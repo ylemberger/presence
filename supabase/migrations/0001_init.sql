@@ -1,4 +1,3 @@
--- Academic Years
 create table academic_years (
   id uuid primary key default gen_random_uuid(),
   name text not null unique,
@@ -6,14 +5,12 @@ create table academic_years (
   created_at timestamptz default now()
 );
 
--- Grades / Layers
 create table grades (
   id uuid primary key default gen_random_uuid(),
   academic_year_id uuid references academic_years(id) on delete cascade,
   name text not null
 );
 
--- Classes
 create table classes (
   id uuid primary key default gen_random_uuid(),
   academic_year_id uuid references academic_years(id) on delete cascade,
@@ -21,21 +18,18 @@ create table classes (
   name text not null
 );
 
--- Tracks
 create table tracks (
   id uuid primary key default gen_random_uuid(),
   academic_year_id uuid references academic_years(id) on delete cascade,
   name text not null
 );
 
--- Specializations
 create table specializations (
   id uuid primary key default gen_random_uuid(),
   academic_year_id uuid references academic_years(id) on delete cascade,
   name text not null
 );
 
--- Activity Ranges (Terms/Semesters/Courses)
 create table activity_ranges (
   id uuid primary key default gen_random_uuid(),
   academic_year_id uuid references academic_years(id) on delete cascade,
@@ -46,14 +40,12 @@ create table activity_ranges (
   constraint activity_ranges_dates_check check (end_date >= start_date)
 );
 
--- Attendance Rules
 create table attendance_rules (
   id uuid primary key default gen_random_uuid(),
   name text not null,
   max_allowed_absence_percent numeric(5,2) not null
 );
 
--- Students
 create table students (
   id uuid primary key default gen_random_uuid(),
   full_name text not null,
@@ -62,7 +54,6 @@ create table students (
   created_at timestamptz default now()
 );
 
--- Student Historical Assignments (Placements)
 create table student_assignments (
   id uuid primary key default gen_random_uuid(),
   student_id uuid references students(id) on delete cascade,
@@ -77,7 +68,6 @@ create table student_assignments (
   constraint student_assignments_dates_check check (end_date is null or end_date >= start_date)
 );
 
--- Teachers (Core Person)
 create table teachers (
   id uuid primary key default gen_random_uuid(),
   full_name text not null,
@@ -88,7 +78,6 @@ create table teachers (
   created_at timestamptz default now()
 );
 
--- Mock External Source Records for Sync Testing
 create table teacher_source_records (
   id uuid primary key default gen_random_uuid(),
   external_id text unique not null,
@@ -100,7 +89,6 @@ create table teacher_source_records (
   synced_at timestamptz default now()
 );
 
--- Teacher Teaching Assignments (Local Mapping)
 create table teacher_teaching_assignments (
   id uuid primary key default gen_random_uuid(),
   teacher_id uuid references teachers(id) on delete cascade,
@@ -111,7 +99,6 @@ create table teacher_teaching_assignments (
   source_record_id uuid references teacher_source_records(id) on delete set null
 );
 
--- Lessons (Templates)
 create table lessons (
   id uuid primary key default gen_random_uuid(),
   academic_year_id uuid references academic_years(id) on delete cascade,
@@ -129,7 +116,6 @@ create table lessons (
   created_at timestamptz default now()
 );
 
--- Lesson Occurrences (Concrete Dates)
 create table lesson_occurrences (
   id uuid primary key default gen_random_uuid(),
   lesson_id uuid references lessons(id) on delete cascade,
@@ -139,7 +125,6 @@ create table lesson_occurrences (
   unique(lesson_id, occurrence_date)
 );
 
--- Student Lesson Assignments
 create table student_lesson_assignments (
   id uuid primary key default gen_random_uuid(),
   student_id uuid references students(id) on delete cascade,
@@ -150,7 +135,6 @@ create table student_lesson_assignments (
   constraint student_lesson_assignments_dates_check check (end_date is null or end_date >= start_date)
 );
 
--- Attendance Records
 create table attendance (
   id uuid primary key default gen_random_uuid(),
   student_id uuid references students(id) on delete cascade,
@@ -159,7 +143,6 @@ create table attendance (
   unique(student_id, lesson_occurrence_id)
 );
 
--- Attendance Change Logs (Audit Trail)
 create table attendance_change_log (
   id uuid primary key default gen_random_uuid(),
   attendance_id uuid references attendance(id) on delete cascade,
@@ -169,7 +152,6 @@ create table attendance_change_log (
   changed_at timestamptz default now()
 );
 
--- Indexes
 create index idx_grades_academic_year on grades(academic_year_id);
 create index idx_classes_academic_year on classes(academic_year_id);
 create index idx_classes_grade on classes(grade_id);
@@ -189,12 +171,10 @@ create index idx_student_lesson_assignments_lesson on student_lesson_assignments
 create index idx_attendance_student on attendance(student_id);
 create index idx_attendance_occurrence on attendance(lesson_occurrence_id);
 
--- Only one active academic year at a time
 create unique index idx_academic_years_single_active
   on academic_years (is_active)
   where is_active = true;
 
--- Prevent overlapping student assignments for the same student
 create or replace function check_student_assignment_overlap()
 returns trigger as $$
 begin
@@ -215,7 +195,6 @@ create trigger trg_student_assignment_overlap
   before insert or update on student_assignments
   for each row execute function check_student_assignment_overlap();
 
--- Attendance change audit log trigger
 create or replace function log_attendance_change()
 returns trigger as $$
 begin
@@ -234,7 +213,6 @@ create trigger trg_attendance_change_log
   after insert or update on attendance
   for each row execute function log_attendance_change();
 
--- Enable RLS on all tables
 alter table academic_years enable row level security;
 alter table grades enable row level security;
 alter table classes enable row level security;
@@ -253,7 +231,6 @@ alter table student_lesson_assignments enable row level security;
 alter table attendance enable row level security;
 alter table attendance_change_log enable row level security;
 
--- RLS policies: authenticated users have full access (admin-only system)
 do $$
 declare
   tbl text;
