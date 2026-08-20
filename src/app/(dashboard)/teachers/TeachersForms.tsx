@@ -33,7 +33,7 @@ export function TeachersForms({ type, teachers, classes, yearId }: TeachersForms
     else if (type === "source") result = await createSourceRecordAction(fd);
     else result = await createTeachingAssignmentAction(fd);
 
-    if (result.error) setError(result.error);
+    if (result && "error" in result && result.error) setError(result.error);
     else {
       e.currentTarget.reset();
       router.refresh();
@@ -46,8 +46,8 @@ export function TeachersForms({ type, teachers, classes, yearId }: TeachersForms
         <>
           <Input label="שם מלא" name="full_name" required />
           <Input label='ת"ז' name="identity_number" required />
-          <Input label="טלפון" name="phone" />
-          <Input label="אימייל" name="email" type="email" />
+          <Input label="טלפון" name="phone" required />
+          <Input label="אימייל" name="email" type="email" required />
         </>
       )}
 

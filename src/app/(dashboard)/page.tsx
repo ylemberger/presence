@@ -62,7 +62,7 @@ export default async function DashboardPage() {
   }
 
   const cards = [
-    { label: "תלמידות משובצות", value: stats.students, href: "/students", hint: "שיבוץ פעיל בשנה הזו" },
+    { label: "תלמידות בשנה", value: stats.students, href: "/students", hint: "עם שיבוץ פעיל בשנה הזו" },
     { label: "כיתות", value: stats.classes, href: "/settings", hint: "מבנה השנה הפעילה" },
     { label: "תבניות שיעור", value: stats.lessons, href: "/lessons", hint: "שיעורים קבועים" },
     { label: "שיעורים בלי רישום", value: stats.unmarked, href: "/attendance", hint: "השבוע הנוכחי" },

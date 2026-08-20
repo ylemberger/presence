@@ -37,22 +37,48 @@ export function StudentLessonAssignments({
 }) {
   const router = useRouter();
   const [error, setError] = useState<string | null>(null);
+  const [mismatchWarning, setMismatchWarning] = useState<string | null>(null);
+  const [pendingForm, setPendingForm] = useState<FormData | null>(null);
+
+  async function submit(fd: FormData, force: boolean) {
+    if (force) fd.set("force_mismatch", "1");
+    else fd.delete("force_mismatch");
+
+    const result = await createStudentLessonAssignmentAction(fd);
+    if (result && "error" in result && result.error) {
+      if ("code" in result && result.code === "mismatch") {
+        setMismatchWarning(result.error);
+        setPendingForm(fd);
+        setError(null);
+        return false;
+      }
+      setError(result.error);
+      setMismatchWarning(null);
+      setPendingForm(null);
+      return false;
+    }
+
+    setError(null);
+    setMismatchWarning(null);
+    setPendingForm(null);
+    router.refresh();
+    return true;
+  }
 
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
-    setError(null);
-    const fd = new FormData(e.currentTarget);
+    const form = e.currentTarget;
+    const fd = new FormData(form);
     fd.set("student_id", studentId);
-    const result = await createStudentLessonAssignmentAction(fd);
-    if (result.error) setError(result.error);
-    else {
-      e.currentTarget.reset();
-      router.refresh();
-    }
+    const ok = await submit(fd, false);
+    if (ok) form.reset();
   }
 
   return (
     <div className="space-y-4">
+      <p className="text-sm text-slate-600">
+        שיוך אוטומטי נוצר כשפותחים שיעור לקבוצה של התלמידה. כאן אפשר להוסיף שיוך ידני חריג.
+      </p>
       <form onSubmit={handleSubmit} className="flex flex-wrap items-end gap-3">
         <Select
           label="שיעור"
@@ -63,20 +89,24 @@ export function StudentLessonAssignments({
             ...lessons.map((l) => ({ value: l.id, label: l.subject })),
           ]}
         />
-        <Select
-          label="סוג שיוך"
-          name="assignment_type"
-          defaultValue="manual"
-          options={[
-            { value: "manual", label: "ידני" },
-            { value: "automatic", label: "אוטומטי" },
-          ]}
-        />
         <HebrewDateInput label="מתאריך" name="start_date" required />
         <HebrewDateInput label="עד תאריך" name="end_date" allowEmpty />
         <Button type="submit">שיוך לשיעור</Button>
       </form>
       {error && <p className="text-sm text-rose-600">{error}</p>}
+      {mismatchWarning && pendingForm && (
+        <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+          <p className="mb-2">{mismatchWarning}</p>
+          <Button
+            type="button"
+            size="sm"
+            variant="secondary"
+            onClick={() => submit(pendingForm, true)}
+          >
+            שמרי בכל זאת
+          </Button>
+        </div>
+      )}
       <div className="overflow-x-auto">
         <table className="w-full text-sm">
           <thead>

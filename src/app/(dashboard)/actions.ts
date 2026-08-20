@@ -5,7 +5,21 @@ import { createClient } from "@/lib/supabase/server";
 import { setActiveAcademicYear } from "@/lib/utils";
 import { syncTeacherSourceRecords } from "@/lib/sync/teachers";
 import { generateLessonOccurrences } from "@/lib/lessons/occurrences";
+import {
+  autoAssignStudentsToLesson,
+  lessonMismatchMessage,
+  refreshAutomaticLessonAssignmentsForStudent,
+} from "@/lib/lessons/autoAssign";
 import type { AttendanceStatus } from "@/types/database";
+import {
+  isError,
+  parseLessonBilling,
+  requireId,
+  requireText,
+  validateEmail,
+  validateIsraeliId,
+  validatePhone,
+} from "@/lib/validation";
 
 function addDaysLocal(dateStr: string, days: number): string {
   const [y, m, d] = dateStr.split("-").map(Number);
@@ -184,7 +198,7 @@ export async function deleteTrackAction(id: string) {
       { table: "student_assignments", column: "track_id" },
       { table: "lessons", column: "track_id" },
     ],
-    "מגמה"
+    "מסלול"
   );
 }
 
@@ -316,13 +330,66 @@ export async function updateAttendanceRuleAction(id: string, formData: FormData)
 
 // --- Students ---
 export async function createStudentAction(formData: FormData) {
+  const fullName = requireText(formData.get("full_name"), "שם מלא");
+  if (isError(fullName)) return fullName;
+  const identity = validateIsraeliId(String(formData.get("identity_number") ?? ""));
+  if (isError(identity)) return identity;
+
+  const yearId = requireId(formData.get("academic_year_id"), "שנה אקדמית");
+  if (isError(yearId)) return yearId;
+  const gradeId = requireId(formData.get("grade_id"), "שכבה");
+  if (isError(gradeId)) return gradeId;
+  const classId = requireId(formData.get("class_id"), "כיתה");
+  if (isError(classId)) return classId;
+  const trackId = requireId(formData.get("track_id"), "מסלול");
+  if (isError(trackId)) return trackId;
+  const startDate = requireText(formData.get("start_date"), "בתוקף מתאריך");
+  if (isError(startDate)) return startDate;
+  const specId = String(formData.get("specialization_id") ?? "").trim() || null;
+
   const supabase = await createClient();
-  const { error } = await supabase.from("students").insert({
-    full_name: formData.get("full_name") as string,
-    identity_number: formData.get("identity_number") as string,
+  const { data: student, error } = await supabase
+    .from("students")
+    .insert({
+      full_name: fullName,
+      identity_number: identity,
+    })
+    .select("id")
+    .single();
+  if (error || !student) {
+    if (error?.code === "23505") return { error: 'מספר תעודת זהות כבר קיים במערכת' };
+    return { error: error?.message ?? "יצירת תלמידה נכשלה" };
+  }
+
+  const { error: placementError } = await supabase.from("student_assignments").insert({
+    student_id: student.id,
+    academic_year_id: yearId,
+    grade_id: gradeId,
+    class_id: classId,
+    track_id: trackId,
+    specialization_id: specId,
+    start_date: startDate,
+    end_date: null,
   });
-  if (error) return { error: error.message };
+  if (placementError) {
+    await supabase.from("students").update({ is_active: false }).eq("id", student.id);
+    return { error: `התלמידה נוצרה אך השיבוץ נכשל: ${placementError.message}` };
+  }
+
+  await refreshAutomaticLessonAssignmentsForStudent(
+    student.id,
+    yearId,
+    {
+      grade_id: gradeId,
+      class_id: classId,
+      track_id: trackId,
+      specialization_id: specId,
+    },
+    startDate
+  );
+
   revalidatePath("/students");
+  revalidatePath(`/students/${student.id}`);
   return { success: true };
 }
 
@@ -343,12 +410,41 @@ export async function updateStudentAction(id: string, formData: FormData) {
 
 export async function createStudentLessonAssignmentAction(formData: FormData) {
   const supabase = await createClient();
-  const studentId = formData.get("student_id") as string;
+  const studentId = requireId(formData.get("student_id"), "תלמידה");
+  if (isError(studentId)) return studentId;
+  const lessonId = requireId(formData.get("lesson_id"), "שיעור");
+  if (isError(lessonId)) return lessonId;
+  const startDate = requireText(formData.get("start_date"), "מתאריך");
+  if (isError(startDate)) return startDate;
+  const force = formData.get("force_mismatch") === "1";
+
+  const [{ data: lesson }, { data: placement }] = await Promise.all([
+    supabase
+      .from("lessons")
+      .select("id, class_id, track_id, specialization_id, billing_type, grade_id, subject")
+      .eq("id", lessonId)
+      .single(),
+    supabase
+      .from("student_assignments")
+      .select("class_id, track_id, specialization_id, grade_id")
+      .eq("student_id", studentId)
+      .is("end_date", null)
+      .maybeSingle(),
+  ]);
+
+  if (!lesson) return { error: "השיעור לא נמצא" };
+  if (!placement) return { error: "לתלמידה אין שיבוץ פעיל בשנה הנוכחית" };
+
+  const mismatch = lessonMismatchMessage(placement, lesson);
+  if (mismatch && !force) {
+    return { error: mismatch, code: "mismatch" as const };
+  }
+
   const { error } = await supabase.from("student_lesson_assignments").insert({
     student_id: studentId,
-    lesson_id: formData.get("lesson_id") as string,
-    assignment_type: (formData.get("assignment_type") as string) || "manual",
-    start_date: formData.get("start_date") as string,
+    lesson_id: lessonId,
+    assignment_type: "manual",
+    start_date: startDate,
     end_date: (formData.get("end_date") as string) || null,
   });
   if (error) return { error: error.message };
@@ -364,39 +460,49 @@ export async function deleteStudentLessonAssignmentAction(id: string, studentId:
   return { success: true };
 }
 
-export async function createStudentAssignmentAction(formData: FormData) {
-  const supabase = await createClient();
-  const specId = formData.get("specialization_id") as string;
-  const { error } = await supabase.from("student_assignments").insert({
-    student_id: formData.get("student_id") as string,
-    academic_year_id: formData.get("academic_year_id") as string,
-    grade_id: formData.get("grade_id") as string,
-    class_id: formData.get("class_id") as string,
-    track_id: formData.get("track_id") as string,
-    specialization_id: specId || null,
-    start_date: formData.get("start_date") as string,
-    end_date: (formData.get("end_date") as string) || null,
-  });
-  if (error) return { error: error.message };
-  revalidatePath(`/students/${formData.get("student_id")}`);
-  return { success: true };
+function parsePlacementFields(formData: FormData) {
+  const studentId = requireId(formData.get("student_id"), "תלמידה");
+  if (isError(studentId)) return studentId;
+  const yearId = requireId(formData.get("academic_year_id"), "שנה אקדמית");
+  if (isError(yearId)) return yearId;
+  const gradeId = requireId(formData.get("grade_id"), "שכבה");
+  if (isError(gradeId)) return gradeId;
+  const classId = requireId(formData.get("class_id"), "כיתה");
+  if (isError(classId)) return classId;
+  const trackId = requireId(formData.get("track_id"), "מסלול");
+  if (isError(trackId)) return trackId;
+  const startDate = requireText(formData.get("start_date") ?? formData.get("transfer_date"), "בתוקף מתאריך");
+  if (isError(startDate)) return startDate;
+  const specId = String(formData.get("specialization_id") ?? "").trim() || null;
+  return {
+    student_id: studentId,
+    academic_year_id: yearId,
+    grade_id: gradeId,
+    class_id: classId,
+    track_id: trackId,
+    specialization_id: specId,
+    start_date: startDate,
+  };
+}
+
+export async function createStudentAssignmentAction(_formData: FormData) {
+  return { error: "אין יצירת שיבוץ נפרד. בעת יצירת תלמידה ממלאים את כל הפרטים, ושינוי נעשה רק בהעברה." };
 }
 
 export async function transferStudentAction(formData: FormData) {
-  const supabase = await createClient();
-  const studentId = formData.get("student_id") as string;
-  const transferDate = formData.get("transfer_date") as string;
+  const placement = parsePlacementFields(formData);
+  if ("error" in placement) return placement;
 
+  const supabase = await createClient();
   const { data: currentAssignment } = await supabase
     .from("student_assignments")
     .select("*")
-    .eq("student_id", studentId)
+    .eq("student_id", placement.student_id)
     .is("end_date", null)
     .maybeSingle();
 
   if (currentAssignment) {
-    const endDate = addDaysLocal(transferDate, -1);
-
+    const endDate = addDaysLocal(placement.start_date, -1);
     const { error: closeError } = await supabase
       .from("student_assignments")
       .update({ end_date: endDate })
@@ -404,33 +510,52 @@ export async function transferStudentAction(formData: FormData) {
     if (closeError) return { error: closeError.message };
   }
 
-  const specId = formData.get("specialization_id") as string;
   const { error } = await supabase.from("student_assignments").insert({
-    student_id: studentId,
-    academic_year_id: formData.get("academic_year_id") as string,
-    grade_id: formData.get("grade_id") as string,
-    class_id: formData.get("class_id") as string,
-    track_id: formData.get("track_id") as string,
-    specialization_id: specId || null,
-    start_date: transferDate,
+    ...placement,
     end_date: null,
   });
   if (error) return { error: error.message };
-  revalidatePath(`/students/${studentId}`);
+
+  await refreshAutomaticLessonAssignmentsForStudent(
+    placement.student_id,
+    placement.academic_year_id,
+    {
+      grade_id: placement.grade_id,
+      class_id: placement.class_id,
+      track_id: placement.track_id,
+      specialization_id: placement.specialization_id,
+    },
+    placement.start_date
+  );
+
+  revalidatePath(`/students/${placement.student_id}`);
+  revalidatePath("/attendance");
   return { success: true };
 }
 
 // --- Teachers ---
 export async function createTeacherAction(formData: FormData) {
+  const fullName = requireText(formData.get("full_name"), "שם מלא");
+  if (isError(fullName)) return fullName;
+  const identity = validateIsraeliId(String(formData.get("identity_number") ?? ""));
+  if (isError(identity)) return identity;
+  const phone = validatePhone(String(formData.get("phone") ?? ""));
+  if (isError(phone)) return phone;
+  const email = validateEmail(String(formData.get("email") ?? ""));
+  if (isError(email)) return email;
+
   const supabase = await createClient();
   const { error } = await supabase.from("teachers").insert({
-    full_name: formData.get("full_name") as string,
-    identity_number: formData.get("identity_number") as string,
-    phone: (formData.get("phone") as string) || null,
-    email: (formData.get("email") as string) || null,
+    full_name: fullName,
+    identity_number: identity,
+    phone,
+    email,
     is_local: true,
   });
-  if (error) return { error: error.message };
+  if (error) {
+    if (error.code === "23505") return { error: 'מספר תעודת זהות כבר קיים במערכת' };
+    return { error: error.message };
+  }
   revalidatePath("/teachers");
   return { success: true };
 }
@@ -460,61 +585,117 @@ export async function syncTeachersAction(academicYearId: string) {
 }
 
 export async function createTeachingAssignmentAction(formData: FormData) {
+  const teacherId = requireId(formData.get("teacher_id"), "מורה");
+  if (isError(teacherId)) return teacherId;
+  const yearId = requireId(formData.get("academic_year_id"), "שנה אקדמית");
+  if (isError(yearId)) return yearId;
+  const subject = requireText(formData.get("subject"), "מקצוע");
+  if (isError(subject)) return subject;
+  const classId = requireId(formData.get("class_id"), "כיתה");
+  if (isError(classId)) return classId;
+
   const supabase = await createClient();
-  const specId = formData.get("specialization_id") as string;
+  const specId = String(formData.get("specialization_id") ?? "").trim() || null;
   const { error } = await supabase.from("teacher_teaching_assignments").insert({
-    teacher_id: formData.get("teacher_id") as string,
-    academic_year_id: formData.get("academic_year_id") as string,
-    subject: formData.get("subject") as string,
-    class_id: formData.get("class_id") as string,
-    specialization_id: specId || null,
+    teacher_id: teacherId,
+    academic_year_id: yearId,
+    subject,
+    class_id: classId,
+    specialization_id: specId,
   });
   if (error) return { error: error.message };
   revalidatePath("/teachers");
   return { success: true };
 }
 
+async function buildLessonPayload(formData: FormData) {
+  const yearId = requireId(formData.get("academic_year_id"), "שנה אקדמית");
+  if (isError(yearId)) return yearId;
+  const teachingId = requireId(formData.get("teacher_teaching_assignment_id"), "שיבוץ הוראה");
+  if (isError(teachingId)) return teachingId;
+  const gradeId = requireId(formData.get("grade_id"), "שכבה");
+  if (isError(gradeId)) return gradeId;
+  const rangeId = requireId(formData.get("activity_range_id"), "טווח פעילות");
+  if (isError(rangeId)) return rangeId;
+  const ruleId = requireId(formData.get("attendance_rule_id"), "כלל נוכחות");
+  if (isError(ruleId)) return ruleId;
+  const billing = parseLessonBilling(formData);
+  if ("error" in billing) return billing;
+
+  const dayOfWeek = parseInt(String(formData.get("day_of_week") ?? ""), 10);
+  if (Number.isNaN(dayOfWeek) || dayOfWeek < 0 || dayOfWeek > 6) {
+    return { error: "יש לבחור יום בשבוע" };
+  }
+  const lessonNumber = parseInt(String(formData.get("lesson_number") ?? ""), 10);
+  if (Number.isNaN(lessonNumber) || lessonNumber < 1 || lessonNumber > 9) {
+    return { error: "מספר שיעור חייב להיות בין 1 ל-9" };
+  }
+
+  const supabase = await createClient();
+  const { data: teaching, error: teachingError } = await supabase
+    .from("teacher_teaching_assignments")
+    .select("subject")
+    .eq("id", teachingId)
+    .single();
+  if (teachingError || !teaching) {
+    return { error: "שיבוץ ההוראה שנבחר אינו תקין" };
+  }
+
+  return {
+    academic_year_id: yearId,
+    teacher_teaching_assignment_id: teachingId,
+    subject: teaching.subject,
+    grade_id: gradeId,
+    class_id: billing.class_id,
+    track_id: billing.track_id,
+    specialization_id: billing.specialization_id,
+    billing_type: billing.billing_type,
+    day_of_week: dayOfWeek,
+    lesson_number: lessonNumber,
+    activity_range_id: rangeId,
+    attendance_rule_id: ruleId,
+  };
+}
+
 // --- Lessons ---
 export async function createLessonAction(formData: FormData) {
+  const payload = await buildLessonPayload(formData);
+  if ("error" in payload) return payload;
+
   const supabase = await createClient();
-  const { error } = await supabase.from("lessons").insert({
-    academic_year_id: formData.get("academic_year_id") as string,
-    teacher_teaching_assignment_id: formData.get("teacher_teaching_assignment_id") as string,
-    subject: formData.get("subject") as string,
-    grade_id: formData.get("grade_id") as string,
-    class_id: (formData.get("class_id") as string) || null,
-    track_id: (formData.get("track_id") as string) || null,
-    specialization_id: (formData.get("specialization_id") as string) || null,
-    billing_type: formData.get("billing_type") as "mandatory" | "specialization",
-    day_of_week: parseInt(formData.get("day_of_week") as string),
-    lesson_number: parseInt(formData.get("lesson_number") as string),
-    activity_range_id: formData.get("activity_range_id") as string,
-    attendance_rule_id: (formData.get("attendance_rule_id") as string) || null,
-  });
-  if (error) return { error: error.message };
+  const { data: lesson, error } = await supabase
+    .from("lessons")
+    .insert(payload)
+    .select("id")
+    .single();
+  if (error || !lesson) return { error: error?.message ?? "יצירת שיעור נכשלה" };
+
+  try {
+    await generateLessonOccurrences(lesson.id);
+  } catch (e) {
+    await supabase.from("lessons").delete().eq("id", lesson.id);
+    return { error: (e as Error).message };
+  }
+
+  await autoAssignStudentsToLesson(lesson.id, payload.academic_year_id);
+
   revalidatePath("/lessons");
+  revalidatePath("/attendance");
+  revalidatePath("/students");
   return { success: true };
 }
 
 export async function createLessonForDateAction(formData: FormData) {
+  const occurrenceDate = requireText(formData.get("occurrence_date"), "תאריך");
+  if (isError(occurrenceDate)) return occurrenceDate;
+
+  const payload = await buildLessonPayload(formData);
+  if ("error" in payload) return payload;
+
   const supabase = await createClient();
-  const occurrenceDate = formData.get("occurrence_date") as string;
   const { data: lesson, error } = await supabase
     .from("lessons")
-    .insert({
-      academic_year_id: formData.get("academic_year_id") as string,
-      teacher_teaching_assignment_id: formData.get("teacher_teaching_assignment_id") as string,
-      subject: formData.get("subject") as string,
-      grade_id: formData.get("grade_id") as string,
-      class_id: (formData.get("class_id") as string) || null,
-      track_id: (formData.get("track_id") as string) || null,
-      specialization_id: (formData.get("specialization_id") as string) || null,
-      billing_type: formData.get("billing_type") as "mandatory" | "specialization",
-      day_of_week: parseInt(formData.get("day_of_week") as string),
-      lesson_number: parseInt(formData.get("lesson_number") as string),
-      activity_range_id: formData.get("activity_range_id") as string,
-      attendance_rule_id: (formData.get("attendance_rule_id") as string) || null,
-    })
+    .insert(payload)
     .select("id")
     .single();
 
@@ -525,10 +706,19 @@ export async function createLessonForDateAction(formData: FormData) {
     occurrence_date: occurrenceDate,
     status: "scheduled",
   });
-  if (occError) return { error: occError.message };
+  if (occError) {
+    await supabase.from("lessons").delete().eq("id", lesson.id);
+    if (occError.code === "23505") {
+      return { error: "כבר קיים מופע לשיעור זה באותו תאריך" };
+    }
+    return { error: occError.message };
+  }
+
+  await autoAssignStudentsToLesson(lesson.id, payload.academic_year_id, occurrenceDate);
 
   revalidatePath("/lessons");
   revalidatePath("/attendance");
+  revalidatePath("/students");
   return { success: true };
 }
 

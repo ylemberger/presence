@@ -4,6 +4,7 @@ import { createClient } from "@/lib/supabase/server";
 import { getActiveAcademicYear } from "@/lib/utils";
 import { TeachersForms } from "./TeachersForms";
 import { SyncButton } from "./SyncButton";
+import { TeachersDirectory } from "./TeachersDirectory";
 
 export default async function TeachersPage() {
   const activeYear = await getActiveAcademicYear();
@@ -55,17 +56,7 @@ export default async function TeachersPage() {
       </Card>
 
       <Card title="רשימת מורות">
-        <Table headers={["שם", 'ת"ז', "טלפון", "אימייל", "מקומית"]}>
-          {(teachers ?? []).map((t) => (
-            <TableRow key={t.id}>
-              <TableCell>{t.full_name}</TableCell>
-              <TableCell>{t.identity_number}</TableCell>
-              <TableCell>{t.phone ?? "-"}</TableCell>
-              <TableCell>{t.email ?? "-"}</TableCell>
-              <TableCell>{t.is_local ? "כן" : "לא"}</TableCell>
-            </TableRow>
-          ))}
-        </Table>
+        <TeachersDirectory teachers={teachers ?? []} />
       </Card>
 
       <Card title="שיבוצי הוראה">

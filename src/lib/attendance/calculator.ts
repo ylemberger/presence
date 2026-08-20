@@ -28,6 +28,8 @@ export interface EligibleOccurrence {
 export function summarizeAttendance(occurrences: EligibleOccurrence[]) {
   const required = occurrences.filter((o) => o.status !== "cancelled");
   const absentCount = required.filter((o) => o.attendanceStatus === "absent").length;
+  const lateCount = required.filter((o) => o.attendanceStatus === "late").length;
+  const presentOnlyCount = required.filter((o) => o.attendanceStatus === "present").length;
   const presentCount = required.filter(
     (o) => o.attendanceStatus && countsAsPresent(o.attendanceStatus)
   ).length;
@@ -36,6 +38,8 @@ export function summarizeAttendance(occurrences: EligibleOccurrence[]) {
   return {
     totalRequired: required.length,
     absentCount,
+    lateCount,
+    presentOnlyCount,
     presentCount,
     unmarked,
     absencePercent: calculateAbsencePercent({ totalRequired: required.length, absentCount }),

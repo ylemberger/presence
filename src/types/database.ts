@@ -76,8 +76,8 @@ export interface Teacher {
   id: string;
   full_name: string;
   identity_number: string;
-  phone: string | null;
-  email: string | null;
+  phone: string;
+  email: string;
   is_local: boolean;
   created_at: string;
 }
@@ -116,7 +116,7 @@ export interface Lesson {
   day_of_week: number;
   lesson_number: number;
   activity_range_id: string;
-  attendance_rule_id: string | null;
+  attendance_rule_id: string;
   created_at: string;
 }
 

@@ -118,10 +118,10 @@ begin
   ) returning id into lesson_english;
 
   insert into lessons (
-    academic_year_id, teacher_teaching_assignment_id, subject, grade_id, class_id, track_id, specialization_id,
+    academic_year_id, teacher_teaching_assignment_id, subject, grade_id, specialization_id,
     billing_type, day_of_week, lesson_number, activity_range_id, attendance_rule_id
   ) values (
-    year_id, ta_history, 'היסטוריה', grade_b, class_b1, track_iyuni, spec_account,
+    year_id, ta_history, 'היסטוריה', grade_b, spec_account,
     'specialization', 4, 1, range_a, rule_10
   ) returning id into lesson_history;
 

@@ -3,10 +3,11 @@
 import { useMemo, useState } from "react";
 import Link from "next/link";
 import { Button } from "@/components/ui/Button";
-import { Input } from "@/components/ui/Input";
+import { Input, Select } from "@/components/ui/Input";
 import { Table, TableRow, TableCell } from "@/components/ui/Table";
 import { StatusPill } from "@/components/ui/PageHeader";
 import { StudentsForm } from "./StudentsForm";
+import type { Grade, Class, Track, Specialization } from "@/types/database";
 
 interface StudentRow {
   id: string;
@@ -15,42 +16,138 @@ interface StudentRow {
   is_active: boolean;
   className: string;
   gradeName: string;
+  trackName: string;
+  specializationName: string;
 }
 
-export function StudentsDirectory({ students }: { students: StudentRow[] }) {
+interface YearOptions {
+  yearId: string;
+  grades: Grade[];
+  classes: Class[];
+  tracks: Track[];
+  specializations: Specialization[];
+}
+
+export function StudentsDirectory({
+  students,
+  yearOptions,
+}: {
+  students: StudentRow[];
+  yearOptions: YearOptions | null;
+}) {
   const [query, setQuery] = useState("");
+  const [grade, setGrade] = useState("");
+  const [className, setClassName] = useState("");
+  const [track, setTrack] = useState("");
+  const [status, setStatus] = useState<"all" | "active" | "inactive">("all");
   const [adding, setAdding] = useState(false);
+
+  const grades = useMemo(
+    () => [...new Set(students.map((s) => s.gradeName).filter((g) => g && g !== "—"))].sort(),
+    [students]
+  );
+  const classNames = useMemo(
+    () =>
+      [...new Set(students.map((s) => s.className).filter((c) => c && c !== "לא משובצת"))].sort(),
+    [students]
+  );
+  const tracks = useMemo(
+    () => [...new Set(students.map((s) => s.trackName).filter((t) => t && t !== "—"))].sort(),
+    [students]
+  );
 
   const filtered = useMemo(() => {
     const q = query.trim();
-    if (!q) return students;
-    return students.filter(
-      (s) => s.full_name.includes(q) || s.identity_number.includes(q) || s.className.includes(q)
-    );
-  }, [query, students]);
+    return students.filter((s) => {
+      if (status === "active" && !s.is_active) return false;
+      if (status === "inactive" && s.is_active) return false;
+      if (grade && s.gradeName !== grade) return false;
+      if (className && s.className !== className) return false;
+      if (track && s.trackName !== track) return false;
+      if (!q) return true;
+      return (
+        s.full_name.includes(q) ||
+        s.identity_number.includes(q) ||
+        s.className.includes(q) ||
+        s.gradeName.includes(q) ||
+        s.trackName.includes(q) ||
+        s.specializationName.includes(q)
+      );
+    });
+  }, [query, students, grade, className, track, status]);
 
   return (
     <div className="overflow-hidden rounded-2xl border border-stone-200/80 bg-white shadow-[0_8px_30px_rgb(28,43,48,0.04)]">
-      <div className="flex flex-wrap items-center gap-3 border-b border-stone-100 px-5 py-4">
-        <div className="min-w-[16rem] flex-1">
+      <div className="grid gap-3 border-b border-stone-100 px-5 py-4 md:grid-cols-2 lg:grid-cols-6">
+        <div className="lg:col-span-2">
           <Input
-            placeholder="חיפוש לפי שם, תעודת זהות או כיתה"
+            placeholder="חיפוש לפי שם, תעודת זהות, כיתה, מסלול או התמחות"
             value={query}
             onChange={(e) => setQuery(e.target.value)}
           />
         </div>
-        <Button type="button" onClick={() => setAdding((v) => !v)}>
-          {adding ? "סגירה" : "תלמידה חדשה"}
-        </Button>
+        <Select
+          label="שכבה"
+          value={grade}
+          onChange={(e) => setGrade(e.target.value)}
+          options={[
+            { value: "", label: "הכל" },
+            ...grades.map((g) => ({ value: g, label: g })),
+          ]}
+        />
+        <Select
+          label="כיתה"
+          value={className}
+          onChange={(e) => setClassName(e.target.value)}
+          options={[
+            { value: "", label: "הכל" },
+            ...classNames.map((c) => ({ value: c, label: c })),
+          ]}
+        />
+        <Select
+          label="מסלול"
+          value={track}
+          onChange={(e) => setTrack(e.target.value)}
+          options={[
+            { value: "", label: "הכל" },
+            ...tracks.map((t) => ({ value: t, label: t })),
+          ]}
+        />
+        <Select
+          label="סטטוס"
+          value={status}
+          onChange={(e) => setStatus(e.target.value as typeof status)}
+          options={[
+            { value: "all", label: "הכל" },
+            { value: "active", label: "פעילות" },
+            { value: "inactive", label: "לא פעילות" },
+          ]}
+        />
+        <div className="flex items-end">
+          <Button type="button" onClick={() => setAdding((v) => !v)}>
+            {adding ? "סגירה" : "תלמידה חדשה"}
+          </Button>
+        </div>
       </div>
 
-      {adding && (
+      {adding && yearOptions && (
         <div className="border-b border-stone-100 bg-stone-50/70 px-5 py-4">
-          <StudentsForm />
+          <StudentsForm
+            yearId={yearOptions.yearId}
+            grades={yearOptions.grades}
+            classes={yearOptions.classes}
+            tracks={yearOptions.tracks}
+            specializations={yearOptions.specializations}
+          />
         </div>
       )}
+      {adding && !yearOptions && (
+        <p className="border-b border-stone-100 px-5 py-4 text-sm text-rose-600">
+          יש להגדיר שנה אקדמית פעילה לפני הוספת תלמידה.
+        </p>
+      )}
 
-      <Table headers={["תלמידה", 'ת"ז', "שכבה", "כיתה", "סטטוס", ""]}>
+      <Table headers={["תלמידה", 'ת"ז', "שכבה", "כיתה", "מסלול", "התמחות", "סטטוס", ""]}>
         {filtered.map((s) => (
           <TableRow key={s.id}>
             <TableCell>
@@ -66,6 +163,8 @@ export function StudentsDirectory({ students }: { students: StudentRow[] }) {
             </TableCell>
             <TableCell>{s.gradeName}</TableCell>
             <TableCell>{s.className}</TableCell>
+            <TableCell>{s.trackName}</TableCell>
+            <TableCell>{s.specializationName}</TableCell>
             <TableCell>
               <StatusPill tone={s.is_active ? "ok" : "muted"}>
                 {s.is_active ? "פעילה" : "לא פעילה"}
@@ -83,7 +182,7 @@ export function StudentsDirectory({ students }: { students: StudentRow[] }) {
         ))}
       </Table>
       {filtered.length === 0 && (
-        <p className="px-5 py-8 text-center text-sm text-slate-500">לא נמצאו תלמידות תואמות.</p>
+        <p className="px-5 py-8 text-center text-sm text-slate-500">לא נמצאו תלמידות לפי הסינון.</p>
       )}
     </div>
   );

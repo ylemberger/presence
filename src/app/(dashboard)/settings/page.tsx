@@ -140,7 +140,7 @@ export default async function SettingsPage() {
           </table>
         </div>
       </Card>
-      <Card title="מגמות">
+      <Card title="מסלולים">
         <SettingsForms type="track" yearId={yearId} createAction={createTrackAction} />
         <div className="mt-4 overflow-x-auto">
           <table className="w-full text-sm">

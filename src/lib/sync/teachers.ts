@@ -43,6 +43,8 @@ export async function syncTeacherSourceRecords(
         .insert({
           full_name: record.full_name,
           identity_number: record.teacher_identity_number,
+          phone: "0500000000",
+          email: `${record.teacher_identity_number}@sync.local`,
           is_local: false,
         })
         .select()

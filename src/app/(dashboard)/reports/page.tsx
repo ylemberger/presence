@@ -56,6 +56,8 @@ export default async function ReportsPage({ searchParams }: Props) {
     studentName: string;
     className: string;
     totalRequired: number;
+    presentOnlyCount: number;
+    lateCount: number;
     absentCount: number;
     absencePercent: number;
   }> = [];
@@ -173,6 +175,8 @@ export default async function ReportsPage({ searchParams }: Props) {
           studentName,
           className,
           totalRequired: summary.totalRequired,
+          presentOnlyCount: summary.presentOnlyCount,
+          lateCount: summary.lateCount,
           absentCount: summary.absentCount,
           absencePercent: summary.absencePercent,
         });
@@ -212,25 +216,51 @@ export default async function ReportsPage({ searchParams }: Props) {
         ) : reportRows.length === 0 ? (
           <p className="text-slate-600">לא נמצאו תוצאות לטווח ולסף שנבחרו.</p>
         ) : (
-          <Table headers={["תלמידה", "כיתה", "שיעורים נדרשים", "היעדרויות", "אחוז היעדרות"]}>
-            {reportRows.map((row) => (
-              <TableRow key={row.studentId}>
-                <TableCell>{row.studentName}</TableCell>
-                <TableCell>{row.className}</TableCell>
-                <TableCell>{row.totalRequired}</TableCell>
-                <TableCell>{row.absentCount}</TableCell>
-                <TableCell
-                  className={
-                    row.absencePercent > (selectedRule?.max_allowed_absence_percent ?? 15)
-                      ? "font-bold text-rose-600"
-                      : ""
-                  }
-                >
-                  {row.absencePercent}%
-                </TableCell>
-              </TableRow>
-            ))}
-          </Table>
+          <>
+            <div className="mb-4 grid gap-2 text-sm text-slate-700 sm:grid-cols-2 lg:grid-cols-5 print:grid-cols-5">
+              <div>שיעורים שהתקיימו: {reportRows.reduce((s, r) => s + r.totalRequired, 0)}</div>
+              <div>נוכחות: {reportRows.reduce((s, r) => s + r.presentOnlyCount, 0)}</div>
+              <div>איחורים: {reportRows.reduce((s, r) => s + r.lateCount, 0)}</div>
+              <div>היעדרויות: {reportRows.reduce((s, r) => s + r.absentCount, 0)}</div>
+              <div>
+                סף מותר:{" "}
+                {selectedRule
+                  ? `${selectedRule.max_allowed_absence_percent}% (${selectedRule.name})`
+                  : `${threshold}%`}
+              </div>
+            </div>
+            <Table
+              headers={[
+                "תלמידה",
+                "כיתה",
+                "שיעורים",
+                "נוכחת",
+                "איחור",
+                "נעדרה",
+                "אחוז היעדרות",
+              ]}
+            >
+              {reportRows.map((row) => (
+                <TableRow key={row.studentId}>
+                  <TableCell>{row.studentName}</TableCell>
+                  <TableCell>{row.className}</TableCell>
+                  <TableCell>{row.totalRequired}</TableCell>
+                  <TableCell>{row.presentOnlyCount}</TableCell>
+                  <TableCell>{row.lateCount}</TableCell>
+                  <TableCell>{row.absentCount}</TableCell>
+                  <TableCell
+                    className={
+                      row.absencePercent > (selectedRule?.max_allowed_absence_percent ?? threshold)
+                        ? "font-bold text-rose-600"
+                        : ""
+                    }
+                  >
+                    {row.absencePercent}%
+                  </TableCell>
+                </TableRow>
+              ))}
+            </Table>
+          </>
         )}
       </Card>
     </div>

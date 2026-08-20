@@ -1,4 +1,5 @@
 import { createClient } from "@/lib/supabase/server";
+import { parseIsoDate, toIsoDate } from "@/lib/dates/hebrew";
 
 export interface GenerateOccurrencesResult {
   created: number;
@@ -11,15 +12,15 @@ function getDatesForDayOfWeek(
   dayOfWeek: number
 ): string[] {
   const dates: string[] = [];
-  const current = new Date(startDate);
-  const end = new Date(endDate);
+  const current = parseIsoDate(startDate);
+  const end = parseIsoDate(endDate);
 
   while (current.getDay() !== dayOfWeek && current <= end) {
     current.setDate(current.getDate() + 1);
   }
 
   while (current <= end) {
-    dates.push(current.toISOString().split("T")[0]);
+    dates.push(toIsoDate(current));
     current.setDate(current.getDate() + 7);
   }
 
@@ -45,13 +46,22 @@ export async function generateLessonOccurrences(
 
   const { data: lessons, error } = await lessonsQuery;
   if (error) throw error;
-  if (!lessons?.length) return result;
+  if (!lessons?.length) {
+    throw new Error("לא נמצאו שיעורים ליצירת מופעים");
+  }
 
   for (const lesson of lessons) {
     const range = lesson.activity_ranges as { start_date: string; end_date: string } | null;
-    if (!range) continue;
+    if (!range) {
+      throw new Error(`לשיעור "${lesson.subject}" חסר טווח פעילות`);
+    }
 
     const dates = getDatesForDayOfWeek(range.start_date, range.end_date, lesson.day_of_week);
+    if (dates.length === 0) {
+      throw new Error(
+        `לא נוצרו מופעים לשיעור "${lesson.subject}" — אין תאריכים תואמים בטווח הפעילות ליום שנבחר`
+      );
+    }
 
     for (const date of dates) {
       const { data: existing } = await supabase
@@ -72,8 +82,19 @@ export async function generateLessonOccurrences(
         status: "scheduled",
       });
 
-      if (!insertError) result.created++;
+      if (insertError) {
+        if (insertError.code === "23505") {
+          result.skipped++;
+          continue;
+        }
+        throw new Error(insertError.message);
+      }
+      result.created++;
     }
+  }
+
+  if (result.created === 0 && result.skipped === 0) {
+    throw new Error("לא נוצרו מופעי שיעור כלל");
   }
 
   return result;

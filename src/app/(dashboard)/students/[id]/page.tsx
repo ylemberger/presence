@@ -50,7 +50,10 @@ export default async function StudentDetailPage({ params }: Props) {
     subject: string;
     totalRequired: number;
     absentCount: number;
+    lateCount: number;
+    presentOnlyCount: number;
     presentCount: number;
+    unmarked: number;
     absencePercent: number;
   }> = [];
   let changeLog: Array<{
@@ -206,13 +209,13 @@ export default async function StudentDetailPage({ params }: Props) {
       />
 
       {yearData && (
-        <Card title="שיבוץ / העברה">
+        <Card title="העברה" className="print:hidden">
           <StudentDetailForms studentId={id} yearData={yearData} />
         </Card>
       )}
 
-      <Card title="היסטוריית שיבוצים">
-        <Table headers={["שנה", "שכבה", "כיתה", "מגמה", "התמחות", "מתאריך", "עד תאריך"]}>
+      <Card title="היסטוריית העברות">
+        <Table headers={["שנה", "שכבה", "כיתה", "מסלול", "התמחות", "מתאריך", "עד תאריך"]}>
           {(assignments ?? []).map((a) => (
             <TableRow key={a.id}>
               <TableCell>
@@ -245,12 +248,13 @@ export default async function StudentDetailPage({ params }: Props) {
         {subjectStats.length === 0 ? (
           <p className="text-sm text-slate-500">אין נתוני נוכחות לחישוב עדיין.</p>
         ) : (
-          <Table headers={["מקצוע", "שיעורים נדרשים", "נוכחות", "היעדרויות", "אחוז היעדרות"]}>
+          <Table headers={["מקצוע", "שיעורים", "נוכחת", "איחור", "נעדרה", "אחוז היעדרות"]}>
             {subjectStats.map((row) => (
               <TableRow key={row.subject}>
                 <TableCell>{row.subject}</TableCell>
                 <TableCell>{row.totalRequired}</TableCell>
-                <TableCell>{row.presentCount}</TableCell>
+                <TableCell>{row.presentOnlyCount}</TableCell>
+                <TableCell>{row.lateCount}</TableCell>
                 <TableCell>{row.absentCount}</TableCell>
                 <TableCell
                   className={row.absencePercent > 15 ? "font-bold text-rose-600" : ""}

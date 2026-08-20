@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/Button";
 import { Input, Select } from "@/components/ui/Input";
@@ -36,21 +36,36 @@ export function LessonsForm({
 }: LessonsFormProps) {
   const router = useRouter();
   const [error, setError] = useState<string | null>(null);
+  const [billingType, setBillingType] = useState<"mandatory" | "specialization">("mandatory");
+  const [teachingId, setTeachingId] = useState("");
   const defaultDay =
     occurrenceDate != null ? String(isoToHDate(occurrenceDate).getDay()) : undefined;
+
+  const selectedSubject = useMemo(() => {
+    return teachingAssignments.find((t) => t.id === teachingId)?.subject ?? "";
+  }, [teachingAssignments, teachingId]);
 
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
     setError(null);
     const fd = new FormData(e.currentTarget);
     fd.set("academic_year_id", yearId);
+    fd.set("billing_type", billingType);
     if (occurrenceDate) fd.set("occurrence_date", occurrenceDate);
+    if (billingType === "specialization") {
+      fd.set("class_id", "");
+      fd.set("track_id", "");
+    } else {
+      fd.set("specialization_id", "");
+    }
     const result = occurrenceDate
       ? await createLessonForDateAction(fd)
       : await createLessonAction(fd);
-    if (result.error) setError(result.error);
+    if (result && "error" in result && result.error) setError(result.error);
     else {
       e.currentTarget.reset();
+      setTeachingId("");
+      setBillingType("mandatory");
       onCreated?.();
       router.refresh();
     }
@@ -62,6 +77,8 @@ export function LessonsForm({
         label="שיבוץ הוראה"
         name="teacher_teaching_assignment_id"
         required
+        value={teachingId}
+        onChange={(e) => setTeachingId(e.target.value)}
         options={[
           { value: "", label: "בחרי" },
           ...teachingAssignments.map((t) => ({
@@ -70,7 +87,11 @@ export function LessonsForm({
           })),
         ]}
       />
-      <Input label="מקצוע" name="subject" required />
+      {selectedSubject && (
+        <p className="text-sm text-slate-600">
+          מקצוע: <span className="font-medium text-slate-800">{selectedSubject}</span>
+        </p>
+      )}
       <Select
         label="שכבה"
         name="grade_id"
@@ -81,38 +102,47 @@ export function LessonsForm({
         ]}
       />
       <Select
-        label="כיתה"
-        name="class_id"
-        options={[
-          { value: "", label: "ללא" },
-          ...classes.map((c) => ({ value: c.id, label: c.name })),
-        ]}
-      />
-      <Select
-        label="מגמה"
-        name="track_id"
-        options={[
-          { value: "", label: "ללא" },
-          ...tracks.map((t) => ({ value: t.id, label: t.name })),
-        ]}
-      />
-      <Select
-        label="התמחות"
-        name="specialization_id"
-        options={[
-          { value: "", label: "ללא" },
-          ...specializations.map((s) => ({ value: s.id, label: s.name })),
-        ]}
-      />
-      <Select
-        label="סוג חיוב"
-        name="billing_type"
+        label="סוג שיעור"
+        name="billing_type_ui"
         required
+        value={billingType}
+        onChange={(e) => setBillingType(e.target.value as "mandatory" | "specialization")}
         options={Object.entries(BILLING_TYPE_LABELS).map(([v, l]) => ({
           value: v,
           label: l,
         }))}
       />
+      {billingType === "specialization" ? (
+        <Select
+          label="התמחות"
+          name="specialization_id"
+          required
+          options={[
+            { value: "", label: "בחרי" },
+            ...specializations.map((s) => ({ value: s.id, label: s.name })),
+          ]}
+        />
+      ) : (
+        <>
+          <Select
+            label="כיתה"
+            name="class_id"
+            options={[
+              { value: "", label: "ללא" },
+              ...classes.map((c) => ({ value: c.id, label: c.name })),
+            ]}
+          />
+          <Select
+          label="מסלול"
+          name="track_id"
+          options={[
+            { value: "", label: "ללא" },
+            ...tracks.map((t) => ({ value: t.id, label: t.name })),
+          ]}
+        />
+          <p className="w-full text-xs text-slate-500">בשיעור חובה יש לבחור כיתה או מסלול (או את שתיהן).</p>
+        </>
+      )}
       <Select
         label="יום בשבוע"
         name="day_of_week"
@@ -133,9 +163,10 @@ export function LessonsForm({
       <Select
         label="כלל נוכחות"
         name="attendance_rule_id"
+        required
         options={[
-          { value: "", label: "ללא" },
-          ...rules.map((r) => ({ value: r.id, label: r.name })),
+          { value: "", label: "בחרי" },
+          ...rules.map((r) => ({ value: r.id, label: `${r.name} (${r.max_allowed_absence_percent}%)` })),
         ]}
       />
       <Button type="submit">{occurrenceDate ? "יצירה ליום זה" : "יצירה"}</Button>
