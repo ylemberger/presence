@@ -197,6 +197,7 @@ export async function deleteTrackAction(id: string) {
     [
       { table: "student_assignments", column: "track_id" },
       { table: "lessons", column: "track_id" },
+      { table: "teacher_teaching_assignments", column: "track_id" },
     ],
     "מסלול"
   );
@@ -591,20 +592,22 @@ export async function createTeachingAssignmentAction(formData: FormData) {
   if (isError(yearId)) return yearId;
   const subject = requireText(formData.get("subject"), "מקצוע");
   if (isError(subject)) return subject;
-  const classId = requireId(formData.get("class_id"), "כיתה");
-  if (isError(classId)) return classId;
+  const billing = parseLessonBilling(formData);
+  if ("error" in billing) return billing;
 
   const supabase = await createClient();
-  const specId = String(formData.get("specialization_id") ?? "").trim() || null;
   const { error } = await supabase.from("teacher_teaching_assignments").insert({
     teacher_id: teacherId,
     academic_year_id: yearId,
     subject,
-    class_id: classId,
-    specialization_id: specId,
+    billing_type: billing.billing_type,
+    class_id: billing.class_id,
+    track_id: billing.track_id,
+    specialization_id: billing.specialization_id,
   });
   if (error) return { error: error.message };
   revalidatePath("/teachers");
+  revalidatePath("/lessons");
   return { success: true };
 }
 
@@ -619,8 +622,6 @@ async function buildLessonPayload(formData: FormData) {
   if (isError(rangeId)) return rangeId;
   const ruleId = requireId(formData.get("attendance_rule_id"), "כלל נוכחות");
   if (isError(ruleId)) return ruleId;
-  const billing = parseLessonBilling(formData);
-  if ("error" in billing) return billing;
 
   const dayOfWeek = parseInt(String(formData.get("day_of_week") ?? ""), 10);
   if (Number.isNaN(dayOfWeek) || dayOfWeek < 0 || dayOfWeek > 6) {
@@ -634,11 +635,14 @@ async function buildLessonPayload(formData: FormData) {
   const supabase = await createClient();
   const { data: teaching, error: teachingError } = await supabase
     .from("teacher_teaching_assignments")
-    .select("subject")
+    .select("subject, billing_type, class_id, track_id, specialization_id")
     .eq("id", teachingId)
     .single();
   if (teachingError || !teaching) {
     return { error: "שיבוץ ההוראה שנבחר אינו תקין" };
+  }
+  if (!teaching.billing_type) {
+    return { error: "לשיבוץ ההוראה חסר סוג (חובה/התמחות). עדכני את השיבוץ במסך מורות." };
   }
 
   return {
@@ -646,10 +650,10 @@ async function buildLessonPayload(formData: FormData) {
     teacher_teaching_assignment_id: teachingId,
     subject: teaching.subject,
     grade_id: gradeId,
-    class_id: billing.class_id,
-    track_id: billing.track_id,
-    specialization_id: billing.specialization_id,
-    billing_type: billing.billing_type,
+    class_id: teaching.class_id,
+    track_id: teaching.track_id,
+    specialization_id: teaching.specialization_id,
+    billing_type: teaching.billing_type as "mandatory" | "specialization",
     day_of_week: dayOfWeek,
     lesson_number: lessonNumber,
     activity_range_id: rangeId,

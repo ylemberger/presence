@@ -7,19 +7,34 @@ import { Input, Select } from "@/components/ui/Input";
 import { DAY_OF_WEEK_LABELS, BILLING_TYPE_LABELS } from "@/lib/constants";
 import { createLessonAction, createLessonForDateAction } from "../actions";
 import { isoToHDate } from "@/lib/dates/hebrew";
-import type { Grade, Class, Track, Specialization, ActivityRange, AttendanceRule } from "@/types/database";
+import type { Grade, ActivityRange, AttendanceRule, BillingType } from "@/types/database";
+
+export interface TeachingAssignmentOption {
+  id: string;
+  subject: string;
+  billing_type: BillingType;
+  teachers: { full_name: string } | null;
+  className?: string | null;
+  trackName?: string | null;
+  specializationName?: string | null;
+}
 
 interface LessonsFormProps {
   yearId: string;
   occurrenceDate?: string;
-  teachingAssignments: Array<{ id: string; subject: string; teachers: { full_name: string } }>;
+  teachingAssignments: TeachingAssignmentOption[];
   grades: Grade[];
-  classes: Class[];
-  tracks: Track[];
-  specializations: Specialization[];
   ranges: ActivityRange[];
   rules: AttendanceRule[];
   onCreated?: () => void;
+}
+
+function scopeLabel(t: TeachingAssignmentOption): string {
+  if (t.billing_type === "specialization") {
+    return `התמחות · ${t.specializationName ?? "—"}`;
+  }
+  const parts = [t.className, t.trackName].filter(Boolean);
+  return `חובה · ${parts.length ? parts.join(" / ") : "—"}`;
 }
 
 export function LessonsForm({
@@ -27,47 +42,41 @@ export function LessonsForm({
   occurrenceDate,
   teachingAssignments,
   grades,
-  classes,
-  tracks,
-  specializations,
   ranges,
   rules,
   onCreated,
 }: LessonsFormProps) {
   const router = useRouter();
   const [error, setError] = useState<string | null>(null);
-  const [billingType, setBillingType] = useState<"mandatory" | "specialization">("mandatory");
   const [teachingId, setTeachingId] = useState("");
   const defaultDay =
     occurrenceDate != null ? String(isoToHDate(occurrenceDate).getDay()) : undefined;
 
-  const selectedSubject = useMemo(() => {
-    return teachingAssignments.find((t) => t.id === teachingId)?.subject ?? "";
-  }, [teachingAssignments, teachingId]);
+  const selected = useMemo(
+    () => teachingAssignments.find((t) => t.id === teachingId) ?? null,
+    [teachingAssignments, teachingId]
+  );
 
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
+    const form = e.currentTarget;
     setError(null);
-    const fd = new FormData(e.currentTarget);
-    fd.set("academic_year_id", yearId);
-    fd.set("billing_type", billingType);
-    if (occurrenceDate) fd.set("occurrence_date", occurrenceDate);
-    if (billingType === "specialization") {
-      fd.set("class_id", "");
-      fd.set("track_id", "");
-    } else {
-      fd.set("specialization_id", "");
-    }
-    const result = occurrenceDate
-      ? await createLessonForDateAction(fd)
-      : await createLessonAction(fd);
-    if (result && "error" in result && result.error) setError(result.error);
-    else {
-      e.currentTarget.reset();
-      setTeachingId("");
-      setBillingType("mandatory");
-      onCreated?.();
-      router.refresh();
+    try {
+      const fd = new FormData(form);
+      fd.set("academic_year_id", yearId);
+      if (occurrenceDate) fd.set("occurrence_date", occurrenceDate);
+      const result = occurrenceDate
+        ? await createLessonForDateAction(fd)
+        : await createLessonAction(fd);
+      if (result && "error" in result && result.error) setError(result.error);
+      else {
+        form.reset();
+        setTeachingId("");
+        onCreated?.();
+        router.refresh();
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "שמירה נכשלה");
     }
   }
 
@@ -80,16 +89,23 @@ export function LessonsForm({
         value={teachingId}
         onChange={(e) => setTeachingId(e.target.value)}
         options={[
-          { value: "", label: "בחרי" },
+          { value: "", label: "בחרי שיבוץ" },
           ...teachingAssignments.map((t) => ({
             value: t.id,
-            label: `${t.teachers?.full_name} - ${t.subject}`,
+            label: `${t.teachers?.full_name ?? "מורה"} · ${t.subject} · ${scopeLabel(t)}`,
           })),
         ]}
       />
-      {selectedSubject && (
-        <p className="text-sm text-slate-600">
-          מקצוע: <span className="font-medium text-slate-800">{selectedSubject}</span>
+      {selected && (
+        <p className="w-full text-sm text-slate-600">
+          מקצוע: <span className="font-medium text-slate-800">{selected.subject}</span>
+          {" · "}
+          סוג:{" "}
+          <span className="font-medium text-slate-800">
+            {BILLING_TYPE_LABELS[selected.billing_type]}
+          </span>
+          {" · "}
+          קהל: <span className="font-medium text-slate-800">{scopeLabel(selected)}</span>
         </p>
       )}
       <Select
@@ -101,48 +117,6 @@ export function LessonsForm({
           ...grades.map((g) => ({ value: g.id, label: g.name })),
         ]}
       />
-      <Select
-        label="סוג שיעור"
-        name="billing_type_ui"
-        required
-        value={billingType}
-        onChange={(e) => setBillingType(e.target.value as "mandatory" | "specialization")}
-        options={Object.entries(BILLING_TYPE_LABELS).map(([v, l]) => ({
-          value: v,
-          label: l,
-        }))}
-      />
-      {billingType === "specialization" ? (
-        <Select
-          label="התמחות"
-          name="specialization_id"
-          required
-          options={[
-            { value: "", label: "בחרי" },
-            ...specializations.map((s) => ({ value: s.id, label: s.name })),
-          ]}
-        />
-      ) : (
-        <>
-          <Select
-            label="כיתה"
-            name="class_id"
-            options={[
-              { value: "", label: "ללא" },
-              ...classes.map((c) => ({ value: c.id, label: c.name })),
-            ]}
-          />
-          <Select
-          label="מסלול"
-          name="track_id"
-          options={[
-            { value: "", label: "ללא" },
-            ...tracks.map((t) => ({ value: t.id, label: t.name })),
-          ]}
-        />
-          <p className="w-full text-xs text-slate-500">בשיעור חובה יש לבחור כיתה או מסלול (או את שתיהן).</p>
-        </>
-      )}
       <Select
         label="יום בשבוע"
         name="day_of_week"
@@ -166,7 +140,10 @@ export function LessonsForm({
         required
         options={[
           { value: "", label: "בחרי" },
-          ...rules.map((r) => ({ value: r.id, label: `${r.name} (${r.max_allowed_absence_percent}%)` })),
+          ...rules.map((r) => ({
+            value: r.id,
+            label: `${r.name} (${r.max_allowed_absence_percent}%)`,
+          })),
         ]}
       />
       <Button type="submit">{occurrenceDate ? "יצירה ליום זה" : "יצירה"}</Button>

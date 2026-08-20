@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/Button";
 import { Input, Select } from "@/components/ui/Input";
 import { Table, TableRow, TableCell } from "@/components/ui/Table";
 import { StatusPill } from "@/components/ui/PageHeader";
+import { Modal } from "@/components/ui/Modal";
 import { StudentsForm } from "./StudentsForm";
 import type { Grade, Class, Track, Specialization } from "@/types/database";
 
@@ -40,7 +41,8 @@ export function StudentsDirectory({
   const [className, setClassName] = useState("");
   const [track, setTrack] = useState("");
   const [status, setStatus] = useState<"all" | "active" | "inactive">("all");
-  const [adding, setAdding] = useState(false);
+  const [modalOpen, setModalOpen] = useState(false);
+  const [yearError, setYearError] = useState<string | null>(null);
 
   const grades = useMemo(
     () => [...new Set(students.map((s) => s.gradeName).filter((g) => g && g !== "—"))].sort(),
@@ -75,6 +77,15 @@ export function StudentsDirectory({
       );
     });
   }, [query, students, grade, className, track, status]);
+
+  function openCreate() {
+    if (!yearOptions) {
+      setYearError("יש להגדיר שנה אקדמית פעילה לפני הוספת תלמידה.");
+      return;
+    }
+    setYearError(null);
+    setModalOpen(true);
+  }
 
   return (
     <div className="overflow-hidden rounded-2xl border border-stone-200/80 bg-white shadow-[0_8px_30px_rgb(28,43,48,0.04)]">
@@ -124,27 +135,14 @@ export function StudentsDirectory({
           ]}
         />
         <div className="flex items-end">
-          <Button type="button" onClick={() => setAdding((v) => !v)}>
-            {adding ? "סגירה" : "תלמידה חדשה"}
+          <Button type="button" onClick={openCreate}>
+            תלמידה חדשה
           </Button>
         </div>
       </div>
 
-      {adding && yearOptions && (
-        <div className="border-b border-stone-100 bg-stone-50/70 px-5 py-4">
-          <StudentsForm
-            yearId={yearOptions.yearId}
-            grades={yearOptions.grades}
-            classes={yearOptions.classes}
-            tracks={yearOptions.tracks}
-            specializations={yearOptions.specializations}
-          />
-        </div>
-      )}
-      {adding && !yearOptions && (
-        <p className="border-b border-stone-100 px-5 py-4 text-sm text-rose-600">
-          יש להגדיר שנה אקדמית פעילה לפני הוספת תלמידה.
-        </p>
+      {yearError && (
+        <p className="border-b border-stone-100 px-5 py-3 text-sm text-rose-600">{yearError}</p>
       )}
 
       <Table headers={["תלמידה", 'ת"ז', "שכבה", "כיתה", "מסלול", "התמחות", "סטטוס", ""]}>
@@ -183,6 +181,25 @@ export function StudentsDirectory({
       </Table>
       {filtered.length === 0 && (
         <p className="px-5 py-8 text-center text-sm text-slate-500">לא נמצאו תלמידות לפי הסינון.</p>
+      )}
+
+      {yearOptions && (
+        <Modal
+          open={modalOpen}
+          onClose={() => setModalOpen(false)}
+          title="תלמידה חדשה"
+          description="מלאי את כל הפרטים בבת אחת — שם, תעודת זהות, שכבה, כיתה, מסלול ותאריך תחילה."
+        >
+          <StudentsForm
+            yearId={yearOptions.yearId}
+            grades={yearOptions.grades}
+            classes={yearOptions.classes}
+            tracks={yearOptions.tracks}
+            specializations={yearOptions.specializations}
+            onCancel={() => setModalOpen(false)}
+            onSuccess={() => setModalOpen(false)}
+          />
+        </Modal>
       )}
     </div>
   );

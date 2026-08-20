@@ -27,15 +27,20 @@ export function StudentDetailForms({ studentId, yearData }: Props) {
 
   async function handleTransfer(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
+    const form = e.currentTarget;
     setError(null);
-    const fd = new FormData(e.currentTarget);
-    fd.set("student_id", studentId);
-    fd.set("academic_year_id", yearData.year.id);
-    const result = await transferStudentAction(fd);
-    if (result && "error" in result && result.error) setError(result.error);
-    else {
-      e.currentTarget.reset();
-      router.refresh();
+    try {
+      const fd = new FormData(form);
+      fd.set("student_id", studentId);
+      fd.set("academic_year_id", yearData.year.id);
+      const result = await transferStudentAction(fd);
+      if (result && "error" in result && result.error) setError(result.error);
+      else {
+        form.reset();
+        router.refresh();
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "העברה נכשלה");
     }
   }
 

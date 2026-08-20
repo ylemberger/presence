@@ -12,12 +12,17 @@ export function GenerateOccurrencesButton({ academicYearId }: { academicYearId: 
 
   async function handleGenerate() {
     setLoading(true);
-    const result = await generateOccurrencesAction(academicYearId);
-    if (result.error) setMessage(result.error);
-    else if (result.result)
-      setMessage(`נוצרו ${result.result.created} מופעים, דולגו ${result.result.skipped}`);
-    router.refresh();
-    setLoading(false);
+    try {
+      const result = await generateOccurrencesAction(academicYearId);
+      if (result.error) setMessage(result.error);
+      else if (result.result)
+        setMessage(`נוצרו ${result.result.created} מופעים, דולגו ${result.result.skipped}`);
+      router.refresh();
+    } catch (err) {
+      setMessage(err instanceof Error ? err.message : "יצירה נכשלה");
+    } finally {
+      setLoading(false);
+    }
   }
 
   return (

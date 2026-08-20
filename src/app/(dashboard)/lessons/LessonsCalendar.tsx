@@ -21,13 +21,11 @@ import {
 } from "../actions";
 import type {
   Grade,
-  Class,
-  Track,
-  Specialization,
   ActivityRange,
   AttendanceRule,
   Lesson,
 } from "@/types/database";
+import type { TeachingAssignmentOption } from "./LessonsForm";
 
 interface OccurrenceRow {
   id: string;
@@ -43,11 +41,8 @@ interface LessonsCalendarProps {
   initialMonthIso?: string;
   occurrences: OccurrenceRow[];
   lessons: Lesson[];
-  teachingAssignments: Array<{ id: string; subject: string; teachers: { full_name: string } }>;
+  teachingAssignments: TeachingAssignmentOption[];
   grades: Grade[];
-  classes: Class[];
-  tracks: Track[];
-  specializations: Specialization[];
   ranges: ActivityRange[];
   rules: AttendanceRule[];
 }
@@ -59,9 +54,6 @@ export function LessonsCalendar({
   lessons,
   teachingAssignments,
   grades,
-  classes,
-  tracks,
-  specializations,
   ranges,
   rules,
 }: LessonsCalendarProps) {
@@ -194,9 +186,6 @@ export function LessonsCalendar({
                 occurrenceDate={selectedIso}
                 teachingAssignments={teachingAssignments}
                 grades={grades}
-                classes={classes}
-                tracks={tracks}
-                specializations={specializations}
                 ranges={ranges}
                 rules={rules}
                 onCreated={() => {

@@ -94,12 +94,12 @@ begin
   select id into t_dana from teachers where identity_number = '800000002';
   select id into t_miriam from teachers where identity_number = '800000003';
 
-  insert into teacher_teaching_assignments (teacher_id, academic_year_id, subject, class_id)
-  values (t_rivka, year_id, 'מתמטיקה', class_a1) returning id into ta_math;
-  insert into teacher_teaching_assignments (teacher_id, academic_year_id, subject, class_id)
-  values (t_dana, year_id, 'אנגלית', class_a1) returning id into ta_english;
-  insert into teacher_teaching_assignments (teacher_id, academic_year_id, subject, class_id, specialization_id)
-  values (t_miriam, year_id, 'היסטוריה', class_b1, spec_account) returning id into ta_history;
+  insert into teacher_teaching_assignments (teacher_id, academic_year_id, subject, billing_type, class_id, track_id)
+  values (t_rivka, year_id, 'מתמטיקה', 'mandatory', class_a1, track_iyuni) returning id into ta_math;
+  insert into teacher_teaching_assignments (teacher_id, academic_year_id, subject, billing_type, class_id, track_id)
+  values (t_dana, year_id, 'אנגלית', 'mandatory', class_a1, track_iyuni) returning id into ta_english;
+  insert into teacher_teaching_assignments (teacher_id, academic_year_id, subject, billing_type, specialization_id)
+  values (t_miriam, year_id, 'היסטוריה', 'specialization', spec_account) returning id into ta_history;
 
   insert into lessons (
     academic_year_id, teacher_teaching_assignment_id, subject, grade_id, class_id, track_id,

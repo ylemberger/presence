@@ -3,6 +3,7 @@ import { getActiveAcademicYear } from "@/lib/utils";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { GenerateOccurrencesButton } from "./GenerateOccurrencesButton";
 import { LessonsCalendar } from "./LessonsCalendar";
+import type { TeachingAssignmentOption } from "./LessonsForm";
 import {
   buildHebrewMonth,
   hebrewMonthFromIso,
@@ -30,31 +31,29 @@ export default async function LessonsPage({ searchParams }: Props) {
   const from = searchParams.from || month.rangeStart;
   const to = searchParams.to || month.rangeEnd;
 
-  const [lessons, teachingAssignments, grades, classes, tracks, specializations, ranges, rules, occurrences] =
-    await Promise.all([
-      supabase
-        .from("lessons")
-        .select("*")
-        .eq("academic_year_id", activeYear.id)
-        .order("day_of_week"),
-      supabase
-        .from("teacher_teaching_assignments")
-        .select("id, subject, teachers(full_name)")
-        .eq("academic_year_id", activeYear.id),
-      supabase.from("grades").select("*").eq("academic_year_id", activeYear.id),
-      supabase.from("classes").select("*").eq("academic_year_id", activeYear.id),
-      supabase.from("tracks").select("*").eq("academic_year_id", activeYear.id),
-      supabase.from("specializations").select("*").eq("academic_year_id", activeYear.id),
-      supabase.from("activity_ranges").select("*").eq("academic_year_id", activeYear.id),
-      supabase.from("attendance_rules").select("*"),
-      supabase
-        .from("lesson_occurrences")
-        .select("id, occurrence_date, status, notes, lesson_id, lessons!inner(subject, academic_year_id)")
-        .eq("lessons.academic_year_id", activeYear.id)
-        .gte("occurrence_date", from)
-        .lte("occurrence_date", to)
-        .order("occurrence_date"),
-    ]);
+  const [lessons, teachingAssignments, grades, ranges, rules, occurrences] = await Promise.all([
+    supabase
+      .from("lessons")
+      .select("*")
+      .eq("academic_year_id", activeYear.id)
+      .order("day_of_week"),
+    supabase
+      .from("teacher_teaching_assignments")
+      .select(
+        "id, subject, billing_type, teachers(full_name), classes(name), tracks(name), specializations(name)"
+      )
+      .eq("academic_year_id", activeYear.id),
+    supabase.from("grades").select("*").eq("academic_year_id", activeYear.id),
+    supabase.from("activity_ranges").select("*").eq("academic_year_id", activeYear.id),
+    supabase.from("attendance_rules").select("*"),
+    supabase
+      .from("lesson_occurrences")
+      .select("id, occurrence_date, status, notes, lesson_id, lessons!inner(subject, academic_year_id)")
+      .eq("lessons.academic_year_id", activeYear.id)
+      .gte("occurrence_date", from)
+      .lte("occurrence_date", to)
+      .order("occurrence_date"),
+  ]);
 
   const occurrenceRows = (occurrences.data ?? []).map((o) => ({
     id: o.id,
@@ -65,11 +64,24 @@ export default async function LessonsPage({ searchParams }: Props) {
     subject: (o.lessons as unknown as { subject: string } | null)?.subject ?? "",
   }));
 
+  const teachingOptions: TeachingAssignmentOption[] = (teachingAssignments.data ?? []).map(
+    (t) => ({
+      id: t.id,
+      subject: t.subject,
+      billing_type: (t.billing_type as "mandatory" | "specialization") ?? "mandatory",
+      teachers: t.teachers as unknown as { full_name: string } | null,
+      className: (t.classes as unknown as { name: string } | null)?.name ?? null,
+      trackName: (t.tracks as unknown as { name: string } | null)?.name ?? null,
+      specializationName:
+        (t.specializations as unknown as { name: string } | null)?.name ?? null,
+    })
+  );
+
   return (
     <div className="space-y-6">
       <PageHeader
         title="יומן שיעורים עברי"
-        description="לחיצה על יום מציגה את השיעורים ומאפשרת יצירה ישירה."
+        description="סוג השיעור (חובה/התמחות) נקבע לפי שיבוץ ההוראה של המורה."
         actions={<GenerateOccurrencesButton academicYearId={activeYear.id} />}
       />
       <LessonsCalendar
@@ -77,15 +89,8 @@ export default async function LessonsPage({ searchParams }: Props) {
         initialMonthIso={from}
         occurrences={occurrenceRows}
         lessons={lessons.data ?? []}
-        teachingAssignments={(teachingAssignments.data ?? []) as unknown as Array<{
-          id: string;
-          subject: string;
-          teachers: { full_name: string };
-        }>}
+        teachingAssignments={teachingOptions}
         grades={grades.data ?? []}
-        classes={classes.data ?? []}
-        tracks={tracks.data ?? []}
-        specializations={specializations.data ?? []}
         ranges={ranges.data ?? []}
         rules={rules.data ?? []}
       />

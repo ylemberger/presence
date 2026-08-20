@@ -98,7 +98,9 @@ export interface TeacherTeachingAssignment {
   teacher_id: string;
   academic_year_id: string;
   subject: string;
-  class_id: string;
+  billing_type: BillingType;
+  class_id: string | null;
+  track_id: string | null;
   specialization_id: string | null;
   source_record_id: string | null;
 }

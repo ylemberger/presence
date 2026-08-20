@@ -16,9 +16,14 @@ export function DeleteButton({ onDelete, label = "מחק" }: DeleteButtonProps) 
     if (!confirm("האם את בטוחה שברצונך למחוק?")) return;
     setLoading(true);
     setError(null);
-    const result = await onDelete();
-    if (result.error) setError(result.error);
-    setLoading(false);
+    try {
+      const result = await onDelete();
+      if (result?.error) setError(result.error);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "מחיקה נכשלה");
+    } finally {
+      setLoading(false);
+    }
   }
 
   return (

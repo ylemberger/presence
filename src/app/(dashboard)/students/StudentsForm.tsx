@@ -14,6 +14,8 @@ interface StudentsFormProps {
   classes: Class[];
   tracks: Track[];
   specializations: Specialization[];
+  onSuccess?: () => void;
+  onCancel?: () => void;
 }
 
 export function StudentsForm({
@@ -22,6 +24,8 @@ export function StudentsForm({
   classes,
   tracks,
   specializations,
+  onSuccess,
+  onCancel,
 }: StudentsFormProps) {
   const router = useRouter();
   const [error, setError] = useState<string | null>(null);
@@ -32,66 +36,103 @@ export function StudentsForm({
 
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
+    const form = e.currentTarget;
     setLoading(true);
     setError(null);
-    const fd = new FormData(e.currentTarget);
-    fd.set("academic_year_id", yearId);
-    const result = await createStudentAction(fd);
-    if (result && "error" in result && result.error) setError(result.error);
-    else {
-      e.currentTarget.reset();
+    try {
+      const fd = new FormData(form);
+      fd.set("academic_year_id", yearId);
+      const result = await createStudentAction(fd);
+      if (result && "error" in result && result.error) {
+        setError(result.error);
+        return;
+      }
+      form.reset();
       setGradeId("");
       router.refresh();
+      onSuccess?.();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "שמירה נכשלה");
+    } finally {
+      setLoading(false);
     }
-    setLoading(false);
   }
 
   return (
-    <form onSubmit={handleSubmit} className="flex flex-wrap items-end gap-3">
-      <Input label="שם מלא" name="full_name" required />
-      <Input label='ת"ז' name="identity_number" required />
-      <Select
-        label="שכבה"
-        name="grade_id"
-        required
-        value={gradeId}
-        onChange={(e) => setGradeId(e.target.value)}
-        options={[
-          { value: "", label: "בחרי" },
-          ...grades.map((g) => ({ value: g.id, label: g.name })),
-        ]}
-      />
-      <Select
-        label="כיתה"
-        name="class_id"
-        required
-        options={[
-          { value: "", label: "בחרי" },
-          ...filteredClasses.map((c) => ({ value: c.id, label: c.name })),
-        ]}
-      />
-      <Select
-        label="מסלול"
-        name="track_id"
-        required
-        options={[
-          { value: "", label: "בחרי" },
-          ...tracks.map((t) => ({ value: t.id, label: t.name })),
-        ]}
-      />
-      <Select
-        label="התמחות"
-        name="specialization_id"
-        options={[
-          { value: "", label: "ללא" },
-          ...specializations.map((s) => ({ value: s.id, label: s.name })),
-        ]}
-      />
-      <HebrewDateInput label="בתוקף מתאריך" name="start_date" required />
-      <Button type="submit" disabled={loading}>
-        {loading ? "שומר..." : "הוספת תלמידה"}
-      </Button>
-      {error && <p className="w-full text-sm text-red-600">{error}</p>}
+    <form onSubmit={handleSubmit} className="space-y-6">
+      <section className="space-y-3">
+        <h3 className="text-sm font-semibold text-slate-800">פרטי תלמידה</h3>
+        <div className="grid gap-3 sm:grid-cols-2">
+          <Input label="שם מלא" name="full_name" required autoFocus />
+          <Input label='תעודת זהות' name="identity_number" required inputMode="numeric" />
+        </div>
+      </section>
+
+      <section className="space-y-3 border-t border-stone-100 pt-5">
+        <h3 className="text-sm font-semibold text-slate-800">שיבוץ ראשוני (חובה)</h3>
+        <p className="text-xs text-slate-500">
+          חייבים למלא שכבה, כיתה, מסלול ותאריך תחילה. בלי זה לא ניתן ליצור תלמידה.
+        </p>
+        <div className="grid gap-3 sm:grid-cols-2">
+          <Select
+            label="שכבה"
+            name="grade_id"
+            required
+            value={gradeId}
+            onChange={(e) => setGradeId(e.target.value)}
+            options={[
+              { value: "", label: "בחרי שכבה" },
+              ...grades.map((g) => ({ value: g.id, label: g.name })),
+            ]}
+          />
+          <Select
+            label="כיתה"
+            name="class_id"
+            required
+            options={[
+              { value: "", label: "בחרי כיתה" },
+              ...filteredClasses.map((c) => ({ value: c.id, label: c.name })),
+            ]}
+          />
+          <Select
+            label="מסלול"
+            name="track_id"
+            required
+            options={[
+              { value: "", label: "בחרי מסלול" },
+              ...tracks.map((t) => ({ value: t.id, label: t.name })),
+            ]}
+          />
+          <Select
+            label="התמחות"
+            name="specialization_id"
+            options={[
+              { value: "", label: "ללא התמחות" },
+              ...specializations.map((s) => ({ value: s.id, label: s.name })),
+            ]}
+          />
+          <div className="sm:col-span-2">
+            <HebrewDateInput label="בתוקף מתאריך" name="start_date" required />
+          </div>
+        </div>
+      </section>
+
+      {error && (
+        <p className="rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-700">
+          {error}
+        </p>
+      )}
+
+      <div className="flex flex-wrap items-center justify-end gap-2 border-t border-stone-100 pt-4">
+        {onCancel && (
+          <Button type="button" variant="secondary" onClick={onCancel} disabled={loading}>
+            ביטול
+          </Button>
+        )}
+        <Button type="submit" disabled={loading}>
+          {loading ? "שומר..." : "שמירת תלמידה"}
+        </Button>
+      </div>
     </form>
   );
 }

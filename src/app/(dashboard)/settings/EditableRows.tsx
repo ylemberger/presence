@@ -40,14 +40,19 @@ export function EditableNameRow({
 
   async function handleSave(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
+    const form = e.currentTarget;
     setError(null);
-    const fd = new FormData(e.currentTarget);
-    onBuildFormData?.(fd);
-    const result = await updateAction(id, fd);
-    if (result.error) setError(result.error);
-    else {
-      setEditing(false);
-      router.refresh();
+    try {
+      const fd = new FormData(form);
+      onBuildFormData?.(fd);
+      const result = await updateAction(id, fd);
+      if (result?.error) setError(result.error);
+      else {
+        setEditing(false);
+        router.refresh();
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "שמירה נכשלה");
     }
   }
 
@@ -113,12 +118,17 @@ export function EditableActivityRangeRow({
 
   async function handleSave(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
+    const form = e.currentTarget;
     setError(null);
-    const result = await updateAction(id, new FormData(e.currentTarget));
-    if (result.error) setError(result.error);
-    else {
-      setEditing(false);
-      router.refresh();
+    try {
+      const result = await updateAction(id, new FormData(form));
+      if (result?.error) setError(result.error);
+      else {
+        setEditing(false);
+        router.refresh();
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "שמירה נכשלה");
     }
   }
 

@@ -22,18 +22,24 @@ export function SettingsForms({ type, yearId, grades, createAction }: SettingsFo
 
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
+    const form = e.currentTarget;
     setLoading(true);
     setError(null);
-    const formData = new FormData(e.currentTarget);
-    if (yearId) formData.set("academic_year_id", yearId);
-    const result = await createAction(formData);
-    if (result.error) {
-      setError(result.error);
-    } else {
-      e.currentTarget.reset();
-      router.refresh();
+    try {
+      const formData = new FormData(form);
+      if (yearId) formData.set("academic_year_id", yearId);
+      const result = await createAction(formData);
+      if (result?.error) {
+        setError(result.error);
+      } else {
+        form.reset();
+        router.refresh();
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "שמירה נכשלה");
+    } finally {
+      setLoading(false);
     }
-    setLoading(false);
   }
 
   return (
@@ -49,7 +55,13 @@ export function SettingsForms({ type, yearId, grades, createAction }: SettingsFo
       )}
 
       {(type === "grade" || type === "track" || type === "specialization") && (
-        <Input label="שם" name="name" required />
+        <Input
+          label={
+            type === "grade" ? "שם שכבה" : type === "track" ? "שם מסלול" : "שם התמחות"
+          }
+          name="name"
+          required
+        />
       )}
 
       {type === "class" && (

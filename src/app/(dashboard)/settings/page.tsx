@@ -191,7 +191,7 @@ export default async function SettingsPage() {
     </div>
   ) : (
     <Card>
-      <p className="text-slate-600">צרי שנה אקדמית פעילה כדי להגדיר שכבות וכיתות.</p>
+      <p className="text-slate-600">צרי שנה אקדמית פעילה כדי להגדיר שכבות, כיתות ומסלולים.</p>
     </Card>
   );
 
@@ -265,12 +265,12 @@ export default async function SettingsPage() {
     <div>
       <PageHeader
         title="הגדרות מוסד"
-        description="שנה, מבנה כיתות, טווחי פעילות וכללי היעדרות. ניתן להוסיף ולערוך."
+        description="שנה, שכבות, כיתות, מסלולים, טווחי פעילות וכללי היעדרות. ניתן להוסיף ולערוך."
       />
       <Tabs
         tabs={[
           { id: "year", label: "שנים", content: yearPanel },
-          { id: "structure", label: "שכבות וכיתות", content: structurePanel },
+          { id: "structure", label: "שכבות, כיתות ומסלולים", content: structurePanel },
           { id: "ranges", label: "טווחי פעילות", content: rangesPanel },
           { id: "rules", label: "כללי נוכחות", content: rulesPanel },
         ]}
