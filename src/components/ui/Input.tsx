@@ -17,7 +17,7 @@ export function Input({ label, error, className, id, ...props }: InputProps) {
       <input
         id={inputId}
         className={cn(
-          "rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500",
+          "rounded-xl border border-stone-200 bg-white px-3 py-2 text-sm focus:border-[var(--brand)] focus:outline-none focus:ring-2 focus:ring-[var(--brand)]/15",
           error && "border-red-500",
           className
         )}
@@ -46,7 +46,7 @@ export function Select({ label, error, options, className, id, ...props }: Selec
       <select
         id={selectId}
         className={cn(
-          "rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500",
+          "rounded-xl border border-stone-200 bg-white px-3 py-2 text-sm focus:border-[var(--brand)] focus:outline-none focus:ring-2 focus:ring-[var(--brand)]/15",
           error && "border-red-500",
           className
         )}

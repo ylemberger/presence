@@ -1,6 +1,8 @@
-import { Card } from "@/components/ui/Card";
+import { PageHeader } from "@/components/ui/PageHeader";
 import { createClient } from "@/lib/supabase/server";
 import { getActiveAcademicYear } from "@/lib/utils";
+import { addDays } from "@/lib/dates/hebrew";
+import { formatHebrewDate, toIsoDate } from "@/lib/dates/hebrew";
 import { AttendanceJournal } from "./AttendanceJournal";
 
 interface Props {
@@ -8,16 +10,15 @@ interface Props {
 }
 
 function getWeekStart(dateStr?: string): string {
-  const d = dateStr ? new Date(dateStr) : new Date();
+  const d = dateStr
+    ? (() => {
+        const [y, m, day] = dateStr.split("-").map(Number);
+        return new Date(y, m - 1, day, 12, 0, 0);
+      })()
+    : new Date();
   const day = d.getDay();
   d.setDate(d.getDate() - day);
-  return d.toISOString().split("T")[0];
-}
-
-function addDaysToDate(dateStr: string, days: number): string {
-  const d = new Date(dateStr);
-  d.setDate(d.getDate() + days);
-  return d.toISOString().split("T")[0];
+  return toIsoDate(d);
 }
 
 export default async function AttendancePage({ searchParams }: Props) {
@@ -28,14 +29,13 @@ export default async function AttendancePage({ searchParams }: Props) {
   if (!activeYear) {
     return (
       <div>
-        <h1 className="text-2xl font-bold text-gray-900">נוכחות</h1>
-        <p className="mt-4 text-gray-600">יש להגדיר שנה אקדמית פעילה.</p>
+        <PageHeader title="יומן נוכחות" description="יש להגדיר שנה אקדמית פעילה." />
       </div>
     );
   }
 
   const weekStart = getWeekStart(params.week);
-  const weekEnd = addDaysToDate(weekStart, 6);
+  const weekEnd = addDays(weekStart, 6);
   const classId = params.classId;
 
   const { data: classes } = await supabase
@@ -98,31 +98,33 @@ export default async function AttendancePage({ searchParams }: Props) {
 
   return (
     <div>
-      <h1 className="mb-6 text-2xl font-bold text-gray-900">יומן נוכחות</h1>
+      <PageHeader
+        title="יומן נוכחות"
+        description="לחיצה על תא משנה: נוכחת → נעדרה → איחור. איחור נספר כנוכחות."
+      />
 
       {unmarkedOccurrences.length > 0 && (
-        <div className="mb-4 rounded-lg border border-yellow-300 bg-yellow-50 p-4 text-yellow-800">
-          אזהרה: {unmarkedOccurrences.length} מופעי שיעור ללא רישום נוכחות מלא השבוע.
+        <div className="mb-4 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+          {unmarkedOccurrences.length} שיעורים השבוע עדיין בלי רישום מלא.
         </div>
       )}
 
-      <Card>
-        <AttendanceJournal
-          weekStart={weekStart}
-          classes={classes ?? []}
-          selectedClassId={classId}
-          students={students}
-          occurrences={filteredOccurrences.map((o) => {
-            const lesson = o.lessons as unknown as { subject: string };
-            return {
-              id: o.id,
-              date: o.occurrence_date,
-              subject: lesson?.subject ?? "",
-            };
-          })}
-          attendance={attendanceRecords}
-        />
-      </Card>
+      <AttendanceJournal
+        weekStart={weekStart}
+        weekLabel={`${formatHebrewDate(weekStart)} – ${formatHebrewDate(weekEnd)}`}
+        classes={classes ?? []}
+        selectedClassId={classId}
+        students={students}
+        occurrences={filteredOccurrences.map((o) => {
+          const lesson = o.lessons as unknown as { subject: string };
+          return {
+            id: o.id,
+            date: o.occurrence_date,
+            subject: lesson?.subject ?? "",
+          };
+        })}
+        attendance={attendanceRecords}
+      />
     </div>
   );
 }

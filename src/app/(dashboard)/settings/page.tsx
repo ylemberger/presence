@@ -1,10 +1,8 @@
 import { Card } from "@/components/ui/Card";
-import { Table, TableRow, TableCell } from "@/components/ui/Table";
-import { DeleteButton } from "@/components/ui/DeleteButton";
+import { PageHeader } from "@/components/ui/PageHeader";
+import { Tabs } from "@/components/ui/Tabs";
 import { getActiveAcademicYear, getAllAcademicYears } from "@/lib/utils";
 import { createClient } from "@/lib/supabase/server";
-import { RANGE_TYPE_LABELS } from "@/lib/constants";
-import { formatDate } from "@/lib/utils";
 import {
   createAcademicYearAction,
   createGradeAction,
@@ -20,14 +18,27 @@ import {
   deleteSpecializationAction,
   deleteActivityRangeAction,
   deleteAttendanceRuleAction,
+  updateAcademicYearAction,
+  updateGradeAction,
+  updateClassAction,
+  updateTrackAction,
+  updateSpecializationAction,
+  updateActivityRangeAction,
+  updateAttendanceRuleAction,
 } from "../actions";
 import { SettingsForms } from "./SettingsForms";
+import {
+  EditableActivityRangeRow,
+  EditableAttendanceRuleRow,
+  EditableClassRow,
+  EditableNameRow,
+  EditableYearRow,
+} from "./EditableRows";
 
 export default async function SettingsPage() {
   const activeYear = await getActiveAcademicYear();
   const years = await getAllAcademicYears();
   const supabase = await createClient();
-
   const yearId = activeYear?.id;
 
   const [grades, classes, tracks, specializations, ranges, rules] = yearId
@@ -41,134 +52,229 @@ export default async function SettingsPage() {
       ])
     : [{ data: [] }, { data: [] }, { data: [] }, { data: [] }, { data: [] }, { data: [] }];
 
-  return (
-    <div className="space-y-8">
-      <h1 className="text-2xl font-bold text-gray-900">הגדרות</h1>
+  const yearPanel = (
+    <Card title="שנים אקדמיות">
+      <SettingsForms type="academic_year" yearId={yearId} createAction={createAcademicYearAction} />
+      <div className="mt-4 overflow-x-auto">
+        <table className="w-full text-sm">
+          <thead>
+            <tr className="border-b border-stone-200 bg-stone-50/90">
+              <th className="px-4 py-3 text-right text-xs font-semibold text-slate-500">שם</th>
+              <th className="px-4 py-3 text-right text-xs font-semibold text-slate-500">סטטוס</th>
+              <th className="px-4 py-3 text-right text-xs font-semibold text-slate-500">פעולות</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-gray-100">
+            {years.map((y) => (
+              <EditableYearRow
+                key={y.id}
+                id={y.id}
+                name={y.name}
+                isActive={y.is_active}
+                updateAction={updateAcademicYearAction}
+                deleteAction={deleteAcademicYearAction}
+              />
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </Card>
+  );
 
-      <Card title="שנים אקדמיות">
-        <SettingsForms
-          type="academic_year"
-          yearId={yearId}
-          createAction={createAcademicYearAction}
-        />
-        <Table headers={["שם", "פעילה", "פעולות"]} className="mt-4">
-          {years.map((y) => (
-            <TableRow key={y.id}>
-              <TableCell>{y.name}</TableCell>
-              <TableCell>{y.is_active ? "כן" : "לא"}</TableCell>
-              <TableCell>
-                <DeleteButton onDelete={() => deleteAcademicYearAction(y.id)} />
-              </TableCell>
-            </TableRow>
-          ))}
-        </Table>
-      </Card>
-
-      {yearId && (
-        <>
-          <Card title="שכבות">
-            <SettingsForms type="grade" yearId={yearId} createAction={createGradeAction} />
-            <Table headers={["שם", "פעולות"]} className="mt-4">
+  const structurePanel = yearId ? (
+    <div className="grid gap-6 lg:grid-cols-2">
+      <Card title="שכבות">
+        <SettingsForms type="grade" yearId={yearId} createAction={createGradeAction} />
+        <div className="mt-4 overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="border-b border-stone-200 bg-stone-50/90">
+                <th className="px-4 py-3 text-right text-xs font-semibold text-slate-500">שם</th>
+                <th className="px-4 py-3 text-right text-xs font-semibold text-slate-500">פעולות</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-gray-100">
               {(grades.data ?? []).map((g) => (
-                <TableRow key={g.id}>
-                  <TableCell>{g.name}</TableCell>
-                  <TableCell>
-                    <DeleteButton onDelete={() => deleteGradeAction(g.id)} />
-                  </TableCell>
-                </TableRow>
+                <EditableNameRow
+                  key={g.id}
+                  id={g.id}
+                  name={g.name}
+                  updateAction={updateGradeAction}
+                  deleteAction={deleteGradeAction}
+                />
               ))}
-            </Table>
-          </Card>
-
-          <Card title="כיתות">
-            <SettingsForms
-              type="class"
-              yearId={yearId}
-              grades={grades.data ?? []}
-              createAction={createClassAction}
-            />
-            <Table headers={["שם", "שכבה", "פעולות"]} className="mt-4">
-              {(classes.data ?? []).map((c) => (
-                <TableRow key={c.id}>
-                  <TableCell>{c.name}</TableCell>
-                  <TableCell>{(c.grades as unknown as { name: string } | null)?.name}</TableCell>
-                  <TableCell>
-                    <DeleteButton onDelete={() => deleteClassAction(c.id)} />
-                  </TableCell>
-                </TableRow>
-              ))}
-            </Table>
-          </Card>
-
-          <Card title="מגמות">
-            <SettingsForms type="track" yearId={yearId} createAction={createTrackAction} />
-            <Table headers={["שם", "פעולות"]} className="mt-4">
-              {(tracks.data ?? []).map((t) => (
-                <TableRow key={t.id}>
-                  <TableCell>{t.name}</TableCell>
-                  <TableCell>
-                    <DeleteButton onDelete={() => deleteTrackAction(t.id)} />
-                  </TableCell>
-                </TableRow>
-              ))}
-            </Table>
-          </Card>
-
-          <Card title="התמחויות">
-            <SettingsForms
-              type="specialization"
-              yearId={yearId}
-              createAction={createSpecializationAction}
-            />
-            <Table headers={["שם", "פעולות"]} className="mt-4">
-              {(specializations.data ?? []).map((s) => (
-                <TableRow key={s.id}>
-                  <TableCell>{s.name}</TableCell>
-                  <TableCell>
-                    <DeleteButton onDelete={() => deleteSpecializationAction(s.id)} />
-                  </TableCell>
-                </TableRow>
-              ))}
-            </Table>
-          </Card>
-
-          <Card title="טווחי פעילות">
-            <SettingsForms
-              type="activity_range"
-              yearId={yearId}
-              createAction={createActivityRangeAction}
-            />
-            <Table headers={["שם", "סוג", "מתאריך", "עד תאריך", "פעולות"]} className="mt-4">
-              {(ranges.data ?? []).map((r) => (
-                <TableRow key={r.id}>
-                  <TableCell>{r.name}</TableCell>
-                  <TableCell>{RANGE_TYPE_LABELS[r.range_type as keyof typeof RANGE_TYPE_LABELS]}</TableCell>
-                  <TableCell>{formatDate(r.start_date)}</TableCell>
-                  <TableCell>{formatDate(r.end_date)}</TableCell>
-                  <TableCell>
-                    <DeleteButton onDelete={() => deleteActivityRangeAction(r.id)} />
-                  </TableCell>
-                </TableRow>
-              ))}
-            </Table>
-          </Card>
-        </>
-      )}
-
-      <Card title="כללי נוכחות">
-        <SettingsForms type="attendance_rule" createAction={createAttendanceRuleAction} />
-        <Table headers={["שם", "אחוז היעדרות מקסימלי", "פעולות"]} className="mt-4">
-          {(rules.data ?? []).map((r) => (
-            <TableRow key={r.id}>
-              <TableCell>{r.name}</TableCell>
-              <TableCell>{r.max_allowed_absence_percent}%</TableCell>
-              <TableCell>
-                <DeleteButton onDelete={() => deleteAttendanceRuleAction(r.id)} />
-              </TableCell>
-            </TableRow>
-          ))}
-        </Table>
+            </tbody>
+          </table>
+        </div>
       </Card>
+      <Card title="כיתות">
+        <SettingsForms
+          type="class"
+          yearId={yearId}
+          grades={grades.data ?? []}
+          createAction={createClassAction}
+        />
+        <div className="mt-4 overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="border-b border-stone-200 bg-stone-50/90">
+                <th className="px-4 py-3 text-right text-xs font-semibold text-slate-500">שם</th>
+                <th className="px-4 py-3 text-right text-xs font-semibold text-slate-500">שכבה</th>
+                <th className="px-4 py-3 text-right text-xs font-semibold text-slate-500">פעולות</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-gray-100">
+              {(classes.data ?? []).map((c) => (
+                <EditableClassRow
+                  key={c.id}
+                  id={c.id}
+                  name={c.name}
+                  gradeId={c.grade_id}
+                  gradeName={(c.grades as unknown as { name: string } | null)?.name ?? ""}
+                  grades={grades.data ?? []}
+                  updateAction={updateClassAction}
+                  deleteAction={deleteClassAction}
+                />
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </Card>
+      <Card title="מגמות">
+        <SettingsForms type="track" yearId={yearId} createAction={createTrackAction} />
+        <div className="mt-4 overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="border-b border-stone-200 bg-stone-50/90">
+                <th className="px-4 py-3 text-right text-xs font-semibold text-slate-500">שם</th>
+                <th className="px-4 py-3 text-right text-xs font-semibold text-slate-500">פעולות</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-gray-100">
+              {(tracks.data ?? []).map((t) => (
+                <EditableNameRow
+                  key={t.id}
+                  id={t.id}
+                  name={t.name}
+                  updateAction={updateTrackAction}
+                  deleteAction={deleteTrackAction}
+                />
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </Card>
+      <Card title="התמחויות">
+        <SettingsForms type="specialization" yearId={yearId} createAction={createSpecializationAction} />
+        <div className="mt-4 overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="border-b border-stone-200 bg-stone-50/90">
+                <th className="px-4 py-3 text-right text-xs font-semibold text-slate-500">שם</th>
+                <th className="px-4 py-3 text-right text-xs font-semibold text-slate-500">פעולות</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-gray-100">
+              {(specializations.data ?? []).map((s) => (
+                <EditableNameRow
+                  key={s.id}
+                  id={s.id}
+                  name={s.name}
+                  updateAction={updateSpecializationAction}
+                  deleteAction={deleteSpecializationAction}
+                />
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </Card>
+    </div>
+  ) : (
+    <Card>
+      <p className="text-slate-600">צרי שנה אקדמית פעילה כדי להגדיר שכבות וכיתות.</p>
+    </Card>
+  );
+
+  const rangesPanel = yearId ? (
+    <Card title="טווחי פעילות">
+      <SettingsForms type="activity_range" yearId={yearId} createAction={createActivityRangeAction} />
+      <div className="mt-4 overflow-x-auto">
+        <table className="w-full text-sm">
+          <thead>
+            <tr className="border-b border-stone-200 bg-stone-50/90">
+              <th className="px-4 py-3 text-right text-xs font-semibold text-slate-500">שם</th>
+              <th className="px-4 py-3 text-right text-xs font-semibold text-slate-500">סוג</th>
+              <th className="px-4 py-3 text-right text-xs font-semibold text-slate-500">מתאריך</th>
+              <th className="px-4 py-3 text-right text-xs font-semibold text-slate-500">עד תאריך</th>
+              <th className="px-4 py-3 text-right text-xs font-semibold text-slate-500">פעולות</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-gray-100">
+            {(ranges.data ?? []).map((r) => (
+              <EditableActivityRangeRow
+                key={r.id}
+                id={r.id}
+                name={r.name}
+                rangeType={r.range_type}
+                startDate={r.start_date}
+                endDate={r.end_date}
+                updateAction={updateActivityRangeAction}
+                deleteAction={deleteActivityRangeAction}
+              />
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </Card>
+  ) : (
+    <Card>
+      <p className="text-slate-600">צרי שנה אקדמית פעילה תחילה.</p>
+    </Card>
+  );
+
+  const rulesPanel = (
+    <Card title="כללי נוכחות">
+      <SettingsForms type="attendance_rule" createAction={createAttendanceRuleAction} />
+      <div className="mt-4 overflow-x-auto">
+        <table className="w-full text-sm">
+          <thead>
+            <tr className="border-b border-stone-200 bg-stone-50/90">
+              <th className="px-4 py-3 text-right text-xs font-semibold text-slate-500">שם</th>
+              <th className="px-4 py-3 text-right text-xs font-semibold text-slate-500">סף היעדרות</th>
+              <th className="px-4 py-3 text-right text-xs font-semibold text-slate-500">פעולות</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-gray-100">
+            {(rules.data ?? []).map((r) => (
+              <EditableAttendanceRuleRow
+                key={r.id}
+                id={r.id}
+                name={r.name}
+                maxPercent={r.max_allowed_absence_percent}
+                updateAction={updateAttendanceRuleAction}
+                deleteAction={deleteAttendanceRuleAction}
+              />
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </Card>
+  );
+
+  return (
+    <div>
+      <PageHeader
+        title="הגדרות מוסד"
+        description="שנה, מבנה כיתות, טווחי פעילות וכללי היעדרות. ניתן להוסיף ולערוך."
+      />
+      <Tabs
+        tabs={[
+          { id: "year", label: "שנים", content: yearPanel },
+          { id: "structure", label: "שכבות וכיתות", content: structurePanel },
+          { id: "ranges", label: "טווחי פעילות", content: rangesPanel },
+          { id: "rules", label: "כללי נוכחות", content: rulesPanel },
+        ]}
+      />
     </div>
   );
 }

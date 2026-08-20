@@ -3,7 +3,8 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/Button";
-import { Input, Select } from "@/components/ui/Input";
+import { Select } from "@/components/ui/Input";
+import { HebrewDateInput } from "@/components/ui/HebrewDateInput";
 import {
   createStudentAssignmentAction,
   transferStudentAction,
@@ -128,13 +129,13 @@ export function StudentDetailForms({ studentId, yearData }: Props) {
       {mode === "assign" ? (
         <form onSubmit={handleAssign} className="flex flex-wrap items-end gap-3">
           <AssignmentFields yearData={yearData} prefix="" />
-          <Input label="תאריך התחלה" name="start_date" type="date" required />
-          <Input label="תאריך סיום (אופציונלי)" name="end_date" type="date" />
+          <HebrewDateInput label="תאריך התחלה" name="start_date" required />
+          <HebrewDateInput label="תאריך סיום (אופציונלי)" name="end_date" allowEmpty />
           <Button type="submit">שמור שיבוץ</Button>
         </form>
       ) : (
         <form onSubmit={handleTransfer} className="flex flex-wrap items-end gap-3">
-          <Input label="תאריך העברה" name="transfer_date" type="date" required />
+          <HebrewDateInput label="תאריך העברה" name="transfer_date" required />
           <AssignmentFields yearData={yearData} prefix="" />
           <Button type="submit">בצע העברה</Button>
         </form>

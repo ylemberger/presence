@@ -1,9 +1,7 @@
-import Link from "next/link";
-import { Card } from "@/components/ui/Card";
-import { Table, TableRow, TableCell } from "@/components/ui/Table";
+import { PageHeader } from "@/components/ui/PageHeader";
 import { createClient } from "@/lib/supabase/server";
 import { getActiveAcademicYear } from "@/lib/utils";
-import { StudentsForm } from "./StudentsForm";
+import { StudentsDirectory } from "./StudentsDirectory";
 
 export default async function StudentsPage() {
   const activeYear = await getActiveAcademicYear();
@@ -14,7 +12,7 @@ export default async function StudentsPage() {
     .select("*")
     .order("full_name");
 
-  let assignments: Record<string, { className: string; gradeName: string }> = {};
+  const assignments: Record<string, { className: string; gradeName: string }> = {};
 
   if (activeYear) {
     const { data: currentAssignments } = await supabase
@@ -23,45 +21,30 @@ export default async function StudentsPage() {
       .eq("academic_year_id", activeYear.id)
       .is("end_date", null);
 
-    if (currentAssignments) {
-      for (const a of currentAssignments) {
-        assignments[a.student_id] = {
-          className: (a.classes as unknown as { name: string } | null)?.name ?? "-",
-          gradeName: (a.grades as unknown as { name: string } | null)?.name ?? "-",
-        };
-      }
+    for (const a of currentAssignments ?? []) {
+      assignments[a.student_id] = {
+        className: (a.classes as unknown as { name: string } | null)?.name ?? "לא משובצת",
+        gradeName: (a.grades as unknown as { name: string } | null)?.name ?? "—",
+      };
     }
   }
 
+  const rows = (students ?? []).map((s) => ({
+    id: s.id,
+    full_name: s.full_name,
+    identity_number: s.identity_number,
+    is_active: s.is_active,
+    className: assignments[s.id]?.className ?? "לא משובצת",
+    gradeName: assignments[s.id]?.gradeName ?? "—",
+  }));
+
   return (
     <div>
-      <h1 className="mb-6 text-2xl font-bold text-gray-900">תלמידות</h1>
-
-      <Card title="הוספת תלמידה" className="mb-6">
-        <StudentsForm />
-      </Card>
-
-      <Card title="רשימת תלמידות">
-        <Table headers={["שם", 'ת"ז', "כיתה", "שכבה", "סטטוס", "פעולות"]}>
-          {(students ?? []).map((s) => (
-            <TableRow key={s.id}>
-              <TableCell>{s.full_name}</TableCell>
-              <TableCell>{s.identity_number}</TableCell>
-              <TableCell>{assignments[s.id]?.className ?? "-"}</TableCell>
-              <TableCell>{assignments[s.id]?.gradeName ?? "-"}</TableCell>
-              <TableCell>{s.is_active ? "פעילה" : "לא פעילה"}</TableCell>
-              <TableCell>
-                <Link
-                  href={`/students/${s.id}`}
-                  className="text-blue-600 hover:underline"
-                >
-                  פרטים
-                </Link>
-              </TableCell>
-            </TableRow>
-          ))}
-        </Table>
-      </Card>
+      <PageHeader
+        title="תלמידות"
+        description="כרטסת קבועה. העברה בין כיתות נשמרת בהיסטוריית שיבוצים, בלי למחוק תלמידה."
+      />
+      <StudentsDirectory students={rows} />
     </div>
   );
 }

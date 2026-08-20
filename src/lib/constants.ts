@@ -35,13 +35,13 @@ export const DAY_OF_WEEK_LABELS = [
 ] as const;
 
 export const NAV_ITEMS = [
-  { href: "/", label: "לוח בקרה" },
-  { href: "/settings", label: "הגדרות" },
-  { href: "/students", label: "תלמידות" },
-  { href: "/teachers", label: "מורות" },
-  { href: "/lessons", label: "שיעורים" },
-  { href: "/attendance", label: "נוכחות" },
-  { href: "/reports", label: "דוחות" },
+  { href: "/", label: "לוח בקרה", icon: "home" },
+  { href: "/students", label: "תלמידות", icon: "students" },
+  { href: "/attendance", label: "נוכחות", icon: "attendance" },
+  { href: "/lessons", label: "שיעורים", icon: "lessons" },
+  { href: "/teachers", label: "מורות", icon: "teachers" },
+  { href: "/reports", label: "דוחות", icon: "reports" },
+  { href: "/settings", label: "הגדרות", icon: "settings" },
 ] as const;
 
 export const ATTENDANCE_COLORS: Record<AttendanceStatus, string> = {

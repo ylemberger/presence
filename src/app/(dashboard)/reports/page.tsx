@@ -1,11 +1,14 @@
 import { Card } from "@/components/ui/Card";
 import { Table, TableRow, TableCell } from "@/components/ui/Table";
+import { PageHeader } from "@/components/ui/PageHeader";
 import { createClient } from "@/lib/supabase/server";
 import { getActiveAcademicYear } from "@/lib/utils";
+import { isDateInRange, formatDate } from "@/lib/dates/hebrew";
 import { summarizeAttendance } from "@/lib/attendance/calculator";
-import { isDateInRange } from "@/lib/utils";
 import { ReportsFilter } from "./ReportsFilter";
 import { PrintButton } from "@/components/ui/PrintButton";
+import { todayIso } from "@/lib/dates/hebrew";
+import type { AttendanceStatus } from "@/types/database";
 
 interface Props {
   searchParams: {
@@ -14,6 +17,8 @@ interface Props {
     startDate?: string;
     endDate?: string;
     minAbsence?: string;
+    ruleId?: string;
+    run?: string;
   };
 }
 
@@ -25,22 +30,29 @@ export default async function ReportsPage({ searchParams }: Props) {
   if (!activeYear) {
     return (
       <div>
-        <h1 className="text-2xl font-bold text-gray-900">דוחות</h1>
-        <p className="mt-4 text-gray-600">יש להגדיר שנה אקדמית פעילה.</p>
+        <PageHeader title="דוחות" description="יש להגדיר שנה אקדמית פעילה." />
       </div>
     );
   }
 
   const startDate = params.startDate ?? activeYear.created_at.split("T")[0];
-  const endDate = params.endDate ?? new Date().toISOString().split("T")[0];
+  const endDate = params.endDate ?? todayIso();
   const minAbsence = params.minAbsence ? parseFloat(params.minAbsence) : 0;
+  const shouldRun = params.run === "1" || Boolean(params.classId || params.studentId);
 
-  const [{ data: classes }, { data: allStudents }] = await Promise.all([
+  const [{ data: classes }, { data: allStudents }, { data: rules }] = await Promise.all([
     supabase.from("classes").select("id, name").eq("academic_year_id", activeYear.id),
     supabase.from("students").select("id, full_name").eq("is_active", true).order("full_name"),
+    supabase.from("attendance_rules").select("id, name, max_allowed_absence_percent").order("name"),
   ]);
 
+  const selectedRule = (rules ?? []).find((r) => r.id === params.ruleId);
+  const threshold = selectedRule
+    ? Number(selectedRule.max_allowed_absence_percent)
+    : minAbsence;
+
   let reportRows: Array<{
+    studentId: string;
     studentName: string;
     className: string;
     totalRequired: number;
@@ -48,7 +60,7 @@ export default async function ReportsPage({ searchParams }: Props) {
     absencePercent: number;
   }> = [];
 
-  if (params.classId || params.studentId) {
+  if (shouldRun) {
     let studentIds: string[] = [];
 
     if (params.studentId) {
@@ -59,112 +71,159 @@ export default async function ReportsPage({ searchParams }: Props) {
         .select("student_id")
         .eq("academic_year_id", activeYear.id)
         .eq("class_id", params.classId);
-      studentIds = (assignments ?? []).map((a) => a.student_id);
-    }
-
-    for (const studentId of studentIds) {
-      const { data: student } = await supabase
-        .from("students")
-        .select("full_name")
-        .eq("id", studentId)
-        .single();
-      if (!student) continue;
-
+      studentIds = [...new Set((assignments ?? []).map((a) => a.student_id))];
+    } else {
       const { data: assignments } = await supabase
         .from("student_assignments")
-        .select("*")
-        .eq("student_id", studentId)
+        .select("student_id")
         .eq("academic_year_id", activeYear.id);
+      studentIds = [...new Set((assignments ?? []).map((a) => a.student_id))];
+    }
 
-      const { data: lessonAssignments } = await supabase
-        .from("student_lesson_assignments")
-        .select("*, lessons!inner(academic_year_id)")
-        .eq("student_id", studentId)
-        .eq("lessons.academic_year_id", activeYear.id);
+    if (studentIds.length > 0) {
+      const [
+        { data: students },
+        { data: assignments },
+        { data: lessonAssignments },
+        { data: occurrences },
+        { data: attendanceRecords },
+      ] = await Promise.all([
+        supabase.from("students").select("id, full_name").in("id", studentIds),
+        supabase
+          .from("student_assignments")
+          .select("*, classes(name)")
+          .eq("academic_year_id", activeYear.id)
+          .in("student_id", studentIds),
+        supabase
+          .from("student_lesson_assignments")
+          .select("*, lessons!inner(academic_year_id)")
+          .eq("lessons.academic_year_id", activeYear.id)
+          .in("student_id", studentIds),
+        supabase
+          .from("lesson_occurrences")
+          .select("id, occurrence_date, status, lesson_id, lessons!inner(academic_year_id)")
+          .eq("lessons.academic_year_id", activeYear.id)
+          .gte("occurrence_date", startDate)
+          .lte("occurrence_date", endDate)
+          .neq("status", "cancelled"),
+        supabase.from("attendance").select("*").in("student_id", studentIds),
+      ]);
 
-      const { data: occurrences } = await supabase
-        .from("lesson_occurrences")
-        .select("id, occurrence_date, status, lesson_id, lessons!inner(academic_year_id)")
-        .eq("lessons.academic_year_id", activeYear.id)
-        .gte("occurrence_date", startDate)
-        .lte("occurrence_date", endDate)
-        .neq("status", "cancelled");
+      const studentMap = new Map((students ?? []).map((s) => [s.id, s.full_name]));
+      const assignmentsByStudent = new Map<string, typeof assignments>();
+      for (const a of assignments ?? []) {
+        const list = assignmentsByStudent.get(a.student_id) ?? [];
+        list.push(a);
+        assignmentsByStudent.set(a.student_id, list);
+      }
+      const lessonByStudent = new Map<string, typeof lessonAssignments>();
+      for (const la of lessonAssignments ?? []) {
+        const list = lessonByStudent.get(la.student_id) ?? [];
+        list.push(la);
+        lessonByStudent.set(la.student_id, list);
+      }
+      const attendanceByStudent = new Map<string, typeof attendanceRecords>();
+      for (const att of attendanceRecords ?? []) {
+        const list = attendanceByStudent.get(att.student_id) ?? [];
+        list.push(att);
+        attendanceByStudent.set(att.student_id, list);
+      }
 
-      const { data: attendanceRecords } = await supabase
-        .from("attendance")
-        .select("*")
-        .eq("student_id", studentId);
+      for (const studentId of studentIds) {
+        const studentName = studentMap.get(studentId);
+        if (!studentName) continue;
 
-      const eligible = (occurrences ?? []).filter((o) => {
-        const date = o.occurrence_date;
-        const inAssignment = (assignments ?? []).some((a) =>
-          isDateInRange(date, a.start_date, a.end_date)
-        );
-        const inLesson =
-          !lessonAssignments?.length ||
-          lessonAssignments.some((la) => isDateInRange(date, la.start_date, la.end_date));
-        return inAssignment && inLesson;
-      });
+        const studentAssignments = assignmentsByStudent.get(studentId) ?? [];
+        const studentLessonAssignments = lessonByStudent.get(studentId) ?? [];
+        const studentAttendance = attendanceByStudent.get(studentId) ?? [];
 
-      const eligibleWithAttendance = eligible.map((o) => ({
-        occurrenceId: o.id,
-        occurrenceDate: o.occurrence_date,
-        status: o.status,
-        attendanceStatus: attendanceRecords?.find((a) => a.lesson_occurrence_id === o.id)
-          ?.status as "present" | "absent" | "late" | undefined,
-      }));
+        const eligible = (occurrences ?? []).filter((o) => {
+          const date = o.occurrence_date;
+          const inAssignment = studentAssignments.some((a) =>
+            isDateInRange(date, a.start_date, a.end_date)
+          );
+          const inLesson =
+            studentLessonAssignments.length === 0 ||
+            studentLessonAssignments.some(
+              (la) =>
+                la.lesson_id === o.lesson_id &&
+                isDateInRange(date, la.start_date, la.end_date)
+            );
+          return inAssignment && inLesson;
+        });
 
-      const summary = summarizeAttendance(eligibleWithAttendance);
+        const eligibleWithAttendance = eligible.map((o) => ({
+          occurrenceId: o.id,
+          occurrenceDate: o.occurrence_date,
+          status: o.status,
+          attendanceStatus: studentAttendance.find((a) => a.lesson_occurrence_id === o.id)
+            ?.status as AttendanceStatus | undefined,
+        }));
 
-      if (summary.absencePercent >= minAbsence) {
-        const currentAssignment = (assignments ?? []).find((a) => !a.end_date);
-        let className = "-";
-        if (currentAssignment) {
-          const { data: cls } = await supabase
-            .from("classes")
-            .select("name")
-            .eq("id", currentAssignment.class_id)
-            .single();
-          className = cls?.name ?? "-";
-        }
+        const summary = summarizeAttendance(eligibleWithAttendance);
+        if (summary.absencePercent < threshold) continue;
+
+        const currentAssignment =
+          studentAssignments.find((a) => !a.end_date) ?? studentAssignments[0];
+        const className =
+          (currentAssignment?.classes as unknown as { name: string } | null)?.name ?? "-";
 
         reportRows.push({
-          studentName: student.full_name,
+          studentId,
+          studentName,
           className,
           totalRequired: summary.totalRequired,
           absentCount: summary.absentCount,
           absencePercent: summary.absencePercent,
         });
       }
+
+      reportRows.sort((a, b) => b.absencePercent - a.absencePercent);
     }
   }
 
   return (
     <div>
-      <h1 className="mb-6 text-2xl font-bold text-gray-900">דוחות נוכחות</h1>
+      <PageHeader
+        title="דוחות נוכחות"
+        description="סינון לפי כיתה, תלמידה, טווח תאריכים עברי וסף היעדרות."
+        actions={<PrintButton />}
+      />
 
       <div className="print:hidden mb-6">
         <ReportsFilter
           classes={classes ?? []}
           students={allStudents ?? []}
-          defaults={{ startDate, endDate, minAbsence: String(minAbsence) }}
+          rules={rules ?? []}
+          defaults={{
+            startDate,
+            endDate,
+            minAbsence: String(minAbsence),
+            classId: params.classId,
+            studentId: params.studentId,
+            ruleId: params.ruleId,
+          }}
         />
       </div>
 
-      <Card title={`דוח נוכחות: ${startDate} — ${endDate}`}>
-        {reportRows.length === 0 ? (
-          <p className="text-gray-600">בחרי כיתה או תלמידה והפעילי חיפוש.</p>
+      <Card title={`דוח נוכחות: ${formatDate(startDate)} — ${formatDate(endDate)}`}>
+        {!shouldRun ? (
+          <p className="text-slate-600">בחרי מסננים ולחצי «הצג דוח». ניתן להשאיר «כל הכיתות».</p>
+        ) : reportRows.length === 0 ? (
+          <p className="text-slate-600">לא נמצאו תוצאות לטווח ולסף שנבחרו.</p>
         ) : (
           <Table headers={["תלמידה", "כיתה", "שיעורים נדרשים", "היעדרויות", "אחוז היעדרות"]}>
-            {reportRows.map((row, i) => (
-              <TableRow key={i}>
+            {reportRows.map((row) => (
+              <TableRow key={row.studentId}>
                 <TableCell>{row.studentName}</TableCell>
                 <TableCell>{row.className}</TableCell>
                 <TableCell>{row.totalRequired}</TableCell>
                 <TableCell>{row.absentCount}</TableCell>
                 <TableCell
                   className={
-                    row.absencePercent > 15 ? "font-bold text-red-600" : ""
+                    row.absencePercent > (selectedRule?.max_allowed_absence_percent ?? 15)
+                      ? "font-bold text-rose-600"
+                      : ""
                   }
                 >
                   {row.absencePercent}%
@@ -174,10 +233,6 @@ export default async function ReportsPage({ searchParams }: Props) {
           </Table>
         )}
       </Card>
-
-      <div className="print:hidden mt-4">
-        <PrintButton />
-      </div>
     </div>
   );
 }

@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/Button";
 import { Input, Select } from "@/components/ui/Input";
+import { HebrewDateInput } from "@/components/ui/HebrewDateInput";
 import { RANGE_TYPE_LABELS } from "@/lib/constants";
 import type { Grade } from "@/types/database";
 
@@ -78,8 +79,8 @@ export function SettingsForms({ type, yearId, grades, createAction }: SettingsFo
               label: l,
             }))}
           />
-          <Input label="מתאריך" name="start_date" type="date" required />
-          <Input label="עד תאריך" name="end_date" type="date" required />
+          <HebrewDateInput label="מתאריך" name="start_date" required />
+          <HebrewDateInput label="עד תאריך" name="end_date" required />
         </>
       )}
 

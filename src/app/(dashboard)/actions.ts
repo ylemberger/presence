@@ -7,6 +7,15 @@ import { syncTeacherSourceRecords } from "@/lib/sync/teachers";
 import { generateLessonOccurrences } from "@/lib/lessons/occurrences";
 import type { AttendanceStatus } from "@/types/database";
 
+function addDaysLocal(dateStr: string, days: number): string {
+  const [y, m, d] = dateStr.split("-").map(Number);
+  const date = new Date(y, m - 1, d + days, 12, 0, 0);
+  const yy = date.getFullYear();
+  const mm = String(date.getMonth() + 1).padStart(2, "0");
+  const dd = String(date.getDate()).padStart(2, "0");
+  return `${yy}-${mm}-${dd}`;
+}
+
 export async function setActiveYearAction(yearId: string) {
   await setActiveAcademicYear(yearId);
   revalidatePath("/", "layout");
@@ -104,7 +113,20 @@ export async function createAttendanceRuleAction(formData: FormData) {
   return { success: true };
 }
 
-async function deleteEntityWithCheck(
+async function countRefs(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  table: string,
+  column: string,
+  id: string
+) {
+  const { count } = await supabase
+    .from(table)
+    .select("*", { count: "exact", head: true })
+    .eq(column, id);
+  return count ?? 0;
+}
+
+async function deleteEntityWithChecks(
   table:
     | "grades"
     | "classes"
@@ -113,18 +135,14 @@ async function deleteEntityWithCheck(
     | "activity_ranges"
     | "attendance_rules",
   id: string,
-  checkTable:
-    | "student_assignments"
-    | "lessons",
-  checkColumn: string,
+  checks: Array<{ table: string; column: string }>,
   entityLabel: string
 ) {
   const supabase = await createClient();
-  const { count } = await supabase
-    .from(checkTable)
-    .select("*", { count: "exact", head: true })
-    .eq(checkColumn, id);
-  if (count && count > 0) return { error: `לא ניתן למחוק ${entityLabel} - קיימות הפניות` };
+  for (const check of checks) {
+    const count = await countRefs(supabase, check.table, check.column, id);
+    if (count > 0) return { error: `לא ניתן למחוק ${entityLabel} - קיימות הפניות` };
+  }
 
   const { error } = await supabase.from(table).delete().eq("id", id);
   if (error) return { error: error.message };
@@ -133,27 +151,167 @@ async function deleteEntityWithCheck(
 }
 
 export async function deleteGradeAction(id: string) {
-  return deleteEntityWithCheck("grades", id, "student_assignments", "grade_id", "שכבה");
+  return deleteEntityWithChecks(
+    "grades",
+    id,
+    [
+      { table: "student_assignments", column: "grade_id" },
+      { table: "classes", column: "grade_id" },
+      { table: "lessons", column: "grade_id" },
+    ],
+    "שכבה"
+  );
 }
 
 export async function deleteClassAction(id: string) {
-  return deleteEntityWithCheck("classes", id, "student_assignments", "class_id", "כיתה");
+  return deleteEntityWithChecks(
+    "classes",
+    id,
+    [
+      { table: "student_assignments", column: "class_id" },
+      { table: "lessons", column: "class_id" },
+      { table: "teacher_teaching_assignments", column: "class_id" },
+    ],
+    "כיתה"
+  );
 }
 
 export async function deleteTrackAction(id: string) {
-  return deleteEntityWithCheck("tracks", id, "student_assignments", "track_id", "מגמה");
+  return deleteEntityWithChecks(
+    "tracks",
+    id,
+    [
+      { table: "student_assignments", column: "track_id" },
+      { table: "lessons", column: "track_id" },
+    ],
+    "מגמה"
+  );
 }
 
 export async function deleteSpecializationAction(id: string) {
-  return deleteEntityWithCheck("specializations", id, "student_assignments", "specialization_id", "התמחות");
+  return deleteEntityWithChecks(
+    "specializations",
+    id,
+    [
+      { table: "student_assignments", column: "specialization_id" },
+      { table: "lessons", column: "specialization_id" },
+      { table: "teacher_teaching_assignments", column: "specialization_id" },
+    ],
+    "התמחות"
+  );
 }
 
 export async function deleteActivityRangeAction(id: string) {
-  return deleteEntityWithCheck("activity_ranges", id, "lessons", "activity_range_id", "טווח פעילות");
+  return deleteEntityWithChecks(
+    "activity_ranges",
+    id,
+    [{ table: "lessons", column: "activity_range_id" }],
+    "טווח פעילות"
+  );
 }
 
 export async function deleteAttendanceRuleAction(id: string) {
-  return deleteEntityWithCheck("attendance_rules", id, "lessons", "attendance_rule_id", "כלל נוכחות");
+  return deleteEntityWithChecks(
+    "attendance_rules",
+    id,
+    [{ table: "lessons", column: "attendance_rule_id" }],
+    "כלל נוכחות"
+  );
+}
+
+export async function updateAcademicYearAction(id: string, formData: FormData) {
+  const supabase = await createClient();
+  const isActive = formData.get("is_active") === "on";
+  if (isActive) {
+    await supabase.from("academic_years").update({ is_active: false }).eq("is_active", true);
+  }
+  const { error } = await supabase
+    .from("academic_years")
+    .update({ name: formData.get("name") as string, is_active: isActive })
+    .eq("id", id);
+  if (error) return { error: error.message };
+  revalidatePath("/settings");
+  revalidatePath("/", "layout");
+  return { success: true };
+}
+
+export async function updateGradeAction(id: string, formData: FormData) {
+  const supabase = await createClient();
+  const { error } = await supabase
+    .from("grades")
+    .update({ name: formData.get("name") as string })
+    .eq("id", id);
+  if (error) return { error: error.message };
+  revalidatePath("/settings");
+  return { success: true };
+}
+
+export async function updateClassAction(id: string, formData: FormData) {
+  const supabase = await createClient();
+  const { error } = await supabase
+    .from("classes")
+    .update({
+      name: formData.get("name") as string,
+      grade_id: formData.get("grade_id") as string,
+    })
+    .eq("id", id);
+  if (error) return { error: error.message };
+  revalidatePath("/settings");
+  return { success: true };
+}
+
+export async function updateTrackAction(id: string, formData: FormData) {
+  const supabase = await createClient();
+  const { error } = await supabase
+    .from("tracks")
+    .update({ name: formData.get("name") as string })
+    .eq("id", id);
+  if (error) return { error: error.message };
+  revalidatePath("/settings");
+  return { success: true };
+}
+
+export async function updateSpecializationAction(id: string, formData: FormData) {
+  const supabase = await createClient();
+  const { error } = await supabase
+    .from("specializations")
+    .update({ name: formData.get("name") as string })
+    .eq("id", id);
+  if (error) return { error: error.message };
+  revalidatePath("/settings");
+  return { success: true };
+}
+
+export async function updateActivityRangeAction(id: string, formData: FormData) {
+  const supabase = await createClient();
+  const { error } = await supabase
+    .from("activity_ranges")
+    .update({
+      name: formData.get("name") as string,
+      range_type: formData.get("range_type") as string,
+      start_date: formData.get("start_date") as string,
+      end_date: formData.get("end_date") as string,
+    })
+    .eq("id", id);
+  if (error) return { error: error.message };
+  revalidatePath("/settings");
+  return { success: true };
+}
+
+export async function updateAttendanceRuleAction(id: string, formData: FormData) {
+  const supabase = await createClient();
+  const { error } = await supabase
+    .from("attendance_rules")
+    .update({
+      name: formData.get("name") as string,
+      max_allowed_absence_percent: parseFloat(
+        formData.get("max_allowed_absence_percent") as string
+      ),
+    })
+    .eq("id", id);
+  if (error) return { error: error.message };
+  revalidatePath("/settings");
+  return { success: true };
 }
 
 // --- Students ---
@@ -180,6 +338,29 @@ export async function updateStudentAction(id: string, formData: FormData) {
   if (error) return { error: error.message };
   revalidatePath("/students");
   revalidatePath(`/students/${id}`);
+  return { success: true };
+}
+
+export async function createStudentLessonAssignmentAction(formData: FormData) {
+  const supabase = await createClient();
+  const studentId = formData.get("student_id") as string;
+  const { error } = await supabase.from("student_lesson_assignments").insert({
+    student_id: studentId,
+    lesson_id: formData.get("lesson_id") as string,
+    assignment_type: (formData.get("assignment_type") as string) || "manual",
+    start_date: formData.get("start_date") as string,
+    end_date: (formData.get("end_date") as string) || null,
+  });
+  if (error) return { error: error.message };
+  revalidatePath(`/students/${studentId}`);
+  return { success: true };
+}
+
+export async function deleteStudentLessonAssignmentAction(id: string, studentId: string) {
+  const supabase = await createClient();
+  const { error } = await supabase.from("student_lesson_assignments").delete().eq("id", id);
+  if (error) return { error: error.message };
+  revalidatePath(`/students/${studentId}`);
   return { success: true };
 }
 
@@ -214,9 +395,7 @@ export async function transferStudentAction(formData: FormData) {
     .maybeSingle();
 
   if (currentAssignment) {
-    const dayBefore = new Date(transferDate);
-    dayBefore.setDate(dayBefore.getDate() - 1);
-    const endDate = dayBefore.toISOString().split("T")[0];
+    const endDate = addDaysLocal(transferDate, -1);
 
     const { error: closeError } = await supabase
       .from("student_assignments")
@@ -317,6 +496,42 @@ export async function createLessonAction(formData: FormData) {
   return { success: true };
 }
 
+export async function createLessonForDateAction(formData: FormData) {
+  const supabase = await createClient();
+  const occurrenceDate = formData.get("occurrence_date") as string;
+  const { data: lesson, error } = await supabase
+    .from("lessons")
+    .insert({
+      academic_year_id: formData.get("academic_year_id") as string,
+      teacher_teaching_assignment_id: formData.get("teacher_teaching_assignment_id") as string,
+      subject: formData.get("subject") as string,
+      grade_id: formData.get("grade_id") as string,
+      class_id: (formData.get("class_id") as string) || null,
+      track_id: (formData.get("track_id") as string) || null,
+      specialization_id: (formData.get("specialization_id") as string) || null,
+      billing_type: formData.get("billing_type") as "mandatory" | "specialization",
+      day_of_week: parseInt(formData.get("day_of_week") as string),
+      lesson_number: parseInt(formData.get("lesson_number") as string),
+      activity_range_id: formData.get("activity_range_id") as string,
+      attendance_rule_id: (formData.get("attendance_rule_id") as string) || null,
+    })
+    .select("id")
+    .single();
+
+  if (error || !lesson) return { error: error?.message ?? "יצירת שיעור נכשלה" };
+
+  const { error: occError } = await supabase.from("lesson_occurrences").insert({
+    lesson_id: lesson.id,
+    occurrence_date: occurrenceDate,
+    status: "scheduled",
+  });
+  if (occError) return { error: occError.message };
+
+  revalidatePath("/lessons");
+  revalidatePath("/attendance");
+  return { success: true };
+}
+
 export async function generateOccurrencesAction(academicYearId: string) {
   try {
     const result = await generateLessonOccurrences(undefined, academicYearId);
@@ -332,6 +547,30 @@ export async function cancelOccurrenceAction(occurrenceId: string) {
   const { error } = await supabase
     .from("lesson_occurrences")
     .update({ status: "cancelled" })
+    .eq("id", occurrenceId);
+  if (error) return { error: error.message };
+  revalidatePath("/lessons");
+  revalidatePath("/attendance");
+  return { success: true };
+}
+
+export async function completeOccurrenceAction(occurrenceId: string) {
+  const supabase = await createClient();
+  const { error } = await supabase
+    .from("lesson_occurrences")
+    .update({ status: "completed" })
+    .eq("id", occurrenceId);
+  if (error) return { error: error.message };
+  revalidatePath("/lessons");
+  revalidatePath("/attendance");
+  return { success: true };
+}
+
+export async function restoreOccurrenceAction(occurrenceId: string) {
+  const supabase = await createClient();
+  const { error } = await supabase
+    .from("lesson_occurrences")
+    .update({ status: "scheduled" })
     .eq("id", occurrenceId);
   if (error) return { error: error.message };
   revalidatePath("/lessons");

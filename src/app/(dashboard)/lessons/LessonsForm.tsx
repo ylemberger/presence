@@ -5,11 +5,13 @@ import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/Button";
 import { Input, Select } from "@/components/ui/Input";
 import { DAY_OF_WEEK_LABELS, BILLING_TYPE_LABELS } from "@/lib/constants";
-import { createLessonAction } from "../actions";
+import { createLessonAction, createLessonForDateAction } from "../actions";
+import { isoToHDate } from "@/lib/dates/hebrew";
 import type { Grade, Class, Track, Specialization, ActivityRange, AttendanceRule } from "@/types/database";
 
 interface LessonsFormProps {
   yearId: string;
+  occurrenceDate?: string;
   teachingAssignments: Array<{ id: string; subject: string; teachers: { full_name: string } }>;
   grades: Grade[];
   classes: Class[];
@@ -17,10 +19,12 @@ interface LessonsFormProps {
   specializations: Specialization[];
   ranges: ActivityRange[];
   rules: AttendanceRule[];
+  onCreated?: () => void;
 }
 
 export function LessonsForm({
   yearId,
+  occurrenceDate,
   teachingAssignments,
   grades,
   classes,
@@ -28,19 +32,26 @@ export function LessonsForm({
   specializations,
   ranges,
   rules,
+  onCreated,
 }: LessonsFormProps) {
   const router = useRouter();
   const [error, setError] = useState<string | null>(null);
+  const defaultDay =
+    occurrenceDate != null ? String(isoToHDate(occurrenceDate).getDay()) : undefined;
 
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
     setError(null);
     const fd = new FormData(e.currentTarget);
     fd.set("academic_year_id", yearId);
-    const result = await createLessonAction(fd);
+    if (occurrenceDate) fd.set("occurrence_date", occurrenceDate);
+    const result = occurrenceDate
+      ? await createLessonForDateAction(fd)
+      : await createLessonAction(fd);
     if (result.error) setError(result.error);
     else {
       e.currentTarget.reset();
+      onCreated?.();
       router.refresh();
     }
   }
@@ -106,6 +117,7 @@ export function LessonsForm({
         label="יום בשבוע"
         name="day_of_week"
         required
+        defaultValue={defaultDay}
         options={DAY_OF_WEEK_LABELS.map((l, i) => ({ value: String(i), label: l }))}
       />
       <Input label="מספר שיעור (1-9)" name="lesson_number" type="number" min={1} max={9} required />
@@ -126,7 +138,7 @@ export function LessonsForm({
           ...rules.map((r) => ({ value: r.id, label: r.name })),
         ]}
       />
-      <Button type="submit">יצירה</Button>
+      <Button type="submit">{occurrenceDate ? "יצירה ליום זה" : "יצירה"}</Button>
       {error && <p className="w-full text-sm text-red-600">{error}</p>}
     </form>
   );

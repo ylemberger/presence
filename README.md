@@ -8,6 +8,7 @@
 2. **מיגרציה:** הריצי ב-SQL Editor לפי הסדר:
    - [`supabase/migrations/0001_init.sql`](supabase/migrations/0001_init.sql)
    - [`supabase/migrations/0002_performance.sql`](supabase/migrations/0002_performance.sql)
+   - (אופציונלי) [`supabase/seed_demo.sql`](supabase/seed_demo.sql) — נתוני דמה לבדיקות
 3. **Auth עם Google:**
    1. ב-[Google Cloud Console](https://console.cloud.google.com/) צרי OAuth 2.0 Client (Web)
    2. Authorized redirect URI: `https://<project-ref>.supabase.co/auth/v1/callback`
@@ -23,14 +24,17 @@ npm run dev
 
 ## מבנה
 
-- `/login` — התחברות
+- `/login` — התחברות Google
 - `/` — לוח בקרה
-- `/settings` — שנים, שכבות, כיתות, מגמות, טווחי פעילות, כללי נוכחות
-- `/students` — תלמידות ושיבוצים היסטוריים
+- `/settings` — שנים, שכבות, כיתות, מגמות, טווחי פעילות (תאריכים עבריים), כללי נוכחות
+- `/students` — תלמידות, שיבוצים, שיוך לשיעורים, אחוזי נוכחות והדפסה
 - `/teachers` — מורות וסנכרון מקור חיצוני
-- `/lessons` — תבניות שיעור ומופעים
-- `/attendance` — יומן נוכחות שבועי
-- `/reports` — דוחות והדפסה
+- `/lessons` — יומן חודשי עברי: לחיצה על יום → שיעורים / יצירה / ביטול
+- `/attendance` — יומן נוכחות שבועי עם תאריכים עבריים
+- `/reports` — דוחות והדפסה (כולל כל הכיתות)
+
+## תאריכים
+הממשק מציג ובוחר תאריכים עבריים בלבד (`@hebcal/core`). במסד נשמר `date` ISO.
 
 ## כללי פיתוח
 
