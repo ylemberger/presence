@@ -3,14 +3,12 @@ import { Card } from "@/components/ui/Card";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { getActiveAcademicYear } from "@/lib/utils";
 import { createClient } from "@/lib/supabase/server";
-import { loadDashboardAlerts } from "@/lib/attendance/alerts";
 
 export default async function DashboardPage() {
   const activeYear = await getActiveAcademicYear();
   const supabase = await createClient();
 
   let stats = { students: 0, classes: 0, lessons: 0, unmarked: 0 };
-  let alerts: Awaited<ReturnType<typeof loadDashboardAlerts>> = [];
 
   if (activeYear) {
     const today = new Date();
@@ -21,7 +19,7 @@ export default async function DashboardPage() {
     weekEnd.setDate(weekStart.getDate() + 6);
     const end = weekEnd.toISOString().split("T")[0];
 
-    const [students, classes, lessons, occurrences, dashboardAlerts] = await Promise.all([
+    const [students, classes, lessons, occurrences] = await Promise.all([
       supabase
         .from("student_assignments")
         .select("*", { count: "exact", head: true })
@@ -42,7 +40,6 @@ export default async function DashboardPage() {
         .gte("occurrence_date", start)
         .lte("occurrence_date", end)
         .neq("status", "cancelled"),
-      loadDashboardAlerts(supabase, activeYear.id),
     ]);
 
     const occIds = (occurrences.data ?? []).map((o) => o.id);
@@ -62,14 +59,18 @@ export default async function DashboardPage() {
       lessons: lessons.count ?? 0,
       unmarked,
     };
-    alerts = dashboardAlerts;
   }
 
   const cards = [
     { label: "תלמידות בשנה", value: stats.students, href: "/students", hint: "עם שיבוץ פעיל בשנה הזו" },
     { label: "כיתות", value: stats.classes, href: "/settings", hint: "מבנה השנה הפעילה" },
     { label: "תבניות שיעור", value: stats.lessons, href: "/lessons", hint: "שיעורים קבועים" },
-    { label: "שיעורים בלי רישום", value: stats.unmarked, href: "/attendance", hint: "השבוע הנוכחי" },
+    {
+      label: "שיעורים בלי רישום",
+      value: stats.unmarked,
+      href: "/attendance",
+      hint: "השבוע · לטיפול ביומן הנוכחות",
+    },
   ];
 
   return (
@@ -78,7 +79,7 @@ export default async function DashboardPage() {
         title="לוח בקרה"
         description={
           activeYear
-            ? `שנת ${activeYear.name} · יומן הנוכחות הוא מסך העבודה הראשי`
+            ? `שנת ${activeYear.name} · התראות מופיעות במסך הרלוונטי (יומן נוכחות / תלמידה)`
             : "כדי להתחיל, הגדירי שנה אקדמית פעילה"
         }
         actions={
@@ -100,46 +101,18 @@ export default async function DashboardPage() {
           </p>
         </Card>
       ) : (
-        <div className="space-y-6">
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
-            {cards.map((card) => (
-              <Link key={card.label} href={card.href}>
-                <Card className="h-full transition-transform hover:-translate-y-0.5">
-                  <p className="text-sm text-slate-500">{card.label}</p>
-                  <p className="mt-3 text-4xl font-semibold tracking-tight text-[var(--brand)]">
-                    {card.value}
-                  </p>
-                  <p className="mt-2 text-xs text-slate-400">{card.hint}</p>
-                </Card>
-              </Link>
-            ))}
-          </div>
-
-          {alerts.length > 0 && (
-            <Card title="התראות פעילות">
-              <ul className="divide-y divide-stone-100">
-                {alerts.map((alert, idx) => (
-                  <li key={`${alert.kind}-${idx}`}>
-                    <Link
-                      href={alert.href}
-                      className="flex flex-col gap-0.5 py-3 transition-colors hover:bg-stone-50 sm:flex-row sm:items-center sm:justify-between"
-                    >
-                      <span
-                        className={
-                          alert.kind === "mismatch"
-                            ? "text-sm font-medium text-amber-800"
-                            : "text-sm font-medium text-rose-700"
-                        }
-                      >
-                        {alert.title}
-                      </span>
-                      <span className="text-sm text-slate-500">{alert.detail}</span>
-                    </Link>
-                  </li>
-                ))}
-              </ul>
-            </Card>
-          )}
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+          {cards.map((card) => (
+            <Link key={card.label} href={card.href}>
+              <Card className="h-full transition-transform hover:-translate-y-0.5">
+                <p className="text-sm text-slate-500">{card.label}</p>
+                <p className="mt-3 text-4xl font-semibold tracking-tight text-[var(--brand)]">
+                  {card.value}
+                </p>
+                <p className="mt-2 text-xs text-slate-400">{card.hint}</p>
+              </Card>
+            </Link>
+          ))}
         </div>
       )}
     </div>

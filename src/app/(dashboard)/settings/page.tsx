@@ -9,7 +9,6 @@ import {
   createClassAction,
   createTrackAction,
   createSpecializationAction,
-  createTeachingTypeAction,
   createActivityRangeAction,
   createAttendanceRuleAction,
   deleteAcademicYearAction,
@@ -17,7 +16,6 @@ import {
   deleteClassAction,
   deleteTrackAction,
   deleteSpecializationAction,
-  deleteTeachingTypeAction,
   deleteActivityRangeAction,
   deleteAttendanceRuleAction,
   updateAcademicYearAction,
@@ -25,7 +23,6 @@ import {
   updateClassAction,
   updateTrackAction,
   updateSpecializationAction,
-  updateTeachingTypeAction,
   updateActivityRangeAction,
   updateAttendanceRuleAction,
 } from "../actions";
@@ -44,18 +41,16 @@ export default async function SettingsPage() {
   const supabase = await createClient();
   const yearId = activeYear?.id;
 
-  const [grades, classes, tracks, specializations, teachingTypes, ranges, rules] = yearId
+  const [grades, classes, tracks, specializations, ranges, rules] = yearId
     ? await Promise.all([
         supabase.from("grades").select("*").eq("academic_year_id", yearId).order("name"),
         supabase.from("classes").select("*, grades(name)").eq("academic_year_id", yearId).order("name"),
         supabase.from("tracks").select("*").eq("academic_year_id", yearId).order("name"),
         supabase.from("specializations").select("*").eq("academic_year_id", yearId).order("name"),
-        supabase.from("teaching_types").select("*").eq("academic_year_id", yearId).order("name"),
         supabase.from("activity_ranges").select("*").eq("academic_year_id", yearId).order("start_date"),
         supabase.from("attendance_rules").select("*").order("name"),
       ])
     : [
-        { data: [] },
         { data: [] },
         { data: [] },
         { data: [] },
@@ -195,31 +190,6 @@ export default async function SettingsPage() {
                   name={s.name}
                   updateAction={updateSpecializationAction}
                   deleteAction={deleteSpecializationAction}
-                />
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </Card>
-      <Card title="סוגי הוראה">
-        <p className="mb-2 text-xs text-slate-500">תלמידות ומורות בוחרות סוג הוראה מתוך הרשימה הזו.</p>
-        <SettingsForms type="teaching_type" yearId={yearId} createAction={createTeachingTypeAction} />
-        <div className="mt-4 overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="border-b border-stone-200 bg-stone-50/90">
-                <th className="px-4 py-3 text-right text-xs font-semibold text-slate-500">שם</th>
-                <th className="px-4 py-3 text-right text-xs font-semibold text-slate-500">פעולות</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-gray-100">
-              {(teachingTypes.data ?? []).map((t) => (
-                <EditableNameRow
-                  key={t.id}
-                  id={t.id}
-                  name={t.name}
-                  updateAction={updateTeachingTypeAction}
-                  deleteAction={deleteTeachingTypeAction}
                 />
               ))}
             </tbody>

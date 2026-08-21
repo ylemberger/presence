@@ -8,7 +8,7 @@ import { Table, TableRow, TableCell } from "@/components/ui/Table";
 import { StatusPill } from "@/components/ui/PageHeader";
 import { Modal } from "@/components/ui/Modal";
 import { StudentsForm } from "./StudentsForm";
-import type { Grade, Class, Track, Specialization, TeachingType } from "@/types/database";
+import type { Grade, Class, Track, Specialization } from "@/types/database";
 
 interface StudentRow {
   id: string;
@@ -21,7 +21,6 @@ interface StudentRow {
   trackName: string;
   specializationName: string;
   secondarySpecializationName: string;
-  teachingTypeName: string;
   isPsychology: boolean;
 }
 
@@ -31,7 +30,6 @@ interface YearOptions {
   classes: Class[];
   tracks: Track[];
   specializations: Specialization[];
-  teachingTypes: TeachingType[];
 }
 
 export function StudentsDirectory({
@@ -224,7 +222,6 @@ export function StudentsDirectory({
             classes={yearOptions.classes}
             tracks={yearOptions.tracks}
             specializations={yearOptions.specializations}
-            teachingTypes={yearOptions.teachingTypes}
             onCancel={() => setModalOpen(false)}
             onSuccess={() => setModalOpen(false)}
           />

@@ -38,6 +38,7 @@ export const NAV_ITEMS = [
   { href: "/", label: "לוח בקרה", icon: "home" },
   { href: "/students", label: "תלמידות", icon: "students" },
   { href: "/attendance", label: "נוכחות", icon: "attendance" },
+  { href: "/makeup", label: "מבחני השלמה", icon: "reports" },
   { href: "/lessons", label: "שיעורים", icon: "lessons" },
   { href: "/teachers", label: "מורות", icon: "teachers" },
   { href: "/reports", label: "דוחות", icon: "reports" },

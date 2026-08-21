@@ -29,10 +29,8 @@ export default async function TeachersPage() {
   let tracks: { id: string; name: string }[] = [];
   let specializations: { id: string; name: string }[] = [];
 
-  let teachingTypes: { id: string; name: string }[] = [];
-
   if (activeYear) {
-    const [asg, grd, cls, trk, spec, types] = await Promise.all([
+    const [asg, grd, cls, trk, spec] = await Promise.all([
       supabase
         .from("teacher_teaching_assignments")
         .select(
@@ -52,18 +50,12 @@ export default async function TeachersPage() {
         .select("id, name")
         .eq("academic_year_id", activeYear.id)
         .order("name"),
-      supabase
-        .from("teaching_types")
-        .select("id, name")
-        .eq("academic_year_id", activeYear.id)
-        .order("name"),
     ]);
     assignments = (asg.data ?? []) as unknown as typeof assignments;
     grades = grd.data ?? [];
     classes = cls.data ?? [];
     tracks = trk.data ?? [];
     specializations = spec.data ?? [];
-    teachingTypes = types.data ?? [];
   }
 
   return (
@@ -74,7 +66,7 @@ export default async function TeachersPage() {
       />
 
       <Card title="הוספת מורה">
-        <TeachersForms type="teacher" yearId={activeYear?.id} teachingTypes={teachingTypes} />
+        <TeachersForms type="teacher" yearId={activeYear?.id} />
       </Card>
 
       <Card title="רשימת מורות">
@@ -93,7 +85,6 @@ export default async function TeachersPage() {
               classes={classes}
               tracks={tracks}
               specializations={specializations}
-              teachingTypes={teachingTypes}
               yearId={activeYear.id}
             />
             <Table

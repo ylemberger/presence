@@ -192,19 +192,54 @@ export default async function AttendancePage({ searchParams }: Props) {
   }
 
   const lessonIds = [...new Set(occurrences.map((o) => o.lessonId))];
-  const pastGaps: Array<{ lessonId: string; subject: string; date: string; occurrenceId: string }> =
-    [];
+  const pastGaps: Array<{
+    lessonId: string;
+    subject: string;
+    date: string;
+    occurrenceId: string;
+    gapHandling: "in_treatment" | "continued" | null;
+  }> = [];
+  let siblingDates: Array<{
+    occurrenceId: string;
+    lessonId: string;
+    date: string;
+    subject: string;
+  }> = [];
+  let noteBody = "";
+  let noteLessonId: string | null = null;
+  let noteStudentId: string | null = null;
 
   if (lessonIds.length > 0) {
-    const { data: pastOccs } = await supabase
-      .from("lesson_occurrences")
-      .select("id, occurrence_date, lesson_id, lessons!inner(subject, academic_year_id)")
-      .eq("lessons.academic_year_id", activeYear.id)
-      .in("lesson_id", lessonIds)
-      .lt("occurrence_date", weekStart)
-      .neq("status", "cancelled")
-      .order("occurrence_date", { ascending: false })
-      .limit(40);
+    const [{ data: pastOccs }, { data: siblings }] = await Promise.all([
+      supabase
+        .from("lesson_occurrences")
+        .select(
+          "id, occurrence_date, lesson_id, gap_handling, lessons!inner(subject, academic_year_id)"
+        )
+        .eq("lessons.academic_year_id", activeYear.id)
+        .in("lesson_id", lessonIds)
+        .lt("occurrence_date", weekStart)
+        .neq("status", "cancelled")
+        .order("occurrence_date", { ascending: false })
+        .limit(60),
+      supabase
+        .from("lesson_occurrences")
+        .select(
+          "id, occurrence_date, lesson_id, lessons!inner(subject, academic_year_id)"
+        )
+        .eq("lessons.academic_year_id", activeYear.id)
+        .in("lesson_id", lessonIds)
+        .neq("status", "cancelled")
+        .order("occurrence_date", { ascending: false })
+        .limit(120),
+    ]);
+
+    siblingDates = (siblings ?? []).map((o) => ({
+      occurrenceId: o.id,
+      lessonId: o.lesson_id,
+      date: o.occurrence_date,
+      subject: (o.lessons as unknown as { subject: string } | null)?.subject ?? "שיעור",
+    }));
 
     const pastIds = (pastOccs ?? []).map((o) => o.id);
     if (pastIds.length > 0) {
@@ -220,9 +255,36 @@ export default async function AttendancePage({ searchParams }: Props) {
           subject: (o.lessons as unknown as { subject: string } | null)?.subject ?? "שיעור",
           date: o.occurrence_date,
           occurrenceId: o.id,
+          gapHandling: (o.gap_handling as "in_treatment" | "continued" | null) ?? null,
         });
-        if (pastGaps.length >= 8) break;
+        if (pastGaps.length >= 12) break;
       }
+    }
+  }
+
+  if (mode === "single" && params.studentId) {
+    const { data: note } = await supabase
+      .from("attendance_notes")
+      .select("body")
+      .eq("academic_year_id", activeYear.id)
+      .eq("student_id", params.studentId)
+      .maybeSingle();
+    noteBody = note?.body ?? "";
+    noteStudentId = params.studentId;
+  } else {
+    const focusLesson =
+      (params.occurrenceId
+        ? occurrences.find((o) => o.id === params.occurrenceId)?.lessonId
+        : undefined) ?? lessonIds[0];
+    if (focusLesson) {
+      const { data: note } = await supabase
+        .from("attendance_notes")
+        .select("body")
+        .eq("academic_year_id", activeYear.id)
+        .eq("lesson_id", focusLesson)
+        .maybeSingle();
+      noteBody = note?.body ?? "";
+      noteLessonId = focusLesson;
     }
   }
 
@@ -230,10 +292,11 @@ export default async function AttendancePage({ searchParams }: Props) {
     <div>
       <PageHeader
         title="נוכחות"
-        description="מצב בת יחידה או קבוצה, סינון דינמי, סימון מהיר ושמירה בלחיצה אחת. איחור נספר כנוכחות."
+        description="תאריך עברי ראשי, סימון מהיר, והתראות על מופעים חסרים במקום. איחור נספר כנוכחות."
       />
 
       <AttendanceBoard
+        yearId={activeYear.id}
         filters={{
           mode,
           view,
@@ -257,6 +320,10 @@ export default async function AttendancePage({ searchParams }: Props) {
         occurrences={occurrences.map(({ teacherId: _t, ...rest }) => rest)}
         attendance={attendanceRecords}
         pastGaps={pastGaps}
+        siblingDates={siblingDates}
+        noteBody={noteBody}
+        noteLessonId={noteLessonId}
+        noteStudentId={noteStudentId}
       />
     </div>
   );

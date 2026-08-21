@@ -97,7 +97,6 @@ async function createYearEntity(
     | "classes"
     | "tracks"
     | "specializations"
-    | "teaching_types"
     | "activity_ranges",
   data: Record<string, unknown>
 ) {
@@ -136,13 +135,6 @@ export async function createTrackAction(formData: FormData) {
 
 export async function createSpecializationAction(formData: FormData) {
   return createYearEntity("specializations", {
-    academic_year_id: formData.get("academic_year_id"),
-    name: formData.get("name"),
-  });
-}
-
-export async function createTeachingTypeAction(formData: FormData) {
-  return createYearEntity("teaching_types", {
     academic_year_id: formData.get("academic_year_id"),
     name: formData.get("name"),
   });
@@ -188,7 +180,6 @@ async function deleteEntityWithChecks(
     | "classes"
     | "tracks"
     | "specializations"
-    | "teaching_types"
     | "activity_ranges"
     | "attendance_rules",
   id: string,
@@ -258,18 +249,6 @@ export async function deleteSpecializationAction(id: string) {
       { table: "teacher_teaching_assignments", column: "specialization_id" },
     ],
     "התמחות"
-  );
-}
-
-export async function deleteTeachingTypeAction(id: string) {
-  return deleteEntityWithChecks(
-    "teaching_types",
-    id,
-    [
-      { table: "student_assignments", column: "teaching_type_id" },
-      { table: "teachers", column: "teaching_type_id" },
-    ],
-    "סוג הוראה"
   );
 }
 
@@ -355,17 +334,6 @@ export async function updateSpecializationAction(id: string, formData: FormData)
   return { success: true };
 }
 
-export async function updateTeachingTypeAction(id: string, formData: FormData) {
-  const supabase = await createClient();
-  const { error } = await supabase
-    .from("teaching_types")
-    .update({ name: formData.get("name") as string })
-    .eq("id", id);
-  if (error) return { error: error.message };
-  revalidatePath("/settings");
-  return { success: true };
-}
-
 export async function updateActivityRangeAction(id: string, formData: FormData) {
   const supabase = await createClient();
   const { error } = await supabase
@@ -423,7 +391,6 @@ export async function createStudentAction(formData: FormData) {
   const specId = String(formData.get("specialization_id") ?? "").trim() || null;
   const secondarySpecId =
     String(formData.get("secondary_specialization_id") ?? "").trim() || null;
-  const teachingTypeId = String(formData.get("teaching_type_id") ?? "").trim() || null;
   const isPsychology =
     formData.get("is_psychology") === "on" || formData.get("is_psychology") === "1";
 
@@ -450,7 +417,6 @@ export async function createStudentAction(formData: FormData) {
     track_id: trackId,
     specialization_id: specId,
     secondary_specialization_id: secondarySpecId,
-    teaching_type_id: teachingTypeId,
     is_psychology: isPsychology,
     start_date: startDate,
     end_date: null,
@@ -572,7 +538,6 @@ function parsePlacementFields(formData: FormData) {
   const specId = String(formData.get("specialization_id") ?? "").trim() || null;
   const secondarySpecId =
     String(formData.get("secondary_specialization_id") ?? "").trim() || null;
-  const teachingTypeId = String(formData.get("teaching_type_id") ?? "").trim() || null;
   const isPsychology =
     formData.get("is_psychology") === "on" || formData.get("is_psychology") === "1";
   return {
@@ -583,7 +548,6 @@ function parsePlacementFields(formData: FormData) {
     track_id: trackId,
     specialization_id: specId,
     secondary_specialization_id: secondarySpecId,
-    teaching_type_id: teachingTypeId,
     is_psychology: isPsychology,
     start_date: startDate,
   };
@@ -651,13 +615,11 @@ export async function createTeacherAction(formData: FormData) {
   if (isError(email)) return email;
 
   const supabase = await createClient();
-  const teachingTypeId = String(formData.get("teaching_type_id") ?? "").trim() || null;
   const { error } = await supabase.from("teachers").insert({
     full_name: fullName,
     identity_number: identity,
     phone,
     email,
-    teaching_type_id: teachingTypeId,
     is_local: true,
   });
   if (error) {
@@ -880,11 +842,127 @@ export async function cancelOccurrenceAction(occurrenceId: string) {
   const supabase = await createClient();
   const { error } = await supabase
     .from("lesson_occurrences")
-    .update({ status: "cancelled" })
+    .update({ status: "cancelled", gap_handling: null })
     .eq("id", occurrenceId);
   if (error) return { error: error.message };
   revalidatePath("/lessons");
   revalidatePath("/attendance");
+  return { success: true };
+}
+
+export async function setOccurrenceGapHandlingAction(
+  occurrenceId: string,
+  handling: "in_treatment" | "continued"
+) {
+  const supabase = await createClient();
+  const { error } = await supabase
+    .from("lesson_occurrences")
+    .update({ gap_handling: handling })
+    .eq("id", occurrenceId);
+  if (error) return { error: error.message };
+  revalidatePath("/attendance");
+  return { success: true };
+}
+
+export async function upsertAttendanceNoteAction(formData: FormData) {
+  const yearId = requireId(formData.get("academic_year_id"), "שנה");
+  if (isError(yearId)) return yearId;
+  const body = requireText(formData.get("body"), "הערה");
+  if (isError(body)) return body;
+  const studentId = String(formData.get("student_id") ?? "").trim() || null;
+  const lessonId = String(formData.get("lesson_id") ?? "").trim() || null;
+  if (!studentId && !lessonId) return { error: "חסר הקשר להערה" };
+  if (studentId && lessonId) return { error: "הערה כללית היא לתלמידה או לשיעור, לא לשניהם" };
+
+  const supabase = await createClient();
+  const row = {
+    academic_year_id: yearId,
+    student_id: studentId,
+    lesson_id: lessonId,
+    body,
+    updated_at: new Date().toISOString(),
+  };
+
+  if (studentId) {
+    const { data: existing } = await supabase
+      .from("attendance_notes")
+      .select("id")
+      .eq("academic_year_id", yearId)
+      .eq("student_id", studentId)
+      .maybeSingle();
+    if (existing) {
+      const { error } = await supabase.from("attendance_notes").update(row).eq("id", existing.id);
+      if (error) return { error: error.message };
+    } else {
+      const { error } = await supabase.from("attendance_notes").insert(row);
+      if (error) return { error: error.message };
+    }
+  } else {
+    const { data: existing } = await supabase
+      .from("attendance_notes")
+      .select("id")
+      .eq("academic_year_id", yearId)
+      .eq("lesson_id", lessonId!)
+      .maybeSingle();
+    if (existing) {
+      const { error } = await supabase.from("attendance_notes").update(row).eq("id", existing.id);
+      if (error) return { error: error.message };
+    } else {
+      const { error } = await supabase.from("attendance_notes").insert(row);
+      if (error) return { error: error.message };
+    }
+  }
+
+  revalidatePath("/attendance");
+  return { success: true };
+}
+
+export async function upsertMakeupExamAction(formData: FormData) {
+  const yearId = requireId(formData.get("academic_year_id"), "שנה");
+  if (isError(yearId)) return yearId;
+  const studentId = requireId(formData.get("student_id"), "תלמידה");
+  if (isError(studentId)) return studentId;
+  const lessonId = requireId(formData.get("lesson_id"), "שיעור");
+  if (isError(lessonId)) return lessonId;
+  const required = parseInt(String(formData.get("required_exams") ?? "1"), 10);
+  if (Number.isNaN(required) || required < 1 || required > 4) {
+    return { error: "מספר מבחנים חייב להיות בין 1 ל-4" };
+  }
+
+  const supabase = await createClient();
+  const { error } = await supabase.from("makeup_exams").upsert(
+    {
+      academic_year_id: yearId,
+      student_id: studentId,
+      lesson_id: lessonId,
+      required_exams: required,
+      status: "open",
+    },
+    { onConflict: "student_id,lesson_id" }
+  );
+  if (error) return { error: error.message };
+  revalidatePath("/makeup");
+  return { success: true };
+}
+
+export async function updateMakeupExamAction(id: string, formData: FormData) {
+  const completed = parseInt(String(formData.get("completed_exams") ?? "0"), 10);
+  const required = parseInt(String(formData.get("required_exams") ?? "1"), 10);
+  const status = String(formData.get("status") ?? "open");
+  if (!["open", "done", "blocked"].includes(status)) return { error: "סטטוס לא תקין" };
+
+  const supabase = await createClient();
+  const { error } = await supabase
+    .from("makeup_exams")
+    .update({
+      completed_exams: Number.isNaN(completed) ? 0 : completed,
+      required_exams: Number.isNaN(required) ? 1 : required,
+      status,
+      notes: String(formData.get("notes") ?? "").trim() || null,
+    })
+    .eq("id", id);
+  if (error) return { error: error.message };
+  revalidatePath("/makeup");
   return { success: true };
 }
 
@@ -941,6 +1019,15 @@ export async function bulkAttendanceAction(
     .from("attendance")
     .upsert(records, { onConflict: "student_id,lesson_occurrence_id" });
   if (error) return { error: error.message };
+
+  const occurrenceIds = [...new Set(updates.map((u) => u.occurrenceId))];
+  if (occurrenceIds.length > 0) {
+    await supabase
+      .from("lesson_occurrences")
+      .update({ gap_handling: null, status: "completed" })
+      .in("id", occurrenceIds);
+  }
+
   revalidatePath("/attendance");
   return { success: true };
 }

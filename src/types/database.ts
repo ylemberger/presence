@@ -36,12 +36,6 @@ export interface Specialization {
   name: string;
 }
 
-export interface TeachingType {
-  id: string;
-  academic_year_id: string;
-  name: string;
-}
-
 export interface ActivityRange {
   id: string;
   academic_year_id: string;
@@ -75,7 +69,6 @@ export interface StudentAssignment {
   track_id: string;
   specialization_id: string | null;
   secondary_specialization_id: string | null;
-  teaching_type_id: string | null;
   is_psychology: boolean;
   start_date: string;
   end_date: string | null;
@@ -88,7 +81,6 @@ export interface Teacher {
   identity_number: string;
   phone: string;
   email: string;
-  teaching_type_id: string | null;
   is_local: boolean;
   created_at: string;
 }
@@ -142,6 +134,28 @@ export interface LessonOccurrence {
   occurrence_date: string;
   status: OccurrenceStatus;
   notes: string | null;
+  gap_handling: "in_treatment" | "continued" | null;
+}
+
+export interface MakeupExam {
+  id: string;
+  academic_year_id: string;
+  student_id: string;
+  lesson_id: string;
+  required_exams: number;
+  completed_exams: number;
+  status: "open" | "done" | "blocked";
+  notes: string | null;
+  created_at: string;
+}
+
+export interface AttendanceNote {
+  id: string;
+  academic_year_id: string;
+  student_id: string | null;
+  lesson_id: string | null;
+  body: string;
+  updated_at: string;
 }
 
 export interface StudentLessonAssignment {
@@ -177,7 +191,6 @@ export interface Database {
       classes: { Row: Class; Insert: Omit<Class, "id"> & { id?: string }; Update: Partial<Class> };
       tracks: { Row: Track; Insert: Omit<Track, "id"> & { id?: string }; Update: Partial<Track> };
       specializations: { Row: Specialization; Insert: Omit<Specialization, "id"> & { id?: string }; Update: Partial<Specialization> };
-      teaching_types: { Row: TeachingType; Insert: Omit<TeachingType, "id"> & { id?: string }; Update: Partial<TeachingType> };
       activity_ranges: { Row: ActivityRange; Insert: Omit<ActivityRange, "id"> & { id?: string }; Update: Partial<ActivityRange> };
       attendance_rules: { Row: AttendanceRule; Insert: Omit<AttendanceRule, "id"> & { id?: string }; Update: Partial<AttendanceRule> };
       students: { Row: Student; Insert: Omit<Student, "id" | "created_at"> & { id?: string; created_at?: string }; Update: Partial<Student> };
@@ -186,10 +199,12 @@ export interface Database {
       teacher_source_records: { Row: TeacherSourceRecord; Insert: Omit<TeacherSourceRecord, "id" | "synced_at"> & { id?: string; synced_at?: string }; Update: Partial<TeacherSourceRecord> };
       teacher_teaching_assignments: { Row: TeacherTeachingAssignment; Insert: Omit<TeacherTeachingAssignment, "id"> & { id?: string }; Update: Partial<TeacherTeachingAssignment> };
       lessons: { Row: Lesson; Insert: Omit<Lesson, "id" | "created_at"> & { id?: string; created_at?: string }; Update: Partial<Lesson> };
-      lesson_occurrences: { Row: LessonOccurrence; Insert: Omit<LessonOccurrence, "id"> & { id?: string }; Update: Partial<LessonOccurrence> };
+      lesson_occurrences: { Row: LessonOccurrence; Insert: Omit<LessonOccurrence, "id"> & { id?: string; gap_handling?: LessonOccurrence["gap_handling"] }; Update: Partial<LessonOccurrence> };
       student_lesson_assignments: { Row: StudentLessonAssignment; Insert: Omit<StudentLessonAssignment, "id"> & { id?: string }; Update: Partial<StudentLessonAssignment> };
       attendance: { Row: Attendance; Insert: Omit<Attendance, "id"> & { id?: string }; Update: Partial<Attendance> };
       attendance_change_log: { Row: AttendanceChangeLog; Insert: Omit<AttendanceChangeLog, "id" | "changed_at"> & { id?: string; changed_at?: string }; Update: Partial<AttendanceChangeLog> };
+      makeup_exams: { Row: MakeupExam; Insert: Omit<MakeupExam, "id" | "created_at"> & { id?: string; created_at?: string }; Update: Partial<MakeupExam> };
+      attendance_notes: { Row: AttendanceNote; Insert: Omit<AttendanceNote, "id" | "updated_at"> & { id?: string; updated_at?: string }; Update: Partial<AttendanceNote> };
     };
   };
 }

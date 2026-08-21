@@ -85,9 +85,6 @@ begin
   insert into specializations (academic_year_id, name) values (year_id, '׳¢׳™׳¦׳•׳‘') returning id into spec_design;
 
   insert into grades (academic_year_id, name) values (year_id, 'ג');
-  insert into teaching_types (academic_year_id, name) values
-    (year_id, 'הוראה'),
-    (year_id, 'גננות');
 
   insert into activity_ranges (academic_year_id, name, start_date, end_date, range_type)
   values (year_id, '׳©׳ ׳×׳™', '2026-09-01', '2027-06-30', 'annual') returning id into range_year;

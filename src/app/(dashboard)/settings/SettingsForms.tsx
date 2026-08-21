@@ -58,16 +58,14 @@ export function SettingsForms({ type, yearId, grades, createAction }: SettingsFo
         </>
       )}
 
-      {(type === "grade" || type === "track" || type === "specialization" || type === "teaching_type") && (
+      {(type === "grade" || type === "track" || type === "specialization") && (
         <Input
           label={
             type === "grade"
               ? "שם שכבה (א/ב/ג)"
               : type === "track"
                 ? "שם מסלול"
-                : type === "teaching_type"
-                  ? "סוג הוראה"
-                  : "שם התמחות"
+                : "שם התמחות"
           }
           name="name"
           required

@@ -11,13 +11,22 @@ interface ModalProps {
   onClose: () => void;
   children: React.ReactNode;
   className?: string;
+  dismissible?: boolean;
 }
 
-export function Modal({ open, title, description, onClose, children, className }: ModalProps) {
+export function Modal({
+  open,
+  title,
+  description,
+  onClose,
+  children,
+  className,
+  dismissible = true,
+}: ModalProps) {
   useEffect(() => {
     if (!open) return;
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") onClose();
+      if (e.key === "Escape" && dismissible) onClose();
     };
     document.addEventListener("keydown", onKey);
     const prev = document.body.style.overflow;
@@ -26,7 +35,7 @@ export function Modal({ open, title, description, onClose, children, className }
       document.removeEventListener("keydown", onKey);
       document.body.style.overflow = prev;
     };
-  }, [open, onClose]);
+  }, [open, onClose, dismissible]);
 
   if (!open) return null;
 
@@ -36,7 +45,7 @@ export function Modal({ open, title, description, onClose, children, className }
         type="button"
         aria-label="סגירה"
         className="absolute inset-0 bg-slate-900/40 backdrop-blur-[2px]"
-        onClick={onClose}
+        onClick={() => dismissible && onClose()}
       />
       <div
         className={cn(
@@ -49,9 +58,17 @@ export function Modal({ open, title, description, onClose, children, className }
             <h2 className="text-xl font-semibold tracking-tight">{title}</h2>
             {description && <p className="mt-1 text-sm text-white/80">{description}</p>}
           </div>
-          <Button type="button" variant="ghost" size="sm" onClick={onClose} className="text-white hover:bg-white/10">
-            סגירה
-          </Button>
+          {dismissible && (
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              onClick={onClose}
+              className="text-white hover:bg-white/10"
+            >
+              סגירה
+            </Button>
+          )}
         </div>
         <div className="max-h-[min(80vh,40rem)] overflow-y-auto px-6 py-5">{children}</div>
       </div>

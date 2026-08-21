@@ -7,13 +7,21 @@ import { HebrewDateInput } from "@/components/ui/HebrewDateInput";
 
 interface ReportsFilterProps {
   classes: { id: string; name: string }[];
+  tracks: { id: string; name: string }[];
+  specializations: { id: string; name: string }[];
+  teachers: { id: string; name: string }[];
   students: { id: string; full_name: string }[];
+  subjects: string[];
   rules: { id: string; name: string; max_allowed_absence_percent: number }[];
   defaults: {
     startDate: string;
     endDate: string;
     minAbsence: string;
     classId?: string;
+    trackId?: string;
+    specializationId?: string;
+    teacherId?: string;
+    subject?: string;
     studentId?: string;
     ruleId?: string;
   };
@@ -21,7 +29,11 @@ interface ReportsFilterProps {
 
 export function ReportsFilter({
   classes,
+  tracks,
+  specializations,
+  teachers,
   students,
+  subjects,
   rules,
   defaults,
 }: ReportsFilterProps) {
@@ -31,7 +43,18 @@ export function ReportsFilter({
     e.preventDefault();
     const fd = new FormData(e.currentTarget);
     const params = new URLSearchParams();
-    for (const key of ["classId", "studentId", "startDate", "endDate", "minAbsence", "ruleId"]) {
+    for (const key of [
+      "classId",
+      "trackId",
+      "specializationId",
+      "teacherId",
+      "subject",
+      "studentId",
+      "startDate",
+      "endDate",
+      "minAbsence",
+      "ruleId",
+    ]) {
       const value = fd.get(key) as string;
       if (value) params.set(key, value);
     }
@@ -48,6 +71,42 @@ export function ReportsFilter({
         options={[
           { value: "", label: "כל הכיתות" },
           ...classes.map((c) => ({ value: c.id, label: c.name })),
+        ]}
+      />
+      <Select
+        label="מסלול"
+        name="trackId"
+        defaultValue={defaults.trackId ?? ""}
+        options={[
+          { value: "", label: "כל המסלולים" },
+          ...tracks.map((t) => ({ value: t.id, label: t.name })),
+        ]}
+      />
+      <Select
+        label="התמחות"
+        name="specializationId"
+        defaultValue={defaults.specializationId ?? ""}
+        options={[
+          { value: "", label: "כל ההתמחויות" },
+          ...specializations.map((s) => ({ value: s.id, label: s.name })),
+        ]}
+      />
+      <Select
+        label="מורה"
+        name="teacherId"
+        defaultValue={defaults.teacherId ?? ""}
+        options={[
+          { value: "", label: "כל המורות" },
+          ...teachers.map((t) => ({ value: t.id, label: t.name })),
+        ]}
+      />
+      <Select
+        label="מקצוע"
+        name="subject"
+        defaultValue={defaults.subject ?? ""}
+        options={[
+          { value: "", label: "כל המקצועות" },
+          ...subjects.map((s) => ({ value: s, label: s })),
         ]}
       />
       <Select

@@ -24,29 +24,9 @@ export async function ensureFixedGrades(academicYearId: string) {
   );
 }
 
-export async function copyTeachingTypes(fromYearId: string, toYearId: string) {
-  const supabase = await createClient();
-  const { data: from } = await supabase
-    .from("teaching_types")
-    .select("name")
-    .eq("academic_year_id", fromYearId);
-  if (!from?.length) return;
-
-  const { data: existing } = await supabase
-    .from("teaching_types")
-    .select("name")
-    .eq("academic_year_id", toYearId);
-  const have = new Set((existing ?? []).map((t) => t.name));
-  const rows = from
-    .filter((t) => !have.has(t.name))
-    .map((t) => ({ academic_year_id: toYearId, name: t.name }));
-  if (rows.length) await supabase.from("teaching_types").insert(rows);
-}
-
 export async function copyYearStructure(fromYearId: string, toYearId: string) {
   const supabase = await createClient();
   await ensureFixedGrades(toYearId);
-  await copyTeachingTypes(fromYearId, toYearId);
 
   const [
     { data: fromGrades },
@@ -98,7 +78,7 @@ export async function copyYearStructure(fromYearId: string, toYearId: string) {
 
 /**
  * Promote active placements: א→ב, ב→ג, ג→ inactive (history kept).
- * Copies structure first, then maps class/track/spec/teaching_type by name.
+ * Copies structure first, then maps class/track/spec by name.
  */
 export async function promoteStudentsToYear(fromYearId: string, toYearId: string) {
   const supabase = await createClient();
@@ -111,8 +91,6 @@ export async function promoteStudentsToYear(fromYearId: string, toYearId: string
     { data: toTracks },
     { data: fromSpecs },
     { data: toSpecs },
-    { data: fromTypes },
-    { data: toTypes },
     { data: placements },
   ] = await Promise.all([
     supabase.from("grades").select("id, name").eq("academic_year_id", fromYearId),
@@ -121,12 +99,10 @@ export async function promoteStudentsToYear(fromYearId: string, toYearId: string
     supabase.from("tracks").select("id, name").eq("academic_year_id", toYearId),
     supabase.from("specializations").select("id, name").eq("academic_year_id", fromYearId),
     supabase.from("specializations").select("id, name").eq("academic_year_id", toYearId),
-    supabase.from("teaching_types").select("id, name").eq("academic_year_id", fromYearId),
-    supabase.from("teaching_types").select("id, name").eq("academic_year_id", toYearId),
     supabase
       .from("student_assignments")
       .select(
-        "student_id, grade_id, class_id, track_id, specialization_id, secondary_specialization_id, teaching_type_id, is_psychology, classes(name), tracks(name), students(id, is_active)"
+        "student_id, grade_id, class_id, track_id, specialization_id, secondary_specialization_id, is_psychology, classes(name), tracks(name), students(id, is_active)"
       )
       .eq("academic_year_id", fromYearId)
       .is("end_date", null),
@@ -137,8 +113,6 @@ export async function promoteStudentsToYear(fromYearId: string, toYearId: string
   const toTrackByName = new Map((toTracks ?? []).map((t) => [t.name, t.id]));
   const fromSpecName = new Map((fromSpecs ?? []).map((s) => [s.id, s.name]));
   const toSpecByName = new Map((toSpecs ?? []).map((s) => [s.name, s.id]));
-  const fromTypeName = new Map((fromTypes ?? []).map((t) => [t.id, t.name]));
-  const toTypeByName = new Map((toTypes ?? []).map((t) => [t.name, t.id]));
 
   let promoted = 0;
   let graduated = 0;
@@ -188,7 +162,6 @@ export async function promoteStudentsToYear(fromYearId: string, toYearId: string
     const secondaryName = p.secondary_specialization_id
       ? fromSpecName.get(p.secondary_specialization_id)
       : null;
-    const typeName = p.teaching_type_id ? fromTypeName.get(p.teaching_type_id) : null;
 
     const { error } = await supabase.from("student_assignments").insert({
       student_id: p.student_id,
@@ -200,7 +173,6 @@ export async function promoteStudentsToYear(fromYearId: string, toYearId: string
       secondary_specialization_id: secondaryName
         ? toSpecByName.get(secondaryName) ?? null
         : null,
-      teaching_type_id: typeName ? toTypeByName.get(typeName) ?? null : null,
       is_psychology: Boolean(p.is_psychology),
       start_date: startDate,
       end_date: null,

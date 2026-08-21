@@ -18,6 +18,7 @@ export interface TeachingAssignmentOption {
   className?: string | null;
   trackName?: string | null;
   specializationName?: string | null;
+  forPsychology?: boolean;
 }
 
 interface LessonsFormProps {
@@ -31,6 +32,7 @@ interface LessonsFormProps {
 
 function scopeLabel(t: TeachingAssignmentOption): string {
   const grade = t.gradeName ? `${t.gradeName} · ` : "";
+  if (t.forPsychology) return `${grade}פסיכולוגיה`;
   if (t.billing_type === "specialization") {
     return `${grade}התמחות · ${t.specializationName ?? "—"}`;
   }
@@ -85,64 +87,69 @@ export function LessonsForm({
   }
 
   return (
-    <form onSubmit={handleSubmit} className="flex flex-wrap items-end gap-3">
-      <Select
-        label="שיבוץ הוראה"
-        name="teacher_teaching_assignment_id"
-        required
-        value={teachingId}
-        onChange={(e) => setTeachingId(e.target.value)}
-        options={[
-          { value: "", label: "בחרי שיבוץ" },
-          ...teachingAssignments.map((t) => ({
-            value: t.id,
-            label: `${t.teachers?.full_name ?? "מורה"} · ${t.subject} · ${scopeLabel(t)}`,
-          })),
-        ]}
-      />
+    <form onSubmit={handleSubmit} className="space-y-4">
+      <div className="flex flex-wrap items-end gap-3">
+        <Select
+          label="שיבוץ הוראה"
+          name="teacher_teaching_assignment_id"
+          required
+          value={teachingId}
+          onChange={(e) => setTeachingId(e.target.value)}
+          options={[
+            { value: "", label: "בחרי שיבוץ" },
+            ...teachingAssignments.map((t) => ({
+              value: t.id,
+              label: `${t.teachers?.full_name ?? "מורה"} · ${t.subject} · ${scopeLabel(t)}`,
+            })),
+          ]}
+        />
+        <Select
+          label="יום בשבוע"
+          name="day_of_week"
+          required
+          defaultValue={defaultDay}
+          options={DAY_OF_WEEK_LABELS.map((l, i) => ({ value: String(i), label: l }))}
+        />
+        <Input label="מספר שיעור (1-9)" name="lesson_number" type="number" min={1} max={9} required />
+        <Select
+          label="טווח פעילות"
+          name="activity_range_id"
+          required
+          options={[
+            { value: "", label: "בחרי" },
+            ...ranges.map((r) => ({ value: r.id, label: r.name })),
+          ]}
+        />
+        <Select
+          label="כלל נוכחות"
+          name="attendance_rule_id"
+          required
+          options={[
+            { value: "", label: "בחרי" },
+            ...rules.map((r) => ({
+              value: r.id,
+              label: `${r.name} (${r.max_allowed_absence_percent}%)`,
+            })),
+          ]}
+        />
+        <Button type="submit">{occurrenceDate ? "יצירה ליום זה" : "יצירה"}</Button>
+      </div>
+
       {selected && (
-        <p className="w-full text-sm text-slate-600">
-          מקצוע: <span className="font-medium text-slate-800">{selected.subject}</span>
-          {" · "}
-          סוג:{" "}
-          <span className="font-medium text-slate-800">
-            {BILLING_TYPE_LABELS[selected.billing_type]}
-          </span>
-          {" · "}
-          קהל: <span className="font-medium text-slate-800">{scopeLabel(selected)}</span>
-        </p>
+        <div className="ml-auto max-w-sm rounded-xl border border-teal-100 bg-teal-50/70 px-3 py-2 text-xs text-teal-950">
+          <div className="font-semibold text-teal-900">סיכום קהל</div>
+          <div className="mt-1 space-y-0.5 text-teal-800/90">
+            <div>מקצוע: {selected.subject}</div>
+            <div>סוג: {BILLING_TYPE_LABELS[selected.billing_type]}</div>
+            <div>קהל: {scopeLabel(selected)}</div>
+          </div>
+          <p className="mt-2 text-[11px] text-teal-700/80">
+            חוקי נוכחות חדשים: הגדרות ← כללי נוכחות
+          </p>
+        </div>
       )}
-      <Select
-        label="יום בשבוע"
-        name="day_of_week"
-        required
-        defaultValue={defaultDay}
-        options={DAY_OF_WEEK_LABELS.map((l, i) => ({ value: String(i), label: l }))}
-      />
-      <Input label="מספר שיעור (1-9)" name="lesson_number" type="number" min={1} max={9} required />
-      <Select
-        label="טווח פעילות"
-        name="activity_range_id"
-        required
-        options={[
-          { value: "", label: "בחרי" },
-          ...ranges.map((r) => ({ value: r.id, label: r.name })),
-        ]}
-      />
-      <Select
-        label="כלל נוכחות"
-        name="attendance_rule_id"
-        required
-        options={[
-          { value: "", label: "בחרי" },
-          ...rules.map((r) => ({
-            value: r.id,
-            label: `${r.name} (${r.max_allowed_absence_percent}%)`,
-          })),
-        ]}
-      />
-      <Button type="submit">{occurrenceDate ? "יצירה ליום זה" : "יצירה"}</Button>
-      {error && <p className="w-full text-sm text-red-600">{error}</p>}
+
+      {error && <p className="text-sm text-red-600">{error}</p>}
     </form>
   );
 }

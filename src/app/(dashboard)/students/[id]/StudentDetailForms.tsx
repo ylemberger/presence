@@ -12,7 +12,6 @@ import type {
   Class,
   Track,
   Specialization,
-  TeachingType,
 } from "@/types/database";
 
 interface YearData {
@@ -21,7 +20,6 @@ interface YearData {
   classes: Class[];
   tracks: Track[];
   specializations: Specialization[];
-  teachingTypes: TeachingType[];
 }
 
 interface Props {
@@ -100,14 +98,6 @@ export function StudentDetailForms({ studentId, yearData }: Props) {
           options={[
             { value: "", label: "ללא" },
             ...yearData.specializations.map((s) => ({ value: s.id, label: s.name })),
-          ]}
-        />
-        <Select
-          label="סוג הוראה"
-          name="teaching_type_id"
-          options={[
-            { value: "", label: "ללא" },
-            ...yearData.teachingTypes.map((t) => ({ value: t.id, label: t.name })),
           ]}
         />
         <label className="flex items-center gap-2 pb-2 text-sm text-slate-700">

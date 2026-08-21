@@ -6,10 +6,11 @@ import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/Button";
 import { Select } from "@/components/ui/Input";
 import { ATTENDANCE_STATUS_LABELS } from "@/lib/constants";
-import { bulkAttendanceAction } from "../actions";
+import { bulkAttendanceAction, upsertAttendanceNoteAction } from "../actions";
 import type { AttendanceStatus } from "@/types/database";
 import { cn } from "@/lib/cn";
-import { addDays, formatHebrewDate } from "@/lib/dates/hebrew";
+import { addDays, formatGregorianDate, formatHebrewDate } from "@/lib/dates/hebrew";
+import { AttendanceGapModal, type GapItem } from "./AttendanceGapModal";
 
 export type AttendanceMode = "single" | "group";
 export type AttendanceView = "lesson" | "date" | "teacher" | "group";
@@ -50,6 +51,7 @@ interface Option {
 }
 
 interface Props {
+  yearId: string;
   filters: Filters;
   classes: Option[];
   tracks: Option[];
@@ -60,7 +62,11 @@ interface Props {
   allStudents: AttendanceStudent[];
   occurrences: AttendanceOccurrence[];
   attendance: { student_id: string; lesson_occurrence_id: string; status: string }[];
-  pastGaps?: Array<{ lessonId: string; subject: string; date: string; occurrenceId: string }>;
+  pastGaps?: GapItem[];
+  siblingDates?: Array<{ occurrenceId: string; lessonId: string; date: string; subject: string }>;
+  noteBody?: string;
+  noteLessonId?: string | null;
+  noteStudentId?: string | null;
 }
 
 const CELL: Record<AttendanceStatus, string> = {
@@ -75,7 +81,17 @@ function keyOf(studentId: string, occurrenceId: string): DraftKey {
   return `${studentId}::${occurrenceId}`;
 }
 
+function DateStack({ iso }: { iso: string }) {
+  return (
+    <div className="leading-tight">
+      <div className="font-semibold text-slate-800">{formatHebrewDate(iso)}</div>
+      <div className="text-[11px] text-slate-400">{formatGregorianDate(iso)}</div>
+    </div>
+  );
+}
+
 export function AttendanceBoard({
+  yearId,
   filters,
   classes,
   tracks,
@@ -87,12 +103,23 @@ export function AttendanceBoard({
   occurrences,
   attendance,
   pastGaps = [],
+  siblingDates = [],
+  noteBody = "",
+  noteLessonId = null,
+  noteStudentId = null,
 }: Props) {
   const router = useRouter();
   const [draft, setDraft] = useState<Record<DraftKey, AttendanceStatus | null>>({});
   const [dirty, setDirty] = useState(false);
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
+  const [note, setNote] = useState(noteBody);
+  const [noteSaving, setNoteSaving] = useState(false);
+  const [dismissedSoftIds, setDismissedSoftIds] = useState<string[]>([]);
+
+  useEffect(() => {
+    setNote(noteBody);
+  }, [noteBody]);
 
   useEffect(() => {
     const byKey = new Map<string, AttendanceStatus>();
@@ -115,14 +142,47 @@ export function AttendanceBoard({
       return occurrences.filter((o) => o.id === filters.occurrenceId);
     }
     if (filters.view === "date") {
-      const byDate = [...occurrences].sort((a, b) => a.date.localeCompare(b.date));
-      return byDate;
+      return [...occurrences].sort((a, b) => a.date.localeCompare(b.date));
     }
     if (filters.view === "teacher") {
       return [...occurrences].sort((a, b) => a.teacherName.localeCompare(b.teacherName, "he"));
     }
     return occurrences;
   }, [occurrences, filters.view, filters.occurrenceId]);
+
+  const relevantGaps = useMemo(() => {
+    const lessonIds = new Set(
+      (filters.occurrenceId
+        ? occurrences.filter((o) => o.id === filters.occurrenceId)
+        : occurrences
+      ).map((o) => o.lessonId)
+    );
+    if (lessonIds.size === 0 && pastGaps.length) return pastGaps.slice(0, 1);
+    return pastGaps.filter((g) => lessonIds.has(g.lessonId) || lessonIds.size === 0);
+  }, [pastGaps, occurrences, filters.occurrenceId]);
+
+  const blockingGap = relevantGaps.find((g) => !g.gapHandling) ?? null;
+  const softGap =
+    !blockingGap
+      ? relevantGaps.find(
+          (g) => g.gapHandling && !dismissedSoftIds.includes(g.occurrenceId)
+        ) ?? null
+      : null;
+  const activeGap = blockingGap ?? softGap;
+  const gridLocked = Boolean(blockingGap);
+
+  const focusLessonId =
+    visibleOccurrences[0]?.lessonId ??
+    (filters.occurrenceId
+      ? occurrences.find((o) => o.id === filters.occurrenceId)?.lessonId
+      : undefined);
+
+  const lessonSiblingDates = useMemo(() => {
+    if (!focusLessonId) return [];
+    return siblingDates
+      .filter((s) => s.lessonId === focusLessonId)
+      .sort((a, b) => b.date.localeCompare(a.date));
+  }, [siblingDates, focusLessonId]);
 
   function pushFilters(patch: Partial<Filters>) {
     const next = { ...filters, ...patch };
@@ -140,13 +200,33 @@ export function AttendanceBoard({
     router.push(`/attendance?${params.toString()}`);
   }
 
+  function jumpToOccurrence(occurrenceId: string, date: string) {
+    const week = (() => {
+      const [y, m, d] = date.split("-").map(Number);
+      const dt = new Date(y, m - 1, d, 12, 0, 0);
+      dt.setDate(dt.getDate() - dt.getDay());
+      const yy = dt.getFullYear();
+      const mm = String(dt.getMonth() + 1).padStart(2, "0");
+      const dd = String(dt.getDate()).padStart(2, "0");
+      return `${yy}-${mm}-${dd}`;
+    })();
+    pushFilters({
+      view: "lesson",
+      mode: "group",
+      weekStart: week,
+      occurrenceId,
+    });
+  }
+
   function setStatus(studentId: string, occurrenceId: string, status: AttendanceStatus | null) {
+    if (gridLocked) return;
     setDraft((prev) => ({ ...prev, [keyOf(studentId, occurrenceId)]: status }));
     setDirty(true);
     setMessage(null);
   }
 
   function markAll(status: AttendanceStatus) {
+    if (gridLocked) return;
     const next = { ...draft };
     for (const student of students) {
       for (const occ of visibleOccurrences) {
@@ -159,17 +239,14 @@ export function AttendanceBoard({
   }
 
   async function saveAll() {
+    if (gridLocked) return;
     setSaving(true);
     setMessage(null);
     const updates = Object.entries(draft)
       .filter(([, status]) => status != null)
       .map(([key, status]) => {
         const [studentId, occurrenceId] = key.split("::");
-        return {
-          studentId,
-          occurrenceId,
-          status: status as AttendanceStatus,
-        };
+        return { studentId, occurrenceId, status: status as AttendanceStatus };
       });
 
     if (updates.length === 0) {
@@ -188,77 +265,119 @@ export function AttendanceBoard({
     setSaving(false);
   }
 
+  async function saveNote() {
+    setNoteSaving(true);
+    const fd = new FormData();
+    fd.set("academic_year_id", yearId);
+    fd.set("body", note);
+    if (filters.mode === "single" && filters.studentId) {
+      fd.set("student_id", filters.studentId);
+    } else if (noteLessonId || focusLessonId) {
+      fd.set("lesson_id", noteLessonId || focusLessonId || "");
+    } else {
+      setNoteSaving(false);
+      setMessage("בחרי שיעור או תלמידה כדי לשמור הערה כללית");
+      return;
+    }
+    const result = await upsertAttendanceNoteAction(fd);
+    if (result && "error" in result && result.error) setMessage(result.error);
+    else {
+      setMessage("ההערה נשמרה");
+      router.refresh();
+    }
+    setNoteSaving(false);
+  }
+
   const canShowGrid =
+    !gridLocked &&
     students.length > 0 &&
     visibleOccurrences.length > 0 &&
     (filters.mode === "single" ? Boolean(filters.studentId) : true);
 
-  const relevantGaps = useMemo(() => {
-    const lessonIds = new Set(visibleOccurrences.map((o) => o.lessonId));
-    return pastGaps.filter((g) => lessonIds.has(g.lessonId));
-  }, [pastGaps, visibleOccurrences]);
+  const showNoteBox =
+    (filters.mode === "single" && filters.studentId) ||
+    Boolean(focusLessonId) ||
+    Boolean(noteStudentId) ||
+    Boolean(noteLessonId);
 
   return (
-    <div className="overflow-hidden rounded-2xl border border-stone-200/80 bg-white shadow-[0_8px_30px_rgb(28,43,48,0.04)] print:shadow-none print:border-0">
-      {relevantGaps.length > 0 && (
-        <div className="border-b border-amber-200 bg-amber-50 px-5 py-3 text-sm text-amber-900 print:hidden">
-          <p className="font-semibold">יש מופעים קודמים בלי נוכחות לשיעורים האלה:</p>
-          <ul className="mt-1 list-inside list-disc text-xs">
-            {relevantGaps.map((g) => (
-              <li key={g.occurrenceId}>
-                {g.subject} · {formatHebrewDate(g.date)}
-              </li>
-            ))}
-          </ul>
-        </div>
+    <div className="overflow-hidden rounded-2xl border border-stone-200/80 bg-white shadow-[0_8px_30px_rgb(28,43,48,0.04)] print:border-0 print:shadow-none">
+      {activeGap && (
+        <AttendanceGapModal
+          gap={activeGap}
+          soft={!blockingGap}
+          onResolved={() => {
+            if (activeGap.gapHandling) {
+              setDismissedSoftIds((ids) => [...ids, activeGap.occurrenceId]);
+            }
+          }}
+          onMarkAttendance={(g) => jumpToOccurrence(g.occurrenceId, g.date)}
+        />
       )}
-      <div className="flex flex-wrap items-center gap-2 border-b border-stone-100 px-5 py-4 print:hidden">
-        {(
-          [
-            ["single", "בת יחידה"],
-            ["group", "קבוצה"],
-          ] as const
-        ).map(([value, label]) => (
-          <button
-            key={value}
-            type="button"
-            onClick={() => pushFilters({ mode: value, studentId: value === "group" ? undefined : filters.studentId })}
-            className={cn(
-              "rounded-full px-4 py-1.5 text-sm font-medium",
-              filters.mode === value
-                ? "bg-[var(--brand)] text-white"
-                : "bg-stone-100 text-slate-600 hover:bg-stone-200"
-            )}
-          >
-            {label}
-          </button>
-        ))}
-        <div className="mx-2 h-6 w-px bg-stone-200" />
-        {(
-          [
-            ["date", "לפי תאריך"],
-            ["lesson", "לפי שיעור"],
-            ["teacher", "לפי מורה"],
-            ["group", "לפי קבוצה"],
-          ] as const
-        ).map(([value, label]) => (
-          <button
-            key={value}
-            type="button"
-            onClick={() => pushFilters({ view: value })}
-            className={cn(
-              "rounded-full px-3 py-1.5 text-sm font-medium",
-              filters.view === value
-                ? "bg-slate-800 text-white"
-                : "bg-stone-100 text-slate-600 hover:bg-stone-200"
-            )}
-          >
-            {label}
-          </button>
-        ))}
+
+      <div className="flex flex-wrap items-start justify-between gap-3 border-b border-stone-100 bg-stone-50/80 px-4 py-3 print:hidden">
+        <div className="flex flex-wrap items-center gap-2">
+          {(
+            [
+              ["single", "בת יחידה"],
+              ["group", "קבוצה"],
+            ] as const
+          ).map(([value, label]) => (
+            <button
+              key={value}
+              type="button"
+              onClick={() =>
+                pushFilters({
+                  mode: value,
+                  studentId: value === "group" ? undefined : filters.studentId,
+                })
+              }
+              className={cn(
+                "rounded-lg px-3 py-1.5 text-sm font-medium",
+                filters.mode === value
+                  ? "bg-[var(--brand)]/90 text-white"
+                  : "bg-white text-slate-600 ring-1 ring-stone-200 hover:bg-stone-100"
+              )}
+            >
+              {label}
+            </button>
+          ))}
+          <div className="mx-1 h-5 w-px bg-stone-200" />
+          {(
+            [
+              ["date", "לפי תאריך"],
+              ["lesson", "לפי שיעור"],
+              ["teacher", "לפי מורה"],
+              ["group", "לפי קבוצה"],
+            ] as const
+          ).map(([value, label]) => (
+            <button
+              key={value}
+              type="button"
+              onClick={() => pushFilters({ view: value })}
+              className={cn(
+                "rounded-lg px-2.5 py-1.5 text-xs font-medium",
+                filters.view === value
+                  ? "bg-teal-700/90 text-white"
+                  : "bg-white text-slate-600 ring-1 ring-stone-200 hover:bg-stone-100"
+              )}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+        <div className="text-left">
+          <div className="text-sm font-semibold text-slate-800">
+            {filters.weekLabel.split("–")[0]?.trim() || filters.weekLabel}
+          </div>
+          <div className="text-[11px] text-slate-400">
+            {formatGregorianDate(filters.weekStart)} –{" "}
+            {formatGregorianDate(addDays(filters.weekStart, 6))}
+          </div>
+        </div>
       </div>
 
-      <div className="grid gap-3 border-b border-stone-100 px-5 py-4 md:grid-cols-3 lg:grid-cols-4 print:hidden">
+      <div className="grid gap-2 border-b border-stone-100 px-4 py-3 md:grid-cols-3 lg:grid-cols-4 print:hidden">
         {filters.mode === "single" && (
           <Select
             label="תלמידה"
@@ -315,16 +434,34 @@ export function AttendanceBoard({
             ...subjects.map((s) => ({ value: s, label: s })),
           ]}
         />
-        {filters.view === "lesson" && (
+        {(filters.view === "lesson" || lessonSiblingDates.length > 0) && (
           <Select
-            label="שיעור"
+            label="תאריך שיעור (רק ימי השיעור)"
             value={filters.occurrenceId ?? ""}
-            onChange={(e) => pushFilters({ occurrenceId: e.target.value || undefined })}
+            onChange={(e) => {
+              const id = e.target.value;
+              if (!id) {
+                pushFilters({ occurrenceId: undefined });
+                return;
+              }
+              const row =
+                lessonSiblingDates.find((s) => s.occurrenceId === id) ||
+                occurrences.find((o) => o.id === id);
+              if (row && "date" in row) jumpToOccurrence(id, row.date);
+              else pushFilters({ occurrenceId: id, view: "lesson" });
+            }}
             options={[
-              { value: "", label: "בחרי שיעור" },
-              ...occurrences.map((o) => ({
-                value: o.id,
-                label: `${formatHebrewDate(o.date)} · ${o.subject}`,
+              { value: "", label: "בחרי מופע" },
+              ...(lessonSiblingDates.length
+                ? lessonSiblingDates
+                : occurrences.map((o) => ({
+                    occurrenceId: o.id,
+                    date: o.date,
+                    subject: o.subject,
+                  }))
+              ).map((o) => ({
+                value: o.occurrenceId,
+                label: `${formatHebrewDate(o.date)} · ${formatGregorianDate(o.date)} · ${o.subject}`,
               })),
             ]}
           />
@@ -337,9 +474,6 @@ export function AttendanceBoard({
           >
             שבוע קודם
           </Button>
-          <span className="min-w-[10rem] text-center text-sm font-medium text-slate-700">
-            {filters.weekLabel}
-          </span>
           <Button
             variant="secondary"
             size="sm"
@@ -350,29 +484,34 @@ export function AttendanceBoard({
         </div>
       </div>
 
-      <div className="flex flex-wrap items-center gap-2 border-b border-stone-100 px-5 py-3 print:hidden">
-        <Button
-          size="sm"
-          variant="secondary"
-          onClick={() => markAll("present")}
-          disabled={!canShowGrid}
-        >
+      {showNoteBox && (
+        <div className="border-b border-stone-100 px-4 py-3 print:hidden">
+          <label className="mb-1 block text-xs font-medium text-slate-600">
+            הערה כללית {filters.mode === "single" ? "(לתלמידה)" : "(לשיעור)"} — לא מודפסת בדוחות
+          </label>
+          <div className="flex gap-2">
+            <textarea
+              value={note}
+              onChange={(e) => setNote(e.target.value)}
+              rows={2}
+              className="min-h-[2.5rem] flex-1 rounded-xl border border-stone-200 px-3 py-2 text-sm"
+              placeholder="דברים חשובים לזכור לגבי נוכחות..."
+            />
+            <Button type="button" size="sm" variant="secondary" disabled={noteSaving} onClick={saveNote}>
+              {noteSaving ? "..." : "שמור הערה"}
+            </Button>
+          </div>
+        </div>
+      )}
+
+      <div className="flex flex-wrap items-center gap-2 border-b border-stone-100 px-4 py-3 print:hidden">
+        <Button size="sm" variant="secondary" onClick={() => markAll("present")} disabled={!canShowGrid}>
           סמן נוכחות לכולן
         </Button>
-        <Button
-          size="sm"
-          variant="secondary"
-          onClick={() => markAll("late")}
-          disabled={!canShowGrid}
-        >
+        <Button size="sm" variant="secondary" onClick={() => markAll("late")} disabled={!canShowGrid}>
           סמן איחור לכולן
         </Button>
-        <Button
-          size="sm"
-          variant="secondary"
-          onClick={() => markAll("absent")}
-          disabled={!canShowGrid}
-        >
+        <Button size="sm" variant="secondary" onClick={() => markAll("absent")} disabled={!canShowGrid}>
           סמן היעדרות לכולן
         </Button>
         <Button size="sm" onClick={saveAll} disabled={!dirty || saving || !canShowGrid}>
@@ -387,25 +526,22 @@ export function AttendanceBoard({
         {message && <span className="text-xs text-slate-600">{message}</span>}
       </div>
 
-      <div className="hidden print:block px-2 py-3 text-sm">
-        <div className="font-semibold">יומן נוכחות</div>
-        <div>{filters.weekLabel}</div>
-      </div>
-
       {!canShowGrid ? (
         <div className="px-5 py-12 text-center text-slate-500">
-          {filters.mode === "single" && !filters.studentId ? (
+          {gridLocked ? (
+            <p>טפלי קודם במופע החסר בחלונית — ואז אפשר להמשיך לסמן נוכחות.</p>
+          ) : filters.mode === "single" && !filters.studentId ? (
             <p>בחרי תלמידה כדי לפתוח רישום נוכחות.</p>
           ) : students.length === 0 ? (
             <p>
-              אין תלמידות שמתאימות למסננים / שיוך לשיעור.{" "}
+              אין תלמידות שמתאימות.{" "}
               <Link href="/students" className="font-medium text-[var(--brand)] hover:underline">
                 מעבר לתלמידות
               </Link>
             </p>
           ) : (
             <p>
-              אין שיעורים בשבוע הזה לפי המסננים שנבחרו.{" "}
+              אין שיעורים בשבוע הזה.{" "}
               <Link href="/lessons" className="font-medium text-[var(--brand)] hover:underline">
                 מעבר לשיעורים
               </Link>
@@ -414,6 +550,22 @@ export function AttendanceBoard({
         </div>
       ) : (
         <div className="overflow-auto">
+          <div className="border-b border-stone-100 bg-teal-50/40 px-4 py-3 print:hidden">
+            <div className="flex flex-wrap items-end gap-4">
+              {visibleOccurrences.map((o) => (
+                <div key={o.id} className="min-w-[8rem]">
+                  <DateStack iso={o.date} />
+                  <div className="mt-0.5 text-xs font-medium text-teal-900">{o.subject}</div>
+                  {o.teacherName && (
+                    <div className="text-[11px] text-slate-500">{o.teacherName}</div>
+                  )}
+                </div>
+              ))}
+              <div className="text-sm text-slate-600">
+                {students.length} תלמידות בקבוצה זו
+              </div>
+            </div>
+          </div>
           <table className="w-full min-w-[42rem] border-collapse text-sm">
             <thead>
               <tr className="bg-stone-50">
@@ -422,11 +574,8 @@ export function AttendanceBoard({
                 </th>
                 {visibleOccurrences.map((o) => (
                   <th key={o.id} className="px-2 py-3 text-center font-medium">
-                    <div className="text-slate-800">{formatHebrewDate(o.date)}</div>
-                    <div className="text-xs font-normal text-slate-500">{o.subject}</div>
-                    {filters.view === "teacher" && (
-                      <div className="text-[11px] font-normal text-slate-400">{o.teacherName}</div>
-                    )}
+                    <DateStack iso={o.date} />
+                    <div className="mt-1 text-xs font-normal text-slate-500">{o.subject}</div>
                   </th>
                 ))}
               </tr>
@@ -449,7 +598,7 @@ export function AttendanceBoard({
                                 type="button"
                                 onClick={() => setStatus(student.id, o.id, option)}
                                 className={cn(
-                                  "rounded-md border px-1 py-1 text-[11px] font-semibold transition-colors print:border-stone-300",
+                                  "rounded-md border px-1 py-1 text-[11px] font-semibold transition-colors",
                                   status === option
                                     ? CELL[option]
                                     : "border-stone-200 bg-stone-50 text-slate-500 hover:bg-stone-100"

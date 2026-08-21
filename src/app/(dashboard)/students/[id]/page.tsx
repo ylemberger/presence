@@ -71,8 +71,7 @@ export default async function StudentDetailPage({ params }: Props) {
   }> = [];
 
   if (activeYear) {
-    const [grades, classes, tracks, specializations, yearLessons, sla, teachingTypes] =
-      await Promise.all([
+    const [grades, classes, tracks, specializations, yearLessons, sla] = await Promise.all([
       supabase.from("grades").select("*").eq("academic_year_id", activeYear.id),
       supabase.from("classes").select("*").eq("academic_year_id", activeYear.id),
       supabase.from("tracks").select("*").eq("academic_year_id", activeYear.id),
@@ -88,7 +87,6 @@ export default async function StudentDetailPage({ params }: Props) {
         .eq("student_id", id)
         .eq("lessons.academic_year_id", activeYear.id)
         .order("start_date", { ascending: false }),
-      supabase.from("teaching_types").select("*").eq("academic_year_id", activeYear.id),
     ]);
 
     yearData = {
@@ -97,7 +95,6 @@ export default async function StudentDetailPage({ params }: Props) {
       classes: classes.data ?? [],
       tracks: tracks.data ?? [],
       specializations: specializations.data ?? [],
-      teachingTypes: teachingTypes.data ?? [],
     };
     lessons = yearLessons.data ?? [];
     lessonAssignments = (sla.data ?? []).map((row) => ({

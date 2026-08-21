@@ -33,6 +33,25 @@ export function formatHebrewDate(date: string | Date | null | undefined): string
   }
 }
 
+/** Gregorian display under Hebrew primary, e.g. 21.08.2026 */
+export function formatGregorianDate(date: string | Date | null | undefined): string {
+  if (!date) return "";
+  const iso = typeof date === "string" ? date.slice(0, 10) : toIsoDate(date);
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(iso)) return String(date);
+  const [y, m, d] = iso.split("-");
+  return `${d}.${m}.${y}`;
+}
+
+export function formatDatePair(date: string | Date | null | undefined): {
+  hebrew: string;
+  gregorian: string;
+} {
+  return {
+    hebrew: formatHebrewDate(date),
+    gregorian: formatGregorianDate(date),
+  };
+}
+
 export function todayIso(): string {
   return toIsoDate(new Date());
 }

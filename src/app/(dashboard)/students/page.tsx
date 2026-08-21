@@ -20,7 +20,6 @@ export default async function StudentsPage() {
       trackName: string;
       specializationName: string;
       secondarySpecializationName: string;
-      teachingTypeName: string;
       isPsychology: boolean;
     }
   > = {};
@@ -34,12 +33,11 @@ export default async function StudentsPage() {
       { data: classes },
       { data: tracks },
       { data: specializations },
-      { data: teachingTypes },
     ] = await Promise.all([
       supabase
         .from("student_assignments")
         .select(
-          "student_id, is_psychology, classes(name), grades(name), tracks(name), specializations(name), teaching_types(name), secondary_specialization_id"
+          "student_id, is_psychology, classes(name), grades(name), tracks(name), specializations(name), secondary_specialization_id"
         )
         .eq("academic_year_id", activeYear.id)
         .is("end_date", null),
@@ -48,11 +46,6 @@ export default async function StudentsPage() {
       supabase.from("tracks").select("*").eq("academic_year_id", activeYear.id).order("name"),
       supabase
         .from("specializations")
-        .select("*")
-        .eq("academic_year_id", activeYear.id)
-        .order("name"),
-      supabase
-        .from("teaching_types")
         .select("*")
         .eq("academic_year_id", activeYear.id)
         .order("name"),
@@ -70,8 +63,6 @@ export default async function StudentsPage() {
         secondarySpecializationName: a.secondary_specialization_id
           ? specNameById.get(a.secondary_specialization_id) ?? "—"
           : "—",
-        teachingTypeName:
-          (a.teaching_types as unknown as { name: string } | null)?.name ?? "—",
         isPsychology: Boolean(a.is_psychology),
       };
     }
@@ -82,7 +73,6 @@ export default async function StudentsPage() {
       classes: classes ?? [],
       tracks: tracks ?? [],
       specializations: specializations ?? [],
-      teachingTypes: teachingTypes ?? [],
     };
   }
 
@@ -97,7 +87,6 @@ export default async function StudentsPage() {
     trackName: assignments[s.id]?.trackName ?? "—",
     specializationName: assignments[s.id]?.specializationName ?? "—",
     secondarySpecializationName: assignments[s.id]?.secondarySpecializationName ?? "—",
-    teachingTypeName: assignments[s.id]?.teachingTypeName ?? "—",
     isPsychology: assignments[s.id]?.isPsychology ?? false,
   }));
 

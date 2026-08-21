@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/Button";
 import { Input, Select } from "@/components/ui/Input";
 import { HebrewDateInput } from "@/components/ui/HebrewDateInput";
 import { createStudentAction } from "../actions";
-import type { Grade, Class, Track, Specialization, TeachingType } from "@/types/database";
+import type { Grade, Class, Track, Specialization } from "@/types/database";
 
 interface StudentsFormProps {
   yearId: string;
@@ -14,7 +14,6 @@ interface StudentsFormProps {
   classes: Class[];
   tracks: Track[];
   specializations: Specialization[];
-  teachingTypes: TeachingType[];
   onSuccess?: () => void;
   onCancel?: () => void;
 }
@@ -25,7 +24,6 @@ export function StudentsForm({
   classes,
   tracks,
   specializations,
-  teachingTypes,
   onSuccess,
   onCancel,
 }: StudentsFormProps) {
@@ -74,14 +72,6 @@ export function StudentsForm({
             min={1}
             required
             placeholder="למשל 3"
-          />
-          <Select
-            label="סוג הוראה"
-            name="teaching_type_id"
-            options={[
-              { value: "", label: "ללא" },
-              ...teachingTypes.map((t) => ({ value: t.id, label: t.name })),
-            ]}
           />
         </div>
       </section>

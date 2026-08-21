@@ -15,7 +15,6 @@ interface TeachersFormsProps {
   classes?: { id: string; name: string; grade_id: string }[];
   tracks?: { id: string; name: string }[];
   specializations?: { id: string; name: string }[];
-  teachingTypes?: { id: string; name: string }[];
   yearId?: string;
 }
 
@@ -26,7 +25,6 @@ export function TeachersForms({
   classes,
   tracks,
   specializations,
-  teachingTypes,
   yearId,
 }: TeachersFormsProps) {
   const router = useRouter();
@@ -101,14 +99,6 @@ export function TeachersForms({
           <Input label='ת"ז' name="identity_number" required />
           <Input label="טלפון" name="phone" required />
           <Input label="אימייל" name="email" type="email" required />
-          <Select
-            label="סוג הוראה"
-            name="teaching_type_id"
-            options={[
-              { value: "", label: "ללא" },
-              ...(teachingTypes?.map((t) => ({ value: t.id, label: t.name })) ?? []),
-            ]}
-          />
         </>
       )}
 
