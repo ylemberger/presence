@@ -21,7 +21,7 @@ export function YearSelector({ years, activeYearId }: YearSelectorProps) {
   if (years.length === 0) return null;
 
   return (
-    <div className="print:hidden">
+    <div className="print:hidden min-w-[11rem]">
       <Select
         label="שנה אקדמית"
         value={activeYearId || ""}
@@ -30,7 +30,7 @@ export function YearSelector({ years, activeYearId }: YearSelectorProps) {
           value: y.id,
           label: `${y.name}${y.is_active ? " (פעילה)" : ""}`,
         }))}
-        className="w-48"
+        className="w-full min-w-[11rem] sm:w-52"
       />
     </div>
   );

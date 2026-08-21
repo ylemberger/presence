@@ -46,9 +46,9 @@ export const NAV_ITEMS = [
 ] as const;
 
 export const ATTENDANCE_COLORS: Record<AttendanceStatus, string> = {
-  present: "bg-green-100 text-green-800 border-green-300",
-  absent: "bg-red-100 text-red-800 border-red-300",
-  late: "bg-yellow-100 text-yellow-800 border-yellow-300",
+  present: "bg-emerald-50 text-emerald-800 border-emerald-200",
+  absent: "bg-rose-50 text-rose-800 border-rose-200",
+  late: "bg-amber-50 text-amber-900 border-amber-200",
 };
 
 export const ATTENDANCE_CYCLE: AttendanceStatus[] = ["present", "absent", "late"];

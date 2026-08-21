@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/Button";
 import { Input, Select } from "@/components/ui/Input";
@@ -31,8 +31,24 @@ export function StudentsForm({
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [gradeId, setGradeId] = useState("");
+  const [classId, setClassId] = useState("");
 
-  const filteredClasses = classes.filter((c) => !gradeId || c.grade_id === gradeId);
+  const gradeNameById = useMemo(
+    () => new Map(grades.map((g) => [g.id, g.name])),
+    [grades]
+  );
+
+  const classOptions = useMemo(() => {
+    const list = gradeId ? classes.filter((c) => c.grade_id === gradeId) : classes;
+    return [...list]
+      .sort((a, b) => a.name.localeCompare(b.name, "he"))
+      .map((c) => ({
+        value: c.id,
+        label: gradeId
+          ? c.name
+          : `${gradeNameById.get(c.grade_id) ?? "?"} · ${c.name}`,
+      }));
+  }, [classes, gradeId, gradeNameById]);
 
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -42,6 +58,8 @@ export function StudentsForm({
     try {
       const fd = new FormData(form);
       fd.set("academic_year_id", yearId);
+      if (gradeId) fd.set("grade_id", gradeId);
+      if (classId) fd.set("class_id", classId);
       const result = await createStudentAction(fd);
       if (result && "error" in result && result.error) {
         setError(result.error);
@@ -49,6 +67,7 @@ export function StudentsForm({
       }
       form.reset();
       setGradeId("");
+      setClassId("");
       router.refresh();
       onSuccess?.();
     } catch (err) {
@@ -57,6 +76,9 @@ export function StudentsForm({
       setLoading(false);
     }
   }
+
+  const missingStructure =
+    grades.length === 0 || classes.length === 0 || tracks.length === 0;
 
   return (
     <form onSubmit={handleSubmit} className="space-y-6">
@@ -79,17 +101,27 @@ export function StudentsForm({
       <section className="space-y-3 border-t border-stone-100 pt-5">
         <h3 className="text-sm font-semibold text-slate-800">שיבוץ ראשוני (חובה)</h3>
         <p className="text-xs text-slate-500">
-          שכבות תמיד א/ב/ג. שינוי באמצע השנה נעשה בהעברה עם תאריך.
+          הרשימות מגיעות מהגדרות השנה (שכבות / כיתות / מסלולים). שינוי באמצע השנה — בהעברה.
         </p>
+
+        {missingStructure && (
+          <p className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900">
+            חסרות הגדרות בשנה הפעילה. בהגדרות יש להוסיף לפחות שכבה, כיתה ומסלול לפני שיבוץ תלמידה.
+          </p>
+        )}
+
         <div className="grid gap-3 sm:grid-cols-2">
           <Select
             label="שכבה"
             name="grade_id"
             required
             value={gradeId}
-            onChange={(e) => setGradeId(e.target.value)}
+            onChange={(e) => {
+              setGradeId(e.target.value);
+              setClassId("");
+            }}
             options={[
-              { value: "", label: "בחרי שכבה" },
+              { value: "", label: grades.length ? "בחרי שכבה" : "אין שכבות בהגדרות" },
               ...grades.map((g) => ({ value: g.id, label: g.name })),
             ]}
           />
@@ -97,9 +129,28 @@ export function StudentsForm({
             label="כיתה"
             name="class_id"
             required
+            value={classId}
+            onChange={(e) => {
+              const next = e.target.value;
+              setClassId(next);
+              const selected = classes.find((c) => c.id === next);
+              if (selected && selected.grade_id !== gradeId) {
+                setGradeId(selected.grade_id);
+              }
+            }}
+            disabled={classOptions.length === 0}
             options={[
-              { value: "", label: "בחרי כיתה" },
-              ...filteredClasses.map((c) => ({ value: c.id, label: c.name })),
+              {
+                value: "",
+                label: classOptions.length
+                  ? gradeId
+                    ? "בחרי כיתה"
+                    : "בחרי כיתה (מכל השכבות)"
+                  : gradeId
+                    ? "אין כיתות לשכבה זו בהגדרות"
+                    : "אין כיתות בהגדרות",
+              },
+              ...classOptions,
             ]}
           />
           <Select
@@ -107,7 +158,7 @@ export function StudentsForm({
             name="track_id"
             required
             options={[
-              { value: "", label: "בחרי מסלול" },
+              { value: "", label: tracks.length ? "בחרי מסלול" : "אין מסלולים בהגדרות" },
               ...tracks.map((t) => ({ value: t.id, label: t.name })),
             ]}
           />
@@ -149,7 +200,7 @@ export function StudentsForm({
             ביטול
           </Button>
         )}
-        <Button type="submit" disabled={loading}>
+        <Button type="submit" disabled={loading || missingStructure}>
           {loading ? "שומר..." : "שמירת תלמידה"}
         </Button>
       </div>

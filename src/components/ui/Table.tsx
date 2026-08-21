@@ -8,22 +8,29 @@ interface TableProps {
 
 export function Table({ headers, children, className }: TableProps) {
   return (
-    <div className={cn("overflow-x-auto", className)}>
-      <table className="w-full text-sm">
-        <thead>
-          <tr className="border-b border-stone-200 bg-stone-50/90">
-            {headers.map((header) => (
-              <th
-                key={header}
-                className="px-4 py-3 text-right text-xs font-semibold tracking-wide text-slate-500"
-              >
-                {header}
-              </th>
-            ))}
-          </tr>
-        </thead>
-        <tbody className="divide-y divide-gray-100">{children}</tbody>
-      </table>
+    <div
+      className={cn(
+        "overflow-hidden rounded-xl border border-[var(--border)] bg-white",
+        className
+      )}
+    >
+      <div className="overflow-x-auto">
+        <table className="w-full text-sm">
+          <thead>
+            <tr className="border-b border-[var(--border)] bg-[var(--surface-muted)]">
+              {headers.map((header) => (
+                <th
+                  key={header}
+                  className="px-4 py-3 text-right text-xs font-semibold tracking-wide text-slate-500"
+                >
+                  {header}
+                </th>
+              ))}
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-[var(--border)]">{children}</tbody>
+        </table>
+      </div>
     </div>
   );
 }
@@ -35,7 +42,11 @@ export function TableRow({
   children: React.ReactNode;
   className?: string;
 }) {
-  return <tr className={cn("hover:bg-stone-50/80", className)}>{children}</tr>;
+  return (
+    <tr className={cn("transition-colors hover:bg-[var(--surface-muted)]/80", className)}>
+      {children}
+    </tr>
+  );
 }
 
 export function TableCell({
@@ -48,7 +59,7 @@ export function TableCell({
   dir?: "ltr" | "rtl" | "auto";
 }) {
   return (
-    <td className={cn("px-4 py-3 text-right", className)} dir={dir}>
+    <td className={cn("px-4 py-3.5 text-right text-slate-700", className)} dir={dir}>
       {children}
     </td>
   );

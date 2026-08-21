@@ -70,6 +70,7 @@ export default async function DashboardPage() {
       value: stats.unmarked,
       href: "/attendance",
       hint: "השבוע · לטיפול ביומן הנוכחות",
+      alert: stats.unmarked > 0,
     },
   ];
 
@@ -85,7 +86,7 @@ export default async function DashboardPage() {
         actions={
           <Link
             href="/attendance"
-            className="inline-flex rounded-xl bg-[var(--brand)] px-4 py-2 text-sm font-medium text-white hover:bg-[var(--brand-soft)]"
+            className="inline-flex items-center rounded-xl bg-[var(--brand)] px-4 py-2.5 text-sm font-medium text-white shadow-[var(--shadow-sm)] transition-colors hover:bg-[var(--brand-soft)]"
           >
             ליומן נוכחות
           </Link>
@@ -103,13 +104,18 @@ export default async function DashboardPage() {
       ) : (
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
           {cards.map((card) => (
-            <Link key={card.label} href={card.href}>
-              <Card className="h-full transition-transform hover:-translate-y-0.5">
-                <p className="text-sm text-slate-500">{card.label}</p>
-                <p className="mt-3 text-4xl font-semibold tracking-tight text-[var(--brand)]">
+            <Link key={card.label} href={card.href} className="group block">
+              <Card className="h-full transition-all duration-200 group-hover:-translate-y-0.5 group-hover:border-[var(--border-strong)]">
+                <div className="flex items-start justify-between gap-3">
+                  <p className="text-sm font-medium text-slate-500">{card.label}</p>
+                  {"alert" in card && card.alert ? (
+                    <span className="mt-0.5 h-2 w-2 rounded-full bg-amber-500" aria-hidden />
+                  ) : null}
+                </div>
+                <p className="mt-4 text-4xl font-semibold tracking-tight text-[var(--brand)]">
                   {card.value}
                 </p>
-                <p className="mt-2 text-xs text-slate-400">{card.hint}</p>
+                <p className="mt-3 text-xs leading-relaxed text-slate-400">{card.hint}</p>
               </Card>
             </Link>
           ))}

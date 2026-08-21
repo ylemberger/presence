@@ -13,21 +13,21 @@ export default async function DashboardLayout({
   ]);
 
   return (
-    <div className="flex min-h-screen bg-[var(--background)]">
+    <div className="flex min-h-screen">
       <Sidebar activeYearName={activeYear?.name} />
       <main className="flex min-w-0 flex-1 flex-col">
-        <header className="print:hidden flex items-center justify-between border-b border-black/5 bg-white/80 px-8 py-4 backdrop-blur">
-          <div>
-            <p className="text-xs font-medium tracking-wide text-[var(--brand-soft)]">
+        <header className="print:hidden sticky top-0 z-20 flex items-center justify-between gap-4 border-b border-[var(--border)] bg-white/85 px-6 py-3.5 backdrop-blur-md sm:px-8">
+          <div className="min-w-0">
+            <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-[var(--brand-muted)]">
               מערכת ניהול פנימית
             </p>
-            <p className="text-sm text-slate-500">
+            <p className="truncate text-sm text-slate-500">
               {activeYear ? `שנה פעילה · ${activeYear.name}` : "לא הוגדרה שנה פעילה"}
             </p>
           </div>
           <YearSelector years={years} activeYearId={activeYear?.id} />
         </header>
-        <div className="flex-1 p-8">{children}</div>
+        <div className="flex-1 px-6 py-7 sm:px-8">{children}</div>
       </main>
     </div>
   );

@@ -3,20 +3,71 @@
 @tailwind utilities;
 
 :root {
-  --background: #f4f0e8;
-  --foreground: #1c2b30;
-  --brand: #1a3c42;
-  --brand-soft: #24555c;
-  --accent: #c4a46c;
+  --background: #eef2f1;
+  --background-deep: #e4ebe9;
+  --foreground: #1a2c30;
+  --brand: #163a40;
+  --brand-soft: #215058;
+  --brand-muted: #3d6b72;
+  --accent: #b89555;
+  --accent-soft: #f3e8d4;
+  --surface: #ffffff;
+  --surface-muted: #f7f9f8;
+  --border: #d9e2e0;
+  --border-strong: #c5d2cf;
+  --ring: color-mix(in srgb, var(--brand) 18%, transparent);
+  --shadow-sm: 0 1px 2px rgb(22 58 64 / 0.04);
+  --shadow-md: 0 10px 28px rgb(22 58 64 / 0.06);
+  --radius-lg: 1.25rem;
 }
 
 body {
-  background: var(--background);
+  background:
+    radial-gradient(1200px 500px at 100% -10%, rgb(184 149 85 / 0.12), transparent 55%),
+    radial-gradient(900px 420px at -5% 0%, rgb(33 80 88 / 0.08), transparent 50%),
+    linear-gradient(180deg, var(--background) 0%, var(--background-deep) 100%);
+  background-attachment: fixed;
   color: var(--foreground);
+  text-rendering: optimizeLegibility;
+}
+
+::selection {
+  background: color-mix(in srgb, var(--accent) 35%, white);
+  color: var(--brand);
 }
 
 @media print {
   body {
     background: white;
+  }
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes scaleIn {
+  from {
+    opacity: 0;
+    transform: translateY(6px) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@layer utilities {
+  .surface-panel {
+    @apply rounded-2xl border border-[var(--border)] bg-white shadow-[var(--shadow-md)];
+  }
+
+  .focus-ring {
+    @apply focus:border-[var(--brand)] focus:outline-none focus:ring-2 focus:ring-[var(--ring)];
   }
 }

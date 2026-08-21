@@ -12,7 +12,7 @@ export function Tabs({
 
   return (
     <div>
-      <div className="flex flex-wrap gap-1 rounded-2xl bg-white p-1 shadow-[0_8px_30px_rgb(28,43,48,0.04)]">
+      <div className="inline-flex flex-wrap gap-1 rounded-2xl border border-[var(--border)] bg-white p-1.5 shadow-[var(--shadow-sm)]">
         {tabs.map((tab) => (
           <button
             key={tab.id}
@@ -21,8 +21,8 @@ export function Tabs({
             className={cn(
               "rounded-xl px-4 py-2 text-sm font-medium transition-colors",
               active === tab.id
-                ? "bg-[var(--brand)] text-white"
-                : "text-slate-600 hover:bg-stone-100"
+                ? "bg-[var(--brand)] text-white shadow-[var(--shadow-sm)]"
+                : "text-slate-600 hover:bg-[var(--surface-muted)] hover:text-slate-800"
             )}
           >
             {tab.label}

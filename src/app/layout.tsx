@@ -19,7 +19,9 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="he" dir="rtl" className={`${heebo.variable} h-full`}>
-      <body className={`${heebo.className} min-h-full antialiased text-slate-800`}>{children}</body>
+      <body className={`${heebo.className} min-h-full antialiased text-[var(--foreground)]`}>
+        {children}
+      </body>
     </html>
   );
 }

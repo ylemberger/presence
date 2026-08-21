@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/Button";
 import { Select } from "@/components/ui/Input";
@@ -30,6 +30,27 @@ interface Props {
 export function StudentDetailForms({ studentId, yearData }: Props) {
   const router = useRouter();
   const [error, setError] = useState<string | null>(null);
+  const [gradeId, setGradeId] = useState("");
+  const [classId, setClassId] = useState("");
+
+  const gradeNameById = useMemo(
+    () => new Map(yearData.grades.map((g) => [g.id, g.name])),
+    [yearData.grades]
+  );
+
+  const classOptions = useMemo(() => {
+    const list = gradeId
+      ? yearData.classes.filter((c) => c.grade_id === gradeId)
+      : yearData.classes;
+    return [...list]
+      .sort((a, b) => a.name.localeCompare(b.name, "he"))
+      .map((c) => ({
+        value: c.id,
+        label: gradeId
+          ? c.name
+          : `${gradeNameById.get(c.grade_id) ?? "?"} · ${c.name}`,
+      }));
+  }, [yearData.classes, gradeId, gradeNameById]);
 
   async function handleTransfer(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -39,10 +60,14 @@ export function StudentDetailForms({ studentId, yearData }: Props) {
       const fd = new FormData(form);
       fd.set("student_id", studentId);
       fd.set("academic_year_id", yearData.year.id);
+      if (gradeId) fd.set("grade_id", gradeId);
+      if (classId) fd.set("class_id", classId);
       const result = await transferStudentAction(fd);
       if (result && "error" in result && result.error) setError(result.error);
       else {
         form.reset();
+        setGradeId("");
+        setClassId("");
         router.refresh();
       }
     } catch (err) {
@@ -61,6 +86,11 @@ export function StudentDetailForms({ studentId, yearData }: Props) {
           label="שכבה"
           name="grade_id"
           required
+          value={gradeId}
+          onChange={(e) => {
+            setGradeId(e.target.value);
+            setClassId("");
+          }}
           options={[
             { value: "", label: "בחרי" },
             ...yearData.grades.map((g) => ({ value: g.id, label: g.name })),
@@ -70,9 +100,21 @@ export function StudentDetailForms({ studentId, yearData }: Props) {
           label="כיתה"
           name="class_id"
           required
+          value={classId}
+          onChange={(e) => {
+            const next = e.target.value;
+            setClassId(next);
+            const selected = yearData.classes.find((c) => c.id === next);
+            if (selected && selected.grade_id !== gradeId) {
+              setGradeId(selected.grade_id);
+            }
+          }}
           options={[
-            { value: "", label: "בחרי" },
-            ...yearData.classes.map((c) => ({ value: c.id, label: c.name })),
+            {
+              value: "",
+              label: classOptions.length ? "בחרי" : "אין כיתות בהגדרות",
+            },
+            ...classOptions,
           ]}
         />
         <Select

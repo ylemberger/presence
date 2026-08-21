@@ -70,9 +70,9 @@ interface Props {
 }
 
 const CELL: Record<AttendanceStatus, string> = {
-  present: "bg-emerald-500 text-white border-emerald-600",
-  absent: "bg-rose-500 text-white border-rose-600",
-  late: "bg-amber-400 text-slate-900 border-amber-500",
+  present: "bg-emerald-600 text-white border-emerald-700 shadow-sm",
+  absent: "bg-rose-500 text-white border-rose-600 shadow-sm",
+  late: "bg-amber-400 text-slate-900 border-amber-500 shadow-sm",
 };
 
 type DraftKey = string;
@@ -301,7 +301,7 @@ export function AttendanceBoard({
     Boolean(noteLessonId);
 
   return (
-    <div className="overflow-hidden rounded-2xl border border-stone-200/80 bg-white shadow-[0_8px_30px_rgb(28,43,48,0.04)] print:border-0 print:shadow-none">
+    <div className="overflow-hidden rounded-2xl border border-[var(--border)] bg-white shadow-[var(--shadow-md)] print:border-0 print:shadow-none">
       {activeGap && (
         <AttendanceGapModal
           gap={activeGap}

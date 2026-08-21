@@ -22,47 +22,63 @@ export function Sidebar({ activeYearName }: SidebarProps) {
   }
 
   return (
-    <aside className="print:hidden flex w-[17.5rem] shrink-0 flex-col bg-[var(--brand)] text-white">
-      <div className="px-6 pb-6 pt-7">
-        <div className="mb-5 flex h-11 w-11 items-center justify-center rounded-2xl bg-[var(--accent)] text-[var(--brand)] shadow-sm">
-          <span className="text-lg font-black">נ</span>
-        </div>
-        <h1 className="text-xl font-semibold tracking-tight">נוכחות סמינר</h1>
-        <p className="mt-1 text-sm text-white/65">ניהול נוכחות והיסטוריית שיבוצים</p>
-        {activeYearName && (
-          <div className="mt-4 inline-flex rounded-full bg-white/10 px-3 py-1 text-xs text-white/90">
-            שנה {activeYearName}
+    <aside className="print:hidden flex w-[17.5rem] shrink-0 flex-col border-l border-white/10 bg-[var(--brand)] text-white">
+      <div className="relative overflow-hidden px-5 pb-5 pt-6">
+        <div
+          className="pointer-events-none absolute -left-8 -top-10 h-32 w-32 rounded-full bg-[var(--accent)]/20 blur-2xl"
+          aria-hidden
+        />
+        <div className="relative">
+          <div className="mb-4 flex h-11 w-11 items-center justify-center rounded-2xl bg-[var(--accent)] text-[var(--brand)] shadow-[var(--shadow-sm)]">
+            <span className="text-lg font-black leading-none">נ</span>
           </div>
-        )}
+          <h1 className="text-xl font-semibold tracking-tight">נוכחות סמינר</h1>
+          <p className="mt-1 text-sm leading-relaxed text-white/60">
+            ניהול נוכחות והיסטוריית שיבוצים
+          </p>
+          {activeYearName && (
+            <div className="mt-4 inline-flex items-center gap-2 rounded-xl bg-white/10 px-3 py-1.5 text-xs text-white/90 ring-1 ring-white/10">
+              <span className="h-1.5 w-1.5 rounded-full bg-[var(--accent)]" aria-hidden />
+              שנה {activeYearName}
+            </div>
+          )}
+        </div>
       </div>
-      <nav className="flex-1 space-y-1 px-3 pb-4">
+
+      <nav className="flex-1 space-y-0.5 overflow-y-auto px-3 pb-4">
         {NAV_ITEMS.map((item) => {
           const isActive =
-            item.href === "/"
-              ? pathname === "/"
-              : pathname.startsWith(item.href);
+            item.href === "/" ? pathname === "/" : pathname.startsWith(item.href);
           return (
             <Link
               key={item.href}
               href={item.href}
               className={cn(
-                "flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition-all",
+                "group flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition-colors",
                 isActive
-                  ? "bg-white text-[var(--brand)] shadow-sm"
-                  : "text-white/80 hover:bg-white/10 hover:text-white"
+                  ? "bg-white text-[var(--brand)] shadow-[var(--shadow-sm)]"
+                  : "text-white/75 hover:bg-white/10 hover:text-white"
               )}
             >
-              <NavIcon name={item.icon} />
+              <span
+                className={cn(
+                  "flex h-8 w-8 items-center justify-center rounded-lg transition-colors",
+                  isActive ? "bg-[var(--accent-soft)] text-[var(--brand)]" : "bg-white/5 text-white/80"
+                )}
+              >
+                <NavIcon name={item.icon} />
+              </span>
               {item.label}
             </Link>
           );
         })}
       </nav>
-      <div className="p-4">
+
+      <div className="border-t border-white/10 p-4">
         <button
           type="button"
           onClick={handleLogout}
-          className="flex w-full items-center justify-center rounded-xl bg-white/10 px-3 py-2.5 text-sm font-medium text-white/90 transition-colors hover:bg-white/15"
+          className="flex w-full items-center justify-center rounded-xl bg-white/8 px-3 py-2.5 text-sm font-medium text-white/85 ring-1 ring-white/10 transition-colors hover:bg-white/12 hover:text-white"
         >
           התנתקות
         </button>
@@ -73,8 +89,8 @@ export function Sidebar({ activeYearName }: SidebarProps) {
 
 function NavIcon({ name }: { name: string }) {
   const common = {
-    width: 18,
-    height: 18,
+    width: 17,
+    height: 17,
     viewBox: "0 0 24 24",
     fill: "none",
     stroke: "currentColor",

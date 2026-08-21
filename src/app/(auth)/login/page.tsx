@@ -19,21 +19,38 @@ export default function LoginPage({
       : null;
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-[var(--background)] px-4">
-      <div className="w-full max-w-md">
+    <div className="relative flex min-h-screen items-center justify-center overflow-hidden px-4 py-10">
+      <div
+        className="pointer-events-none absolute inset-0"
+        aria-hidden
+        style={{
+          background:
+            "radial-gradient(800px 420px at 85% 10%, rgb(184 149 85 / 0.22), transparent 55%), radial-gradient(700px 380px at 10% 90%, rgb(33 80 88 / 0.18), transparent 50%)",
+        }}
+      />
+      <div className="relative w-full max-w-md animate-[scaleIn_220ms_ease-out]">
         <div className="mb-8 text-center">
-          <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-[var(--brand)] text-xl font-black text-[var(--accent)]">
+          <div className="mx-auto mb-5 flex h-16 w-16 items-center justify-center rounded-2xl bg-[var(--brand)] text-2xl font-black text-[var(--accent)] shadow-[var(--shadow-md)]">
             נ
           </div>
-          <h1 className="text-2xl font-semibold text-slate-800">נוכחות סמינר</h1>
-          <p className="mt-1 text-sm text-slate-500">כניסה למערכת הניהול</p>
+          <h1 className="text-3xl font-semibold tracking-tight text-[var(--brand)]">נוכחות סמינר</h1>
+          <p className="mt-2 text-sm text-slate-500">כניסה למערכת הניהול</p>
         </div>
         <Card title="התחברות">
-          <p className="mb-4 text-sm text-slate-600">יש להתחבר עם חשבון Google מורשה.</p>
-          <p className="mb-6 rounded-xl bg-stone-50 px-3 py-2 text-sm text-slate-700" dir="ltr">
+          <p className="mb-4 text-sm leading-relaxed text-slate-600">
+            יש להתחבר עם חשבון Google מורשה.
+          </p>
+          <p
+            className="mb-6 rounded-xl border border-[var(--border)] bg-[var(--surface-muted)] px-3.5 py-2.5 text-sm text-slate-700"
+            dir="ltr"
+          >
             {FIRST_ALLOWED_EMAIL}
           </p>
-          {error && <p className="mb-4 text-sm text-rose-600">{error}</p>}
+          {error && (
+            <p className="mb-4 rounded-xl bg-rose-50 px-3 py-2 text-sm text-rose-700 ring-1 ring-rose-100">
+              {error}
+            </p>
+          )}
           <LoginButton />
         </Card>
       </div>
