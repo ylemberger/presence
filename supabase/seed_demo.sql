@@ -1,34 +1,36 @@
-delete from academic_years where name in ('תשפ"ז', 'תשפ"ו');
-delete from attendance_rules where name in ('כלל 15%', 'כלל 10%');
+﻿delete from academic_years where name in ('׳×׳©׳₪"׳–', '׳×׳©׳₪"׳•');
+delete from attendance_rules where name in ('׳›׳׳ 15%', '׳›׳׳ 10%', '׳¨׳’׳™׳ 20%', '׳‘׳˜׳™׳—׳•׳× 10%', '׳¢׳–׳¨׳” ׳¨׳׳©׳•׳ ׳” 1%');
 delete from teacher_source_records where external_id like 'demo-%';
 
-insert into students (full_name, identity_number, is_active) values
-  ('נועה כהן', '900000001', true),
-  ('שירה לוי', '900000002', true),
-  ('תמר אברהם', '900000003', true),
-  ('יעל מזרחי', '900000004', true),
-  ('מיכל דוד', '900000005', true),
-  ('רחל גולדברג', '900000006', true),
-  ('אסתר פרץ', '900000007', true),
-  ('הילה ביטון', '900000008', true)
-on conflict (identity_number) do update set full_name = excluded.full_name, is_active = true;
+insert into students (full_name, identity_number, cohort_number, is_active) values
+  ('׳ ׳•׳¢׳” ׳›׳”׳', '900000001', 1, true),
+  ('׳©׳™׳¨׳” ׳׳•׳™', '900000002', 1, true),
+  ('׳×׳׳¨ ׳׳‘׳¨׳”׳', '900000003', 2, true),
+  ('׳™׳¢׳ ׳׳–׳¨׳—׳™', '900000004', 2, true),
+  ('׳׳™׳›׳ ׳“׳•׳“', '900000005', 3, true),
+  ('׳¨׳—׳ ׳’׳•׳׳“׳‘׳¨׳’', '900000006', 3, true),
+  ('׳׳¡׳×׳¨ ׳₪׳¨׳¥', '900000007', 4, true),
+  ('׳”׳™׳׳” ׳‘׳™׳˜׳•׳', '900000008', 4, true)
+on conflict (identity_number) do update
+  set full_name = excluded.full_name, is_active = true, cohort_number = excluded.cohort_number;
 
 insert into teachers (full_name, identity_number, phone, email, is_local) values
-  ('רבקה שמיר', '800000001', '050-1112233', 'rivka.demo@example.com', true),
-  ('דנה אלון', '800000002', '050-2223344', 'dana.demo@example.com', false),
-  ('מרים חדד', '800000003', '050-3334455', 'miriam.demo@example.com', false)
+  ('׳¨׳‘׳§׳” ׳©׳׳™׳¨', '800000001', '050-1112233', 'rivka.demo@example.com', true),
+  ('׳“׳ ׳” ׳׳׳•׳', '800000002', '050-2223344', 'dana.demo@example.com', false),
+  ('׳׳¨׳™׳ ׳—׳“׳“', '800000003', '050-3334455', 'miriam.demo@example.com', false)
 on conflict (identity_number) do update
   set full_name = excluded.full_name, phone = excluded.phone, email = excluded.email;
 
 insert into teacher_source_records (external_id, teacher_identity_number, full_name, subject, source_year) values
-  ('demo-src-1', '800000002', 'דנה אלון', 'אנגלית', 'תשפ"ז'),
-  ('demo-src-2', '800000003', 'מרים חדד', 'היסטוריה', 'תשפ"ז'),
-  ('demo-src-3', '800000003', 'מרים חדד', 'ספרות', 'תשפ"ז')
+  ('demo-src-1', '800000002', '׳“׳ ׳” ׳׳׳•׳', '׳׳ ׳’׳׳™׳×', '׳×׳©׳₪"׳–'),
+  ('demo-src-2', '800000003', '׳׳¨׳™׳ ׳—׳“׳“', '׳”׳™׳¡׳˜׳•׳¨׳™׳”', '׳×׳©׳₪"׳–'),
+  ('demo-src-3', '800000003', '׳׳¨׳™׳ ׳—׳“׳“', '׳¡׳₪׳¨׳•׳×', '׳×׳©׳₪"׳–')
 on conflict (external_id) do nothing;
 
 insert into attendance_rules (name, max_allowed_absence_percent) values
-  ('כלל 15%', 15),
-  ('כלל 10%', 10);
+  ('׳¨׳’׳™׳ 20%', 20),
+  ('׳‘׳˜׳™׳—׳•׳× 10%', 10),
+  ('׳¢׳–׳¨׳” ׳¨׳׳©׳•׳ ׳” 1%', 1);
 
 do $$
 declare
@@ -44,8 +46,8 @@ declare
   spec_design uuid;
   range_year uuid;
   range_a uuid;
-  rule_15 uuid;
-  rule_10 uuid;
+  rule_regular uuid;
+  rule_safety uuid;
   t_rivka uuid;
   t_dana uuid;
   t_miriam uuid;
@@ -67,62 +69,67 @@ declare
   d date;
 begin
   update academic_years set is_active = false;
-  insert into academic_years (name, is_active) values ('תשפ"ז', true) returning id into year_id;
+  insert into academic_years (name, is_active) values ('׳×׳©׳₪"׳–', true) returning id into year_id;
 
-  insert into grades (academic_year_id, name) values (year_id, 'שנה א') returning id into grade_a;
-  insert into grades (academic_year_id, name) values (year_id, 'שנה ב') returning id into grade_b;
+  insert into grades (academic_year_id, name) values (year_id, 'א') returning id into grade_a;
+  insert into grades (academic_year_id, name) values (year_id, 'ב') returning id into grade_b;
 
-  insert into classes (academic_year_id, grade_id, name) values (year_id, grade_a, 'א1') returning id into class_a1;
-  insert into classes (academic_year_id, grade_id, name) values (year_id, grade_a, 'א2') returning id into class_a2;
-  insert into classes (academic_year_id, grade_id, name) values (year_id, grade_b, 'ב1') returning id into class_b1;
+  insert into classes (academic_year_id, grade_id, name) values (year_id, grade_a, '׳1') returning id into class_a1;
+  insert into classes (academic_year_id, grade_id, name) values (year_id, grade_a, '׳2') returning id into class_a2;
+  insert into classes (academic_year_id, grade_id, name) values (year_id, grade_b, '׳‘1') returning id into class_b1;
 
-  insert into tracks (academic_year_id, name) values (year_id, 'עיוני') returning id into track_iyuni;
-  insert into tracks (academic_year_id, name) values (year_id, 'מחשבים') returning id into track_computers;
+  insert into tracks (academic_year_id, name) values (year_id, '׳¢׳™׳•׳ ׳™') returning id into track_iyuni;
+  insert into tracks (academic_year_id, name) values (year_id, '׳׳—׳©׳‘׳™׳') returning id into track_computers;
 
-  insert into specializations (academic_year_id, name) values (year_id, 'חשבונאות') returning id into spec_account;
-  insert into specializations (academic_year_id, name) values (year_id, 'עיצוב') returning id into spec_design;
+  insert into specializations (academic_year_id, name) values (year_id, '׳—׳©׳‘׳•׳ ׳׳•׳×') returning id into spec_account;
+  insert into specializations (academic_year_id, name) values (year_id, '׳¢׳™׳¦׳•׳‘') returning id into spec_design;
+
+  insert into grades (academic_year_id, name) values (year_id, 'ג');
+  insert into teaching_types (academic_year_id, name) values
+    (year_id, 'הוראה'),
+    (year_id, 'גננות');
 
   insert into activity_ranges (academic_year_id, name, start_date, end_date, range_type)
-  values (year_id, 'שנתי', '2026-09-01', '2027-06-30', 'annual') returning id into range_year;
+  values (year_id, '׳©׳ ׳×׳™', '2026-09-01', '2027-06-30', 'annual') returning id into range_year;
   insert into activity_ranges (academic_year_id, name, start_date, end_date, range_type)
-  values (year_id, 'מחצית א', '2026-09-01', '2027-01-31', 'semester_a') returning id into range_a;
+  values (year_id, '׳׳—׳¦׳™׳× ׳', '2026-09-01', '2027-01-31', 'semester_a') returning id into range_a;
 
-  select id into rule_15 from attendance_rules where name = 'כלל 15%';
-  select id into rule_10 from attendance_rules where name = 'כלל 10%';
+  select id into rule_regular from attendance_rules where name = '׳¨׳’׳™׳ 20%';
+  select id into rule_safety from attendance_rules where name = '׳‘׳˜׳™׳—׳•׳× 10%';
 
   select id into t_rivka from teachers where identity_number = '800000001';
   select id into t_dana from teachers where identity_number = '800000002';
   select id into t_miriam from teachers where identity_number = '800000003';
 
-  insert into teacher_teaching_assignments (teacher_id, academic_year_id, subject, billing_type, class_id, track_id)
-  values (t_rivka, year_id, 'מתמטיקה', 'mandatory', class_a1, track_iyuni) returning id into ta_math;
-  insert into teacher_teaching_assignments (teacher_id, academic_year_id, subject, billing_type, class_id, track_id)
-  values (t_dana, year_id, 'אנגלית', 'mandatory', class_a1, track_iyuni) returning id into ta_english;
-  insert into teacher_teaching_assignments (teacher_id, academic_year_id, subject, billing_type, specialization_id)
-  values (t_miriam, year_id, 'היסטוריה', 'specialization', spec_account) returning id into ta_history;
+  insert into teacher_teaching_assignments (teacher_id, academic_year_id, subject, billing_type, grade_id, class_id, track_id)
+  values (t_rivka, year_id, '׳׳×׳׳˜׳™׳§׳”', 'mandatory', grade_a, class_a1, track_iyuni) returning id into ta_math;
+  insert into teacher_teaching_assignments (teacher_id, academic_year_id, subject, billing_type, grade_id, class_id, track_id)
+  values (t_dana, year_id, '׳׳ ׳’׳׳™׳×', 'mandatory', grade_a, class_a1, track_iyuni) returning id into ta_english;
+  insert into teacher_teaching_assignments (teacher_id, academic_year_id, subject, billing_type, grade_id, specialization_id)
+  values (t_miriam, year_id, '׳”׳™׳¡׳˜׳•׳¨׳™׳”', 'specialization', grade_b, spec_account) returning id into ta_history;
 
   insert into lessons (
     academic_year_id, teacher_teaching_assignment_id, subject, grade_id, class_id, track_id,
     billing_type, day_of_week, lesson_number, activity_range_id, attendance_rule_id
   ) values (
-    year_id, ta_math, 'מתמטיקה', grade_a, class_a1, track_iyuni,
-    'mandatory', 0, 2, range_year, rule_15
+    year_id, ta_math, '׳׳×׳׳˜׳™׳§׳”', grade_a, class_a1, track_iyuni,
+    'mandatory', 0, 2, range_year, rule_regular
   ) returning id into lesson_math;
 
   insert into lessons (
     academic_year_id, teacher_teaching_assignment_id, subject, grade_id, class_id, track_id,
     billing_type, day_of_week, lesson_number, activity_range_id, attendance_rule_id
   ) values (
-    year_id, ta_english, 'אנגלית', grade_a, class_a1, track_iyuni,
-    'mandatory', 2, 3, range_year, rule_15
+    year_id, ta_english, '׳׳ ׳’׳׳™׳×', grade_a, class_a1, track_iyuni,
+    'mandatory', 2, 3, range_year, rule_regular
   ) returning id into lesson_english;
 
   insert into lessons (
     academic_year_id, teacher_teaching_assignment_id, subject, grade_id, specialization_id,
     billing_type, day_of_week, lesson_number, activity_range_id, attendance_rule_id
   ) values (
-    year_id, ta_history, 'היסטוריה', grade_b, spec_account,
-    'specialization', 4, 1, range_a, rule_10
+    year_id, ta_history, '׳”׳™׳¡׳˜׳•׳¨׳™׳”', grade_b, spec_account,
+    'specialization', 4, 1, range_a, rule_safety
   ) returning id into lesson_history;
 
   select id into s_noa from students where identity_number = '900000001';
@@ -198,3 +205,4 @@ begin
       (s_hila, occ_id, 'absent');
   end loop;
 end $$;
+

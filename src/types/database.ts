@@ -36,6 +36,12 @@ export interface Specialization {
   name: string;
 }
 
+export interface TeachingType {
+  id: string;
+  academic_year_id: string;
+  name: string;
+}
+
 export interface ActivityRange {
   id: string;
   academic_year_id: string;
@@ -55,6 +61,7 @@ export interface Student {
   id: string;
   full_name: string;
   identity_number: string;
+  cohort_number: number;
   is_active: boolean;
   created_at: string;
 }
@@ -67,6 +74,9 @@ export interface StudentAssignment {
   class_id: string;
   track_id: string;
   specialization_id: string | null;
+  secondary_specialization_id: string | null;
+  teaching_type_id: string | null;
+  is_psychology: boolean;
   start_date: string;
   end_date: string | null;
   created_at: string;
@@ -78,6 +88,7 @@ export interface Teacher {
   identity_number: string;
   phone: string;
   email: string;
+  teaching_type_id: string | null;
   is_local: boolean;
   created_at: string;
 }
@@ -99,9 +110,11 @@ export interface TeacherTeachingAssignment {
   academic_year_id: string;
   subject: string;
   billing_type: BillingType;
+  grade_id: string | null;
   class_id: string | null;
   track_id: string | null;
   specialization_id: string | null;
+  for_psychology: boolean;
   source_record_id: string | null;
 }
 
@@ -115,6 +128,7 @@ export interface Lesson {
   track_id: string | null;
   specialization_id: string | null;
   billing_type: BillingType;
+  for_psychology: boolean;
   day_of_week: number;
   lesson_number: number;
   activity_range_id: string;
@@ -163,6 +177,7 @@ export interface Database {
       classes: { Row: Class; Insert: Omit<Class, "id"> & { id?: string }; Update: Partial<Class> };
       tracks: { Row: Track; Insert: Omit<Track, "id"> & { id?: string }; Update: Partial<Track> };
       specializations: { Row: Specialization; Insert: Omit<Specialization, "id"> & { id?: string }; Update: Partial<Specialization> };
+      teaching_types: { Row: TeachingType; Insert: Omit<TeachingType, "id"> & { id?: string }; Update: Partial<TeachingType> };
       activity_ranges: { Row: ActivityRange; Insert: Omit<ActivityRange, "id"> & { id?: string }; Update: Partial<ActivityRange> };
       attendance_rules: { Row: AttendanceRule; Insert: Omit<AttendanceRule, "id"> & { id?: string }; Update: Partial<AttendanceRule> };
       students: { Row: Student; Insert: Omit<Student, "id" | "created_at"> & { id?: string; created_at?: string }; Update: Partial<Student> };

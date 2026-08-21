@@ -6,7 +6,14 @@ import { Button } from "@/components/ui/Button";
 import { Select } from "@/components/ui/Input";
 import { HebrewDateInput } from "@/components/ui/HebrewDateInput";
 import { transferStudentAction } from "../../actions";
-import type { AcademicYear, Grade, Class, Track, Specialization } from "@/types/database";
+import type {
+  AcademicYear,
+  Grade,
+  Class,
+  Track,
+  Specialization,
+  TeachingType,
+} from "@/types/database";
 
 interface YearData {
   year: AcademicYear;
@@ -14,6 +21,7 @@ interface YearData {
   classes: Class[];
   tracks: Track[];
   specializations: Specialization[];
+  teachingTypes: TeachingType[];
 }
 
 interface Props {
@@ -47,7 +55,7 @@ export function StudentDetailForms({ studentId, yearData }: Props) {
   return (
     <div>
       <p className="mb-3 text-sm text-slate-600">
-        שינוי כיתה/מסלול/התמחות נעשה רק בהעברה. השיבוץ הקודם נסגר ונשמר בהיסטוריה.
+        שינוי כיתה/מסלול/התמחות/פסיכולוגיה נעשה רק בהעברה. השיבוץ הקודם נסגר ונשמר בהיסטוריה.
       </p>
       <form onSubmit={handleTransfer} className="flex flex-wrap items-end gap-3">
         <HebrewDateInput label="בתוקף מתאריך" name="transfer_date" required />
@@ -86,6 +94,26 @@ export function StudentDetailForms({ studentId, yearData }: Props) {
             ...yearData.specializations.map((s) => ({ value: s.id, label: s.name })),
           ]}
         />
+        <Select
+          label="התמחות נוספת"
+          name="secondary_specialization_id"
+          options={[
+            { value: "", label: "ללא" },
+            ...yearData.specializations.map((s) => ({ value: s.id, label: s.name })),
+          ]}
+        />
+        <Select
+          label="סוג הוראה"
+          name="teaching_type_id"
+          options={[
+            { value: "", label: "ללא" },
+            ...yearData.teachingTypes.map((t) => ({ value: t.id, label: t.name })),
+          ]}
+        />
+        <label className="flex items-center gap-2 pb-2 text-sm text-slate-700">
+          <input type="checkbox" name="is_psychology" className="rounded border-stone-300" />
+          פסיכולוגיה
+        </label>
         <Button type="submit">בצע העברה</Button>
       </form>
       {error && <p className="mt-2 text-sm text-red-600">{error}</p>}

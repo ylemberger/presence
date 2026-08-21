@@ -20,7 +20,6 @@ import {
   restoreOccurrenceAction,
 } from "../actions";
 import type {
-  Grade,
   ActivityRange,
   AttendanceRule,
   Lesson,
@@ -42,7 +41,6 @@ interface LessonsCalendarProps {
   occurrences: OccurrenceRow[];
   lessons: Lesson[];
   teachingAssignments: TeachingAssignmentOption[];
-  grades: Grade[];
   ranges: ActivityRange[];
   rules: AttendanceRule[];
 }
@@ -53,7 +51,6 @@ export function LessonsCalendar({
   occurrences,
   lessons,
   teachingAssignments,
-  grades,
   ranges,
   rules,
 }: LessonsCalendarProps) {
@@ -185,7 +182,6 @@ export function LessonsCalendar({
                 yearId={yearId}
                 occurrenceDate={selectedIso}
                 teachingAssignments={teachingAssignments}
-                grades={grades}
                 ranges={ranges}
                 rules={rules}
                 onCreated={() => {

@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/Button";
 import { Input, Select } from "@/components/ui/Input";
 import { HebrewDateInput } from "@/components/ui/HebrewDateInput";
 import { createStudentAction } from "../actions";
-import type { Grade, Class, Track, Specialization } from "@/types/database";
+import type { Grade, Class, Track, Specialization, TeachingType } from "@/types/database";
 
 interface StudentsFormProps {
   yearId: string;
@@ -14,6 +14,7 @@ interface StudentsFormProps {
   classes: Class[];
   tracks: Track[];
   specializations: Specialization[];
+  teachingTypes: TeachingType[];
   onSuccess?: () => void;
   onCancel?: () => void;
 }
@@ -24,6 +25,7 @@ export function StudentsForm({
   classes,
   tracks,
   specializations,
+  teachingTypes,
   onSuccess,
   onCancel,
 }: StudentsFormProps) {
@@ -65,13 +67,29 @@ export function StudentsForm({
         <div className="grid gap-3 sm:grid-cols-2">
           <Input label="שם מלא" name="full_name" required autoFocus />
           <Input label='תעודת זהות' name="identity_number" required inputMode="numeric" />
+          <Input
+            label="מחזור"
+            name="cohort_number"
+            type="number"
+            min={1}
+            required
+            placeholder="למשל 3"
+          />
+          <Select
+            label="סוג הוראה"
+            name="teaching_type_id"
+            options={[
+              { value: "", label: "ללא" },
+              ...teachingTypes.map((t) => ({ value: t.id, label: t.name })),
+            ]}
+          />
         </div>
       </section>
 
       <section className="space-y-3 border-t border-stone-100 pt-5">
         <h3 className="text-sm font-semibold text-slate-800">שיבוץ ראשוני (חובה)</h3>
         <p className="text-xs text-slate-500">
-          חייבים למלא שכבה, כיתה, מסלול ותאריך תחילה. בלי זה לא ניתן ליצור תלמידה.
+          שכבות תמיד א/ב/ג. שינוי באמצע השנה נעשה בהעברה עם תאריך.
         </p>
         <div className="grid gap-3 sm:grid-cols-2">
           <Select
@@ -111,6 +129,18 @@ export function StudentsForm({
               ...specializations.map((s) => ({ value: s.id, label: s.name })),
             ]}
           />
+          <Select
+            label="התמחות נוספת"
+            name="secondary_specialization_id"
+            options={[
+              { value: "", label: "ללא" },
+              ...specializations.map((s) => ({ value: s.id, label: s.name })),
+            ]}
+          />
+          <label className="flex items-center gap-2 self-end pb-2 text-sm text-slate-700">
+            <input type="checkbox" name="is_psychology" className="rounded border-stone-300" />
+            פסיכולוגיה
+          </label>
           <div className="sm:col-span-2">
             <HebrewDateInput label="בתוקף מתאריך" name="start_date" required />
           </div>

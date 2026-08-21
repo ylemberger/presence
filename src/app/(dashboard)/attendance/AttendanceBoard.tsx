@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/Button";
 import { Select } from "@/components/ui/Input";
@@ -59,6 +60,7 @@ interface Props {
   allStudents: AttendanceStudent[];
   occurrences: AttendanceOccurrence[];
   attendance: { student_id: string; lesson_occurrence_id: string; status: string }[];
+  pastGaps?: Array<{ lessonId: string; subject: string; date: string; occurrenceId: string }>;
 }
 
 const CELL: Record<AttendanceStatus, string> = {
@@ -84,6 +86,7 @@ export function AttendanceBoard({
   allStudents,
   occurrences,
   attendance,
+  pastGaps = [],
 }: Props) {
   const router = useRouter();
   const [draft, setDraft] = useState<Record<DraftKey, AttendanceStatus | null>>({});
@@ -92,13 +95,14 @@ export function AttendanceBoard({
   const [message, setMessage] = useState<string | null>(null);
 
   useEffect(() => {
+    const byKey = new Map<string, AttendanceStatus>();
+    for (const a of attendance) {
+      byKey.set(keyOf(a.student_id, a.lesson_occurrence_id), a.status as AttendanceStatus);
+    }
     const next: Record<DraftKey, AttendanceStatus | null> = {};
     for (const student of students) {
       for (const occ of occurrences) {
-        const record = attendance.find(
-          (a) => a.student_id === student.id && a.lesson_occurrence_id === occ.id
-        );
-        next[keyOf(student.id, occ.id)] = (record?.status as AttendanceStatus) ?? null;
+        next[keyOf(student.id, occ.id)] = byKey.get(keyOf(student.id, occ.id)) ?? null;
       }
     }
     setDraft(next);
@@ -142,11 +146,11 @@ export function AttendanceBoard({
     setMessage(null);
   }
 
-  function markAllPresent() {
+  function markAll(status: AttendanceStatus) {
     const next = { ...draft };
     for (const student of students) {
       for (const occ of visibleOccurrences) {
-        next[keyOf(student.id, occ.id)] = "present";
+        next[keyOf(student.id, occ.id)] = status;
       }
     }
     setDraft(next);
@@ -189,8 +193,25 @@ export function AttendanceBoard({
     visibleOccurrences.length > 0 &&
     (filters.mode === "single" ? Boolean(filters.studentId) : true);
 
+  const relevantGaps = useMemo(() => {
+    const lessonIds = new Set(visibleOccurrences.map((o) => o.lessonId));
+    return pastGaps.filter((g) => lessonIds.has(g.lessonId));
+  }, [pastGaps, visibleOccurrences]);
+
   return (
     <div className="overflow-hidden rounded-2xl border border-stone-200/80 bg-white shadow-[0_8px_30px_rgb(28,43,48,0.04)] print:shadow-none print:border-0">
+      {relevantGaps.length > 0 && (
+        <div className="border-b border-amber-200 bg-amber-50 px-5 py-3 text-sm text-amber-900 print:hidden">
+          <p className="font-semibold">יש מופעים קודמים בלי נוכחות לשיעורים האלה:</p>
+          <ul className="mt-1 list-inside list-disc text-xs">
+            {relevantGaps.map((g) => (
+              <li key={g.occurrenceId}>
+                {g.subject} · {formatHebrewDate(g.date)}
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
       <div className="flex flex-wrap items-center gap-2 border-b border-stone-100 px-5 py-4 print:hidden">
         {(
           [
@@ -330,12 +351,38 @@ export function AttendanceBoard({
       </div>
 
       <div className="flex flex-wrap items-center gap-2 border-b border-stone-100 px-5 py-3 print:hidden">
-        <Button size="sm" variant="secondary" onClick={markAllPresent} disabled={!canShowGrid}>
-          סמן את כולן כנוכחות
+        <Button
+          size="sm"
+          variant="secondary"
+          onClick={() => markAll("present")}
+          disabled={!canShowGrid}
+        >
+          סמן נוכחות לכולן
+        </Button>
+        <Button
+          size="sm"
+          variant="secondary"
+          onClick={() => markAll("late")}
+          disabled={!canShowGrid}
+        >
+          סמן איחור לכולן
+        </Button>
+        <Button
+          size="sm"
+          variant="secondary"
+          onClick={() => markAll("absent")}
+          disabled={!canShowGrid}
+        >
+          סמן היעדרות לכולן
         </Button>
         <Button size="sm" onClick={saveAll} disabled={!dirty || saving || !canShowGrid}>
           {saving ? "שומר..." : "שמור את כל הרשימה"}
         </Button>
+        {canShowGrid && (
+          <span className="text-xs text-slate-500">
+            {students.length} תלמידות · {visibleOccurrences.length} שיעורים
+          </span>
+        )}
         {dirty && <span className="text-xs text-amber-700">יש שינויים שלא נשמרו</span>}
         {message && <span className="text-xs text-slate-600">{message}</span>}
       </div>
@@ -346,13 +393,25 @@ export function AttendanceBoard({
       </div>
 
       {!canShowGrid ? (
-        <p className="px-5 py-12 text-center text-slate-500">
-          {filters.mode === "single" && !filters.studentId
-            ? "בחרי תלמידה כדי לפתוח רישום נוכחות."
-            : students.length === 0
-              ? "אין תלמידות שמתאימות למסננים שנבחרו."
-              : "אין שיעורים בשבוע הזה לפי המסננים שנבחרו."}
-        </p>
+        <div className="px-5 py-12 text-center text-slate-500">
+          {filters.mode === "single" && !filters.studentId ? (
+            <p>בחרי תלמידה כדי לפתוח רישום נוכחות.</p>
+          ) : students.length === 0 ? (
+            <p>
+              אין תלמידות שמתאימות למסננים / שיוך לשיעור.{" "}
+              <Link href="/students" className="font-medium text-[var(--brand)] hover:underline">
+                מעבר לתלמידות
+              </Link>
+            </p>
+          ) : (
+            <p>
+              אין שיעורים בשבוע הזה לפי המסננים שנבחרו.{" "}
+              <Link href="/lessons" className="font-medium text-[var(--brand)] hover:underline">
+                מעבר לשיעורים
+              </Link>
+            </p>
+          )}
+        </div>
       ) : (
         <div className="overflow-auto">
           <table className="w-full min-w-[42rem] border-collapse text-sm">

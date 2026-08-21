@@ -8,17 +8,21 @@ import { Table, TableRow, TableCell } from "@/components/ui/Table";
 import { StatusPill } from "@/components/ui/PageHeader";
 import { Modal } from "@/components/ui/Modal";
 import { StudentsForm } from "./StudentsForm";
-import type { Grade, Class, Track, Specialization } from "@/types/database";
+import type { Grade, Class, Track, Specialization, TeachingType } from "@/types/database";
 
 interface StudentRow {
   id: string;
   full_name: string;
   identity_number: string;
+  cohort_number: number;
   is_active: boolean;
   className: string;
   gradeName: string;
   trackName: string;
   specializationName: string;
+  secondarySpecializationName: string;
+  teachingTypeName: string;
+  isPsychology: boolean;
 }
 
 interface YearOptions {
@@ -27,6 +31,7 @@ interface YearOptions {
   classes: Class[];
   tracks: Track[];
   specializations: Specialization[];
+  teachingTypes: TeachingType[];
 }
 
 export function StudentsDirectory({
@@ -145,7 +150,19 @@ export function StudentsDirectory({
         <p className="border-b border-stone-100 px-5 py-3 text-sm text-rose-600">{yearError}</p>
       )}
 
-      <Table headers={["תלמידה", 'ת"ז', "שכבה", "כיתה", "מסלול", "התמחות", "סטטוס", ""]}>
+      <Table
+        headers={[
+          "תלמידה",
+          'ת"ז',
+          "מחזור",
+          "שכבה",
+          "כיתה",
+          "מסלול",
+          "התמחות",
+          "סטטוס",
+          "",
+        ]}
+      >
         {filtered.map((s) => (
           <TableRow key={s.id}>
             <TableCell>
@@ -153,16 +170,27 @@ export function StudentsDirectory({
                 <span className="flex h-9 w-9 items-center justify-center rounded-full bg-[var(--brand)]/10 text-sm font-semibold text-[var(--brand)]">
                   {s.full_name.slice(0, 1)}
                 </span>
-                <span className="font-medium text-slate-800">{s.full_name}</span>
+                <div>
+                  <span className="font-medium text-slate-800">{s.full_name}</span>
+                  {s.isPsychology && (
+                    <span className="mr-2 text-xs text-slate-400">· פסיכולוגיה</span>
+                  )}
+                </div>
               </div>
             </TableCell>
             <TableCell className="font-mono text-slate-500" dir="ltr">
               {s.identity_number}
             </TableCell>
+            <TableCell>{s.cohort_number}</TableCell>
             <TableCell>{s.gradeName}</TableCell>
             <TableCell>{s.className}</TableCell>
             <TableCell>{s.trackName}</TableCell>
-            <TableCell>{s.specializationName}</TableCell>
+            <TableCell>
+              {s.specializationName}
+              {s.secondarySpecializationName !== "—"
+                ? ` + ${s.secondarySpecializationName}`
+                : ""}
+            </TableCell>
             <TableCell>
               <StatusPill tone={s.is_active ? "ok" : "muted"}>
                 {s.is_active ? "פעילה" : "לא פעילה"}
@@ -196,6 +224,7 @@ export function StudentsDirectory({
             classes={yearOptions.classes}
             tracks={yearOptions.tracks}
             specializations={yearOptions.specializations}
+            teachingTypes={yearOptions.teachingTypes}
             onCancel={() => setModalOpen(false)}
             onSuccess={() => setModalOpen(false)}
           />

@@ -14,7 +14,15 @@ export default async function StudentsPage() {
 
   const assignments: Record<
     string,
-    { className: string; gradeName: string; trackName: string; specializationName: string }
+    {
+      className: string;
+      gradeName: string;
+      trackName: string;
+      specializationName: string;
+      secondarySpecializationName: string;
+      teachingTypeName: string;
+      isPsychology: boolean;
+    }
   > = {};
 
   let yearOptions = null;
@@ -26,10 +34,13 @@ export default async function StudentsPage() {
       { data: classes },
       { data: tracks },
       { data: specializations },
+      { data: teachingTypes },
     ] = await Promise.all([
       supabase
         .from("student_assignments")
-        .select("student_id, classes(name), grades(name), tracks(name), specializations(name)")
+        .select(
+          "student_id, is_psychology, classes(name), grades(name), tracks(name), specializations(name), teaching_types(name), secondary_specialization_id"
+        )
         .eq("academic_year_id", activeYear.id)
         .is("end_date", null),
       supabase.from("grades").select("*").eq("academic_year_id", activeYear.id).order("name"),
@@ -40,7 +51,14 @@ export default async function StudentsPage() {
         .select("*")
         .eq("academic_year_id", activeYear.id)
         .order("name"),
+      supabase
+        .from("teaching_types")
+        .select("*")
+        .eq("academic_year_id", activeYear.id)
+        .order("name"),
     ]);
+
+    const specNameById = new Map((specializations ?? []).map((s) => [s.id, s.name]));
 
     for (const a of currentAssignments ?? []) {
       assignments[a.student_id] = {
@@ -49,6 +67,12 @@ export default async function StudentsPage() {
         trackName: (a.tracks as unknown as { name: string } | null)?.name ?? "—",
         specializationName:
           (a.specializations as unknown as { name: string } | null)?.name ?? "—",
+        secondarySpecializationName: a.secondary_specialization_id
+          ? specNameById.get(a.secondary_specialization_id) ?? "—"
+          : "—",
+        teachingTypeName:
+          (a.teaching_types as unknown as { name: string } | null)?.name ?? "—",
+        isPsychology: Boolean(a.is_psychology),
       };
     }
 
@@ -58,6 +82,7 @@ export default async function StudentsPage() {
       classes: classes ?? [],
       tracks: tracks ?? [],
       specializations: specializations ?? [],
+      teachingTypes: teachingTypes ?? [],
     };
   }
 
@@ -65,18 +90,22 @@ export default async function StudentsPage() {
     id: s.id,
     full_name: s.full_name,
     identity_number: s.identity_number,
+    cohort_number: s.cohort_number ?? 1,
     is_active: s.is_active,
     className: assignments[s.id]?.className ?? "לא משובצת",
     gradeName: assignments[s.id]?.gradeName ?? "—",
     trackName: assignments[s.id]?.trackName ?? "—",
     specializationName: assignments[s.id]?.specializationName ?? "—",
+    secondarySpecializationName: assignments[s.id]?.secondarySpecializationName ?? "—",
+    teachingTypeName: assignments[s.id]?.teachingTypeName ?? "—",
+    isPsychology: assignments[s.id]?.isPsychology ?? false,
   }));
 
   return (
     <div>
       <PageHeader
         title="תלמידות"
-        description="כרטסת קבועה. בעת יצירה ממלאים שכבה, כיתה ומסלול. שינוי נעשה בהעברה בלבד, עם היסטוריה."
+        description="כרטסת קבועה עם מחזור. בעת יצירה ממלאים שכבה/כיתה/מסלול. שינוי נעשה בהעברה בלבד."
       />
       <StudentsDirectory students={rows} yearOptions={yearOptions} />
     </div>

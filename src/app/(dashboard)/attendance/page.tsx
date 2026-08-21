@@ -62,6 +62,7 @@ export default async function AttendancePage({ searchParams }: Props) {
     { data: specializations },
     { data: teachers },
     { data: yearStudents },
+    { data: occurrencesRaw },
   ] = await Promise.all([
     supabase.from("classes").select("id, name").eq("academic_year_id", activeYear.id).order("name"),
     supabase.from("tracks").select("id, name").eq("academic_year_id", activeYear.id).order("name"),
@@ -76,6 +77,20 @@ export default async function AttendancePage({ searchParams }: Props) {
       .select("student_id, class_id, track_id, specialization_id, students(id, full_name, is_active)")
       .eq("academic_year_id", activeYear.id)
       .is("end_date", null),
+    supabase
+      .from("lesson_occurrences")
+      .select(
+        `id, occurrence_date, lesson_id,
+         lessons!inner(
+           id, subject, class_id, track_id, specialization_id, academic_year_id,
+           teacher_teaching_assignments(teacher_id, teachers(full_name))
+         )`
+      )
+      .eq("lessons.academic_year_id", activeYear.id)
+      .gte("occurrence_date", weekStart)
+      .lte("occurrence_date", weekEnd)
+      .neq("status", "cancelled")
+      .order("occurrence_date"),
   ]);
 
   let assignmentRows = yearStudents ?? [];
@@ -113,25 +128,6 @@ export default async function AttendancePage({ searchParams }: Props) {
       : [];
   }
 
-  const { data: occurrencesRaw } = await supabase
-    .from("lesson_occurrences")
-    .select(
-      `id, occurrence_date, status, lesson_id,
-       lessons!inner(
-         id, subject, class_id, track_id, specialization_id, academic_year_id,
-         teacher_teaching_assignment_id,
-         teacher_teaching_assignments(
-           teacher_id,
-           teachers(id, full_name)
-         )
-       )`
-    )
-    .eq("lessons.academic_year_id", activeYear.id)
-    .gte("occurrence_date", weekStart)
-    .lte("occurrence_date", weekEnd)
-    .neq("status", "cancelled")
-    .order("occurrence_date");
-
   type LessonJoin = {
     id: string;
     subject: string;
@@ -140,7 +136,7 @@ export default async function AttendancePage({ searchParams }: Props) {
     specialization_id: string | null;
     teacher_teaching_assignments: {
       teacher_id: string;
-      teachers: { id: string; full_name: string } | null;
+      teachers: { full_name: string } | null;
     } | null;
   };
 
@@ -195,6 +191,41 @@ export default async function AttendancePage({ searchParams }: Props) {
     attendanceRecords = data ?? [];
   }
 
+  const lessonIds = [...new Set(occurrences.map((o) => o.lessonId))];
+  const pastGaps: Array<{ lessonId: string; subject: string; date: string; occurrenceId: string }> =
+    [];
+
+  if (lessonIds.length > 0) {
+    const { data: pastOccs } = await supabase
+      .from("lesson_occurrences")
+      .select("id, occurrence_date, lesson_id, lessons!inner(subject, academic_year_id)")
+      .eq("lessons.academic_year_id", activeYear.id)
+      .in("lesson_id", lessonIds)
+      .lt("occurrence_date", weekStart)
+      .neq("status", "cancelled")
+      .order("occurrence_date", { ascending: false })
+      .limit(40);
+
+    const pastIds = (pastOccs ?? []).map((o) => o.id);
+    if (pastIds.length > 0) {
+      const { data: pastMarked } = await supabase
+        .from("attendance")
+        .select("lesson_occurrence_id")
+        .in("lesson_occurrence_id", pastIds);
+      const marked = new Set((pastMarked ?? []).map((m) => m.lesson_occurrence_id));
+      for (const o of pastOccs ?? []) {
+        if (marked.has(o.id)) continue;
+        pastGaps.push({
+          lessonId: o.lesson_id,
+          subject: (o.lessons as unknown as { subject: string } | null)?.subject ?? "שיעור",
+          date: o.occurrence_date,
+          occurrenceId: o.id,
+        });
+        if (pastGaps.length >= 8) break;
+      }
+    }
+  }
+
   return (
     <div>
       <PageHeader
@@ -225,6 +256,7 @@ export default async function AttendancePage({ searchParams }: Props) {
         allStudents={allStudents}
         occurrences={occurrences.map(({ teacherId: _t, ...rest }) => rest)}
         attendance={attendanceRecords}
+        pastGaps={pastGaps}
       />
     </div>
   );

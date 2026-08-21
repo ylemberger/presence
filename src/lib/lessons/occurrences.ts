@@ -36,7 +36,7 @@ export async function generateLessonOccurrences(
 
   let lessonsQuery = supabase
     .from("lessons")
-    .select("*, activity_ranges(start_date, end_date)");
+    .select("id, subject, day_of_week, activity_ranges(start_date, end_date)");
 
   if (lessonId) {
     lessonsQuery = lessonsQuery.eq("id", lessonId);
@@ -50,8 +50,14 @@ export async function generateLessonOccurrences(
     throw new Error("לא נמצאו שיעורים ליצירת מופעים");
   }
 
+  const rowsToInsert: { lesson_id: string; occurrence_date: string; status: "scheduled" }[] = [];
+
   for (const lesson of lessons) {
-    const range = lesson.activity_ranges as { start_date: string; end_date: string } | null;
+    const rawRange = lesson.activity_ranges as unknown;
+    const range = (Array.isArray(rawRange) ? rawRange[0] : rawRange) as {
+      start_date: string;
+      end_date: string;
+    } | null;
     if (!range) {
       throw new Error(`לשיעור "${lesson.subject}" חסר טווח פעילות`);
     }
@@ -63,34 +69,44 @@ export async function generateLessonOccurrences(
       );
     }
 
-    for (const date of dates) {
-      const { data: existing } = await supabase
-        .from("lesson_occurrences")
-        .select("id")
-        .eq("lesson_id", lesson.id)
-        .eq("occurrence_date", date)
-        .maybeSingle();
+    const { data: existing } = await supabase
+      .from("lesson_occurrences")
+      .select("occurrence_date")
+      .eq("lesson_id", lesson.id)
+      .in("occurrence_date", dates);
 
-      if (existing) {
+    const existingSet = new Set((existing ?? []).map((e) => e.occurrence_date));
+    for (const date of dates) {
+      if (existingSet.has(date)) {
         result.skipped++;
         continue;
       }
-
-      const { error: insertError } = await supabase.from("lesson_occurrences").insert({
+      rowsToInsert.push({
         lesson_id: lesson.id,
         occurrence_date: date,
         status: "scheduled",
       });
-
-      if (insertError) {
-        if (insertError.code === "23505") {
-          result.skipped++;
-          continue;
-        }
-        throw new Error(insertError.message);
-      }
-      result.created++;
     }
+  }
+
+  const chunkSize = 200;
+  for (let i = 0; i < rowsToInsert.length; i += chunkSize) {
+    const chunk = rowsToInsert.slice(i, i + chunkSize);
+    const { error: insertError } = await supabase.from("lesson_occurrences").insert(chunk);
+    if (insertError) {
+      if (insertError.code === "23505") {
+        // Race / partial overlap — insert one-by-one for this chunk only
+        for (const row of chunk) {
+          const { error: oneErr } = await supabase.from("lesson_occurrences").insert(row);
+          if (!oneErr) result.created++;
+          else if (oneErr.code === "23505") result.skipped++;
+          else throw new Error(oneErr.message);
+        }
+        continue;
+      }
+      throw new Error(insertError.message);
+    }
+    result.created += chunk.length;
   }
 
   if (result.created === 0 && result.skipped === 0) {

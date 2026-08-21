@@ -10,6 +10,11 @@ import {
   lessonMismatchMessage,
   refreshAutomaticLessonAssignmentsForStudent,
 } from "@/lib/lessons/autoAssign";
+import {
+  ensureFixedGrades,
+  promoteStudentsToYear,
+} from "@/lib/years/promote";
+import { FIXED_GRADE_NAMES } from "@/lib/years/promote";
 import type { AttendanceStatus } from "@/types/database";
 import {
   isError,
@@ -40,15 +45,35 @@ export async function createAcademicYearAction(formData: FormData) {
   const supabase = await createClient();
   const name = formData.get("name") as string;
   const isActive = formData.get("is_active") === "on";
+  const shouldPromote = formData.get("promote_students") === "on";
+
+  const { data: previousActive } = await supabase
+    .from("academic_years")
+    .select("id")
+    .eq("is_active", true)
+    .maybeSingle();
 
   if (isActive) {
     await supabase.from("academic_years").update({ is_active: false }).eq("is_active", true);
   }
 
-  const { error } = await supabase.from("academic_years").insert({ name, is_active: isActive });
-  if (error) return { error: error.message };
+  const { data: created, error } = await supabase
+    .from("academic_years")
+    .insert({ name, is_active: isActive })
+    .select("id")
+    .single();
+  if (error || !created) return { error: error?.message ?? "יצירת שנה נכשלה" };
+
+  await ensureFixedGrades(created.id);
+
+  let promoteResult = null;
+  if (shouldPromote && previousActive?.id) {
+    promoteResult = await promoteStudentsToYear(previousActive.id, created.id);
+  }
+
   revalidatePath("/settings");
-  return { success: true };
+  revalidatePath("/students");
+  return { success: true, promoteResult };
 }
 
 export async function deleteAcademicYearAction(id: string) {
@@ -67,7 +92,13 @@ export async function deleteAcademicYearAction(id: string) {
 
 // --- Generic year-scoped entity CRUD helpers ---
 async function createYearEntity(
-  table: "grades" | "classes" | "tracks" | "specializations" | "activity_ranges",
+  table:
+    | "grades"
+    | "classes"
+    | "tracks"
+    | "specializations"
+    | "teaching_types"
+    | "activity_ranges",
   data: Record<string, unknown>
 ) {
   const supabase = await createClient();
@@ -78,9 +109,13 @@ async function createYearEntity(
 }
 
 export async function createGradeAction(formData: FormData) {
+  const name = String(formData.get("name") ?? "").trim();
+  if (!(FIXED_GRADE_NAMES as readonly string[]).includes(name)) {
+    return { error: "שכבה חייבת להיות א, ב או ג בלבד" };
+  }
   return createYearEntity("grades", {
     academic_year_id: formData.get("academic_year_id"),
-    name: formData.get("name"),
+    name,
   });
 }
 
@@ -101,6 +136,13 @@ export async function createTrackAction(formData: FormData) {
 
 export async function createSpecializationAction(formData: FormData) {
   return createYearEntity("specializations", {
+    academic_year_id: formData.get("academic_year_id"),
+    name: formData.get("name"),
+  });
+}
+
+export async function createTeachingTypeAction(formData: FormData) {
+  return createYearEntity("teaching_types", {
     academic_year_id: formData.get("academic_year_id"),
     name: formData.get("name"),
   });
@@ -146,6 +188,7 @@ async function deleteEntityWithChecks(
     | "classes"
     | "tracks"
     | "specializations"
+    | "teaching_types"
     | "activity_ranges"
     | "attendance_rules",
   id: string,
@@ -172,6 +215,7 @@ export async function deleteGradeAction(id: string) {
       { table: "student_assignments", column: "grade_id" },
       { table: "classes", column: "grade_id" },
       { table: "lessons", column: "grade_id" },
+      { table: "teacher_teaching_assignments", column: "grade_id" },
     ],
     "שכבה"
   );
@@ -209,10 +253,23 @@ export async function deleteSpecializationAction(id: string) {
     id,
     [
       { table: "student_assignments", column: "specialization_id" },
+      { table: "student_assignments", column: "secondary_specialization_id" },
       { table: "lessons", column: "specialization_id" },
       { table: "teacher_teaching_assignments", column: "specialization_id" },
     ],
     "התמחות"
+  );
+}
+
+export async function deleteTeachingTypeAction(id: string) {
+  return deleteEntityWithChecks(
+    "teaching_types",
+    id,
+    [
+      { table: "student_assignments", column: "teaching_type_id" },
+      { table: "teachers", column: "teaching_type_id" },
+    ],
+    "סוג הוראה"
   );
 }
 
@@ -251,11 +308,12 @@ export async function updateAcademicYearAction(id: string, formData: FormData) {
 }
 
 export async function updateGradeAction(id: string, formData: FormData) {
+  const name = String(formData.get("name") ?? "").trim();
+  if (!(FIXED_GRADE_NAMES as readonly string[]).includes(name)) {
+    return { error: "שכבה חייבת להיות א, ב או ג בלבד" };
+  }
   const supabase = await createClient();
-  const { error } = await supabase
-    .from("grades")
-    .update({ name: formData.get("name") as string })
-    .eq("id", id);
+  const { error } = await supabase.from("grades").update({ name }).eq("id", id);
   if (error) return { error: error.message };
   revalidatePath("/settings");
   return { success: true };
@@ -290,6 +348,17 @@ export async function updateSpecializationAction(id: string, formData: FormData)
   const supabase = await createClient();
   const { error } = await supabase
     .from("specializations")
+    .update({ name: formData.get("name") as string })
+    .eq("id", id);
+  if (error) return { error: error.message };
+  revalidatePath("/settings");
+  return { success: true };
+}
+
+export async function updateTeachingTypeAction(id: string, formData: FormData) {
+  const supabase = await createClient();
+  const { error } = await supabase
+    .from("teaching_types")
     .update({ name: formData.get("name") as string })
     .eq("id", id);
   if (error) return { error: error.message };
@@ -346,7 +415,17 @@ export async function createStudentAction(formData: FormData) {
   if (isError(trackId)) return trackId;
   const startDate = requireText(formData.get("start_date"), "בתוקף מתאריך");
   if (isError(startDate)) return startDate;
+  const cohortRaw = String(formData.get("cohort_number") ?? "").trim();
+  const cohortNumber = parseInt(cohortRaw, 10);
+  if (!cohortRaw || Number.isNaN(cohortNumber) || cohortNumber < 1) {
+    return { error: "יש להזין מספר מחזור תקין (1 ומעלה)" };
+  }
   const specId = String(formData.get("specialization_id") ?? "").trim() || null;
+  const secondarySpecId =
+    String(formData.get("secondary_specialization_id") ?? "").trim() || null;
+  const teachingTypeId = String(formData.get("teaching_type_id") ?? "").trim() || null;
+  const isPsychology =
+    formData.get("is_psychology") === "on" || formData.get("is_psychology") === "1";
 
   const supabase = await createClient();
   const { data: student, error } = await supabase
@@ -354,6 +433,7 @@ export async function createStudentAction(formData: FormData) {
     .insert({
       full_name: fullName,
       identity_number: identity,
+      cohort_number: cohortNumber,
     })
     .select("id")
     .single();
@@ -369,6 +449,9 @@ export async function createStudentAction(formData: FormData) {
     class_id: classId,
     track_id: trackId,
     specialization_id: specId,
+    secondary_specialization_id: secondarySpecId,
+    teaching_type_id: teachingTypeId,
+    is_psychology: isPsychology,
     start_date: startDate,
     end_date: null,
   });
@@ -385,6 +468,8 @@ export async function createStudentAction(formData: FormData) {
       class_id: classId,
       track_id: trackId,
       specialization_id: specId,
+      secondary_specialization_id: secondarySpecId,
+      is_psychology: isPsychology,
     },
     startDate
   );
@@ -396,13 +481,16 @@ export async function createStudentAction(formData: FormData) {
 
 export async function updateStudentAction(id: string, formData: FormData) {
   const supabase = await createClient();
-  const { error } = await supabase
-    .from("students")
-    .update({
-      full_name: formData.get("full_name") as string,
-      is_active: formData.get("is_active") === "on",
-    })
-    .eq("id", id);
+  const cohortRaw = String(formData.get("cohort_number") ?? "").trim();
+  const cohortNumber = parseInt(cohortRaw, 10);
+  const patch: { full_name: string; is_active: boolean; cohort_number?: number } = {
+    full_name: formData.get("full_name") as string,
+    is_active: formData.get("is_active") === "on",
+  };
+  if (cohortRaw && !Number.isNaN(cohortNumber) && cohortNumber >= 1) {
+    patch.cohort_number = cohortNumber;
+  }
+  const { error } = await supabase.from("students").update(patch).eq("id", id);
   if (error) return { error: error.message };
   revalidatePath("/students");
   revalidatePath(`/students/${id}`);
@@ -422,12 +510,16 @@ export async function createStudentLessonAssignmentAction(formData: FormData) {
   const [{ data: lesson }, { data: placement }] = await Promise.all([
     supabase
       .from("lessons")
-      .select("id, class_id, track_id, specialization_id, billing_type, grade_id, subject")
+      .select(
+        "id, class_id, track_id, specialization_id, billing_type, grade_id, subject, for_psychology"
+      )
       .eq("id", lessonId)
       .single(),
     supabase
       .from("student_assignments")
-      .select("class_id, track_id, specialization_id, grade_id")
+      .select(
+        "class_id, track_id, specialization_id, secondary_specialization_id, grade_id, is_psychology"
+      )
       .eq("student_id", studentId)
       .is("end_date", null)
       .maybeSingle(),
@@ -472,9 +564,17 @@ function parsePlacementFields(formData: FormData) {
   if (isError(classId)) return classId;
   const trackId = requireId(formData.get("track_id"), "מסלול");
   if (isError(trackId)) return trackId;
-  const startDate = requireText(formData.get("start_date") ?? formData.get("transfer_date"), "בתוקף מתאריך");
+  const startDate = requireText(
+    formData.get("start_date") ?? formData.get("transfer_date"),
+    "בתוקף מתאריך"
+  );
   if (isError(startDate)) return startDate;
   const specId = String(formData.get("specialization_id") ?? "").trim() || null;
+  const secondarySpecId =
+    String(formData.get("secondary_specialization_id") ?? "").trim() || null;
+  const teachingTypeId = String(formData.get("teaching_type_id") ?? "").trim() || null;
+  const isPsychology =
+    formData.get("is_psychology") === "on" || formData.get("is_psychology") === "1";
   return {
     student_id: studentId,
     academic_year_id: yearId,
@@ -482,6 +582,9 @@ function parsePlacementFields(formData: FormData) {
     class_id: classId,
     track_id: trackId,
     specialization_id: specId,
+    secondary_specialization_id: secondarySpecId,
+    teaching_type_id: teachingTypeId,
+    is_psychology: isPsychology,
     start_date: startDate,
   };
 }
@@ -525,6 +628,8 @@ export async function transferStudentAction(formData: FormData) {
       class_id: placement.class_id,
       track_id: placement.track_id,
       specialization_id: placement.specialization_id,
+      secondary_specialization_id: placement.secondary_specialization_id,
+      is_psychology: placement.is_psychology,
     },
     placement.start_date
   );
@@ -546,11 +651,13 @@ export async function createTeacherAction(formData: FormData) {
   if (isError(email)) return email;
 
   const supabase = await createClient();
+  const teachingTypeId = String(formData.get("teaching_type_id") ?? "").trim() || null;
   const { error } = await supabase.from("teachers").insert({
     full_name: fullName,
     identity_number: identity,
     phone,
     email,
+    teaching_type_id: teachingTypeId,
     is_local: true,
   });
   if (error) {
@@ -592,18 +699,35 @@ export async function createTeachingAssignmentAction(formData: FormData) {
   if (isError(yearId)) return yearId;
   const subject = requireText(formData.get("subject"), "מקצוע");
   if (isError(subject)) return subject;
+  const gradeId = requireId(formData.get("grade_id"), "שכבה");
+  if (isError(gradeId)) return gradeId;
   const billing = parseLessonBilling(formData);
   if ("error" in billing) return billing;
 
   const supabase = await createClient();
+
+  if (billing.class_id) {
+    const { data: cls } = await supabase
+      .from("classes")
+      .select("id, grade_id")
+      .eq("id", billing.class_id)
+      .maybeSingle();
+    if (!cls) return { error: "הכיתה שנבחרה אינה תקינה" };
+    if (cls.grade_id !== gradeId) {
+      return { error: "הכיתה חייבת להיות מתוך השכבה שנבחרה" };
+    }
+  }
+
   const { error } = await supabase.from("teacher_teaching_assignments").insert({
     teacher_id: teacherId,
     academic_year_id: yearId,
     subject,
     billing_type: billing.billing_type,
+    grade_id: gradeId,
     class_id: billing.class_id,
     track_id: billing.track_id,
     specialization_id: billing.specialization_id,
+    for_psychology: billing.for_psychology,
   });
   if (error) return { error: error.message };
   revalidatePath("/teachers");
@@ -616,8 +740,6 @@ async function buildLessonPayload(formData: FormData) {
   if (isError(yearId)) return yearId;
   const teachingId = requireId(formData.get("teacher_teaching_assignment_id"), "שיבוץ הוראה");
   if (isError(teachingId)) return teachingId;
-  const gradeId = requireId(formData.get("grade_id"), "שכבה");
-  if (isError(gradeId)) return gradeId;
   const rangeId = requireId(formData.get("activity_range_id"), "טווח פעילות");
   if (isError(rangeId)) return rangeId;
   const ruleId = requireId(formData.get("attendance_rule_id"), "כלל נוכחות");
@@ -635,7 +757,9 @@ async function buildLessonPayload(formData: FormData) {
   const supabase = await createClient();
   const { data: teaching, error: teachingError } = await supabase
     .from("teacher_teaching_assignments")
-    .select("subject, billing_type, class_id, track_id, specialization_id")
+    .select(
+      "subject, billing_type, grade_id, class_id, track_id, specialization_id, for_psychology"
+    )
     .eq("id", teachingId)
     .single();
   if (teachingError || !teaching) {
@@ -643,6 +767,23 @@ async function buildLessonPayload(formData: FormData) {
   }
   if (!teaching.billing_type) {
     return { error: "לשיבוץ ההוראה חסר סוג (חובה/התמחות). עדכני את השיבוץ במסך מורות." };
+  }
+
+  let gradeId = teaching.grade_id as string | null;
+  if (!gradeId && teaching.class_id) {
+    const { data: cls } = await supabase
+      .from("classes")
+      .select("grade_id")
+      .eq("id", teaching.class_id)
+      .maybeSingle();
+    gradeId = cls?.grade_id ?? null;
+  }
+  if (!gradeId) {
+    const formGrade = requireId(formData.get("grade_id"), "שכבה");
+    if (isError(formGrade)) {
+      return { error: "לשיבוץ ההוראה חסרה שכבה. עדכני את השיבוץ במסך מורות." };
+    }
+    gradeId = formGrade;
   }
 
   return {
@@ -654,6 +795,7 @@ async function buildLessonPayload(formData: FormData) {
     track_id: teaching.track_id,
     specialization_id: teaching.specialization_id,
     billing_type: teaching.billing_type as "mandatory" | "specialization",
+    for_psychology: Boolean(teaching.for_psychology),
     day_of_week: dayOfWeek,
     lesson_number: lessonNumber,
     activity_range_id: rangeId,
@@ -685,7 +827,6 @@ export async function createLessonAction(formData: FormData) {
 
   revalidatePath("/lessons");
   revalidatePath("/attendance");
-  revalidatePath("/students");
   return { success: true };
 }
 
@@ -722,7 +863,6 @@ export async function createLessonForDateAction(formData: FormData) {
 
   revalidatePath("/lessons");
   revalidatePath("/attendance");
-  revalidatePath("/students");
   return { success: true };
 }
 

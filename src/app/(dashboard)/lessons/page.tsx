@@ -31,7 +31,7 @@ export default async function LessonsPage({ searchParams }: Props) {
   const from = searchParams.from || month.rangeStart;
   const to = searchParams.to || month.rangeEnd;
 
-  const [lessons, teachingAssignments, grades, ranges, rules, occurrences] = await Promise.all([
+  const [lessons, teachingAssignments, ranges, rules, occurrences] = await Promise.all([
     supabase
       .from("lessons")
       .select("*")
@@ -40,10 +40,9 @@ export default async function LessonsPage({ searchParams }: Props) {
     supabase
       .from("teacher_teaching_assignments")
       .select(
-        "id, subject, billing_type, teachers(full_name), classes(name), tracks(name), specializations(name)"
+        "id, subject, billing_type, teachers(full_name), grades(name), classes(name), tracks(name), specializations(name)"
       )
       .eq("academic_year_id", activeYear.id),
-    supabase.from("grades").select("*").eq("academic_year_id", activeYear.id),
     supabase.from("activity_ranges").select("*").eq("academic_year_id", activeYear.id),
     supabase.from("attendance_rules").select("*"),
     supabase
@@ -70,6 +69,7 @@ export default async function LessonsPage({ searchParams }: Props) {
       subject: t.subject,
       billing_type: (t.billing_type as "mandatory" | "specialization") ?? "mandatory",
       teachers: t.teachers as unknown as { full_name: string } | null,
+      gradeName: (t.grades as unknown as { name: string } | null)?.name ?? null,
       className: (t.classes as unknown as { name: string } | null)?.name ?? null,
       trackName: (t.tracks as unknown as { name: string } | null)?.name ?? null,
       specializationName:
@@ -81,7 +81,7 @@ export default async function LessonsPage({ searchParams }: Props) {
     <div className="space-y-6">
       <PageHeader
         title="יומן שיעורים עברי"
-        description="סוג השיעור (חובה/התמחות) נקבע לפי שיבוץ ההוראה של המורה."
+        description="הקהל לשיעור נקבע משיבוץ ההוראה: שכבה, וכיתה∩מסלול או התמחות."
         actions={<GenerateOccurrencesButton academicYearId={activeYear.id} />}
       />
       <LessonsCalendar
@@ -90,7 +90,6 @@ export default async function LessonsPage({ searchParams }: Props) {
         occurrences={occurrenceRows}
         lessons={lessons.data ?? []}
         teachingAssignments={teachingOptions}
-        grades={grades.data ?? []}
         ranges={ranges.data ?? []}
         rules={rules.data ?? []}
       />

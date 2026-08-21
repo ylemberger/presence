@@ -6,10 +6,11 @@ import { PrintButton } from "@/components/ui/PrintButton";
 import { createClient } from "@/lib/supabase/server";
 import { getActiveAcademicYear } from "@/lib/utils";
 import { formatDate, isDateInRange } from "@/lib/dates/hebrew";
-import { summarizeAttendance } from "@/lib/attendance/calculator";
+import { summarizeAttendance, evaluateAbsenceAgainstRule } from "@/lib/attendance/calculator";
 import { StudentDetailForms } from "./StudentDetailForms";
 import { StudentLessonAssignments } from "./StudentLessonAssignments";
 import type { AttendanceStatus } from "@/types/database";
+import { cn } from "@/lib/cn";
 
 interface Props {
   params: { id: string };
@@ -55,6 +56,10 @@ export default async function StudentDetailPage({ params }: Props) {
     presentCount: number;
     unmarked: number;
     absencePercent: number;
+    maxAllowed: number | null;
+    ruleName: string | null;
+    ruleLabel: string;
+    ruleLevel: "ok" | "warning" | "blocked";
   }> = [];
   let changeLog: Array<{
     id: string;
@@ -66,7 +71,8 @@ export default async function StudentDetailPage({ params }: Props) {
   }> = [];
 
   if (activeYear) {
-    const [grades, classes, tracks, specializations, yearLessons, sla] = await Promise.all([
+    const [grades, classes, tracks, specializations, yearLessons, sla, teachingTypes] =
+      await Promise.all([
       supabase.from("grades").select("*").eq("academic_year_id", activeYear.id),
       supabase.from("classes").select("*").eq("academic_year_id", activeYear.id),
       supabase.from("tracks").select("*").eq("academic_year_id", activeYear.id),
@@ -82,6 +88,7 @@ export default async function StudentDetailPage({ params }: Props) {
         .eq("student_id", id)
         .eq("lessons.academic_year_id", activeYear.id)
         .order("start_date", { ascending: false }),
+      supabase.from("teaching_types").select("*").eq("academic_year_id", activeYear.id),
     ]);
 
     yearData = {
@@ -90,6 +97,7 @@ export default async function StudentDetailPage({ params }: Props) {
       classes: classes.data ?? [],
       tracks: tracks.data ?? [],
       specializations: specializations.data ?? [],
+      teachingTypes: teachingTypes.data ?? [],
     };
     lessons = yearLessons.data ?? [];
     lessonAssignments = (sla.data ?? []).map((row) => ({
@@ -106,7 +114,9 @@ export default async function StudentDetailPage({ params }: Props) {
       const [{ data: occurrences }, { data: attendanceRecords }] = await Promise.all([
         supabase
           .from("lesson_occurrences")
-          .select("id, occurrence_date, status, lesson_id, lessons!inner(id, subject, academic_year_id)")
+          .select(
+            "id, occurrence_date, status, lesson_id, lessons!inner(id, subject, academic_year_id, attendance_rule_id, attendance_rules(name, max_allowed_absence_percent))"
+          )
           .eq("lessons.academic_year_id", activeYear.id)
           .in("lesson_id", lessonIds)
           .neq("status", "cancelled"),
@@ -119,12 +129,16 @@ export default async function StudentDetailPage({ params }: Props) {
 
       const bySubject = new Map<
         string,
-        Array<{
-          occurrenceId: string;
-          occurrenceDate: string;
-          status: string;
-          attendanceStatus?: AttendanceStatus;
-        }>
+        {
+          rows: Array<{
+            occurrenceId: string;
+            occurrenceDate: string;
+            status: string;
+            attendanceStatus?: AttendanceStatus;
+          }>;
+          maxAllowed: number | null;
+          ruleName: string | null;
+        }
       >();
 
       for (const o of occurrences ?? []) {
@@ -144,22 +158,48 @@ export default async function StudentDetailPage({ params }: Props) {
             );
         if (!inLesson) continue;
 
-        const subject =
-          (o.lessons as unknown as { subject: string } | null)?.subject ?? "ללא";
-        const list = bySubject.get(subject) ?? [];
-        list.push({
+        const lesson = o.lessons as unknown as {
+          subject: string;
+          attendance_rules: { name: string; max_allowed_absence_percent: number } | null;
+        } | null;
+        const subject = lesson?.subject ?? "ללא";
+        const rule = lesson?.attendance_rules ?? null;
+        const maxAllowed =
+          rule?.max_allowed_absence_percent != null
+            ? Number(rule.max_allowed_absence_percent)
+            : null;
+
+        const bucket = bySubject.get(subject) ?? {
+          rows: [],
+          maxAllowed: null,
+          ruleName: null,
+        };
+        bucket.rows.push({
           occurrenceId: o.id,
           occurrenceDate: date,
           status: o.status,
           attendanceStatus: attendanceRecords?.find((a) => a.lesson_occurrence_id === o.id)
             ?.status as AttendanceStatus | undefined,
         });
-        bySubject.set(subject, list);
+        if (maxAllowed != null) {
+          bucket.maxAllowed =
+            bucket.maxAllowed == null ? maxAllowed : Math.min(bucket.maxAllowed, maxAllowed);
+          bucket.ruleName = rule?.name ?? bucket.ruleName;
+        }
+        bySubject.set(subject, bucket);
       }
 
-      subjectStats = Array.from(bySubject.entries()).map(([subject, rows]) => {
-        const summary = summarizeAttendance(rows);
-        return { subject, ...summary };
+      subjectStats = Array.from(bySubject.entries()).map(([subject, bucket]) => {
+        const summary = summarizeAttendance(bucket.rows);
+        const evaluated = evaluateAbsenceAgainstRule(summary.absencePercent, bucket.maxAllowed);
+        return {
+          subject,
+          ...summary,
+          maxAllowed: bucket.maxAllowed,
+          ruleName: bucket.ruleName,
+          ruleLabel: evaluated.label,
+          ruleLevel: evaluated.level,
+        };
       });
 
       const attendanceIds = (attendanceRecords ?? []).map((a) => a.id);
@@ -204,7 +244,7 @@ export default async function StudentDetailPage({ params }: Props) {
     <div className="space-y-6">
       <PageHeader
         title={student.full_name}
-        description={`ת"ז ${student.identity_number} · ${student.is_active ? "פעילה" : "לא פעילה"}`}
+        description={`ת"ז ${student.identity_number} · מחזור ${student.cohort_number ?? "—"} · ${student.is_active ? "פעילה" : "לא פעילה"}`}
         actions={<PrintButton />}
       />
 
@@ -248,7 +288,7 @@ export default async function StudentDetailPage({ params }: Props) {
         {subjectStats.length === 0 ? (
           <p className="text-sm text-slate-500">אין נתוני נוכחות לחישוב עדיין.</p>
         ) : (
-          <Table headers={["מקצוע", "שיעורים", "נוכחת", "איחור", "נעדרה", "אחוז היעדרות"]}>
+          <Table headers={["מקצוע", "שיעורים", "נוכחת", "איחור", "נעדרה", "אחוז היעדרות", "סטטוס לפי כלל"]}>
             {subjectStats.map((row) => (
               <TableRow key={row.subject}>
                 <TableCell>{row.subject}</TableCell>
@@ -257,9 +297,24 @@ export default async function StudentDetailPage({ params }: Props) {
                 <TableCell>{row.lateCount}</TableCell>
                 <TableCell>{row.absentCount}</TableCell>
                 <TableCell
-                  className={row.absencePercent > 15 ? "font-bold text-rose-600" : ""}
+                  className={cn(
+                    row.ruleLevel === "blocked" && "font-bold text-rose-600",
+                    row.ruleLevel === "warning" && "font-semibold text-amber-700"
+                  )}
                 >
                   {row.absencePercent}%
+                  {row.maxAllowed != null ? ` / ${row.maxAllowed}%` : ""}
+                </TableCell>
+                <TableCell
+                  className={cn(
+                    "text-sm",
+                    row.ruleLevel === "blocked" && "font-bold text-rose-700",
+                    row.ruleLevel === "warning" && "text-amber-700",
+                    row.ruleLevel === "ok" && "text-emerald-700"
+                  )}
+                >
+                  {row.ruleLabel}
+                  {row.ruleName ? ` · ${row.ruleName}` : ""}
                 </TableCell>
               </TableRow>
             ))}

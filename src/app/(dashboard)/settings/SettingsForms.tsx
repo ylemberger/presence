@@ -51,16 +51,27 @@ export function SettingsForms({ type, yearId, grades, createAction }: SettingsFo
             <input type="checkbox" name="is_active" />
             שנה פעילה
           </label>
+          <label className="flex items-center gap-2 text-sm">
+            <input type="checkbox" name="promote_students" defaultChecked />
+            קדם תלמידות מהשנה הקודמת (מעתיק גם כיתות/מסלולים; א→ב, ב→ג, ג יוצאות)
+          </label>
         </>
       )}
 
-      {(type === "grade" || type === "track" || type === "specialization") && (
+      {(type === "grade" || type === "track" || type === "specialization" || type === "teaching_type") && (
         <Input
           label={
-            type === "grade" ? "שם שכבה" : type === "track" ? "שם מסלול" : "שם התמחות"
+            type === "grade"
+              ? "שם שכבה (א/ב/ג)"
+              : type === "track"
+                ? "שם מסלול"
+                : type === "teaching_type"
+                  ? "סוג הוראה"
+                  : "שם התמחות"
           }
           name="name"
           required
+          placeholder={type === "grade" ? "א" : undefined}
         />
       )}
 

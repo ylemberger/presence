@@ -4,11 +4,12 @@ import { PageHeader } from "@/components/ui/PageHeader";
 import { createClient } from "@/lib/supabase/server";
 import { getActiveAcademicYear } from "@/lib/utils";
 import { isDateInRange, formatDate } from "@/lib/dates/hebrew";
-import { summarizeAttendance } from "@/lib/attendance/calculator";
+import { summarizeAttendance, evaluateAbsenceAgainstRule } from "@/lib/attendance/calculator";
 import { ReportsFilter } from "./ReportsFilter";
 import { PrintButton } from "@/components/ui/PrintButton";
 import { todayIso } from "@/lib/dates/hebrew";
 import type { AttendanceStatus } from "@/types/database";
+import { cn } from "@/lib/cn";
 
 interface Props {
   searchParams: {
@@ -60,6 +61,8 @@ export default async function ReportsPage({ searchParams }: Props) {
     lateCount: number;
     absentCount: number;
     absencePercent: number;
+    ruleLabel: string;
+    ruleLevel: "ok" | "warning" | "blocked";
   }> = [];
 
   if (shouldRun) {
@@ -169,6 +172,7 @@ export default async function ReportsPage({ searchParams }: Props) {
           studentAssignments.find((a) => !a.end_date) ?? studentAssignments[0];
         const className =
           (currentAssignment?.classes as unknown as { name: string } | null)?.name ?? "-";
+        const evaluated = evaluateAbsenceAgainstRule(summary.absencePercent, threshold);
 
         reportRows.push({
           studentId,
@@ -179,6 +183,8 @@ export default async function ReportsPage({ searchParams }: Props) {
           lateCount: summary.lateCount,
           absentCount: summary.absentCount,
           absencePercent: summary.absencePercent,
+          ruleLabel: evaluated.label,
+          ruleLevel: evaluated.level,
         });
       }
 
@@ -238,6 +244,7 @@ export default async function ReportsPage({ searchParams }: Props) {
                 "איחור",
                 "נעדרה",
                 "אחוז היעדרות",
+                "סטטוס",
               ]}
             >
               {reportRows.map((row) => (
@@ -249,13 +256,22 @@ export default async function ReportsPage({ searchParams }: Props) {
                   <TableCell>{row.lateCount}</TableCell>
                   <TableCell>{row.absentCount}</TableCell>
                   <TableCell
-                    className={
-                      row.absencePercent > (selectedRule?.max_allowed_absence_percent ?? threshold)
-                        ? "font-bold text-rose-600"
-                        : ""
-                    }
+                    className={cn(
+                      row.ruleLevel === "blocked" && "font-bold text-rose-600",
+                      row.ruleLevel === "warning" && "font-semibold text-amber-700"
+                    )}
                   >
                     {row.absencePercent}%
+                  </TableCell>
+                  <TableCell
+                    className={cn(
+                      "text-sm",
+                      row.ruleLevel === "blocked" && "font-bold text-rose-700",
+                      row.ruleLevel === "warning" && "text-amber-700",
+                      row.ruleLevel === "ok" && "text-emerald-700"
+                    )}
+                  >
+                    {row.ruleLabel}
                   </TableCell>
                 </TableRow>
               ))}

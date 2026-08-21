@@ -45,9 +45,14 @@ export function parseLessonBilling(formData: FormData):
       class_id: string | null;
       track_id: string | null;
       specialization_id: string | null;
+      for_psychology: boolean;
     }
   | { error: string } {
   const billingType = String(formData.get("billing_type") ?? "");
+  const forPsychology =
+    formData.get("for_psychology") === "on" ||
+    formData.get("for_psychology") === "1" ||
+    formData.get("for_psychology") === "true";
   const classId = String(formData.get("class_id") ?? "").trim() || null;
   const trackId = String(formData.get("track_id") ?? "").trim() || null;
   const specializationId = String(formData.get("specialization_id") ?? "").trim() || null;
@@ -59,20 +64,59 @@ export function parseLessonBilling(formData: FormData):
       class_id: null,
       track_id: null,
       specialization_id: specializationId,
+      for_psychology: false,
     };
   }
 
   if (billingType === "mandatory") {
+    if (forPsychology) {
+      return {
+        billing_type: "mandatory",
+        class_id: null,
+        track_id: null,
+        specialization_id: null,
+        for_psychology: true,
+      };
+    }
     if (!classId && !trackId) {
-      return { error: "בשיעור חובה יש לבחור כיתה או מסלול" };
+      return { error: "בשיבוץ חובה יש לבחור כיתה או מסלול (או את שתיהן), או לסמן מיועד לפסיכולוגיה" };
     }
     return {
       billing_type: "mandatory",
       class_id: classId,
       track_id: trackId,
       specialization_id: null,
+      for_psychology: false,
     };
   }
 
   return { error: "יש לבחור סוג שיעור: חובה או התמחות" };
+}
+
+/** Audience rule: class∩track when both set; grade always filters when present. */
+export function describeAudienceScope(opts: {
+  billing_type: "mandatory" | "specialization";
+  gradeName?: string | null;
+  className?: string | null;
+  trackName?: string | null;
+  specializationName?: string | null;
+  forPsychology?: boolean;
+}): string {
+  if (opts.forPsychology) {
+    return [opts.gradeName, "פסיכולוגיה"].filter(Boolean).join(" · ");
+  }
+  if (opts.billing_type === "specialization") {
+    const parts = [opts.gradeName, opts.specializationName].filter(Boolean);
+    return parts.length ? parts.join(" · ") : "התמחות";
+  }
+  const parts: string[] = [];
+  if (opts.gradeName) parts.push(opts.gradeName);
+  if (opts.className && opts.trackName) {
+    parts.push(`${opts.className} ∩ ${opts.trackName}`);
+  } else if (opts.className) {
+    parts.push(opts.className);
+  } else if (opts.trackName) {
+    parts.push(opts.trackName);
+  }
+  return parts.length ? parts.join(" · ") : "חובה";
 }

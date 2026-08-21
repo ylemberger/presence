@@ -7,13 +7,14 @@ import { Input, Select } from "@/components/ui/Input";
 import { DAY_OF_WEEK_LABELS, BILLING_TYPE_LABELS } from "@/lib/constants";
 import { createLessonAction, createLessonForDateAction } from "../actions";
 import { isoToHDate } from "@/lib/dates/hebrew";
-import type { Grade, ActivityRange, AttendanceRule, BillingType } from "@/types/database";
+import type { ActivityRange, AttendanceRule, BillingType } from "@/types/database";
 
 export interface TeachingAssignmentOption {
   id: string;
   subject: string;
   billing_type: BillingType;
   teachers: { full_name: string } | null;
+  gradeName?: string | null;
   className?: string | null;
   trackName?: string | null;
   specializationName?: string | null;
@@ -23,25 +24,28 @@ interface LessonsFormProps {
   yearId: string;
   occurrenceDate?: string;
   teachingAssignments: TeachingAssignmentOption[];
-  grades: Grade[];
   ranges: ActivityRange[];
   rules: AttendanceRule[];
   onCreated?: () => void;
 }
 
 function scopeLabel(t: TeachingAssignmentOption): string {
+  const grade = t.gradeName ? `${t.gradeName} · ` : "";
   if (t.billing_type === "specialization") {
-    return `התמחות · ${t.specializationName ?? "—"}`;
+    return `${grade}התמחות · ${t.specializationName ?? "—"}`;
   }
-  const parts = [t.className, t.trackName].filter(Boolean);
-  return `חובה · ${parts.length ? parts.join(" / ") : "—"}`;
+  if (t.className && t.trackName) {
+    return `${grade}${t.className} ∩ ${t.trackName}`;
+  }
+  if (t.className) return `${grade}${t.className}`;
+  if (t.trackName) return `${grade}${t.trackName}`;
+  return `${grade}חובה`;
 }
 
 export function LessonsForm({
   yearId,
   occurrenceDate,
   teachingAssignments,
-  grades,
   ranges,
   rules,
   onCreated,
@@ -108,15 +112,6 @@ export function LessonsForm({
           קהל: <span className="font-medium text-slate-800">{scopeLabel(selected)}</span>
         </p>
       )}
-      <Select
-        label="שכבה"
-        name="grade_id"
-        required
-        options={[
-          { value: "", label: "בחרי" },
-          ...grades.map((g) => ({ value: g.id, label: g.name })),
-        ]}
-      />
       <Select
         label="יום בשבוע"
         name="day_of_week"

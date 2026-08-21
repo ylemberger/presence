@@ -45,3 +45,34 @@ export function summarizeAttendance(occurrences: EligibleOccurrence[]) {
     absencePercent: calculateAbsencePercent({ totalRequired: required.length, absentCount }),
   };
 }
+
+/** איחור נספר כנוכחות; רק `absent` נכנס לאחוז היעדרות. */
+export type AbsenceRuleLevel = "ok" | "warning" | "blocked";
+
+export function evaluateAbsenceAgainstRule(
+  absencePercent: number,
+  maxAllowedPercent: number | null | undefined
+): { level: AbsenceRuleLevel; label: string; isExceeded: boolean } {
+  if (maxAllowedPercent == null || Number.isNaN(Number(maxAllowedPercent))) {
+    return { level: "ok", label: "תקין", isExceeded: false };
+  }
+
+  const max = Number(maxAllowedPercent);
+  if (absencePercent > max) {
+    return {
+      level: "blocked",
+      label: `חריגה מ-${max}%`,
+      isExceeded: true,
+    };
+  }
+
+  if (max > 0 && absencePercent >= max * 0.8) {
+    return {
+      level: "warning",
+      label: `קרוב לסף (${max}%)`,
+      isExceeded: false,
+    };
+  }
+
+  return { level: "ok", label: "תקין", isExceeded: false };
+}
