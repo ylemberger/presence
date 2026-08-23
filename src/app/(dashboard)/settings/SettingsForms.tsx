@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/Button";
 import { Input, Select } from "@/components/ui/Input";
@@ -18,14 +18,17 @@ interface SettingsFormsProps {
 
 export function SettingsForms({ type, yearId, grades, createAction }: SettingsFormsProps) {
   const router = useRouter();
+  const [isPending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const [doneFlash, setDoneFlash] = useState(false);
 
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
     const form = e.currentTarget;
     setLoading(true);
     setError(null);
+    setDoneFlash(false);
     try {
       const formData = new FormData(form);
       if (yearId) formData.set("academic_year_id", yearId);
@@ -34,7 +37,9 @@ export function SettingsForms({ type, yearId, grades, createAction }: SettingsFo
         setError(result.error);
       } else {
         form.reset();
-        router.refresh();
+        setDoneFlash(true);
+        setTimeout(() => setDoneFlash(false), 1500);
+        startTransition(() => router.refresh());
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : "שמירה נכשלה");
@@ -132,8 +137,8 @@ export function SettingsForms({ type, yearId, grades, createAction }: SettingsFo
       )}
 
       {(type !== "grade" || missingGrades.length > 0) && (
-        <Button type="submit" disabled={loading}>
-          {loading ? "מוסיף..." : "הוספה"}
+        <Button type="submit" disabled={loading || isPending}>
+          {loading ? "מוסיף..." : doneFlash ? "נוסף ✓" : "הוספה"}
         </Button>
       )}
       {error && <p className="w-full text-sm text-red-600">{error}</p>}
