@@ -19,7 +19,7 @@ alwaysApply: true
 - מיילים מורשים: `ALLOWED_LOGIN_EMAILS` env var בלבד — לא בקוד
 - Server Actions: תמיד `createActionClient()` — לא `createClient()` לכתיבה
 - OAuth redirect: `safeRedirectPath()` בלבד
-- Cron: `isValidCronRequest()` + `CRON_SECRET` (16+ תווים)
+- Cron: `isValidCronRequest()` + `CRON_SECRET` (16+ תווים) + `SUPABASE_SERVICE_ROLE_KEY` (שרת בלבד)
 - אין `service_role` key באפליקציה
 - אין secrets ב-`NEXT_PUBLIC_*`
 

@@ -2,6 +2,7 @@ import { Suspense } from "react";
 import { Sidebar } from "@/components/layout/Sidebar";
 import { YearSelector } from "@/components/layout/YearSelector";
 import { NavigationProgress } from "@/components/layout/NavigationProgress";
+import { requireAuthenticatedUser } from "@/lib/supabase/server";
 import { getActiveAcademicYear, getAllAcademicYears } from "@/lib/utils";
 
 export default async function DashboardLayout({
@@ -9,6 +10,8 @@ export default async function DashboardLayout({
 }: {
   children: React.ReactNode;
 }) {
+  await requireAuthenticatedUser();
+
   const [activeYear, years] = await Promise.all([
     getActiveAcademicYear(),
     getAllAcademicYears(),

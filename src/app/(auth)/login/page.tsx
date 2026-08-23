@@ -10,15 +10,13 @@ const ERROR_MESSAGES: Record<string, string> = {
 export default function LoginPage({
   searchParams,
 }: {
-  searchParams: { error?: string; error_description?: string };
+  searchParams: { error?: string };
 }) {
   const loginHintEmail = getLoginHintEmail();
 
-  const error = searchParams.error_description
-    ? decodeURIComponent(searchParams.error_description.replace(/\+/g, " "))
-    : searchParams.error
-      ? ERROR_MESSAGES[searchParams.error] ?? ERROR_MESSAGES.auth
-      : null;
+  const error = searchParams.error
+    ? (ERROR_MESSAGES[searchParams.error] ?? ERROR_MESSAGES.auth)
+    : null;
 
   return (
     <div className="relative flex min-h-screen items-center justify-center overflow-hidden px-4 py-10">

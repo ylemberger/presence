@@ -1,5 +1,6 @@
 import { createServerClient } from "@supabase/ssr";
 import { cookies } from "next/headers";
+import { redirect } from "next/navigation";
 import { isAllowedLoginEmail } from "@/lib/auth/allowed-emails";
 
 export async function createClient() {
@@ -25,6 +26,20 @@ export async function createClient() {
       },
     }
   );
+}
+
+/** Defense-in-depth for dashboard Server Components (middleware also guards). */
+export async function requireAuthenticatedUser() {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (!user || !isAllowedLoginEmail(user.email)) {
+    redirect("/login?error=unauthorized");
+  }
+
+  return { supabase, user };
 }
 
 /** For Server Actions — requires an allowed, authenticated user. */

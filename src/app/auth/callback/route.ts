@@ -10,9 +10,7 @@ export async function GET(request: Request) {
   const oauthError = searchParams.get("error_description") ?? searchParams.get("error");
 
   if (oauthError && !code) {
-    return NextResponse.redirect(
-      `${origin}/login?error=auth&error_description=${encodeURIComponent(oauthError)}`
-    );
+    return NextResponse.redirect(`${origin}/login?error=auth`);
   }
 
   if (!code) {
@@ -23,9 +21,7 @@ export async function GET(request: Request) {
   const { error } = await supabase.auth.exchangeCodeForSession(code);
 
   if (error) {
-    return NextResponse.redirect(
-      `${origin}/login?error=auth&error_description=${encodeURIComponent(error.message)}`
-    );
+    return NextResponse.redirect(`${origin}/login?error=auth`);
   }
 
   const {

@@ -971,8 +971,11 @@ export async function createLessonForDateAction(formData: FormData) {
 }
 
 export async function generateOccurrencesAction(academicYearId: string) {
+  const actionAuth = await createActionClient();
+  if ("error" in actionAuth) return { error: actionAuth.error };
+
   try {
-    const result = await generateLessonOccurrences(undefined, academicYearId);
+    const result = await generateLessonOccurrences(undefined, academicYearId, actionAuth.supabase);
     revalidatePath("/lessons");
     return { success: true, result };
   } catch (e) {

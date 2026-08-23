@@ -1,5 +1,6 @@
 import { createClient } from "@/lib/supabase/server";
 import { parseIsoDate, toIsoDate } from "@/lib/dates/hebrew";
+import type { SupabaseClient } from "@supabase/supabase-js";
 
 export interface GenerateOccurrencesResult {
   created: number;
@@ -29,9 +30,10 @@ function getDatesForDayOfWeek(
 
 export async function generateLessonOccurrences(
   lessonId?: string,
-  academicYearId?: string
+  academicYearId?: string,
+  supabaseClient?: SupabaseClient
 ): Promise<GenerateOccurrencesResult> {
-  const supabase = await createClient();
+  const supabase = supabaseClient ?? (await createClient());
   const result: GenerateOccurrencesResult = { created: 0, skipped: 0 };
 
   let lessonsQuery = supabase
