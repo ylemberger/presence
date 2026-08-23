@@ -1,34 +1,27 @@
 import { PageHeader } from "@/components/ui/PageHeader";
 import { createClient } from "@/lib/supabase/server";
 import { getActiveAcademicYear } from "@/lib/utils";
-import { addDays, formatHebrewDate, toIsoDate } from "@/lib/dates/hebrew";
-import { AttendanceBoard, type AttendanceMode, type AttendanceView } from "./AttendanceBoard";
+import {
+  buildHebrewMonth,
+  hebrewMonthFromIso,
+  todayIso,
+} from "@/lib/dates/hebrew";
+import { AttendanceBoard, type AttendanceMode } from "./AttendanceBoard";
 
 interface Props {
   searchParams: {
-    mode?: string;
-    view?: string;
-    week?: string;
+    date?: string;
+    from?: string;
+    to?: string;
+    occurrenceId?: string;
     classId?: string;
     trackId?: string;
     specializationId?: string;
     teacherId?: string;
     subject?: string;
     studentId?: string;
-    occurrenceId?: string;
+    mode?: string;
   };
-}
-
-function getWeekStart(dateStr?: string): string {
-  const d = dateStr
-    ? (() => {
-        const [y, m, day] = dateStr.split("-").map(Number);
-        return new Date(y, m - 1, day, 12, 0, 0);
-      })()
-    : new Date();
-  const day = d.getDay();
-  d.setDate(d.getDate() - day);
-  return toIsoDate(d);
 }
 
 export default async function AttendancePage({ searchParams }: Props) {
@@ -45,16 +38,11 @@ export default async function AttendancePage({ searchParams }: Props) {
   }
 
   const mode: AttendanceMode = params.mode === "single" ? "single" : "group";
-  const view: AttendanceView =
-    params.view === "lesson" ||
-    params.view === "teacher" ||
-    params.view === "group" ||
-    params.view === "date"
-      ? params.view
-      : "date";
-
-  const weekStart = getWeekStart(params.week);
-  const weekEnd = addDays(weekStart, 6);
+  const selectedDate = params.date || todayIso();
+  const monthSeed = hebrewMonthFromIso(params.from || selectedDate);
+  const month = buildHebrewMonth(monthSeed.year, monthSeed.month);
+  const monthFrom = params.from || month.rangeStart;
+  const monthTo = params.to || month.rangeEnd;
 
   const [
     { data: classes },
@@ -62,7 +50,7 @@ export default async function AttendancePage({ searchParams }: Props) {
     { data: specializations },
     { data: teachers },
     { data: yearStudents },
-    { data: occurrencesRaw },
+    { data: monthOccurrencesRaw },
   ] = await Promise.all([
     supabase.from("classes").select("id, name").eq("academic_year_id", activeYear.id).order("name"),
     supabase.from("tracks").select("id, name").eq("academic_year_id", activeYear.id).order("name"),
@@ -87,46 +75,11 @@ export default async function AttendancePage({ searchParams }: Props) {
          )`
       )
       .eq("lessons.academic_year_id", activeYear.id)
-      .gte("occurrence_date", weekStart)
-      .lte("occurrence_date", weekEnd)
+      .gte("occurrence_date", monthFrom)
+      .lte("occurrence_date", monthTo)
       .neq("status", "cancelled")
       .order("occurrence_date"),
   ]);
-
-  let assignmentRows = yearStudents ?? [];
-  if (params.classId) {
-    assignmentRows = assignmentRows.filter((a) => a.class_id === params.classId);
-  }
-  if (params.trackId) {
-    assignmentRows = assignmentRows.filter((a) => a.track_id === params.trackId);
-  }
-  if (params.specializationId) {
-    assignmentRows = assignmentRows.filter((a) => a.specialization_id === params.specializationId);
-  }
-
-  const allStudentsMap = new Map<string, { id: string; full_name: string }>();
-  for (const row of yearStudents ?? []) {
-    const s = row.students as unknown as { id: string; full_name: string; is_active: boolean } | null;
-    if (s?.is_active) allStudentsMap.set(s.id, { id: s.id, full_name: s.full_name });
-  }
-  const allStudents = [...allStudentsMap.values()].sort((a, b) =>
-    a.full_name.localeCompare(b.full_name, "he")
-  );
-
-  const filteredStudentsMap = new Map<string, { id: string; full_name: string }>();
-  for (const row of assignmentRows) {
-    const s = row.students as unknown as { id: string; full_name: string; is_active: boolean } | null;
-    if (s?.is_active) filteredStudentsMap.set(s.id, { id: s.id, full_name: s.full_name });
-  }
-
-  let students = [...filteredStudentsMap.values()].sort((a, b) =>
-    a.full_name.localeCompare(b.full_name, "he")
-  );
-  if (mode === "single") {
-    students = params.studentId
-      ? allStudents.filter((s) => s.id === params.studentId)
-      : [];
-  }
 
   type LessonJoin = {
     id: string;
@@ -140,7 +93,7 @@ export default async function AttendancePage({ searchParams }: Props) {
     } | null;
   };
 
-  let occurrences = (occurrencesRaw ?? []).map((o) => {
+  function mapOccurrence(o: NonNullable<typeof monthOccurrencesRaw>[number]) {
     const lesson = o.lessons as unknown as LessonJoin;
     const teacher = lesson.teacher_teaching_assignments?.teachers;
     return {
@@ -154,115 +107,116 @@ export default async function AttendancePage({ searchParams }: Props) {
       trackId: lesson.track_id,
       specializationId: lesson.specialization_id,
     };
-  });
+  }
 
-  if (params.classId) {
-    occurrences = occurrences.filter((o) => o.classId === params.classId);
-  }
-  if (params.trackId) {
-    occurrences = occurrences.filter((o) => o.trackId === params.trackId);
-  }
+  let monthOccurrences = (monthOccurrencesRaw ?? []).map(mapOccurrence);
+
+  if (params.classId) monthOccurrences = monthOccurrences.filter((o) => o.classId === params.classId);
+  if (params.trackId) monthOccurrences = monthOccurrences.filter((o) => o.trackId === params.trackId);
   if (params.specializationId) {
-    occurrences = occurrences.filter((o) => o.specializationId === params.specializationId);
+    monthOccurrences = monthOccurrences.filter((o) => o.specializationId === params.specializationId);
   }
-  if (params.teacherId) {
-    occurrences = occurrences.filter((o) => o.teacherId === params.teacherId);
-  }
-  if (params.subject) {
-    occurrences = occurrences.filter((o) => o.subject === params.subject);
-  }
+  if (params.teacherId) monthOccurrences = monthOccurrences.filter((o) => o.teacherId === params.teacherId);
+  if (params.subject) monthOccurrences = monthOccurrences.filter((o) => o.subject === params.subject);
 
-  const subjects = [...new Set(occurrences.map((o) => o.subject))].sort((a, b) =>
-    a.localeCompare(b, "he")
+  const dayOccurrences = monthOccurrences.filter((o) => o.date === selectedDate);
+
+  const allStudentsMap = new Map<string, { id: string; full_name: string }>();
+  for (const row of yearStudents ?? []) {
+    const s = row.students as unknown as { id: string; full_name: string; is_active: boolean } | null;
+    if (s?.is_active) allStudentsMap.set(s.id, { id: s.id, full_name: s.full_name });
+  }
+  const allStudents = [...allStudentsMap.values()].sort((a, b) =>
+    a.full_name.localeCompare(b.full_name, "he")
   );
 
-  const occurrenceIds = occurrences.map((o) => o.id);
+  const selectedOcc =
+    params.occurrenceId && dayOccurrences.find((o) => o.id === params.occurrenceId)
+      ? dayOccurrences.find((o) => o.id === params.occurrenceId)!
+      : dayOccurrences.length === 1
+        ? dayOccurrences[0]
+        : null;
+
+  let lessonStudents: { id: string; full_name: string }[] = [];
+
+  if (selectedOcc) {
+    const { data: links } = await supabase
+      .from("student_lesson_assignments")
+      .select("student_id, students(id, full_name, is_active)")
+      .eq("lesson_id", selectedOcc.lessonId)
+      .lte("start_date", selectedOcc.date)
+      .or(`end_date.is.null,end_date.gte.${selectedOcc.date}`);
+
+    const map = new Map<string, { id: string; full_name: string }>();
+    for (const link of links ?? []) {
+      const s = link.students as unknown as { id: string; full_name: string; is_active: boolean } | null;
+      if (s?.is_active) map.set(s.id, { id: s.id, full_name: s.full_name });
+    }
+    lessonStudents = [...map.values()].sort((a, b) => a.full_name.localeCompare(b.full_name, "he"));
+
+    if (mode === "single" && params.studentId) {
+      lessonStudents = lessonStudents.filter((s) => s.id === params.studentId);
+    }
+  }
+
+  const dayOccIds = dayOccurrences.map((o) => o.id);
+  const checkOccIds = selectedOcc ? [selectedOcc.id] : dayOccIds;
+
   let attendanceRecords: Array<{
     student_id: string;
     lesson_occurrence_id: string;
     status: string;
   }> = [];
 
-  if (occurrenceIds.length > 0) {
+  if (checkOccIds.length > 0) {
     const { data } = await supabase
       .from("attendance")
       .select("student_id, lesson_occurrence_id, status")
-      .in("lesson_occurrence_id", occurrenceIds);
+      .in("lesson_occurrence_id", checkOccIds);
     attendanceRecords = data ?? [];
   }
 
-  const lessonIds = [...new Set(occurrences.map((o) => o.lessonId))];
-  const pastGaps: Array<{
-    lessonId: string;
-    subject: string;
-    date: string;
-    occurrenceId: string;
-    gapHandling: "in_treatment" | "continued" | null;
-  }> = [];
-  let siblingDates: Array<{
-    occurrenceId: string;
-    lessonId: string;
-    date: string;
-    subject: string;
-  }> = [];
-  let noteBody = "";
-  let noteLessonId: string | null = null;
-  let noteStudentId: string | null = null;
+  // stats per occurrence for day list
+  const studentCounts = new Map<string, number>();
+  if (dayOccIds.length > 0) {
+    const lessonIds = [...new Set(dayOccurrences.map((o) => o.lessonId))];
+    const { data: allLinks } = await supabase
+      .from("student_lesson_assignments")
+      .select("lesson_id, student_id, start_date, end_date, students(is_active)")
+      .in("lesson_id", lessonIds);
 
-  if (lessonIds.length > 0) {
-    const [{ data: pastOccs }, { data: siblings }] = await Promise.all([
-      supabase
-        .from("lesson_occurrences")
-        .select(
-          "id, occurrence_date, lesson_id, gap_handling, lessons!inner(subject, academic_year_id)"
-        )
-        .eq("lessons.academic_year_id", activeYear.id)
-        .in("lesson_id", lessonIds)
-        .lt("occurrence_date", weekStart)
-        .neq("status", "cancelled")
-        .order("occurrence_date", { ascending: false })
-        .limit(60),
-      supabase
-        .from("lesson_occurrences")
-        .select(
-          "id, occurrence_date, lesson_id, lessons!inner(subject, academic_year_id)"
-        )
-        .eq("lessons.academic_year_id", activeYear.id)
-        .in("lesson_id", lessonIds)
-        .neq("status", "cancelled")
-        .order("occurrence_date", { ascending: false })
-        .limit(120),
-    ]);
-
-    siblingDates = (siblings ?? []).map((o) => ({
-      occurrenceId: o.id,
-      lessonId: o.lesson_id,
-      date: o.occurrence_date,
-      subject: (o.lessons as unknown as { subject: string } | null)?.subject ?? "שיעור",
-    }));
-
-    const pastIds = (pastOccs ?? []).map((o) => o.id);
-    if (pastIds.length > 0) {
-      const { data: pastMarked } = await supabase
-        .from("attendance")
-        .select("lesson_occurrence_id")
-        .in("lesson_occurrence_id", pastIds);
-      const marked = new Set((pastMarked ?? []).map((m) => m.lesson_occurrence_id));
-      for (const o of pastOccs ?? []) {
-        if (marked.has(o.id)) continue;
-        pastGaps.push({
-          lessonId: o.lesson_id,
-          subject: (o.lessons as unknown as { subject: string } | null)?.subject ?? "שיעור",
-          date: o.occurrence_date,
-          occurrenceId: o.id,
-          gapHandling: (o.gap_handling as "in_treatment" | "continued" | null) ?? null,
-        });
-        if (pastGaps.length >= 12) break;
+    for (const occ of dayOccurrences) {
+      let count = 0;
+      for (const link of allLinks ?? []) {
+        if (link.lesson_id !== occ.lessonId) continue;
+        const active = (link.students as unknown as { is_active: boolean } | null)?.is_active;
+        if (!active) continue;
+        if (link.start_date > occ.date) continue;
+        if (link.end_date && link.end_date < occ.date) continue;
+        count++;
       }
+      studentCounts.set(occ.id, count);
     }
   }
 
-  if (mode === "single" && params.studentId) {
+  const markedCounts = new Map<string, number>();
+  for (const occId of dayOccIds) {
+    markedCounts.set(
+      occId,
+      attendanceRecords.filter((a) => a.lesson_occurrence_id === occId).length
+    );
+  }
+
+  let noteBody = "";
+  if (selectedOcc) {
+    const { data: note } = await supabase
+      .from("attendance_notes")
+      .select("body")
+      .eq("academic_year_id", activeYear.id)
+      .eq("lesson_id", selectedOcc.lessonId)
+      .maybeSingle();
+    noteBody = note?.body ?? "";
+  } else if (mode === "single" && params.studentId) {
     const { data: note } = await supabase
       .from("attendance_notes")
       .select("body")
@@ -270,60 +224,48 @@ export default async function AttendancePage({ searchParams }: Props) {
       .eq("student_id", params.studentId)
       .maybeSingle();
     noteBody = note?.body ?? "";
-    noteStudentId = params.studentId;
-  } else {
-    const focusLesson =
-      (params.occurrenceId
-        ? occurrences.find((o) => o.id === params.occurrenceId)?.lessonId
-        : undefined) ?? lessonIds[0];
-    if (focusLesson) {
-      const { data: note } = await supabase
-        .from("attendance_notes")
-        .select("body")
-        .eq("academic_year_id", activeYear.id)
-        .eq("lesson_id", focusLesson)
-        .maybeSingle();
-      noteBody = note?.body ?? "";
-      noteLessonId = focusLesson;
-    }
   }
+
+  const subjects = [...new Set(monthOccurrences.map((o) => o.subject))].sort((a, b) =>
+    a.localeCompare(b, "he")
+  );
 
   return (
     <div>
       <PageHeader
         title="נוכחות"
-        description="תאריך עברי ראשי, סימון מהיר, והתראות על מופעים חסרים במקום. איחור נספר כנוכחות."
+        description="בחרי תאריך בלוח העברי → בחרי שיעור → סמני נוכחות. שמירה מיידית בכל לחיצה."
       />
 
       <AttendanceBoard
         yearId={activeYear.id}
-        filters={{
-          mode,
-          view,
-          weekStart,
-          weekLabel: `${formatHebrewDate(weekStart)} – ${formatHebrewDate(weekEnd)}`,
-          classId: params.classId,
-          trackId: params.trackId,
-          specializationId: params.specializationId,
-          teacherId: params.teacherId,
-          subject: params.subject,
-          studentId: params.studentId,
-          occurrenceId: params.occurrenceId,
-        }}
+        monthFrom={monthFrom}
+        monthTo={monthTo}
+        selectedDate={selectedDate}
+        selectedOccurrenceId={selectedOcc?.id ?? params.occurrenceId}
+        mode={mode}
+        classId={params.classId}
+        trackId={params.trackId}
+        specializationId={params.specializationId}
+        teacherId={params.teacherId}
+        subject={params.subject}
+        studentId={params.studentId}
         classes={classes ?? []}
         tracks={tracks ?? []}
         specializations={specializations ?? []}
         teachers={(teachers ?? []).map((t) => ({ id: t.id, name: t.full_name }))}
         subjects={subjects}
-        students={students}
         allStudents={allStudents}
-        occurrences={occurrences.map(({ teacherId: _t, ...rest }) => rest)}
+        monthOccurrences={monthOccurrences}
+        dayOccurrences={dayOccurrences.map((o) => ({
+          ...o,
+          studentCount: studentCounts.get(o.id) ?? 0,
+          markedCount: markedCounts.get(o.id) ?? 0,
+        }))}
+        lessonStudents={lessonStudents}
         attendance={attendanceRecords}
-        pastGaps={pastGaps}
-        siblingDates={siblingDates}
         noteBody={noteBody}
-        noteLessonId={noteLessonId}
-        noteStudentId={noteStudentId}
+        noteLessonId={selectedOcc?.lessonId ?? null}
       />
     </div>
   );
