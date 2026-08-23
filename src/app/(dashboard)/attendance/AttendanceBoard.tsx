@@ -5,12 +5,15 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/Button";
 import { Select } from "@/components/ui/Input";
-import { ATTENDANCE_STATUS_LABELS } from "@/lib/constants";
-import { bulkAttendanceAction, upsertAttendanceNoteAction } from "../actions";
+import { bulkAttendanceAction, upsertAttendanceAction, upsertAttendanceNoteAction } from "../actions";
 import type { AttendanceStatus } from "@/types/database";
 import { cn } from "@/lib/cn";
 import { addDays, formatGregorianDate, formatHebrewDate } from "@/lib/dates/hebrew";
 import { AttendanceGapModal, type GapItem } from "./AttendanceGapModal";
+import {
+  AttendanceStatusPicker,
+  type AttendancePickerPhase,
+} from "./AttendanceStatusPicker";
 
 export type AttendanceMode = "single" | "group";
 export type AttendanceView = "lesson" | "date" | "teacher" | "group";
@@ -69,12 +72,6 @@ interface Props {
   noteStudentId?: string | null;
 }
 
-const CELL: Record<AttendanceStatus, string> = {
-  present: "bg-emerald-600 text-white border-emerald-700 shadow-sm",
-  absent: "bg-rose-500 text-white border-rose-600 shadow-sm",
-  late: "bg-amber-400 text-slate-900 border-amber-500 shadow-sm",
-};
-
 type DraftKey = string;
 
 function keyOf(studentId: string, occurrenceId: string): DraftKey {
@@ -110,8 +107,8 @@ export function AttendanceBoard({
 }: Props) {
   const router = useRouter();
   const [draft, setDraft] = useState<Record<DraftKey, AttendanceStatus | null>>({});
-  const [dirty, setDirty] = useState(false);
-  const [saving, setSaving] = useState(false);
+  const [cellPhase, setCellPhase] = useState<Record<DraftKey, AttendancePickerPhase>>({});
+  const [bulkSaving, setBulkSaving] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [note, setNote] = useState(noteBody);
   const [noteSaving, setNoteSaving] = useState(false);
@@ -133,7 +130,7 @@ export function AttendanceBoard({
       }
     }
     setDraft(next);
-    setDirty(false);
+    setCellPhase({});
     setMessage(null);
   }, [students, occurrences, attendance]);
 
@@ -218,51 +215,63 @@ export function AttendanceBoard({
     });
   }
 
-  function setStatus(studentId: string, occurrenceId: string, status: AttendanceStatus | null) {
+  async function pickStatus(
+    studentId: string,
+    occurrenceId: string,
+    status: AttendanceStatus
+  ) {
     if (gridLocked) return;
-    setDraft((prev) => ({ ...prev, [keyOf(studentId, occurrenceId)]: status }));
-    setDirty(true);
-    setMessage(null);
-  }
+    const k = keyOf(studentId, occurrenceId);
+    const previous = draft[k] ?? null;
 
-  function markAll(status: AttendanceStatus) {
-    if (gridLocked) return;
-    const next = { ...draft };
-    for (const student of students) {
-      for (const occ of visibleOccurrences) {
-        next[keyOf(student.id, occ.id)] = status;
-      }
-    }
-    setDraft(next);
-    setDirty(true);
+    setDraft((prev) => ({ ...prev, [k]: status }));
+    setCellPhase((prev) => ({ ...prev, [k]: "saving" }));
     setMessage(null);
-  }
 
-  async function saveAll() {
-    if (gridLocked) return;
-    setSaving(true);
-    setMessage(null);
-    const updates = Object.entries(draft)
-      .filter(([, status]) => status != null)
-      .map(([key, status]) => {
-        const [studentId, occurrenceId] = key.split("::");
-        return { studentId, occurrenceId, status: status as AttendanceStatus };
-      });
-
-    if (updates.length === 0) {
-      setMessage("אין רישומים לשמירה");
-      setSaving(false);
+    const result = await upsertAttendanceAction(studentId, occurrenceId, status);
+    if (result && "error" in result && result.error) {
+      setDraft((prev) => ({ ...prev, [k]: previous }));
+      setCellPhase((prev) => ({ ...prev, [k]: "error" }));
+      setMessage(result.error);
+      window.setTimeout(
+        () => setCellPhase((prev) => ({ ...prev, [k]: "idle" })),
+        2000
+      );
       return;
     }
 
+    setCellPhase((prev) => ({ ...prev, [k]: "saved" }));
+    window.setTimeout(
+      () => setCellPhase((prev) => ({ ...prev, [k]: "idle" })),
+      1200
+    );
+  }
+
+  async function markAll(status: AttendanceStatus) {
+    if (gridLocked || visibleOccurrences.length === 0) return;
+    setBulkSaving(true);
+    setMessage(null);
+
+    const updates: { studentId: string; occurrenceId: string; status: AttendanceStatus }[] =
+      [];
+    const next = { ...draft };
+    for (const student of students) {
+      for (const occ of visibleOccurrences) {
+        const k = keyOf(student.id, occ.id);
+        next[k] = status;
+        updates.push({ studentId: student.id, occurrenceId: occ.id, status });
+      }
+    }
+    setDraft(next);
+
     const result = await bulkAttendanceAction(updates);
-    if (result && "error" in result && result.error) setMessage(result.error);
-    else {
-      setDirty(false);
-      setMessage("הנוכחות נשמרה");
+    if (result && "error" in result && result.error) {
+      setMessage(result.error);
+    } else {
+      setMessage(`סומנו ${updates.length} רשומות — ${status === "present" ? "נוכחות" : status === "late" ? "איחור" : "היעדרות"}`);
       router.refresh();
     }
-    setSaving(false);
+    setBulkSaving(false);
   }
 
   async function saveNote() {
@@ -505,25 +514,48 @@ export function AttendanceBoard({
       )}
 
       <div className="flex flex-wrap items-center gap-2 border-b border-stone-100 px-4 py-3 print:hidden">
-        <Button size="sm" variant="secondary" onClick={() => markAll("present")} disabled={!canShowGrid}>
-          סמן נוכחות לכולן
+        <span className="text-xs font-medium text-slate-500">סימון מהיר לכולן:</span>
+        <Button
+          size="sm"
+          variant="secondary"
+          onClick={() => markAll("present")}
+          disabled={!canShowGrid || bulkSaving}
+        >
+          {bulkSaving ? "..." : "נוכחות לכולן"}
         </Button>
-        <Button size="sm" variant="secondary" onClick={() => markAll("late")} disabled={!canShowGrid}>
-          סמן איחור לכולן
+        <Button
+          size="sm"
+          variant="secondary"
+          onClick={() => markAll("late")}
+          disabled={!canShowGrid || bulkSaving}
+        >
+          איחור לכולן
         </Button>
-        <Button size="sm" variant="secondary" onClick={() => markAll("absent")} disabled={!canShowGrid}>
-          סמן היעדרות לכולן
-        </Button>
-        <Button size="sm" onClick={saveAll} disabled={!dirty || saving || !canShowGrid}>
-          {saving ? "שומר..." : "שמור את כל הרשימה"}
+        <Button
+          size="sm"
+          variant="secondary"
+          onClick={() => markAll("absent")}
+          disabled={!canShowGrid || bulkSaving}
+        >
+          היעדרות לכולן
         </Button>
         {canShowGrid && (
           <span className="text-xs text-slate-500">
-            {students.length} תלמידות · {visibleOccurrences.length} שיעורים
+            {students.length} תלמידות · לחיצה על כפתור = שמירה מיידית
           </span>
         )}
-        {dirty && <span className="text-xs text-amber-700">יש שינויים שלא נשמרו</span>}
-        {message && <span className="text-xs text-slate-600">{message}</span>}
+        {message && (
+          <span
+            className={cn(
+              "text-xs",
+              message.includes("שגיא") || message.includes("נכשל")
+                ? "text-red-600"
+                : "text-emerald-700"
+            )}
+          >
+            {message}
+          </span>
+        )}
       </div>
 
       {!canShowGrid ? (
@@ -587,28 +619,16 @@ export function AttendanceBoard({
                     {student.full_name}
                   </td>
                   {visibleOccurrences.map((o) => {
-                    const status = draft[keyOf(student.id, o.id)] ?? null;
+                    const k = keyOf(student.id, o.id);
+                    const status = draft[k] ?? null;
                     return (
-                      <td key={o.id} className="p-1.5 text-center">
-                        <div className="flex flex-col gap-1">
-                          {(Object.keys(ATTENDANCE_STATUS_LABELS) as AttendanceStatus[]).map(
-                            (option) => (
-                              <button
-                                key={option}
-                                type="button"
-                                onClick={() => setStatus(student.id, o.id, option)}
-                                className={cn(
-                                  "rounded-md border px-1 py-1 text-[11px] font-semibold transition-colors",
-                                  status === option
-                                    ? CELL[option]
-                                    : "border-stone-200 bg-stone-50 text-slate-500 hover:bg-stone-100"
-                                )}
-                              >
-                                {ATTENDANCE_STATUS_LABELS[option]}
-                              </button>
-                            )
-                          )}
-                        </div>
+                      <td key={o.id} className="p-2 text-center align-middle">
+                        <AttendanceStatusPicker
+                          value={status}
+                          phase={cellPhase[k] ?? "idle"}
+                          disabled={gridLocked}
+                          onPick={(s) => pickStatus(student.id, o.id, s)}
+                        />
                       </td>
                     );
                   })}
