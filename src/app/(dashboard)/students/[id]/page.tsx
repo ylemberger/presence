@@ -5,6 +5,7 @@ import { PageHeader } from "@/components/ui/PageHeader";
 import { PrintButton } from "@/components/ui/PrintButton";
 import { createClient } from "@/lib/supabase/server";
 import { getActiveAcademicYear } from "@/lib/utils";
+import { filterFixedGrades } from "@/lib/years/promote";
 import { formatDate, isDateInRange } from "@/lib/dates/hebrew";
 import { summarizeAttendance, evaluateAbsenceAgainstRule } from "@/lib/attendance/calculator";
 import { StudentDetailForms } from "./StudentDetailForms";
@@ -29,13 +30,72 @@ export default async function StudentDetailPage({ params }: Props) {
 
   if (!student) notFound();
 
-  const { data: assignments } = await supabase
+  const { data: assignmentRows } = await supabase
     .from("student_assignments")
     .select(
-      "*, grades(name), classes(name), tracks(name), specializations(name), academic_years(name)"
+      "id, academic_year_id, grade_id, class_id, track_id, specialization_id, secondary_specialization_id, start_date, end_date, is_psychology"
     )
     .eq("student_id", id)
     .order("start_date", { ascending: false });
+
+  const yearIds = [...new Set((assignmentRows ?? []).map((a) => a.academic_year_id))];
+  const gradeIds = [...new Set((assignmentRows ?? []).map((a) => a.grade_id).filter(Boolean))];
+  const classIds = [...new Set((assignmentRows ?? []).map((a) => a.class_id).filter(Boolean))];
+  const trackIds = [...new Set((assignmentRows ?? []).map((a) => a.track_id).filter(Boolean))];
+  const specIds = [
+    ...new Set(
+      (assignmentRows ?? [])
+        .flatMap((a) => [a.specialization_id, a.secondary_specialization_id])
+        .filter((x): x is string => Boolean(x))
+    ),
+  ];
+
+  const [
+    { data: yearsForHistory },
+    { data: gradesForHistory },
+    { data: classesForHistory },
+    { data: tracksForHistory },
+    { data: specsForHistory },
+  ] = await Promise.all([
+    yearIds.length
+      ? supabase.from("academic_years").select("id, name").in("id", yearIds)
+      : Promise.resolve({ data: [] as { id: string; name: string }[] }),
+    gradeIds.length
+      ? supabase.from("grades").select("id, name").in("id", gradeIds)
+      : Promise.resolve({ data: [] as { id: string; name: string }[] }),
+    classIds.length
+      ? supabase.from("classes").select("id, name").in("id", classIds)
+      : Promise.resolve({ data: [] as { id: string; name: string }[] }),
+    trackIds.length
+      ? supabase.from("tracks").select("id, name").in("id", trackIds)
+      : Promise.resolve({ data: [] as { id: string; name: string }[] }),
+    specIds.length
+      ? supabase.from("specializations").select("id, name").in("id", specIds)
+      : Promise.resolve({ data: [] as { id: string; name: string }[] }),
+  ]);
+
+  const yearNameById = new Map((yearsForHistory ?? []).map((y) => [y.id, y.name]));
+  const gradeHistById = new Map((gradesForHistory ?? []).map((g) => [g.id, g.name]));
+  const classHistById = new Map((classesForHistory ?? []).map((c) => [c.id, c.name]));
+  const trackHistById = new Map((tracksForHistory ?? []).map((t) => [t.id, t.name]));
+  const specHistById = new Map((specsForHistory ?? []).map((s) => [s.id, s.name]));
+
+  const assignments = (assignmentRows ?? []).map((a) => ({
+    id: a.id,
+    academic_year_id: a.academic_year_id,
+    start_date: a.start_date,
+    end_date: a.end_date,
+    yearName: yearNameById.get(a.academic_year_id) ?? "—",
+    gradeName: gradeHistById.get(a.grade_id) ?? "—",
+    className: classHistById.get(a.class_id) ?? "—",
+    trackName: trackHistById.get(a.track_id) ?? "—",
+    specializationName: a.specialization_id
+      ? specHistById.get(a.specialization_id) ?? "—"
+      : "—",
+    secondarySpecializationName: a.secondary_specialization_id
+      ? specHistById.get(a.secondary_specialization_id) ?? "—"
+      : "—",
+  }));
 
   let yearData = null;
   let lessons: Array<{ id: string; subject: string }> = [];
@@ -91,7 +151,7 @@ export default async function StudentDetailPage({ params }: Props) {
 
     yearData = {
       year: activeYear,
-      grades: grades.data ?? [],
+      grades: filterFixedGrades(grades.data ?? []),
       classes: classes.data ?? [],
       tracks: tracks.data ?? [],
       specializations: specializations.data ?? [],
@@ -253,16 +313,17 @@ export default async function StudentDetailPage({ params }: Props) {
 
       <Card title="היסטוריית העברות">
         <Table headers={["שנה", "שכבה", "כיתה", "מסלול", "התמחות", "מתאריך", "עד תאריך"]}>
-          {(assignments ?? []).map((a) => (
+          {assignments.map((a) => (
             <TableRow key={a.id}>
+              <TableCell>{a.yearName}</TableCell>
+              <TableCell>{a.gradeName}</TableCell>
+              <TableCell>{a.className}</TableCell>
+              <TableCell>{a.trackName}</TableCell>
               <TableCell>
-                {(a.academic_years as unknown as { name: string } | null)?.name}
-              </TableCell>
-              <TableCell>{(a.grades as unknown as { name: string } | null)?.name}</TableCell>
-              <TableCell>{(a.classes as unknown as { name: string } | null)?.name}</TableCell>
-              <TableCell>{(a.tracks as unknown as { name: string } | null)?.name}</TableCell>
-              <TableCell>
-                {(a.specializations as unknown as { name: string } | null)?.name ?? "-"}
+                {a.specializationName}
+                {a.secondarySpecializationName !== "—"
+                  ? ` + ${a.secondarySpecializationName}`
+                  : ""}
               </TableCell>
               <TableCell>{formatDate(a.start_date)}</TableCell>
               <TableCell>{a.end_date ? formatDate(a.end_date) : "נוכחי"}</TableCell>

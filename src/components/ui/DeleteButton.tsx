@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/Button";
 
 interface DeleteButtonProps {
@@ -9,6 +10,7 @@ interface DeleteButtonProps {
 }
 
 export function DeleteButton({ onDelete, label = "מחק" }: DeleteButtonProps) {
+  const router = useRouter();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -18,7 +20,11 @@ export function DeleteButton({ onDelete, label = "מחק" }: DeleteButtonProps) 
     setError(null);
     try {
       const result = await onDelete();
-      if (result?.error) setError(result.error);
+      if (result?.error) {
+        setError(result.error);
+        return;
+      }
+      router.refresh();
     } catch (err) {
       setError(err instanceof Error ? err.message : "מחיקה נכשלה");
     } finally {

@@ -119,9 +119,22 @@ export async function createGradeAction(formData: FormData) {
 }
 
 export async function createClassAction(formData: FormData) {
+  const gradeId = String(formData.get("grade_id") ?? "").trim();
+  if (!gradeId) return { error: "יש לבחור שכבה (א / ב / ג)" };
+
+  const supabase = await createClient();
+  const { data: grade } = await supabase
+    .from("grades")
+    .select("name")
+    .eq("id", gradeId)
+    .maybeSingle();
+  if (!grade || !(FIXED_GRADE_NAMES as readonly string[]).includes(grade.name)) {
+    return { error: "שכבה חייבת להיות א, ב או ג בלבד" };
+  }
+
   return createYearEntity("classes", {
     academic_year_id: formData.get("academic_year_id"),
-    grade_id: formData.get("grade_id"),
+    grade_id: gradeId,
     name: formData.get("name"),
   });
 }
@@ -299,12 +312,24 @@ export async function updateGradeAction(id: string, formData: FormData) {
 }
 
 export async function updateClassAction(id: string, formData: FormData) {
+  const gradeId = String(formData.get("grade_id") ?? "").trim();
+  if (!gradeId) return { error: "יש לבחור שכבה (א / ב / ג)" };
+
   const supabase = await createClient();
+  const { data: grade } = await supabase
+    .from("grades")
+    .select("name")
+    .eq("id", gradeId)
+    .maybeSingle();
+  if (!grade || !(FIXED_GRADE_NAMES as readonly string[]).includes(grade.name)) {
+    return { error: "שכבה חייבת להיות א, ב או ג בלבד" };
+  }
+
   const { error } = await supabase
     .from("classes")
     .update({
       name: formData.get("name") as string,
-      grade_id: formData.get("grade_id") as string,
+      grade_id: gradeId,
     })
     .eq("id", id);
   if (error) return { error: error.message };

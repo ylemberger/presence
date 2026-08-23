@@ -3,6 +3,7 @@ import { Table, TableRow, TableCell } from "@/components/ui/Table";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { createClient } from "@/lib/supabase/server";
 import { getActiveAcademicYear } from "@/lib/utils";
+import { filterFixedGrades } from "@/lib/years/promote";
 import { BILLING_TYPE_LABELS } from "@/lib/constants";
 import { TeachersForms } from "./TeachersForms";
 import { TeachersDirectory } from "./TeachersDirectory";
@@ -52,7 +53,7 @@ export default async function TeachersPage() {
         .order("name"),
     ]);
     assignments = (asg.data ?? []) as unknown as typeof assignments;
-    grades = grd.data ?? [];
+    grades = filterFixedGrades(grd.data ?? []);
     classes = cls.data ?? [];
     tracks = trk.data ?? [];
     specializations = spec.data ?? [];

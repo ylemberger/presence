@@ -1,6 +1,7 @@
 import { PageHeader } from "@/components/ui/PageHeader";
 import { createClient } from "@/lib/supabase/server";
 import { getActiveAcademicYear } from "@/lib/utils";
+import { filterFixedGrades } from "@/lib/years/promote";
 import { StudentsDirectory } from "./StudentsDirectory";
 
 export default async function StudentsPage() {
@@ -28,7 +29,7 @@ export default async function StudentsPage() {
 
   if (activeYear) {
     const [
-      { data: currentAssignments },
+      { data: currentAssignments, error: assignmentsError },
       { data: grades },
       { data: classes },
       { data: tracks },
@@ -37,7 +38,7 @@ export default async function StudentsPage() {
       supabase
         .from("student_assignments")
         .select(
-          "student_id, is_psychology, classes(name), grades(name), tracks(name), specializations(name), secondary_specialization_id"
+          "student_id, grade_id, class_id, track_id, specialization_id, secondary_specialization_id, is_psychology"
         )
         .eq("academic_year_id", activeYear.id)
         .is("end_date", null),
@@ -51,15 +52,23 @@ export default async function StudentsPage() {
         .order("name"),
     ]);
 
+    if (assignmentsError) {
+      console.error("student_assignments load failed", assignmentsError.message);
+    }
+
+    const gradeNameById = new Map((grades ?? []).map((g) => [g.id, g.name]));
+    const classNameById = new Map((classes ?? []).map((c) => [c.id, c.name]));
+    const trackNameById = new Map((tracks ?? []).map((t) => [t.id, t.name]));
     const specNameById = new Map((specializations ?? []).map((s) => [s.id, s.name]));
 
     for (const a of currentAssignments ?? []) {
       assignments[a.student_id] = {
-        className: (a.classes as unknown as { name: string } | null)?.name ?? "לא משובצת",
-        gradeName: (a.grades as unknown as { name: string } | null)?.name ?? "—",
-        trackName: (a.tracks as unknown as { name: string } | null)?.name ?? "—",
-        specializationName:
-          (a.specializations as unknown as { name: string } | null)?.name ?? "—",
+        className: classNameById.get(a.class_id) ?? "לא משובצת",
+        gradeName: gradeNameById.get(a.grade_id) ?? "—",
+        trackName: trackNameById.get(a.track_id) ?? "—",
+        specializationName: a.specialization_id
+          ? specNameById.get(a.specialization_id) ?? "—"
+          : "—",
         secondarySpecializationName: a.secondary_specialization_id
           ? specNameById.get(a.secondary_specialization_id) ?? "—"
           : "—",
@@ -69,7 +78,7 @@ export default async function StudentsPage() {
 
     yearOptions = {
       yearId: activeYear.id,
-      grades: grades ?? [],
+      grades: filterFixedGrades(grades ?? []),
       classes: classes ?? [],
       tracks: tracks ?? [],
       specializations: specializations ?? [],

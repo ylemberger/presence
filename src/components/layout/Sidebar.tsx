@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { useEffect, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { NAV_ITEMS } from "@/lib/constants";
 import { cn } from "@/lib/cn";
@@ -13,6 +14,11 @@ interface SidebarProps {
 export function Sidebar({ activeYearName }: SidebarProps) {
   const pathname = usePathname();
   const router = useRouter();
+  const [pendingHref, setPendingHref] = useState<string | null>(null);
+
+  useEffect(() => {
+    setPendingHref(null);
+  }, [pathname]);
 
   async function handleLogout() {
     const supabase = createClient();
@@ -49,26 +55,39 @@ export function Sidebar({ activeYearName }: SidebarProps) {
         {NAV_ITEMS.map((item) => {
           const isActive =
             item.href === "/" ? pathname === "/" : pathname.startsWith(item.href);
+          const isPending = pendingHref === item.href;
           return (
             <Link
               key={item.href}
               href={item.href}
+              prefetch
+              onClick={() => {
+                if (!isActive) setPendingHref(item.href);
+              }}
               className={cn(
                 "group flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition-colors",
                 isActive
                   ? "bg-white text-[var(--brand)] shadow-[var(--shadow-sm)]"
-                  : "text-white/75 hover:bg-white/10 hover:text-white"
+                  : isPending
+                    ? "bg-white/15 text-white"
+                    : "text-white/75 hover:bg-white/10 hover:text-white"
               )}
+              aria-busy={isPending || undefined}
             >
               <span
                 className={cn(
                   "flex h-8 w-8 items-center justify-center rounded-lg transition-colors",
-                  isActive ? "bg-[var(--accent-soft)] text-[var(--brand)]" : "bg-white/5 text-white/80"
+                  isActive
+                    ? "bg-[var(--accent-soft)] text-[var(--brand)]"
+                    : "bg-white/5 text-white/80"
                 )}
               >
                 <NavIcon name={item.icon} />
               </span>
-              {item.label}
+              <span className="flex-1">{item.label}</span>
+              {isPending && (
+                <span className="text-[11px] font-normal text-white/70">טוען...</span>
+              )}
             </Link>
           );
         })}

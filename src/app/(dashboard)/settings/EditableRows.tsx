@@ -8,6 +8,7 @@ import { HebrewDateInput } from "@/components/ui/HebrewDateInput";
 import { DeleteButton } from "@/components/ui/DeleteButton";
 import { RANGE_TYPE_LABELS } from "@/lib/constants";
 import { formatDate } from "@/lib/dates/hebrew";
+import { FIXED_GRADE_NAMES, isFixedGradeName } from "@/lib/years/promote";
 import type { Grade } from "@/types/database";
 
 type UpdateAction = (
@@ -23,6 +24,7 @@ interface EditableNameRowProps {
   deleteAction: (id: string) => Promise<{ error?: string }>;
   fields?: React.ReactNode;
   onBuildFormData?: (fd: FormData) => void;
+  nameField?: "input" | "grade-select";
 }
 
 export function EditableNameRow({
@@ -33,15 +35,18 @@ export function EditableNameRow({
   deleteAction,
   fields,
   onBuildFormData,
+  nameField = "input",
 }: EditableNameRowProps) {
   const router = useRouter();
   const [editing, setEditing] = useState(false);
+  const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   async function handleSave(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
     const form = e.currentTarget;
     setError(null);
+    setSaving(true);
     try {
       const fd = new FormData(form);
       onBuildFormData?.(fd);
@@ -53,6 +58,8 @@ export function EditableNameRow({
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : "שמירה נכשלה");
+    } finally {
+      setSaving(false);
     }
   }
 
@@ -80,18 +87,75 @@ export function EditableNameRow({
     <tr className="bg-stone-50/80">
       <td colSpan={extraLabel !== undefined ? 3 : 2} className="px-4 py-3">
         <form onSubmit={handleSave} className="flex flex-wrap items-end gap-3">
-          <Input label="שם" name="name" defaultValue={name} required />
+          {nameField === "grade-select" ? (
+            <Select
+              label="שכבה"
+              name="name"
+              defaultValue={isFixedGradeName(name) ? name : ""}
+              required
+              options={[
+                { value: "", label: "בחרי א / ב / ג" },
+                ...FIXED_GRADE_NAMES.map((n) => ({ value: n, label: n })),
+              ]}
+            />
+          ) : (
+            <Input label="שם" name="name" defaultValue={name} required />
+          )}
           {fields}
-          <Button type="submit" size="sm">
-            שמירה
+          <Button type="submit" size="sm" disabled={saving}>
+            {saving ? "שומר..." : "שמירה"}
           </Button>
-          <Button type="button" size="sm" variant="ghost" onClick={() => setEditing(false)}>
+          <Button
+            type="button"
+            size="sm"
+            variant="ghost"
+            onClick={() => setEditing(false)}
+            disabled={saving}
+          >
             ביטול
           </Button>
           {error && <p className="w-full text-sm text-rose-600">{error}</p>}
         </form>
       </td>
     </tr>
+  );
+}
+
+export function EditableGradeRow({
+  id,
+  name,
+  updateAction,
+  deleteAction,
+}: {
+  id: string;
+  name: string;
+  updateAction: UpdateAction;
+  deleteAction: (id: string) => Promise<{ error?: string }>;
+}) {
+  const valid = isFixedGradeName(name);
+
+  if (!valid) {
+    return (
+      <tr className="bg-amber-50/80">
+        <td className="px-4 py-3 text-right">
+          <span className="font-medium text-amber-950">{name}</span>
+          <span className="mr-2 text-xs text-amber-800">· לא תקין (רק א / ב / ג)</span>
+        </td>
+        <td className="px-4 py-3 text-right">
+          <DeleteButton onDelete={() => deleteAction(id)} label="מחק שכבה זו" />
+        </td>
+      </tr>
+    );
+  }
+
+  return (
+    <EditableNameRow
+      id={id}
+      name={name}
+      updateAction={updateAction}
+      deleteAction={deleteAction}
+      nameField="grade-select"
+    />
   );
 }
 
@@ -114,12 +178,14 @@ export function EditableActivityRangeRow({
 }) {
   const router = useRouter();
   const [editing, setEditing] = useState(false);
+  const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   async function handleSave(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
     const form = e.currentTarget;
     setError(null);
+    setSaving(true);
     try {
       const result = await updateAction(id, new FormData(form));
       if (result?.error) setError(result.error);
@@ -129,6 +195,8 @@ export function EditableActivityRangeRow({
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : "שמירה נכשלה");
+    } finally {
+      setSaving(false);
     }
   }
 
@@ -170,10 +238,16 @@ export function EditableActivityRangeRow({
           />
           <HebrewDateInput label="מתאריך" name="start_date" defaultValue={startDate} required />
           <HebrewDateInput label="עד תאריך" name="end_date" defaultValue={endDate} required />
-          <Button type="submit" size="sm">
-            שמירה
+          <Button type="submit" size="sm" disabled={saving}>
+            {saving ? "שומר..." : "שמירה"}
           </Button>
-          <Button type="button" size="sm" variant="ghost" onClick={() => setEditing(false)}>
+          <Button
+            type="button"
+            size="sm"
+            variant="ghost"
+            onClick={() => setEditing(false)}
+            disabled={saving}
+          >
             ביטול
           </Button>
           {error && <p className="w-full text-sm text-rose-600">{error}</p>}
@@ -247,7 +321,10 @@ export function EditableClassRow({
           name="grade_id"
           defaultValue={gradeId}
           required
-          options={grades.map((g) => ({ value: g.id, label: g.name }))}
+          options={[
+            { value: "", label: "בחרי א / ב / ג" },
+            ...grades.map((g) => ({ value: g.id, label: g.name })),
+          ]}
         />
       }
     />

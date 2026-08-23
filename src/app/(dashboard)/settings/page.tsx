@@ -31,15 +31,21 @@ import {
   EditableActivityRangeRow,
   EditableAttendanceRuleRow,
   EditableClassRow,
+  EditableGradeRow,
   EditableNameRow,
   EditableYearRow,
 } from "./EditableRows";
+import { ensureFixedGrades, filterFixedGrades, isFixedGradeName } from "@/lib/years/promote";
 
 export default async function SettingsPage() {
   const activeYear = await getActiveAcademicYear();
   const years = await getAllAcademicYears();
   const supabase = await createClient();
   const yearId = activeYear?.id;
+
+  if (yearId) {
+    await ensureFixedGrades(yearId);
+  }
 
   const [grades, classes, tracks, specializations, ranges, rules] = yearId
     ? await Promise.all([
@@ -58,6 +64,10 @@ export default async function SettingsPage() {
         { data: [] },
         { data: [] },
       ];
+
+  const allGrades = grades.data ?? [];
+  const fixedGrades = filterFixedGrades(allGrades);
+  const invalidGrades = allGrades.filter((g) => !isFixedGradeName(g.name));
 
   const yearPanel = (
     <Card title="שנים אקדמיות">
@@ -91,8 +101,16 @@ export default async function SettingsPage() {
   const structurePanel = yearId ? (
     <div className="grid gap-6 lg:grid-cols-2">
       <Card title="שכבות">
-        <p className="mb-2 text-xs text-slate-500">בסמינר תמיד שלוש שכבות: א, ב, ג (נוצרות אוטומטית עם שנה חדשה).</p>
-        <SettingsForms type="grade" yearId={yearId} createAction={createGradeAction} />
+        <p className="mb-2 text-xs text-slate-500">
+          מותרות רק שלוש שכבות: <strong>א</strong>, <strong>ב</strong>, <strong>ג</strong>.
+          לא &quot;שנה א&quot; ולא שמות חופשיים. כיתה חייבת להיות משויכת לאחת מהן.
+        </p>
+        <SettingsForms
+          type="grade"
+          yearId={yearId}
+          grades={allGrades}
+          createAction={createGradeAction}
+        />
         <div className="mt-4 overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
@@ -102,8 +120,17 @@ export default async function SettingsPage() {
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100">
-              {(grades.data ?? []).map((g) => (
-                <EditableNameRow
+              {fixedGrades.map((g) => (
+                <EditableGradeRow
+                  key={g.id}
+                  id={g.id}
+                  name={g.name}
+                  updateAction={updateGradeAction}
+                  deleteAction={deleteGradeAction}
+                />
+              ))}
+              {invalidGrades.map((g) => (
+                <EditableGradeRow
                   key={g.id}
                   id={g.id}
                   name={g.name}
@@ -116,10 +143,13 @@ export default async function SettingsPage() {
         </div>
       </Card>
       <Card title="כיתות">
+        <p className="mb-2 text-xs text-slate-500">
+          שם הכיתה חופשי (למשל 1), אבל השכבה חייבת להיות א / ב / ג בלבד.
+        </p>
         <SettingsForms
           type="class"
           yearId={yearId}
-          grades={grades.data ?? []}
+          grades={fixedGrades}
           createAction={createClassAction}
         />
         <div className="mt-4 overflow-x-auto">
@@ -139,7 +169,7 @@ export default async function SettingsPage() {
                   name={c.name}
                   gradeId={c.grade_id}
                   gradeName={(c.grades as unknown as { name: string } | null)?.name ?? ""}
-                  grades={grades.data ?? []}
+                  grades={fixedGrades}
                   updateAction={updateClassAction}
                   deleteAction={deleteClassAction}
                 />

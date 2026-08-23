@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/Button";
 import { Input, Select } from "@/components/ui/Input";
 import { HebrewDateInput } from "@/components/ui/HebrewDateInput";
 import { RANGE_TYPE_LABELS } from "@/lib/constants";
+import { FIXED_GRADE_NAMES } from "@/lib/years/promote";
 import type { Grade } from "@/types/database";
 
 interface SettingsFormsProps {
@@ -42,6 +43,9 @@ export function SettingsForms({ type, yearId, grades, createAction }: SettingsFo
     }
   }
 
+  const existingGradeNames = new Set((grades ?? []).map((g) => g.name));
+  const missingGrades = FIXED_GRADE_NAMES.filter((n) => !existingGradeNames.has(n));
+
   return (
     <form onSubmit={handleSubmit} className="flex flex-wrap items-end gap-3">
       {type === "academic_year" && (
@@ -58,30 +62,39 @@ export function SettingsForms({ type, yearId, grades, createAction }: SettingsFo
         </>
       )}
 
-      {(type === "grade" || type === "track" || type === "specialization") && (
+      {type === "grade" && (
+        missingGrades.length === 0 ? (
+          <p className="text-sm text-slate-500">כל השכבות א / ב / ג כבר קיימות.</p>
+        ) : (
+          <Select
+            label="שכבה"
+            name="name"
+            required
+            options={[
+              { value: "", label: "בחרי א / ב / ג" },
+              ...missingGrades.map((n) => ({ value: n, label: n })),
+            ]}
+          />
+        )
+      )}
+
+      {(type === "track" || type === "specialization") && (
         <Input
-          label={
-            type === "grade"
-              ? "שם שכבה (א/ב/ג)"
-              : type === "track"
-                ? "שם מסלול"
-                : "שם התמחות"
-          }
+          label={type === "track" ? "שם מסלול" : "שם התמחות"}
           name="name"
           required
-          placeholder={type === "grade" ? "א" : undefined}
         />
       )}
 
       {type === "class" && (
         <>
-          <Input label="שם כיתה" name="name" required />
+          <Input label="שם כיתה" name="name" required placeholder="למשל 1 או א1" />
           <Select
             label="שכבה"
             name="grade_id"
             required
             options={[
-              { value: "", label: "בחרי שכבה" },
+              { value: "", label: "בחרי א / ב / ג" },
               ...(grades?.map((g) => ({ value: g.id, label: g.name })) ?? []),
             ]}
           />
@@ -118,9 +131,11 @@ export function SettingsForms({ type, yearId, grades, createAction }: SettingsFo
         </>
       )}
 
-      <Button type="submit" disabled={loading}>
-        {loading ? "שומר..." : "הוספה"}
-      </Button>
+      {(type !== "grade" || missingGrades.length > 0) && (
+        <Button type="submit" disabled={loading}>
+          {loading ? "מוסיף..." : "הוספה"}
+        </Button>
+      )}
       {error && <p className="w-full text-sm text-red-600">{error}</p>}
     </form>
   );
