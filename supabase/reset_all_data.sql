@@ -1,6 +1,7 @@
 -- presence: מחיקת כל הנתונים (שומר טבלאות). הרץ ב-Supabase SQL Editor.
 
 truncate table
+  attendance_change_log,
   attendance,
   attendance_notes,
   makeup_exams,
