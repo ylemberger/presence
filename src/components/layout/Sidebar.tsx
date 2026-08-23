@@ -9,9 +9,10 @@ import { createClient } from "@/lib/supabase/client";
 
 interface SidebarProps {
   activeYearName?: string;
+  attendancePendingCount?: number;
 }
 
-export function Sidebar({ activeYearName }: SidebarProps) {
+export function Sidebar({ activeYearName, attendancePendingCount = 0 }: SidebarProps) {
   const pathname = usePathname();
   const router = useRouter();
   const [pendingHref, setPendingHref] = useState<string | null>(null);
@@ -85,6 +86,19 @@ export function Sidebar({ activeYearName }: SidebarProps) {
                 <NavIcon name={item.icon} />
               </span>
               <span className="flex-1">{item.label}</span>
+              {item.href === "/attendance" && attendancePendingCount > 0 && (
+                <span
+                  className={cn(
+                    "min-w-[1.25rem] rounded-full px-1.5 py-0.5 text-center text-[10px] font-bold",
+                    isActive
+                      ? "bg-amber-100 text-amber-900"
+                      : "bg-[var(--accent)] text-[var(--brand)]"
+                  )}
+                  title={`${attendancePendingCount} שיעורים ממתינים לרישום`}
+                >
+                  {attendancePendingCount > 9 ? "9+" : attendancePendingCount}
+                </span>
+              )}
               {isPending && (
                 <span className="text-[11px] font-normal text-white/70">טוען...</span>
               )}

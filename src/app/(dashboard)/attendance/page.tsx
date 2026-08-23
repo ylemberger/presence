@@ -10,6 +10,8 @@ import {
   evaluateAbsenceAgainstRule,
   summarizeAttendance,
 } from "@/lib/attendance/calculator";
+import { getPendingAttendanceSummary } from "@/lib/attendance/pending";
+import { AttendanceReminderBanner } from "@/components/attendance/AttendanceReminderBanner";
 import {
   AttendanceBoard,
   type AttendanceMode,
@@ -195,8 +197,9 @@ export default async function AttendancePage({ searchParams }: Props) {
     );
   }
 
-  // completeDates — skip heavy work if no occurrences
+  // completeDates / partialDates for calendar colors
   const completeDates: string[] = [];
+  const partialDates: string[] = [];
   if (monthOccurrences.length > 0) {
     const monthStudentCounts = new Map<string, number>();
     const monthMarkedCounts = new Map<string, number>();
@@ -224,12 +227,15 @@ export default async function AttendancePage({ searchParams }: Props) {
       occsByDate.set(o.date, list);
     }
     for (const [date, occs] of occsByDate) {
-      const allDone = occs.every((o) => {
+      const withStudents = occs.filter((o) => (monthStudentCounts.get(o.id) ?? 0) > 0);
+      if (withStudents.length === 0) continue;
+      const allDone = withStudents.every((o) => {
         const total = monthStudentCounts.get(o.id) ?? 0;
         const marked = monthMarkedCounts.get(o.id) ?? 0;
-        return total > 0 && marked >= total;
+        return marked >= total;
       });
       if (allDone) completeDates.push(date);
+      else partialDates.push(date);
     }
   }
 
@@ -298,12 +304,16 @@ export default async function AttendancePage({ searchParams }: Props) {
     a.localeCompare(b, "he")
   );
 
+  const pendingSummary = await getPendingAttendanceSummary(activeYear.id);
+
   return (
     <div>
       <PageHeader
         title="נוכחות"
         description="שלב 1: תאריך → שלב 2: שיעור → שלב 3: סימון (מקלדת: נ/ע/ן · שמירה מיידית)"
       />
+
+      <AttendanceReminderBanner summary={pendingSummary} />
 
       <AttendanceBoard
         yearId={activeYear.id}
@@ -335,6 +345,7 @@ export default async function AttendancePage({ searchParams }: Props) {
         noteBody={noteBody}
         noteLessonId={selectedOcc?.lessonId ?? null}
         completeDates={completeDates}
+        partialDates={partialDates}
         insightsByStudent={insightsByStudent}
       />
     </div>

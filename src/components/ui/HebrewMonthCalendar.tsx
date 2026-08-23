@@ -19,6 +19,8 @@ export interface HebrewMonthCalendarProps {
   countsByDate?: Record<string, number>;
   /** dates where all lessons that day are fully marked */
   completeDates?: string[];
+  /** dates with lessons that are not fully marked yet */
+  partialDates?: string[];
   onSelectDate: (iso: string) => void;
   onMonthRangeChange?: (rangeStart: string, rangeEnd: string) => void;
 }
@@ -28,11 +30,13 @@ export function HebrewMonthCalendar({
   selectedDate,
   countsByDate = {},
   completeDates = [],
+  partialDates = [],
   onSelectDate,
   onMonthRangeChange,
 }: HebrewMonthCalendarProps) {
   const seed = hebrewMonthFromIso(initialMonthIso || selectedDate || todayIso());
   const [cursor, setCursor] = useState(seed);
+  const today = todayIso();
 
   useEffect(() => {
     if (initialMonthIso) {
@@ -63,6 +67,22 @@ export function HebrewMonthCalendar({
           חודש הבא
         </Button>
       </div>
+
+      <div className="flex flex-wrap gap-3 border-b border-stone-100 px-4 py-2 text-[10px] text-slate-600">
+        <span className="inline-flex items-center gap-1.5">
+          <span className="h-2.5 w-2.5 rounded-sm bg-emerald-500" aria-hidden />
+          יום שהושלם
+        </span>
+        <span className="inline-flex items-center gap-1.5">
+          <span className="h-2.5 w-2.5 rounded-sm bg-amber-400" aria-hidden />
+          ממתין לרישום
+        </span>
+        <span className="inline-flex items-center gap-1.5">
+          <span className="h-2.5 w-2.5 rounded-sm bg-teal-300" aria-hidden />
+          יש שיעורים
+        </span>
+      </div>
+
       <div className="grid grid-cols-7 gap-px bg-stone-100 p-px">
         {hebrewWeekdayLabels().map((d) => (
           <div
@@ -79,28 +99,67 @@ export function HebrewMonthCalendar({
           const count = countsByDate[day.iso] ?? 0;
           const selected = selectedDate === day.iso;
           const complete = completeDates.includes(day.iso);
+          const partial = !complete && partialDates.includes(day.iso);
+          const isToday = day.iso === today;
+          const isPastPartial = partial && day.iso < today;
+
           return (
             <button
               key={day.iso}
               type="button"
               onClick={() => onSelectDate(day.iso)}
               className={cn(
-                "min-h-[4.25rem] bg-white p-1.5 text-right transition-colors hover:bg-stone-50",
-                selected && "ring-2 ring-inset ring-[var(--brand)] bg-[var(--brand)]/5",
-                complete && !selected && "bg-emerald-50/60",
-                count > 0 && !selected && !complete && "bg-teal-50/40"
+                "relative min-h-[4.25rem] p-1.5 text-right transition-colors",
+                !complete && !partial && "bg-white hover:bg-stone-50",
+                complete && !selected && "bg-emerald-100/90 hover:bg-emerald-100",
+                partial && !selected && !isPastPartial && "bg-amber-50/90 hover:bg-amber-50",
+                isPastPartial && !selected && "bg-amber-100 hover:bg-amber-100/90",
+                count > 0 && !selected && !complete && !partial && "bg-teal-50/50",
+                selected && "ring-2 ring-inset ring-[var(--brand)]",
+                selected && complete && "bg-emerald-50",
+                selected && partial && "bg-amber-50",
+                isToday && !selected && "outline outline-1 outline-offset-[-1px] outline-[var(--brand)]/40"
               )}
             >
-              <div className="text-sm font-semibold text-slate-800">{day.label}</div>
-              <div className="text-[10px] text-slate-400">{formatGregorianDate(day.iso).slice(0, 5)}</div>
+              {complete && (
+                <span
+                  className="absolute left-1 top-1 h-2 w-2 rounded-full bg-emerald-500 shadow-sm"
+                  aria-hidden
+                />
+              )}
+              {isPastPartial && (
+                <span
+                  className="absolute left-1 top-1 h-2 w-2 rounded-full bg-amber-500 shadow-sm"
+                  aria-hidden
+                />
+              )}
+              <div
+                className={cn(
+                  "text-sm font-semibold",
+                  complete ? "text-emerald-900" : partial ? "text-amber-950" : "text-slate-800"
+                )}
+              >
+                {day.label}
+              </div>
+              <div className="text-[10px] text-slate-400">
+                {formatGregorianDate(day.iso).slice(0, 5)}
+              </div>
               {count > 0 && (
                 <div
                   className={cn(
-                    "mt-1 text-[10px] font-medium",
-                    complete ? "text-emerald-700" : "text-[var(--brand)]"
+                    "mt-1 text-[10px] font-semibold",
+                    complete
+                      ? "text-emerald-700"
+                      : partial
+                        ? "text-amber-800"
+                        : "text-[var(--brand)]"
                   )}
                 >
-                  {complete ? "✓ הושלם" : `${count} שיעור${count > 1 ? "ים" : ""}`}
+                  {complete
+                    ? "✓ הושלם"
+                    : partial
+                      ? "ממתין"
+                      : `${count} שיעור${count > 1 ? "ים" : ""}`}
                 </div>
               )}
             </button>

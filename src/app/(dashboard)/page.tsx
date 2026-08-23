@@ -8,6 +8,8 @@ import {
   evaluateAbsenceAgainstRule,
   summarizeAttendance,
 } from "@/lib/attendance/calculator";
+import { getPendingAttendanceSummary } from "@/lib/attendance/pending";
+import { AttendanceReminderBanner } from "@/components/attendance/AttendanceReminderBanner";
 import { cn } from "@/lib/cn";
 
 export default async function DashboardPage() {
@@ -198,6 +200,10 @@ export default async function DashboardPage() {
     };
   }
 
+  const pendingSummary = activeYear
+    ? await getPendingAttendanceSummary(activeYear.id)
+    : { pendingCount: 0, todayPending: 0, pastPending: 0, items: [] };
+
   const cards = [
     { label: "תלמידות בשנה", value: stats.students, href: "/students", hint: "עם שיבוץ פעיל" },
     { label: "כיתות", value: stats.classes, href: "/settings", hint: "מבנה השנה" },
@@ -241,6 +247,8 @@ export default async function DashboardPage() {
         </Card>
       ) : (
         <>
+          <AttendanceReminderBanner summary={pendingSummary} />
+
           <div className="flex flex-wrap gap-2">
             {(
               [

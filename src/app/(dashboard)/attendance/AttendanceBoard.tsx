@@ -84,6 +84,7 @@ interface Props {
   noteBody?: string;
   noteLessonId?: string | null;
   completeDates?: string[];
+  partialDates?: string[];
   insightsByStudent?: Record<string, StudentInsight>;
 }
 
@@ -164,6 +165,7 @@ export function AttendanceBoard({
   noteBody = "",
   noteLessonId = null,
   completeDates = [],
+  partialDates = [],
   insightsByStudent = {},
 }: Props) {
   const router = useRouter();
@@ -695,6 +697,7 @@ export function AttendanceBoard({
         selectedDate={selectedDate}
         countsByDate={countsByDate}
         completeDates={completeDates}
+        partialDates={partialDates}
         onSelectDate={selectDate}
         onMonthRangeChange={(from, to) => {
           navigate(buildParams({ from, to, date: selectedDate, occurrenceId: undefined }));
@@ -708,10 +711,16 @@ export function AttendanceBoard({
             <p className="text-xs text-slate-500">{formatGregorianDate(selectedDate)}</p>
           </div>
           {completeDateSet.has(selectedDate) && dayOccurrences.length > 0 && (
-            <span className="rounded-full bg-emerald-50 px-3 py-1 text-xs font-medium text-emerald-700">
-              כל השיעורים ביום זה הושלמו
+            <span className="rounded-full bg-emerald-100 px-3 py-1 text-xs font-semibold text-emerald-800 ring-1 ring-emerald-200">
+              ✓ יום שהושלם — כל השיעורים נרשמו
             </span>
           )}
+          {!completeDateSet.has(selectedDate) &&
+            dayOccurrences.some((o) => o.studentCount > 0 && o.markedCount < o.studentCount) && (
+              <span className="rounded-full bg-amber-100 px-3 py-1 text-xs font-semibold text-amber-900 ring-1 ring-amber-200">
+                יש שיעורים שממתינים לרישום
+              </span>
+            )}
         </div>
 
         {dayOccurrences.length === 0 ? (
