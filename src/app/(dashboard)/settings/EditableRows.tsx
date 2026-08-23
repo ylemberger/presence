@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/Button";
 import { Input, Select } from "@/components/ui/Input";
@@ -38,14 +38,9 @@ export function EditableNameRow({
   nameField = "input",
 }: EditableNameRowProps) {
   const router = useRouter();
-  const [isPending, startTransition] = useTransition();
   const [editing, setEditing] = useState(false);
   const [saving, setSaving] = useState(false);
-  const [savedFlash, setSavedFlash] = useState(false);
-  const [removed, setRemoved] = useState(false);
   const [error, setError] = useState<string | null>(null);
-
-  if (removed) return null;
 
   async function handleSave(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -56,13 +51,12 @@ export function EditableNameRow({
       const fd = new FormData(form);
       onBuildFormData?.(fd);
       const result = await updateAction(id, fd);
-      if (result?.error) setError(result.error);
-      else {
-        setEditing(false);
-        setSavedFlash(true);
-        setTimeout(() => setSavedFlash(false), 1500);
-        startTransition(() => router.refresh());
+      if (result?.error) {
+        setError(result.error);
+        return;
       }
+      await router.refresh();
+      setEditing(false);
     } catch (err) {
       setError(err instanceof Error ? err.message : "שמירה נכשלה");
     } finally {
@@ -82,15 +76,8 @@ export function EditableNameRow({
             <Button size="sm" variant="secondary" type="button" onClick={() => setEditing(true)}>
               עריכה
             </Button>
-            <DeleteButton
-              optimistic
-              onDeleted={() => setRemoved(true)}
-              onDelete={() => deleteAction(id)}
-            />
+            <DeleteButton onDelete={() => deleteAction(id)} />
           </div>
-          {savedFlash && !editing && (
-            <p className="mt-1 text-xs text-emerald-600">נשמר ✓</p>
-          )}
           {error && <p className="mt-1 text-xs text-rose-600">{error}</p>}
         </td>
       </tr>
@@ -116,8 +103,8 @@ export function EditableNameRow({
             <Input label="שם" name="name" defaultValue={name} required />
           )}
           {fields}
-          <Button type="submit" size="sm" disabled={saving || isPending}>
-            {saving ? "שומר..." : savedFlash ? "נשמר ✓" : "שמירה"}
+          <Button type="submit" size="sm" disabled={saving}>
+            {saving ? "שומר..." : "שמירה"}
           </Button>
           <Button
             type="button"
@@ -147,9 +134,6 @@ export function EditableGradeRow({
   deleteAction: (id: string) => Promise<{ error?: string }>;
 }) {
   const valid = isFixedGradeName(name);
-  const [removed, setRemoved] = useState(false);
-
-  if (removed) return null;
 
   if (!valid) {
     return (
@@ -159,12 +143,7 @@ export function EditableGradeRow({
           <span className="mr-2 text-xs text-amber-800">· לא תקין (רק א / ב / ג)</span>
         </td>
         <td className="px-4 py-3 text-right">
-          <DeleteButton
-            optimistic
-            onDeleted={() => setRemoved(true)}
-            onDelete={() => deleteAction(id)}
-            label="מחק שכבה זו"
-          />
+          <DeleteButton onDelete={() => deleteAction(id)} label="מחק שכבה זו" />
         </td>
       </tr>
     );
@@ -199,13 +178,9 @@ export function EditableActivityRangeRow({
   deleteAction: (id: string) => Promise<{ error?: string }>;
 }) {
   const router = useRouter();
-  const [isPending, startTransition] = useTransition();
   const [editing, setEditing] = useState(false);
   const [saving, setSaving] = useState(false);
-  const [removed, setRemoved] = useState(false);
   const [error, setError] = useState<string | null>(null);
-
-  if (removed) return null;
 
   async function handleSave(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -214,11 +189,12 @@ export function EditableActivityRangeRow({
     setSaving(true);
     try {
       const result = await updateAction(id, new FormData(form));
-      if (result?.error) setError(result.error);
-      else {
-        setEditing(false);
-        startTransition(() => router.refresh());
+      if (result?.error) {
+        setError(result.error);
+        return;
       }
+      await router.refresh();
+      setEditing(false);
     } catch (err) {
       setError(err instanceof Error ? err.message : "שמירה נכשלה");
     } finally {
@@ -240,11 +216,7 @@ export function EditableActivityRangeRow({
             <Button size="sm" variant="secondary" type="button" onClick={() => setEditing(true)}>
               עריכה
             </Button>
-            <DeleteButton
-              optimistic
-              onDeleted={() => setRemoved(true)}
-              onDelete={() => deleteAction(id)}
-            />
+            <DeleteButton onDelete={() => deleteAction(id)} />
           </div>
         </td>
       </tr>
@@ -268,7 +240,7 @@ export function EditableActivityRangeRow({
           />
           <HebrewDateInput label="מתאריך" name="start_date" defaultValue={startDate} required />
           <HebrewDateInput label="עד תאריך" name="end_date" defaultValue={endDate} required />
-          <Button type="submit" size="sm" disabled={saving || isPending}>
+          <Button type="submit" size="sm" disabled={saving}>
             {saving ? "שומר..." : "שמירה"}
           </Button>
           <Button

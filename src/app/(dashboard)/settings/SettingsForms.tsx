@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/Button";
 import { Input, Select } from "@/components/ui/Input";
@@ -18,29 +18,24 @@ interface SettingsFormsProps {
 
 export function SettingsForms({ type, yearId, grades, createAction }: SettingsFormsProps) {
   const router = useRouter();
-  const [isPending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
-  const [doneFlash, setDoneFlash] = useState(false);
 
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
     const form = e.currentTarget;
     setLoading(true);
     setError(null);
-    setDoneFlash(false);
     try {
       const formData = new FormData(form);
       if (yearId) formData.set("academic_year_id", yearId);
       const result = await createAction(formData);
       if (result?.error) {
         setError(result.error);
-      } else {
-        form.reset();
-        setDoneFlash(true);
-        setTimeout(() => setDoneFlash(false), 1500);
-        startTransition(() => router.refresh());
+        return;
       }
+      form.reset();
+      await router.refresh();
     } catch (err) {
       setError(err instanceof Error ? err.message : "שמירה נכשלה");
     } finally {
@@ -67,8 +62,8 @@ export function SettingsForms({ type, yearId, grades, createAction }: SettingsFo
         </>
       )}
 
-      {type === "grade" && (
-        missingGrades.length === 0 ? (
+      {type === "grade" &&
+        (missingGrades.length === 0 ? (
           <p className="text-sm text-slate-500">כל השכבות א / ב / ג כבר קיימות.</p>
         ) : (
           <Select
@@ -80,8 +75,7 @@ export function SettingsForms({ type, yearId, grades, createAction }: SettingsFo
               ...missingGrades.map((n) => ({ value: n, label: n })),
             ]}
           />
-        )
-      )}
+        ))}
 
       {(type === "track" || type === "specialization") && (
         <Input
@@ -137,8 +131,8 @@ export function SettingsForms({ type, yearId, grades, createAction }: SettingsFo
       )}
 
       {(type !== "grade" || missingGrades.length > 0) && (
-        <Button type="submit" disabled={loading || isPending}>
-          {loading ? "מוסיף..." : doneFlash ? "נוסף ✓" : "הוספה"}
+        <Button type="submit" disabled={loading}>
+          {loading ? "מוסיף..." : "הוספה"}
         </Button>
       )}
       {error && <p className="w-full text-sm text-red-600">{error}</p>}
