@@ -1,0 +1,44 @@
+---
+description: Next.js App Router + Tailwind CSS — מותאם לפרויקט presence
+globs: "**/*.{tsx,ts,css}"
+alwaysApply: false
+---
+
+# Next.js + Tailwind (presence)
+
+מבוסס על [awesome-cursorrules tailwind-css-nextjs-guide](https://github.com/PatrickJS/awesome-cursorrules), מותאם לפרויקט.
+
+## Next.js (App Router)
+
+- Server Components כברירת מחדל; `"use client"` רק כשצריך אינטראקטיביות
+- כתיבה ל-DB: Server Actions ב-`actions.ts`, לא API routes
+- `params`/`searchParams` — async ב-Server Components (Next.js 15+)
+- Auth: middleware + `createActionClient()` ב-actions
+- תמונות: `next/image` כשיש assets סטטיים
+
+## TypeScript
+
+- אין `any` — העדפה ל-`unknown` + בדיקות
+- טיפוסי DB: `src/types/database.ts` — עדכון יחד עם SQL
+- Props: interfaces לרכיבים עם props מורכבים
+
+## Tailwind + UI
+
+- Utility classes; CSS מותאם רק ב-`globals.css` / tokens
+- RTL: `dir="rtl"` על layout; logical properties (`ms-`, `me-`, `ps-`, `pe-`)
+- רכיבים משותפים: `Button`, `Card`, `Modal` מ-`src/components/ui/`
+- עיצוב: CSS variables (`var(--brand)`, `var(--surface-muted)`)
+- Responsive: `sm:`, `md:` — mobile-first
+- אין DaisyUI, אין Material UI
+
+## רכיבים
+
+- פונקציונליים, hooks ללוגיקה חוזרת
+- loading/error states מפורשים (לא optimistic UI למחיקות)
+- נגישות: labels, `aria-*`, כפתורים עם טקסט ברור
+
+## מה לא לעשות
+
+- Pages Router (`getServerSideProps`) — הפרויקט על App Router
+- Biome — הפרויקט משתמש ב-ESLint
+- Starknet / Cairo — לא רלוונטי

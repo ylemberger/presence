@@ -1,0 +1,37 @@
+---
+description: כללי ליבה למערכת נוכחות סמינר — עברית, Supabase, AGENTS.md
+alwaysApply: true
+---
+
+# מערכת נוכחות סמינר
+
+קראי `AGENTS.md` לפני שינוי סכימה או לוגיקה עסקית.
+
+## ליבה (אסור לשבור)
+
+- תלמידות: לעולם לא מחיקה פיזית — רק `is_active = false`
+- שיבוצים: היסטוריה עם `start_date`/`end_date`; העברה = סגירה + פתיחה חדשה
+- שיעורים: `lessons` = תבנית, `lesson_occurrences` = מופע; ביטול רק ברמת מופע
+- מורות מקומיות: לא לדרוס `teachers.is_local = true`
+
+## אבטחה בפרויקט
+
+- מיילים מורשים: `ALLOWED_LOGIN_EMAILS` env var בלבד — לא בקוד
+- Server Actions: תמיד `createActionClient()` — לא `createClient()` לכתיבה
+- OAuth redirect: `safeRedirectPath()` בלבד
+- Cron: `isValidCronRequest()` + `CRON_SECRET` (16+ תווים)
+- אין `service_role` key באפליקציה
+- אין secrets ב-`NEXT_PUBLIC_*`
+
+## קוד
+
+- ממשק: עברית + RTL (`dir="rtl"`, `lang="he"`)
+- כתיבה ל-DB: `src/app/(dashboard)/actions.ts`
+- סכימה: `supabase/setup_database.sql` + patch ב-`supabase/patches/`
+- רכיבי UI: `src/components/ui/`
+- Tailwind + CSS variables (`var(--brand)` וכו') — לא DaisyUI
+
+## נוכחות
+
+- סטטוסים: `present` / `absent` / `late` — איחור = נוכחות לחישוב
+- מכנה: מופעים `scheduled`/`completed` (לא `cancelled`)
