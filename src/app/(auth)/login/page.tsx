@@ -1,5 +1,5 @@
 import { Card } from "@/components/ui/Card";
-import { FIRST_ALLOWED_EMAIL } from "@/lib/auth/allowed-emails";
+import { getLoginHintEmail } from "@/lib/auth/allowed-emails";
 import { LoginButton } from "./LoginButton";
 
 const ERROR_MESSAGES: Record<string, string> = {
@@ -12,6 +12,8 @@ export default function LoginPage({
 }: {
   searchParams: { error?: string; error_description?: string };
 }) {
+  const loginHintEmail = getLoginHintEmail();
+
   const error = searchParams.error_description
     ? decodeURIComponent(searchParams.error_description.replace(/\+/g, " "))
     : searchParams.error
@@ -40,18 +42,20 @@ export default function LoginPage({
           <p className="mb-4 text-sm leading-relaxed text-slate-600">
             יש להתחבר עם חשבון Google מורשה.
           </p>
-          <p
-            className="mb-6 rounded-xl border border-[var(--border)] bg-[var(--surface-muted)] px-3.5 py-2.5 text-sm text-slate-700"
-            dir="ltr"
-          >
-            {FIRST_ALLOWED_EMAIL}
-          </p>
+          {loginHintEmail && (
+            <p
+              className="mb-6 rounded-xl border border-[var(--border)] bg-[var(--surface-muted)] px-3.5 py-2.5 text-sm text-slate-700"
+              dir="ltr"
+            >
+              {loginHintEmail}
+            </p>
+          )}
           {error && (
             <p className="mb-4 rounded-xl bg-rose-50 px-3 py-2 text-sm text-rose-700 ring-1 ring-rose-100">
               {error}
             </p>
           )}
-          <LoginButton />
+          <LoginButton loginHintEmail={loginHintEmail} />
         </Card>
       </div>
     </div>

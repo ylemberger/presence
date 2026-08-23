@@ -2,10 +2,13 @@
 
 import { useState } from "react";
 import { createClient } from "@/lib/supabase/client";
-import { FIRST_ALLOWED_EMAIL } from "@/lib/auth/allowed-emails";
 import { Button } from "@/components/ui/Button";
 
-export function LoginButton() {
+type LoginButtonProps = {
+  loginHintEmail?: string | null;
+};
+
+export function LoginButton({ loginHintEmail }: LoginButtonProps) {
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
@@ -20,7 +23,7 @@ export function LoginButton() {
         redirectTo: `${window.location.origin}/auth/callback`,
         skipBrowserRedirect: true,
         queryParams: {
-          login_hint: FIRST_ALLOWED_EMAIL,
+          ...(loginHintEmail ? { login_hint: loginHintEmail } : {}),
           prompt: "select_account",
         },
       },

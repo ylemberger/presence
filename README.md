@@ -15,7 +15,7 @@
    3. ב-Supabase: Authentication → Providers → Google — הפעילי והדביקי Client ID + Secret
    4. ב-Supabase: Authentication → URL Configuration הוסיפי `http://localhost:3000/auth/callback` (וגם את כתובת הייצור)
 4. **משתני סביבה:** העתיקי `.env.local.example` ל-`.env.local` ומלאי את הערכים מ-Project Settings → API
-5. המייל הראשון המורשה להתחברות: `t025959714@gmail.com` (ראי `src/lib/auth/allowed-emails.ts`)
+5. **מיילים מורשים:** הגדירי `ALLOWED_LOGIN_EMAILS` ב-`.env.local` (מופרדים בפסיק) — ראי `.env.local.example`
 
 ```bash
 npm install
