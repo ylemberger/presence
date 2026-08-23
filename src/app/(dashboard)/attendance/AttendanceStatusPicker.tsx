@@ -38,7 +38,7 @@ export function AttendanceStatusPicker({
   return (
     <div
       className={cn(
-        "inline-flex w-full min-w-[9.5rem] max-w-[12rem] gap-1 rounded-xl bg-stone-50/90 p-1",
+        "inline-flex w-full min-w-[11rem] max-w-md gap-1.5 rounded-xl bg-stone-50/90 p-1.5",
         disabled && "pointer-events-none opacity-50"
       )}
       role="group"
@@ -58,7 +58,7 @@ export function AttendanceStatusPicker({
             onClick={() => onPick(option)}
             className={cn(
               "relative flex-1 rounded-lg border font-bold transition-all duration-150 active:scale-95",
-              compact ? "px-1 py-2 text-[10px]" : "px-1.5 py-2.5 text-xs",
+              compact ? "px-2 py-2.5 text-xs" : "px-2 py-3 text-sm",
               selected ? CELL[option] : IDLE[option],
               isSaving && "animate-pulse opacity-80",
               isSaved && "ring-2 ring-white ring-offset-1 ring-offset-stone-100",

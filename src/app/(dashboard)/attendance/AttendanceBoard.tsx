@@ -6,7 +6,12 @@ import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/Button";
 import { Select } from "@/components/ui/Input";
 import { HebrewMonthCalendar } from "@/components/ui/HebrewMonthCalendar";
-import { bulkAttendanceAction, upsertAttendanceAction, upsertAttendanceNoteAction } from "../actions";
+import {
+  bulkAttendanceAction,
+  syncLessonStudentsAction,
+  upsertAttendanceAction,
+  upsertAttendanceNoteAction,
+} from "../actions";
 import type { AttendanceStatus } from "@/types/database";
 import { cn } from "@/lib/cn";
 import { formatGregorianDate, formatHebrewDate } from "@/lib/dates/hebrew";
@@ -62,6 +67,7 @@ interface Props {
   attendance: { student_id: string; lesson_occurrence_id: string; status: string }[];
   noteBody?: string;
   noteLessonId?: string | null;
+  completeDates?: string[];
 }
 
 type DraftKey = string;
@@ -70,9 +76,32 @@ function keyOf(studentId: string, occurrenceId: string): DraftKey {
   return `${studentId}::${occurrenceId}`;
 }
 
+function StepBadge({ n, label, active, done }: { n: number; label: string; active: boolean; done: boolean }) {
+  return (
+    <div
+      className={cn(
+        "flex items-center gap-2 rounded-xl px-3 py-2 text-sm",
+        active && "bg-[var(--brand)]/10 ring-1 ring-[var(--brand)]/25",
+        done && !active && "text-emerald-700"
+      )}
+    >
+      <span
+        className={cn(
+          "flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-xs font-bold",
+          active ? "bg-[var(--brand)] text-white" : done ? "bg-emerald-100 text-emerald-800" : "bg-stone-100 text-slate-500"
+        )}
+      >
+        {done && !active ? "✓" : n}
+      </span>
+      <span className={cn("font-medium", active ? "text-[var(--brand)]" : "text-slate-600")}>{label}</span>
+    </div>
+  );
+}
+
 export function AttendanceBoard({
   yearId,
   monthFrom,
+  monthTo,
   selectedDate,
   selectedOccurrenceId,
   mode,
@@ -84,33 +113,40 @@ export function AttendanceBoard({
   studentId,
   classes,
   tracks,
-  specializations,
   teachers,
   subjects,
   allStudents,
   monthOccurrences,
-  dayOccurrences,
+  dayOccurrences: dayOccurrencesProp,
   lessonStudents,
   attendance,
   noteBody = "",
   noteLessonId = null,
+  completeDates = [],
 }: Props) {
   const router = useRouter();
   const [draft, setDraft] = useState<Record<DraftKey, AttendanceStatus | null>>({});
   const [cellPhase, setCellPhase] = useState<Record<DraftKey, AttendancePickerPhase>>({});
+  const [dayOccurrences, setDayOccurrences] = useState(dayOccurrencesProp);
   const [bulkSaving, setBulkSaving] = useState(false);
+  const [syncing, setSyncing] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [note, setNote] = useState(noteBody);
   const [noteSaving, setNoteSaving] = useState(false);
+  const [filtersOpen, setFiltersOpen] = useState(false);
+
+  useEffect(() => {
+    setDayOccurrences(dayOccurrencesProp);
+  }, [dayOccurrencesProp]);
 
   const activeOccurrenceId =
     selectedOccurrenceId && dayOccurrences.some((o) => o.id === selectedOccurrenceId)
       ? selectedOccurrenceId
-      : dayOccurrences.length === 1
-        ? dayOccurrences[0].id
-        : undefined;
+      : undefined;
 
   const activeLesson = dayOccurrences.find((o) => o.id === activeOccurrenceId);
+
+  const step = activeOccurrenceId ? 3 : 2;
 
   useEffect(() => {
     setNote(noteBody);
@@ -137,6 +173,15 @@ export function AttendanceBoard({
     setMessage(null);
   }, [lessonStudents, attendance, activeOccurrenceId]);
 
+  // auto-select when exactly one lesson on the day
+  useEffect(() => {
+    if (dayOccurrences.length === 1 && !selectedOccurrenceId) {
+      const params = buildParams({ occurrenceId: dayOccurrences[0].id });
+      router.replace(`/attendance?${params.toString()}`);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [dayOccurrences.length, selectedOccurrenceId, selectedDate]);
+
   const countsByDate = useMemo(() => {
     const counts: Record<string, number> = {};
     for (const o of monthOccurrences) {
@@ -145,11 +190,13 @@ export function AttendanceBoard({
     return counts;
   }, [monthOccurrences]);
 
+  const completeDateSet = useMemo(() => new Set(completeDates), [completeDates]);
+
   function buildParams(patch: Record<string, string | undefined>) {
     const params = new URLSearchParams();
     params.set("date", patch.date ?? selectedDate);
     params.set("from", patch.from ?? monthFrom);
-    if (patch.to) params.set("to", patch.to);
+    params.set("to", patch.to ?? monthTo);
     params.set("mode", patch.mode ?? mode);
     const filters = {
       classId: patch.classId !== undefined ? patch.classId : classId,
@@ -183,6 +230,16 @@ export function AttendanceBoard({
     navigate(buildParams({ [key]: value, occurrenceId: undefined }));
   }
 
+  function bumpMarkedCount(occurrenceId: string, delta: number) {
+    setDayOccurrences((prev) =>
+      prev.map((o) =>
+        o.id === occurrenceId
+          ? { ...o, markedCount: Math.max(0, Math.min(o.studentCount, o.markedCount + delta)) }
+          : o
+      )
+    );
+  }
+
   async function pickStatus(studentId: string, occurrenceId: string, status: AttendanceStatus) {
     const k = keyOf(studentId, occurrenceId);
     const previous = draft[k] ?? null;
@@ -191,8 +248,11 @@ export function AttendanceBoard({
     setCellPhase((prev) => ({ ...prev, [k]: "saving" }));
     setMessage(null);
 
+    if (previous === null) bumpMarkedCount(occurrenceId, 1);
+
     const result = await upsertAttendanceAction(studentId, occurrenceId, status);
     if (result && "error" in result && result.error) {
+      if (previous === null) bumpMarkedCount(occurrenceId, -1);
       setDraft((prev) => ({ ...prev, [k]: previous }));
       setCellPhase((prev) => ({ ...prev, [k]: "error" }));
       setMessage(result.error);
@@ -201,8 +261,7 @@ export function AttendanceBoard({
     }
 
     setCellPhase((prev) => ({ ...prev, [k]: "saved" }));
-    window.setTimeout(() => setCellPhase((prev) => ({ ...prev, [k]: "idle" })), 1200);
-    router.refresh();
+    window.setTimeout(() => setCellPhase((prev) => ({ ...prev, [k]: "idle" })), 900);
   }
 
   async function markAll(status: AttendanceStatus) {
@@ -221,15 +280,37 @@ export function AttendanceBoard({
       next[keyOf(u.studentId, u.occurrenceId)] = status;
     }
     setDraft(next);
+    setDayOccurrences((prev) =>
+      prev.map((o) =>
+        o.id === activeOccurrenceId ? { ...o, markedCount: o.studentCount } : o
+      )
+    );
 
     const result = await bulkAttendanceAction(updates);
     if (result && "error" in result && result.error) {
       setMessage(result.error);
+      router.refresh();
     } else {
       setMessage(`נשמר — ${updates.length} תלמידות`);
-      router.refresh();
     }
     setBulkSaving(false);
+  }
+
+  async function syncStudents() {
+    if (!activeLesson) return;
+    setSyncing(true);
+    setMessage(null);
+    const result = await syncLessonStudentsAction(activeLesson.lessonId, yearId);
+    if (result && "error" in result && result.error) {
+      setMessage(result.error);
+    } else if (result && "success" in result) {
+      const n = result.assigned ?? 0;
+      setMessage(
+        n > 0 ? `שויכו ${n} תלמידות לשיעור` : "לא נמצאו תלמידות חדשות לשיוך — בדקי כיתה/מסלול"
+      );
+      router.refresh();
+    }
+    setSyncing(false);
   }
 
   async function saveNote() {
@@ -241,246 +322,290 @@ export function AttendanceBoard({
     fd.set("lesson_id", noteLessonId);
     const result = await upsertAttendanceNoteAction(fd);
     if (result && "error" in result && result.error) setMessage(result.error);
-    else {
-      setMessage("ההערה נשמרה");
-      router.refresh();
-    }
+    else setMessage("ההערה נשמרה");
     setNoteSaving(false);
   }
 
   const canMark = Boolean(activeOccurrenceId) && lessonStudents.length > 0;
+  const markedInLesson = activeOccurrenceId
+    ? Object.keys(draft).filter((k) => k.endsWith(`::${activeOccurrenceId}`) && draft[k] !== null).length
+    : 0;
 
   return (
-    <div className="space-y-4">
-      {/* filters */}
-      <div className="rounded-2xl border border-stone-200/80 bg-white p-4 shadow-sm">
-        <div className="mb-3 flex flex-wrap items-center gap-2">
-          {(
-            [
-              ["group", "קבוצה"],
-              ["single", "תלמידה בודדת"],
-            ] as const
-          ).map(([value, label]) => (
-            <button
-              key={value}
-              type="button"
-              onClick={() =>
-                navigate(
-                  buildParams({
-                    mode: value,
-                    studentId: value === "group" ? undefined : studentId,
-                    occurrenceId: undefined,
-                  })
-                )
-              }
-              className={cn(
-                "rounded-lg px-3 py-1.5 text-sm font-medium",
-                mode === value
-                  ? "bg-[var(--brand)] text-white"
-                  : "bg-stone-50 text-slate-600 ring-1 ring-stone-200 hover:bg-stone-100"
-              )}
-            >
-              {label}
-            </button>
-          ))}
-        </div>
-        <div className="grid gap-2 md:grid-cols-3 lg:grid-cols-5">
-          {mode === "single" && (
-            <Select
-              label="תלמידה"
-              value={studentId ?? ""}
-              onChange={(e) => updateFilter("studentId", e.target.value || undefined)}
-              options={[
-                { value: "", label: "בחרי תלמידה" },
-                ...allStudents.map((s) => ({ value: s.id, label: s.full_name })),
-              ]}
-            />
-          )}
-          <Select
-            label="כיתה"
-            value={classId ?? ""}
-            onChange={(e) => updateFilter("classId", e.target.value || undefined)}
-            options={[{ value: "", label: "הכל" }, ...classes.map((c) => ({ value: c.id, label: c.name }))]}
-          />
-          <Select
-            label="מסלול"
-            value={trackId ?? ""}
-            onChange={(e) => updateFilter("trackId", e.target.value || undefined)}
-            options={[{ value: "", label: "הכל" }, ...tracks.map((t) => ({ value: t.id, label: t.name }))]}
-          />
-          <Select
-            label="מורה"
-            value={teacherId ?? ""}
-            onChange={(e) => updateFilter("teacherId", e.target.value || undefined)}
-            options={[{ value: "", label: "הכל" }, ...teachers.map((t) => ({ value: t.id, label: t.name }))]}
-          />
-          <Select
-            label="מקצוע"
-            value={subject ?? ""}
-            onChange={(e) => updateFilter("subject", e.target.value || undefined)}
-            options={[{ value: "", label: "הכל" }, ...subjects.map((s) => ({ value: s, label: s }))]}
-          />
-        </div>
+    <div className="space-y-5">
+      {/* steps */}
+      <div className="flex flex-wrap gap-2">
+        <StepBadge n={1} label="בחרי תאריך" active={step === 2 && !activeOccurrenceId} done />
+        <StepBadge n={2} label="בחרי שיעור" active={step === 2 && !activeOccurrenceId} done={Boolean(activeOccurrenceId)} />
+        <StepBadge n={3} label="סמני נוכחות" active={step === 3} done={false} />
       </div>
 
-      <div className="grid gap-6 lg:grid-cols-[1.15fr_1fr]">
-        {/* calendar */}
-        <HebrewMonthCalendar
-          initialMonthIso={monthFrom}
-          selectedDate={selectedDate}
-          countsByDate={countsByDate}
-          onSelectDate={selectDate}
-          onMonthRangeChange={(from, to) => {
-            navigate(buildParams({ from, to, date: selectedDate, occurrenceId: undefined }));
-          }}
-        />
-
-        {/* day panel */}
-        <div className="space-y-4">
-          <div className="rounded-2xl border border-stone-200/80 bg-white p-4 shadow-sm">
-            <h3 className="text-lg font-semibold text-slate-800">
-              {formatHebrewDate(selectedDate)}
-            </h3>
-            <p className="text-xs text-slate-500">{formatGregorianDate(selectedDate)}</p>
-            <p className="mt-2 text-sm text-slate-600">
-              {dayOccurrences.length === 0
-                ? "אין שיעורים ביום זה (לפי הסינון)."
-                : `${dayOccurrences.length} שיעורים — בחרי שיעור לרישום נוכחות`}
-            </p>
-
-            <ul className="mt-3 space-y-2">
-              {dayOccurrences.map((o) => {
-                const selected = o.id === activeOccurrenceId;
-                const complete = o.studentCount > 0 && o.markedCount >= o.studentCount;
-                return (
-                  <li key={o.id}>
-                    <button
-                      type="button"
-                      onClick={() => selectLesson(o.id)}
-                      className={cn(
-                        "w-full rounded-xl border px-3 py-3 text-right transition-colors",
-                        selected
-                          ? "border-[var(--brand)] bg-[var(--brand)]/5 ring-1 ring-[var(--brand)]/30"
-                          : "border-stone-100 bg-stone-50/50 hover:bg-stone-50"
-                      )}
-                    >
-                      <div className="font-medium text-slate-800">{o.subject}</div>
-                      <div className="text-xs text-slate-500">{o.teacherName || "—"}</div>
-                      <div className="mt-1 text-xs text-slate-600">
-                        {o.markedCount}/{o.studentCount} נרשמו
-                        {complete && (
-                          <span className="mr-2 text-emerald-600">· הושלם</span>
-                        )}
-                      </div>
-                    </button>
-                  </li>
-                );
-              })}
-            </ul>
-
-            {dayOccurrences.length === 0 && (
-              <Link
-                href="/lessons"
-                className="mt-3 inline-block text-sm font-medium text-[var(--brand)] hover:underline"
-              >
-                מעבר לשיעורים
-              </Link>
-            )}
-          </div>
-
-          {/* marking panel */}
-          {activeLesson && (
-            <div className="rounded-2xl border border-stone-200/80 bg-white p-4 shadow-sm">
-              <div className="mb-3 flex flex-wrap items-start justify-between gap-2">
-                <div>
-                  <h3 className="font-semibold text-slate-800">{activeLesson.subject}</h3>
-                  <p className="text-xs text-slate-500">{activeLesson.teacherName}</p>
-                </div>
-                <div className="flex flex-wrap gap-1">
-                  <Button size="sm" variant="secondary" disabled={!canMark || bulkSaving} onClick={() => markAll("present")}>
-                    {bulkSaving ? "..." : "נוכחות לכולן"}
-                  </Button>
-                  <Button size="sm" variant="secondary" disabled={!canMark || bulkSaving} onClick={() => markAll("late")}>
-                    איחור
-                  </Button>
-                  <Button size="sm" variant="secondary" disabled={!canMark || bulkSaving} onClick={() => markAll("absent")}>
-                    היעדרות
-                  </Button>
-                </div>
-              </div>
-
-              {message && (
-                <p
+      {/* filters — collapsible */}
+      <div className="rounded-2xl border border-stone-200/80 bg-white shadow-sm">
+        <button
+          type="button"
+          className="flex w-full items-center justify-between px-4 py-3 text-sm font-medium text-slate-700"
+          onClick={() => setFiltersOpen((v) => !v)}
+        >
+          <span>סינון (כיתה, מורה, מקצוע…)</span>
+          <span className="text-slate-400">{filtersOpen ? "▲" : "▼"}</span>
+        </button>
+        {filtersOpen && (
+          <div className="border-t border-stone-100 px-4 pb-4 pt-3">
+            <div className="mb-3 flex flex-wrap gap-2">
+              {(
+                [
+                  ["group", "כל התלמידות"],
+                  ["single", "תלמידה בודדת"],
+                ] as const
+              ).map(([value, label]) => (
+                <button
+                  key={value}
+                  type="button"
+                  onClick={() =>
+                    navigate(
+                      buildParams({
+                        mode: value,
+                        studentId: value === "group" ? undefined : studentId,
+                        occurrenceId: undefined,
+                      })
+                    )
+                  }
                   className={cn(
-                    "mb-3 text-xs",
-                    message.includes("שגיא") ? "text-red-600" : "text-emerald-700"
+                    "rounded-lg px-3 py-1.5 text-sm font-medium",
+                    mode === value
+                      ? "bg-[var(--brand)] text-white"
+                      : "bg-stone-50 text-slate-600 ring-1 ring-stone-200"
                   )}
                 >
-                  {message}
-                </p>
+                  {label}
+                </button>
+              ))}
+            </div>
+            <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
+              {mode === "single" && (
+                <Select
+                  label="תלמידה"
+                  value={studentId ?? ""}
+                  onChange={(e) => updateFilter("studentId", e.target.value || undefined)}
+                  options={[
+                    { value: "", label: "בחרי תלמידה" },
+                    ...allStudents.map((s) => ({ value: s.id, label: s.full_name })),
+                  ]}
+                />
               )}
+              <Select
+                label="כיתה"
+                value={classId ?? ""}
+                onChange={(e) => updateFilter("classId", e.target.value || undefined)}
+                options={[{ value: "", label: "הכל" }, ...classes.map((c) => ({ value: c.id, label: c.name }))]}
+              />
+              <Select
+                label="מסלול"
+                value={trackId ?? ""}
+                onChange={(e) => updateFilter("trackId", e.target.value || undefined)}
+                options={[{ value: "", label: "הכל" }, ...tracks.map((t) => ({ value: t.id, label: t.name }))]}
+              />
+              <Select
+                label="מורה"
+                value={teacherId ?? ""}
+                onChange={(e) => updateFilter("teacherId", e.target.value || undefined)}
+                options={[{ value: "", label: "הכל" }, ...teachers.map((t) => ({ value: t.id, label: t.name }))]}
+              />
+              <Select
+                label="מקצוע"
+                value={subject ?? ""}
+                onChange={(e) => updateFilter("subject", e.target.value || undefined)}
+                options={[{ value: "", label: "הכל" }, ...subjects.map((s) => ({ value: s, label: s }))]}
+              />
+            </div>
+          </div>
+        )}
+      </div>
 
-              {mode === "single" && !studentId && (
-                <p className="text-sm text-slate-500">בחרי תלמידה למעלה.</p>
-              )}
+      {/* calendar */}
+      <HebrewMonthCalendar
+        initialMonthIso={monthFrom}
+        selectedDate={selectedDate}
+        countsByDate={countsByDate}
+        completeDates={completeDates}
+        onSelectDate={selectDate}
+        onMonthRangeChange={(from, to) => {
+          navigate(buildParams({ from, to, date: selectedDate, occurrenceId: undefined }));
+        }}
+      />
 
-              {canMark && lessonStudents.length === 0 && (
-                <p className="text-sm text-slate-500">
-                  אין תלמידות משויכות לשיעור זה.{" "}
-                  <Link href="/students" className="text-[var(--brand)] hover:underline">
-                    בדקי שיוכים
-                  </Link>
-                </p>
-              )}
+      {/* day + lessons */}
+      <div className="rounded-2xl border border-stone-200/80 bg-white p-4 shadow-sm">
+        <div className="mb-4 flex flex-wrap items-end justify-between gap-2">
+          <div>
+            <h3 className="text-lg font-semibold text-slate-800">{formatHebrewDate(selectedDate)}</h3>
+            <p className="text-xs text-slate-500">{formatGregorianDate(selectedDate)}</p>
+          </div>
+          {completeDateSet.has(selectedDate) && dayOccurrences.length > 0 && (
+            <span className="rounded-full bg-emerald-50 px-3 py-1 text-xs font-medium text-emerald-700">
+              כל השיעורים ביום זה הושלמו
+            </span>
+          )}
+        </div>
 
-              <ul className="space-y-2">
-                {lessonStudents.map((student) => {
-                  const k = keyOf(student.id, activeOccurrenceId!);
-                  return (
-                    <li
-                      key={student.id}
-                      className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-stone-100 px-3 py-2"
+        {dayOccurrences.length === 0 ? (
+          <div className="rounded-xl bg-stone-50 px-4 py-6 text-center text-sm text-slate-600">
+            <p>אין שיעורים ביום זה.</p>
+            <Link href="/lessons" className="mt-2 inline-block font-medium text-[var(--brand)] hover:underline">
+              צרי שיעורים או מופעים
+            </Link>
+          </div>
+        ) : (
+          <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+            {dayOccurrences.map((o) => {
+              const selected = o.id === activeOccurrenceId;
+              const complete = o.studentCount > 0 && o.markedCount >= o.studentCount;
+              const partial = o.markedCount > 0 && !complete;
+              return (
+                <button
+                  key={o.id}
+                  type="button"
+                  onClick={() => selectLesson(o.id)}
+                  className={cn(
+                    "rounded-xl border px-4 py-3 text-right transition-all",
+                    selected
+                      ? "border-[var(--brand)] bg-[var(--brand)]/5 ring-2 ring-[var(--brand)]/30"
+                      : "border-stone-100 bg-stone-50/80 hover:border-stone-200 hover:bg-white",
+                    complete && !selected && "border-emerald-200 bg-emerald-50/50"
+                  )}
+                >
+                  <div className="font-semibold text-slate-800">{o.subject}</div>
+                  <div className="text-xs text-slate-500">{o.teacherName || "ללא מורה"}</div>
+                  <div className="mt-2 flex items-center justify-between gap-2">
+                    <span
+                      className={cn(
+                        "text-xs font-medium",
+                        complete ? "text-emerald-700" : partial ? "text-amber-700" : "text-slate-500"
+                      )}
                     >
-                      <span className="font-medium text-slate-800">{student.full_name}</span>
-                      <AttendanceStatusPicker
-                        value={draft[k] ?? null}
-                        phase={cellPhase[k] ?? "idle"}
-                        onPick={(s) => pickStatus(student.id, activeOccurrenceId!, s)}
-                        compact
-                      />
-                    </li>
-                  );
-                })}
-              </ul>
-
-              {noteLessonId && (
-                <div className="mt-4 border-t border-stone-100 pt-3">
-                  <label className="mb-1 block text-xs font-medium text-slate-600">
-                    הערה לשיעור (לא מודפסת)
-                  </label>
-                  <div className="flex gap-2">
-                    <textarea
-                      value={note}
-                      onChange={(e) => setNote(e.target.value)}
-                      rows={2}
-                      className="min-h-[2.5rem] flex-1 rounded-xl border border-stone-200 px-3 py-2 text-sm"
-                    />
-                    <Button type="button" size="sm" variant="secondary" disabled={noteSaving} onClick={saveNote}>
-                      {noteSaving ? "..." : "שמור"}
-                    </Button>
+                      {o.markedCount}/{o.studentCount} נרשמו
+                    </span>
+                    {complete && <span className="text-xs text-emerald-600">✓ הושלם</span>}
+                    {partial && <span className="text-xs text-amber-600">בתהליך</span>}
                   </div>
-                </div>
+                </button>
+              );
+            })}
+          </div>
+        )}
+      </div>
+
+      {/* marking */}
+      {activeLesson && (
+        <div className="rounded-2xl border border-stone-200/80 bg-white p-4 shadow-sm lg:p-6">
+          <div className="mb-4 flex flex-wrap items-start justify-between gap-3 border-b border-stone-100 pb-4">
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-wide text-[var(--brand-muted)]">שלב 3</p>
+              <h3 className="text-xl font-semibold text-slate-800">{activeLesson.subject}</h3>
+              <p className="text-sm text-slate-500">{activeLesson.teacherName}</p>
+              <p className="mt-1 text-xs text-slate-600">
+                {markedInLesson}/{lessonStudents.length} תלמידות סומנו
+              </p>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              <Button size="sm" variant="secondary" disabled={!canMark || bulkSaving} onClick={() => markAll("present")}>
+                {bulkSaving ? "שומר…" : "כולן נוכחות"}
+              </Button>
+              <Button size="sm" variant="secondary" disabled={!canMark || bulkSaving} onClick={() => markAll("late")}>
+                כולן איחור
+              </Button>
+              <Button size="sm" variant="secondary" disabled={!canMark || bulkSaving} onClick={() => markAll("absent")}>
+                כולן נעדרות
+              </Button>
+            </div>
+          </div>
+
+          {message && (
+            <p
+              className={cn(
+                "mb-4 rounded-lg px-3 py-2 text-sm",
+                message.includes("שגיא") || message.includes("אין הרשאה")
+                  ? "bg-rose-50 text-rose-700"
+                  : "bg-emerald-50 text-emerald-800"
               )}
+            >
+              {message}
+            </p>
+          )}
+
+          {mode === "single" && !studentId && (
+            <p className="mb-4 text-sm text-amber-800">בחרי תלמידה בסינון למעלה.</p>
+          )}
+
+          {lessonStudents.length === 0 && (
+            <div className="rounded-xl border border-dashed border-stone-200 bg-stone-50 px-4 py-6 text-center">
+              <p className="text-sm text-slate-600">אין תלמידות משויכות לשיעור זה.</p>
+              <Button
+                type="button"
+                size="sm"
+                className="mt-3"
+                disabled={syncing}
+                onClick={syncStudents}
+              >
+                {syncing ? "משייכת…" : "שייך תלמידות אוטומטית לפי כיתה/מסלול"}
+              </Button>
+              <p className="mt-2 text-xs text-slate-500">
+                או{" "}
+                <Link href="/students" className="text-[var(--brand)] hover:underline">
+                  בדקי שיבוצים בתלמידות
+                </Link>
+              </p>
             </div>
           )}
 
-          {!activeLesson && dayOccurrences.length > 1 && (
-            <p className="rounded-xl bg-amber-50 px-4 py-3 text-sm text-amber-900">
-              יש {dayOccurrences.length} שיעורים ביום זה — בחרי שיעור מהרשימה.
-            </p>
+          <ul className="divide-y divide-stone-100">
+            {lessonStudents.map((student, idx) => {
+              const k = keyOf(student.id, activeOccurrenceId!);
+              return (
+                <li
+                  key={student.id}
+                  className={cn(
+                    "flex flex-col gap-3 py-3 sm:flex-row sm:items-center sm:justify-between",
+                    idx === 0 && "pt-0"
+                  )}
+                >
+                  <span className="min-w-[8rem] font-medium text-slate-800">{student.full_name}</span>
+                  <AttendanceStatusPicker
+                    value={draft[k] ?? null}
+                    phase={cellPhase[k] ?? "idle"}
+                    onPick={(s) => pickStatus(student.id, activeOccurrenceId!, s)}
+                  />
+                </li>
+              );
+            })}
+          </ul>
+
+          {noteLessonId && lessonStudents.length > 0 && (
+            <div className="mt-6 border-t border-stone-100 pt-4">
+              <label className="mb-2 block text-sm font-medium text-slate-600">הערה לשיעור</label>
+              <div className="flex flex-col gap-2 sm:flex-row">
+                <textarea
+                  value={note}
+                  onChange={(e) => setNote(e.target.value)}
+                  rows={2}
+                  className="min-h-[3rem] flex-1 rounded-xl border border-stone-200 px-3 py-2 text-sm"
+                  placeholder="הערות פנימיות…"
+                />
+                <Button type="button" size="sm" variant="secondary" disabled={noteSaving} onClick={saveNote}>
+                  {noteSaving ? "שומר…" : "שמור הערה"}
+                </Button>
+              </div>
+            </div>
           )}
         </div>
-      </div>
+      )}
+
+      {!activeLesson && dayOccurrences.length > 1 && (
+        <p className="rounded-xl bg-amber-50 px-4 py-3 text-center text-sm text-amber-900">
+          יש {dayOccurrences.length} שיעורים ביום זה — בחרי שיעור מהרשימה למעלה.
+        </p>
+      )}
     </div>
   );
 }

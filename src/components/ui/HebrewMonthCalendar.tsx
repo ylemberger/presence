@@ -17,6 +17,8 @@ export interface HebrewMonthCalendarProps {
   selectedDate?: string | null;
   /** number of lessons per date (for dot/badge) */
   countsByDate?: Record<string, number>;
+  /** dates where all lessons that day are fully marked */
+  completeDates?: string[];
   onSelectDate: (iso: string) => void;
   onMonthRangeChange?: (rangeStart: string, rangeEnd: string) => void;
 }
@@ -25,6 +27,7 @@ export function HebrewMonthCalendar({
   initialMonthIso,
   selectedDate,
   countsByDate = {},
+  completeDates = [],
   onSelectDate,
   onMonthRangeChange,
 }: HebrewMonthCalendarProps) {
@@ -75,22 +78,29 @@ export function HebrewMonthCalendar({
           }
           const count = countsByDate[day.iso] ?? 0;
           const selected = selectedDate === day.iso;
+          const complete = completeDates.includes(day.iso);
           return (
             <button
               key={day.iso}
               type="button"
               onClick={() => onSelectDate(day.iso)}
               className={cn(
-                "min-h-[4rem] bg-white p-1.5 text-right transition-colors hover:bg-stone-50",
+                "min-h-[4.25rem] bg-white p-1.5 text-right transition-colors hover:bg-stone-50",
                 selected && "ring-2 ring-inset ring-[var(--brand)] bg-[var(--brand)]/5",
-                count > 0 && !selected && "bg-teal-50/40"
+                complete && !selected && "bg-emerald-50/60",
+                count > 0 && !selected && !complete && "bg-teal-50/40"
               )}
             >
               <div className="text-sm font-semibold text-slate-800">{day.label}</div>
               <div className="text-[10px] text-slate-400">{formatGregorianDate(day.iso).slice(0, 5)}</div>
               {count > 0 && (
-                <div className="mt-1 text-[10px] font-medium text-[var(--brand)]">
-                  {count} שיעור{count > 1 ? "ים" : ""}
+                <div
+                  className={cn(
+                    "mt-1 text-[10px] font-medium",
+                    complete ? "text-emerald-700" : "text-[var(--brand)]"
+                  )}
+                >
+                  {complete ? "✓ הושלם" : `${count} שיעור${count > 1 ? "ים" : ""}`}
                 </div>
               )}
             </button>

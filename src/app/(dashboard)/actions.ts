@@ -1150,6 +1150,58 @@ export async function restoreOccurrenceAction(occurrenceId: string) {
 }
 
 // --- Attendance ---
+
+async function tryMarkOccurrenceComplete(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  occurrenceId: string
+) {
+  const { data: occ } = await supabase
+    .from("lesson_occurrences")
+    .select("lesson_id, occurrence_date, status")
+    .eq("id", occurrenceId)
+    .single();
+  if (!occ || occ.status === "cancelled") return;
+
+  const { data: links } = await supabase
+    .from("student_lesson_assignments")
+    .select("student_id, students(is_active)")
+    .eq("lesson_id", occ.lesson_id)
+    .lte("start_date", occ.occurrence_date)
+    .or(`end_date.is.null,end_date.gte.${occ.occurrence_date}`);
+
+  const studentIds = (links ?? [])
+    .filter((l) => (l.students as unknown as { is_active: boolean } | null)?.is_active)
+    .map((l) => l.student_id);
+  if (studentIds.length === 0) return;
+
+  const { data: marked } = await supabase
+    .from("attendance")
+    .select("student_id")
+    .eq("lesson_occurrence_id", occurrenceId)
+    .in("student_id", studentIds);
+
+  if ((marked ?? []).length >= studentIds.length) {
+    await supabase
+      .from("lesson_occurrences")
+      .update({ status: "completed", gap_handling: null })
+      .eq("id", occurrenceId);
+  }
+}
+
+export async function syncLessonStudentsAction(lessonId: string, academicYearId: string) {
+  const actionAuth = await createActionClient();
+  if ("error" in actionAuth) return { error: actionAuth.error };
+
+  try {
+    const result = await autoAssignStudentsToLesson(lessonId, academicYearId);
+    revalidatePath("/attendance");
+    revalidatePath("/students");
+    return { success: true, assigned: result.assigned };
+  } catch (e) {
+    return { error: (e as Error).message };
+  }
+}
+
 export async function upsertAttendanceAction(
   studentId: string,
   occurrenceId: string,
@@ -1163,6 +1215,8 @@ export async function upsertAttendanceAction(
     { onConflict: "student_id,lesson_occurrence_id" }
   );
   if (error) return { error: error.message };
+
+  await tryMarkOccurrenceComplete(supabase, occurrenceId);
   revalidatePath("/attendance");
   return { success: true };
 }
@@ -1184,11 +1238,8 @@ export async function bulkAttendanceAction(
   if (error) return { error: error.message };
 
   const occurrenceIds = [...new Set(updates.map((u) => u.occurrenceId))];
-  if (occurrenceIds.length > 0) {
-    await supabase
-      .from("lesson_occurrences")
-      .update({ gap_handling: null, status: "completed" })
-      .in("id", occurrenceIds);
+  for (const occId of occurrenceIds) {
+    await tryMarkOccurrenceComplete(supabase, occId);
   }
 
   revalidatePath("/attendance");

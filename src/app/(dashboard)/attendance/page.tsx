@@ -207,6 +207,65 @@ export default async function AttendancePage({ searchParams }: Props) {
     );
   }
 
+  // completion stats for entire visible month (calendar highlights)
+  const monthOccIds = monthOccurrences.map((o) => o.id);
+  const monthLessonIds = [...new Set(monthOccurrences.map((o) => o.lessonId))];
+  let monthAttendance: typeof attendanceRecords = [];
+  const monthStudentCounts = new Map<string, number>();
+  const monthMarkedCounts = new Map<string, number>();
+
+  if (monthOccIds.length > 0) {
+    const { data: monthAtt } = await supabase
+      .from("attendance")
+      .select("student_id, lesson_occurrence_id, status")
+      .in("lesson_occurrence_id", monthOccIds);
+    monthAttendance = monthAtt ?? [];
+
+    if (monthLessonIds.length > 0) {
+      const { data: monthLinks } = await supabase
+        .from("student_lesson_assignments")
+        .select("lesson_id, student_id, start_date, end_date, students(is_active)")
+        .in("lesson_id", monthLessonIds);
+
+      for (const occ of monthOccurrences) {
+        let count = 0;
+        for (const link of monthLinks ?? []) {
+          if (link.lesson_id !== occ.lessonId) continue;
+          const active = (link.students as unknown as { is_active: boolean } | null)?.is_active;
+          if (!active) continue;
+          if (link.start_date > occ.date) continue;
+          if (link.end_date && link.end_date < occ.date) continue;
+          count++;
+        }
+        monthStudentCounts.set(occ.id, count);
+      }
+    }
+
+    for (const occId of monthOccIds) {
+      monthMarkedCounts.set(
+        occId,
+        monthAttendance.filter((a) => a.lesson_occurrence_id === occId).length
+      );
+    }
+  }
+
+  const completeDates: string[] = [];
+  const occsByDate = new Map<string, typeof monthOccurrences>();
+  for (const o of monthOccurrences) {
+    const list = occsByDate.get(o.date) ?? [];
+    list.push(o);
+    occsByDate.set(o.date, list);
+  }
+  for (const [date, occs] of occsByDate) {
+    if (occs.length === 0) continue;
+    const allDone = occs.every((o) => {
+      const total = monthStudentCounts.get(o.id) ?? 0;
+      const marked = monthMarkedCounts.get(o.id) ?? 0;
+      return total > 0 && marked >= total;
+    });
+    if (allDone) completeDates.push(date);
+  }
+
   let noteBody = "";
   if (selectedOcc) {
     const { data: note } = await supabase
@@ -234,7 +293,7 @@ export default async function AttendancePage({ searchParams }: Props) {
     <div>
       <PageHeader
         title="נוכחות"
-        description="בחרי תאריך בלוח העברי → בחרי שיעור → סמני נוכחות. שמירה מיידית בכל לחיצה."
+        description="שלב 1: תאריך בלוח → שלב 2: שיעור → שלב 3: סמני נוכחות (שמירה מיידית)"
       />
 
       <AttendanceBoard
@@ -266,6 +325,7 @@ export default async function AttendancePage({ searchParams }: Props) {
         attendance={attendanceRecords}
         noteBody={noteBody}
         noteLessonId={selectedOcc?.lessonId ?? null}
+        completeDates={completeDates}
       />
     </div>
   );
