@@ -1,16 +1,5 @@
 import { createClient } from "@/lib/supabase/server";
-
-export const FIXED_GRADE_NAMES = ["א", "ב", "ג"] as const;
-
-export type FixedGradeName = (typeof FIXED_GRADE_NAMES)[number];
-
-export function isFixedGradeName(name: string): name is FixedGradeName {
-  return (FIXED_GRADE_NAMES as readonly string[]).includes(name);
-}
-
-export function filterFixedGrades<T extends { name: string }>(grades: T[]): T[] {
-  return grades.filter((g) => isFixedGradeName(g.name));
-}
+import { FIXED_GRADE_NAMES } from "@/lib/years/grades";
 
 const GRADE_PROMOTE: Record<string, string | null> = {
   א: "ב",

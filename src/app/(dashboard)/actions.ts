@@ -14,7 +14,7 @@ import {
   ensureFixedGrades,
   promoteStudentsToYear,
 } from "@/lib/years/promote";
-import { FIXED_GRADE_NAMES } from "@/lib/years/promote";
+import { FIXED_GRADE_NAMES } from "@/lib/years/grades";
 import type { AttendanceStatus } from "@/types/database";
 import {
   isError,

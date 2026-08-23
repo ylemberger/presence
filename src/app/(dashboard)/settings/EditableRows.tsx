@@ -8,7 +8,7 @@ import { HebrewDateInput } from "@/components/ui/HebrewDateInput";
 import { DeleteButton } from "@/components/ui/DeleteButton";
 import { RANGE_TYPE_LABELS } from "@/lib/constants";
 import { formatDate } from "@/lib/dates/hebrew";
-import { FIXED_GRADE_NAMES, isFixedGradeName } from "@/lib/years/promote";
+import { FIXED_GRADE_NAMES, isFixedGradeName } from "@/lib/years/grades";
 import type { Grade } from "@/types/database";
 
 type UpdateAction = (

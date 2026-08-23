@@ -35,7 +35,8 @@ import {
   EditableNameRow,
   EditableYearRow,
 } from "./EditableRows";
-import { ensureFixedGrades, filterFixedGrades, isFixedGradeName } from "@/lib/years/promote";
+import { ensureFixedGrades } from "@/lib/years/promote";
+import { filterFixedGrades, isFixedGradeName } from "@/lib/years/grades";
 
 export default async function SettingsPage() {
   const activeYear = await getActiveAcademicYear();

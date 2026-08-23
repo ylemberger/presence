@@ -3,7 +3,7 @@ import { Table, TableRow, TableCell } from "@/components/ui/Table";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { createClient } from "@/lib/supabase/server";
 import { getActiveAcademicYear } from "@/lib/utils";
-import { filterFixedGrades } from "@/lib/years/promote";
+import { filterFixedGrades } from "@/lib/years/grades";
 import { BILLING_TYPE_LABELS } from "@/lib/constants";
 import { TeachersForms } from "./TeachersForms";
 import { TeachersDirectory } from "./TeachersDirectory";

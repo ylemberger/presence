@@ -1,7 +1,7 @@
 import { PageHeader } from "@/components/ui/PageHeader";
 import { createClient } from "@/lib/supabase/server";
 import { getActiveAcademicYear } from "@/lib/utils";
-import { filterFixedGrades } from "@/lib/years/promote";
+import { filterFixedGrades } from "@/lib/years/grades";
 import { StudentsDirectory } from "./StudentsDirectory";
 
 export default async function StudentsPage() {

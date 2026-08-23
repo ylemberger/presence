@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/Button";
 import { Input, Select } from "@/components/ui/Input";
 import { HebrewDateInput } from "@/components/ui/HebrewDateInput";
 import { RANGE_TYPE_LABELS } from "@/lib/constants";
-import { FIXED_GRADE_NAMES } from "@/lib/years/promote";
+import { FIXED_GRADE_NAMES } from "@/lib/years/grades";
 import type { Grade } from "@/types/database";
 
 interface SettingsFormsProps {
