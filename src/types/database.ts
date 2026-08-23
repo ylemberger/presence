@@ -167,11 +167,14 @@ export interface StudentLessonAssignment {
   end_date: string | null;
 }
 
+export type AbsenceReason = "illness" | "permission" | "family" | "unexcused";
+
 export interface Attendance {
   id: string;
   student_id: string;
   lesson_occurrence_id: string;
   status: AttendanceStatus;
+  reason?: AbsenceReason | null;
 }
 
 export interface AttendanceChangeLog {

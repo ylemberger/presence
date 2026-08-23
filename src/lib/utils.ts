@@ -31,3 +31,30 @@ export async function setActiveAcademicYear(yearId: string) {
     .eq("id", yearId);
   if (error) throw error;
 }
+
+/** Static year catalog — deduped per request across attendance/reports/dashboard. */
+export const getYearCatalog = cache(async (academicYearId: string) => {
+  const supabase = await createClient();
+  const [classes, tracks, specializations, teachers, rules] = await Promise.all([
+    supabase.from("classes").select("id, name").eq("academic_year_id", academicYearId).order("name"),
+    supabase.from("tracks").select("id, name").eq("academic_year_id", academicYearId).order("name"),
+    supabase
+      .from("specializations")
+      .select("id, name")
+      .eq("academic_year_id", academicYearId)
+      .order("name"),
+    supabase.from("teachers").select("id, full_name").order("full_name"),
+    supabase
+      .from("attendance_rules")
+      .select("id, name, max_allowed_absence_percent")
+      .order("name"),
+  ]);
+
+  return {
+    classes: classes.data ?? [],
+    tracks: tracks.data ?? [],
+    specializations: specializations.data ?? [],
+    teachers: (teachers.data ?? []).map((t) => ({ id: t.id, name: t.full_name })),
+    rules: rules.data ?? [],
+  };
+});

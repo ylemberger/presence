@@ -142,6 +142,9 @@ create table attendance (
   student_id uuid references students(id) on delete cascade,
   lesson_occurrence_id uuid references lesson_occurrences(id) on delete cascade,
   status text check (status in ('present', 'absent', 'late')) not null,
+  reason text check (
+    reason is null or reason in ('illness', 'permission', 'family', 'unexcused')
+  ),
   unique(student_id, lesson_occurrence_id)
 );
 
@@ -355,6 +358,12 @@ create index if not exists idx_attendance_occurrence_student
 
 create index if not exists idx_sla_student_lesson_dates
   on student_lesson_assignments (student_id, lesson_id, start_date, end_date);
+
+create index if not exists idx_sla_lesson_dates
+  on student_lesson_assignments (lesson_id, start_date, end_date);
+
+create index if not exists idx_lesson_occurrences_date_status
+  on lesson_occurrences (occurrence_date, status);
 
 create index if not exists idx_sla_overlap
   on student_lesson_assignments

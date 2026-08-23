@@ -58,7 +58,8 @@ export function AttendanceStatusPicker({
             onClick={() => onPick(option)}
             className={cn(
               "relative flex-1 rounded-lg border font-bold transition-all duration-150 active:scale-95",
-              compact ? "px-2 py-2.5 text-xs" : "px-2 py-3 text-sm",
+              "min-h-[44px] touch-manipulation",
+              compact ? "px-2 py-2.5 text-xs sm:text-sm" : "px-2 py-3 text-sm sm:py-4 sm:text-base",
               selected ? CELL[option] : IDLE[option],
               isSaving && "animate-pulse opacity-80",
               isSaved && "ring-2 ring-white ring-offset-1 ring-offset-stone-100",

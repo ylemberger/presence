@@ -10,8 +10,16 @@
 ## שינוי סכימה (למתכנתים)
 
 1. עדכן את [`setup_database.sql`](setup_database.sql) — כך שפרויקט חדש יקבל את הסכימה העדכנית.
-2. אם יש כבר מסד בפרודקשן — צור קובץ patch חדש ב-`supabase/patches/` (למשל `001_add_column_x.sql`) עם **רק** השינוי, והרץ אותו ב-SQL Editor.
+2. אם יש כבר מסד בפרודקשן — צור קובץ patch חדש ב-`supabase/patches/` עם **רק** השינוי, והרץ אותו ב-SQL Editor.
 3. עדכן [`src/types/database.ts`](../src/types/database.ts) בהתאם.
+
+### Patches קיימים
+
+| קובץ | תיאור |
+|------|--------|
+| [`patches/001_teaching_assignments_columns.sql`](patches/001_teaching_assignments_columns.sql) | עמודות חסרות ב-teaching assignments |
+| [`patches/002_attendance_indexes.sql`](patches/002_attendance_indexes.sql) | אינדקסים לביצועי נוכחות |
+| [`patches/003_attendance_reason.sql`](patches/003_attendance_reason.sql) | שדה `reason` להיעדרות |
 
 ## טבלאות עיקריות
 

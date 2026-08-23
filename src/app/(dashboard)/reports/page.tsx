@@ -7,9 +7,12 @@ import { isDateInRange, formatHebrewDate, formatGregorianDate } from "@/lib/date
 import { summarizeAttendance, evaluateAbsenceAgainstRule } from "@/lib/attendance/calculator";
 import { ReportsFilter } from "./ReportsFilter";
 import { PrintButton } from "@/components/ui/PrintButton";
+import { ExportCsvButton } from "./ExportCsvButton";
+import { StudentTrendChart } from "./StudentTrendChart";
 import { todayIso } from "@/lib/dates/hebrew";
 import type { AttendanceStatus } from "@/types/database";
 import { cn } from "@/lib/cn";
+import Link from "next/link";
 
 interface Props {
   searchParams: {
@@ -87,6 +90,8 @@ export default async function ReportsPage({ searchParams }: Props) {
   const threshold = selectedRule
     ? Number(selectedRule.max_allowed_absence_percent)
     : minAbsence;
+  /** Include warning band (80% of rule) when a rule is selected. */
+  const includeFrom = selectedRule && threshold > 0 ? threshold * 0.8 : threshold;
 
   let reportRows: Array<{
     studentId: string;
@@ -100,6 +105,15 @@ export default async function ReportsPage({ searchParams }: Props) {
     ruleLabel: string;
     ruleLevel: "ok" | "warning" | "blocked";
   }> = [];
+
+  let trendMonths: Array<{
+    label: string;
+    present: number;
+    late: number;
+    absent: number;
+  }> = [];
+
+  let singleStudentName: string | null = null;
 
   if (shouldRun) {
     let scopedLessonIds: string[] | null = null;
@@ -250,7 +264,8 @@ export default async function ReportsPage({ searchParams }: Props) {
         }));
 
         const summary = summarizeAttendance(eligibleWithAttendance);
-        if (summary.absencePercent < threshold) continue;
+        const isSingleFocus = Boolean(params.studentId && studentId === params.studentId);
+        if (!isSingleFocus && summary.absencePercent < includeFrom) continue;
 
         const currentAssignment =
           studentAssignments.find((a) => !a.end_date) ?? studentAssignments[0];
@@ -270,18 +285,54 @@ export default async function ReportsPage({ searchParams }: Props) {
           ruleLabel: evaluated.label,
           ruleLevel: evaluated.level,
         });
+
+        if (params.studentId && studentId === params.studentId) {
+          singleStudentName = studentName;
+          const byMonth = new Map<string, { present: number; late: number; absent: number }>();
+          for (const e of eligibleWithAttendance) {
+            if (!e.attendanceStatus) continue;
+            const key = e.occurrenceDate.slice(0, 7);
+            const bucket = byMonth.get(key) ?? { present: 0, late: 0, absent: 0 };
+            if (e.attendanceStatus === "present") bucket.present++;
+            else if (e.attendanceStatus === "late") bucket.late++;
+            else if (e.attendanceStatus === "absent") bucket.absent++;
+            byMonth.set(key, bucket);
+          }
+          trendMonths = [...byMonth.entries()]
+            .sort(([a], [b]) => a.localeCompare(b))
+            .map(([key, v]) => ({
+              label: key.slice(5),
+              present: v.present,
+              late: v.late,
+              absent: v.absent,
+            }));
+        }
       }
 
       reportRows.sort((a, b) => b.absencePercent - a.absencePercent);
     }
   }
 
+  const topAbsentees = params.classId ? reportRows.slice(0, 5) : [];
+  const printTitle = singleStudentName
+    ? `דוח נוכחות עבור ${singleStudentName}`
+    : `דוח נוכחות: ${formatHebrewDate(startDate)} – ${formatHebrewDate(endDate)}`;
+
   return (
     <div>
       <PageHeader
         title="דוחות נוכחות"
         description="סינון לפי כיתה / מסלול / התמחות / מורה / מקצוע. הדפסה בלי הערות פנימיות."
-        actions={<PrintButton />}
+        actions={
+          <div className="flex flex-wrap gap-2 print:hidden">
+            <ExportCsvButton
+              rows={reportRows}
+              title={printTitle}
+              filename={`attendance-${startDate}-${endDate}.csv`}
+            />
+            <PrintButton />
+          </div>
+        }
       />
 
       <div className="print:hidden mb-6">
@@ -308,18 +359,60 @@ export default async function ReportsPage({ searchParams }: Props) {
         />
       </div>
 
-      <Card
-        title={`דוח נוכחות: ${formatHebrewDate(startDate)} – ${formatHebrewDate(endDate)}`}
-      >
+      <Card title={printTitle}>
+        <div className="mb-4 hidden print:block text-sm text-slate-600">
+          <p>
+            תקופה: {formatHebrewDate(startDate)} – {formatHebrewDate(endDate)} (
+            {formatGregorianDate(startDate)} – {formatGregorianDate(endDate)})
+          </p>
+          <p className="mt-1">תאריך הדפסה: {formatGregorianDate(todayIso())}</p>
+          <p className="mt-6">חתימת מורה / רכזת: ________________________</p>
+        </div>
+
         <p className="mb-3 text-xs text-slate-400 print:hidden">
           לועזי: {formatGregorianDate(startDate)} – {formatGregorianDate(endDate)}
         </p>
+
         {!shouldRun ? (
           <p className="text-slate-600">בחרי מסננים ולחצי «הצג דוח».</p>
         ) : reportRows.length === 0 ? (
           <p className="text-slate-600">לא נמצאו תוצאות לטווח ולסף שנבחרו.</p>
         ) : (
           <>
+            {trendMonths.length > 0 && (
+              <div className="print:hidden">
+                <StudentTrendChart months={trendMonths} />
+              </div>
+            )}
+
+            {topAbsentees.length > 0 && (
+              <div className="mb-4 rounded-xl border border-rose-100 bg-rose-50/40 p-3 print:hidden">
+                <p className="mb-2 text-sm font-semibold text-rose-900">
+                  מובילות בהיעדרות (כיתה)
+                </p>
+                <ol className="space-y-1 text-sm">
+                  {topAbsentees.map((r, i) => (
+                    <li key={r.studentId} className="flex justify-between gap-2">
+                      <Link
+                        href={`/students/${r.studentId}`}
+                        className="font-medium text-slate-800 hover:underline"
+                      >
+                        {i + 1}. {r.studentName}
+                      </Link>
+                      <span
+                        className={cn(
+                          "font-semibold",
+                          r.ruleLevel === "blocked" ? "text-rose-700" : "text-amber-700"
+                        )}
+                      >
+                        {r.absencePercent}%
+                      </span>
+                    </li>
+                  ))}
+                </ol>
+              </div>
+            )}
+
             <div className="mb-4 grid gap-2 text-sm text-slate-700 sm:grid-cols-2 lg:grid-cols-5 print:grid-cols-5">
               <div>שיעורים: {reportRows.reduce((s, r) => s + r.totalRequired, 0)}</div>
               <div>נוכחות: {reportRows.reduce((s, r) => s + r.presentOnlyCount, 0)}</div>
@@ -330,6 +423,9 @@ export default async function ReportsPage({ searchParams }: Props) {
                 {selectedRule
                   ? `${selectedRule.max_allowed_absence_percent}% (${selectedRule.name})`
                   : `${threshold}%`}
+                {selectedRule && (
+                  <span className="mr-1 text-xs text-slate-400">· אזהרה מ-{includeFrom}%</span>
+                )}
               </div>
             </div>
             <Table

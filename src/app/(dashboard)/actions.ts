@@ -1205,24 +1205,41 @@ export async function syncLessonStudentsAction(lessonId: string, academicYearId:
 export async function upsertAttendanceAction(
   studentId: string,
   occurrenceId: string,
-  status: AttendanceStatus
+  status: AttendanceStatus,
+  reason?: string | null
 ) {
   const actionAuth = await createActionClient();
   if ("error" in actionAuth) return { error: actionAuth.error };
   const supabase = actionAuth.supabase;
-  const { error } = await supabase.from("attendance").upsert(
-    { student_id: studentId, lesson_occurrence_id: occurrenceId, status },
-    { onConflict: "student_id,lesson_occurrence_id" }
-  );
+  const payload: {
+    student_id: string;
+    lesson_occurrence_id: string;
+    status: AttendanceStatus;
+    reason: string | null;
+  } = {
+    student_id: studentId,
+    lesson_occurrence_id: occurrenceId,
+    status,
+    reason: status === "absent" && reason ? reason : null,
+  };
+  const { error } = await supabase
+    .from("attendance")
+    .upsert(payload, { onConflict: "student_id,lesson_occurrence_id" });
   if (error) return { error: error.message };
 
   await tryMarkOccurrenceComplete(supabase, occurrenceId);
   revalidatePath("/attendance");
+  revalidatePath("/");
   return { success: true };
 }
 
 export async function bulkAttendanceAction(
-  updates: { studentId: string; occurrenceId: string; status: AttendanceStatus }[]
+  updates: {
+    studentId: string;
+    occurrenceId: string;
+    status: AttendanceStatus;
+    reason?: string | null;
+  }[]
 ) {
   const actionAuth = await createActionClient();
   if ("error" in actionAuth) return { error: actionAuth.error };
@@ -1231,6 +1248,7 @@ export async function bulkAttendanceAction(
     student_id: u.studentId,
     lesson_occurrence_id: u.occurrenceId,
     status: u.status,
+    reason: u.status === "absent" && u.reason ? u.reason : null,
   }));
   const { error } = await supabase
     .from("attendance")
@@ -1243,5 +1261,70 @@ export async function bulkAttendanceAction(
   }
 
   revalidatePath("/attendance");
+  revalidatePath("/");
   return { success: true };
+}
+
+/** Copy attendance statuses from the previous occurrence of the same lesson. */
+export async function copyPreviousAttendanceAction(occurrenceId: string) {
+  const actionAuth = await createActionClient();
+  if ("error" in actionAuth) return { error: actionAuth.error };
+  const supabase = actionAuth.supabase;
+
+  const { data: current } = await supabase
+    .from("lesson_occurrences")
+    .select("id, lesson_id, occurrence_date")
+    .eq("id", occurrenceId)
+    .single();
+  if (!current) return { error: "מופע לא נמצא" };
+
+  const { data: previous } = await supabase
+    .from("lesson_occurrences")
+    .select("id")
+    .eq("lesson_id", current.lesson_id)
+    .lt("occurrence_date", current.occurrence_date)
+    .neq("status", "cancelled")
+    .order("occurrence_date", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  if (!previous) return { error: "אין שיעור קודם להעתקה" };
+
+  const { data: prevRows } = await supabase
+    .from("attendance")
+    .select("student_id, status, reason")
+    .eq("lesson_occurrence_id", previous.id);
+  if (!prevRows?.length) return { error: "בשיעור הקודם אין רישומי נוכחות" };
+
+  const { data: links } = await supabase
+    .from("student_lesson_assignments")
+    .select("student_id, students(is_active)")
+    .eq("lesson_id", current.lesson_id)
+    .lte("start_date", current.occurrence_date)
+    .or(`end_date.is.null,end_date.gte.${current.occurrence_date}`);
+
+  const eligible = new Set(
+    (links ?? [])
+      .filter((l) => (l.students as unknown as { is_active: boolean } | null)?.is_active)
+      .map((l) => l.student_id)
+  );
+
+  const records = prevRows
+    .filter((r) => eligible.has(r.student_id))
+    .map((r) => ({
+      student_id: r.student_id,
+      lesson_occurrence_id: occurrenceId,
+      status: r.status as AttendanceStatus,
+      reason: r.status === "absent" ? (r.reason as string | null) : null,
+    }));
+
+  if (records.length === 0) return { error: "אין תלמידות משותפות להעתקה" };
+
+  const { error } = await supabase
+    .from("attendance")
+    .upsert(records, { onConflict: "student_id,lesson_occurrence_id" });
+  if (error) return { error: error.message };
+
+  await tryMarkOccurrenceComplete(supabase, occurrenceId);
+  revalidatePath("/attendance");
+  return { success: true, copied: records.length };
 }

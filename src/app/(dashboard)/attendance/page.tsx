@@ -1,12 +1,20 @@
 import { PageHeader } from "@/components/ui/PageHeader";
 import { createClient } from "@/lib/supabase/server";
-import { getActiveAcademicYear } from "@/lib/utils";
+import { getActiveAcademicYear, getYearCatalog } from "@/lib/utils";
 import {
   buildHebrewMonth,
   hebrewMonthFromIso,
   todayIso,
 } from "@/lib/dates/hebrew";
-import { AttendanceBoard, type AttendanceMode } from "./AttendanceBoard";
+import {
+  evaluateAbsenceAgainstRule,
+  summarizeAttendance,
+} from "@/lib/attendance/calculator";
+import {
+  AttendanceBoard,
+  type AttendanceMode,
+  type StudentInsight,
+} from "./AttendanceBoard";
 
 interface Props {
   searchParams: {
@@ -44,22 +52,9 @@ export default async function AttendancePage({ searchParams }: Props) {
   const monthFrom = params.from || month.rangeStart;
   const monthTo = params.to || month.rangeEnd;
 
-  const [
-    { data: classes },
-    { data: tracks },
-    { data: specializations },
-    { data: teachers },
-    { data: yearStudents },
-    { data: monthOccurrencesRaw },
-  ] = await Promise.all([
-    supabase.from("classes").select("id, name").eq("academic_year_id", activeYear.id).order("name"),
-    supabase.from("tracks").select("id, name").eq("academic_year_id", activeYear.id).order("name"),
-    supabase
-      .from("specializations")
-      .select("id, name")
-      .eq("academic_year_id", activeYear.id)
-      .order("name"),
-    supabase.from("teachers").select("id, full_name").order("full_name"),
+  const catalog = await getYearCatalog(activeYear.id);
+
+  const [{ data: yearStudents }, { data: monthOccurrencesRaw }] = await Promise.all([
     supabase
       .from("student_assignments")
       .select("student_id, class_id, track_id, specialization_id, students(id, full_name, is_active)")
@@ -70,7 +65,7 @@ export default async function AttendancePage({ searchParams }: Props) {
       .select(
         `id, occurrence_date, lesson_id,
          lessons!inner(
-           id, subject, class_id, track_id, specialization_id, academic_year_id,
+           id, subject, class_id, track_id, specialization_id, academic_year_id, attendance_rule_id,
            teacher_teaching_assignments(teacher_id, teachers(full_name))
          )`
       )
@@ -87,6 +82,7 @@ export default async function AttendancePage({ searchParams }: Props) {
     class_id: string | null;
     track_id: string | null;
     specialization_id: string | null;
+    attendance_rule_id: string | null;
     teacher_teaching_assignments: {
       teacher_id: string;
       teachers: { full_name: string } | null;
@@ -106,6 +102,7 @@ export default async function AttendancePage({ searchParams }: Props) {
       classId: lesson.class_id,
       trackId: lesson.track_id,
       specializationId: lesson.specialization_id,
+      attendanceRuleId: lesson.attendance_rule_id,
     };
   }
 
@@ -139,16 +136,31 @@ export default async function AttendancePage({ searchParams }: Props) {
 
   let lessonStudents: { id: string; full_name: string }[] = [];
 
-  if (selectedOcc) {
-    const { data: links } = await supabase
-      .from("student_lesson_assignments")
-      .select("student_id, students(id, full_name, is_active)")
-      .eq("lesson_id", selectedOcc.lessonId)
-      .lte("start_date", selectedOcc.date)
-      .or(`end_date.is.null,end_date.gte.${selectedOcc.date}`);
+  const monthOccIds = monthOccurrences.map((o) => o.id);
+  const monthLessonIds = [...new Set(monthOccurrences.map((o) => o.lessonId))];
 
+  // Single bundled fetch for links + month attendance (perf)
+  const [{ data: monthLinks }, { data: monthAttendance }] = await Promise.all([
+    monthLessonIds.length > 0
+      ? supabase
+          .from("student_lesson_assignments")
+          .select("lesson_id, student_id, start_date, end_date, students(id, full_name, is_active)")
+          .in("lesson_id", monthLessonIds)
+      : Promise.resolve({ data: [] as never[] }),
+    monthOccIds.length > 0
+      ? supabase
+          .from("attendance")
+          .select("student_id, lesson_occurrence_id, status, reason")
+          .in("lesson_occurrence_id", monthOccIds)
+      : Promise.resolve({ data: [] as never[] }),
+  ]);
+
+  if (selectedOcc) {
     const map = new Map<string, { id: string; full_name: string }>();
-    for (const link of links ?? []) {
+    for (const link of monthLinks ?? []) {
+      if (link.lesson_id !== selectedOcc.lessonId) continue;
+      if (link.start_date > selectedOcc.date) continue;
+      if (link.end_date && link.end_date < selectedOcc.date) continue;
       const s = link.students as unknown as { id: string; full_name: string; is_active: boolean } | null;
       if (s?.is_active) map.set(s.id, { id: s.id, full_name: s.full_name });
     }
@@ -160,34 +172,37 @@ export default async function AttendancePage({ searchParams }: Props) {
   }
 
   const dayOccIds = dayOccurrences.map((o) => o.id);
-  const checkOccIds = selectedOcc ? [selectedOcc.id] : dayOccIds;
+  const attendanceRecords = (monthAttendance ?? []).filter((a) =>
+    selectedOcc ? a.lesson_occurrence_id === selectedOcc.id : dayOccIds.includes(a.lesson_occurrence_id)
+  );
 
-  let attendanceRecords: Array<{
-    student_id: string;
-    lesson_occurrence_id: string;
-    status: string;
-  }> = [];
-
-  if (checkOccIds.length > 0) {
-    const { data } = await supabase
-      .from("attendance")
-      .select("student_id, lesson_occurrence_id, status")
-      .in("lesson_occurrence_id", checkOccIds);
-    attendanceRecords = data ?? [];
+  const studentCounts = new Map<string, number>();
+  const markedCounts = new Map<string, number>();
+  for (const occ of dayOccurrences) {
+    let count = 0;
+    for (const link of monthLinks ?? []) {
+      if (link.lesson_id !== occ.lessonId) continue;
+      const active = (link.students as unknown as { is_active: boolean } | null)?.is_active;
+      if (!active) continue;
+      if (link.start_date > occ.date) continue;
+      if (link.end_date && link.end_date < occ.date) continue;
+      count++;
+    }
+    studentCounts.set(occ.id, count);
+    markedCounts.set(
+      occ.id,
+      (monthAttendance ?? []).filter((a) => a.lesson_occurrence_id === occ.id).length
+    );
   }
 
-  // stats per occurrence for day list
-  const studentCounts = new Map<string, number>();
-  if (dayOccIds.length > 0) {
-    const lessonIds = [...new Set(dayOccurrences.map((o) => o.lessonId))];
-    const { data: allLinks } = await supabase
-      .from("student_lesson_assignments")
-      .select("lesson_id, student_id, start_date, end_date, students(is_active)")
-      .in("lesson_id", lessonIds);
-
-    for (const occ of dayOccurrences) {
+  // completeDates — skip heavy work if no occurrences
+  const completeDates: string[] = [];
+  if (monthOccurrences.length > 0) {
+    const monthStudentCounts = new Map<string, number>();
+    const monthMarkedCounts = new Map<string, number>();
+    for (const occ of monthOccurrences) {
       let count = 0;
-      for (const link of allLinks ?? []) {
+      for (const link of monthLinks ?? []) {
         if (link.lesson_id !== occ.lessonId) continue;
         const active = (link.students as unknown as { is_active: boolean } | null)?.is_active;
         if (!active) continue;
@@ -195,75 +210,69 @@ export default async function AttendancePage({ searchParams }: Props) {
         if (link.end_date && link.end_date < occ.date) continue;
         count++;
       }
-      studentCounts.set(occ.id, count);
-    }
-  }
-
-  const markedCounts = new Map<string, number>();
-  for (const occId of dayOccIds) {
-    markedCounts.set(
-      occId,
-      attendanceRecords.filter((a) => a.lesson_occurrence_id === occId).length
-    );
-  }
-
-  // completion stats for entire visible month (calendar highlights)
-  const monthOccIds = monthOccurrences.map((o) => o.id);
-  const monthLessonIds = [...new Set(monthOccurrences.map((o) => o.lessonId))];
-  let monthAttendance: typeof attendanceRecords = [];
-  const monthStudentCounts = new Map<string, number>();
-  const monthMarkedCounts = new Map<string, number>();
-
-  if (monthOccIds.length > 0) {
-    const { data: monthAtt } = await supabase
-      .from("attendance")
-      .select("student_id, lesson_occurrence_id, status")
-      .in("lesson_occurrence_id", monthOccIds);
-    monthAttendance = monthAtt ?? [];
-
-    if (monthLessonIds.length > 0) {
-      const { data: monthLinks } = await supabase
-        .from("student_lesson_assignments")
-        .select("lesson_id, student_id, start_date, end_date, students(is_active)")
-        .in("lesson_id", monthLessonIds);
-
-      for (const occ of monthOccurrences) {
-        let count = 0;
-        for (const link of monthLinks ?? []) {
-          if (link.lesson_id !== occ.lessonId) continue;
-          const active = (link.students as unknown as { is_active: boolean } | null)?.is_active;
-          if (!active) continue;
-          if (link.start_date > occ.date) continue;
-          if (link.end_date && link.end_date < occ.date) continue;
-          count++;
-        }
-        monthStudentCounts.set(occ.id, count);
-      }
-    }
-
-    for (const occId of monthOccIds) {
+      monthStudentCounts.set(occ.id, count);
       monthMarkedCounts.set(
-        occId,
-        monthAttendance.filter((a) => a.lesson_occurrence_id === occId).length
+        occ.id,
+        (monthAttendance ?? []).filter((a) => a.lesson_occurrence_id === occ.id).length
       );
     }
+
+    const occsByDate = new Map<string, typeof monthOccurrences>();
+    for (const o of monthOccurrences) {
+      const list = occsByDate.get(o.date) ?? [];
+      list.push(o);
+      occsByDate.set(o.date, list);
+    }
+    for (const [date, occs] of occsByDate) {
+      const allDone = occs.every((o) => {
+        const total = monthStudentCounts.get(o.id) ?? 0;
+        const marked = monthMarkedCounts.get(o.id) ?? 0;
+        return total > 0 && marked >= total;
+      });
+      if (allDone) completeDates.push(date);
+    }
   }
 
-  const completeDates: string[] = [];
-  const occsByDate = new Map<string, typeof monthOccurrences>();
-  for (const o of monthOccurrences) {
-    const list = occsByDate.get(o.date) ?? [];
-    list.push(o);
-    occsByDate.set(o.date, list);
-  }
-  for (const [date, occs] of occsByDate) {
-    if (occs.length === 0) continue;
-    const allDone = occs.every((o) => {
-      const total = monthStudentCounts.get(o.id) ?? 0;
-      const marked = monthMarkedCounts.get(o.id) ?? 0;
-      return total > 0 && marked >= total;
-    });
-    if (allDone) completeDates.push(date);
+  // Insights for students in selected lesson
+  const insightsByStudent: Record<string, StudentInsight> = {};
+  if (selectedOcc && lessonStudents.length > 0) {
+    const rule =
+      catalog.rules.find((r) => r.id === selectedOcc.attendanceRuleId) ?? catalog.rules[0];
+    const maxPct = rule ? Number(rule.max_allowed_absence_percent) : null;
+    const lessonOccs = monthOccurrences
+      .filter((o) => o.lessonId === selectedOcc.lessonId)
+      .sort((a, b) => a.date.localeCompare(b.date));
+
+    for (const student of lessonStudents) {
+      const eligible = lessonOccs
+        .filter((o) => o.date <= selectedOcc.date)
+        .map((o) => {
+          const att = (monthAttendance ?? []).find(
+            (a) => a.lesson_occurrence_id === o.id && a.student_id === student.id
+          );
+          return {
+            occurrenceId: o.id,
+            occurrenceDate: o.date,
+            status: "scheduled",
+            attendanceStatus: att?.status as "present" | "absent" | "late" | undefined,
+          };
+        });
+      const summary = summarizeAttendance(eligible);
+      const evaluated = evaluateAbsenceAgainstRule(summary.absencePercent, maxPct);
+
+      let streak = 0;
+      for (let i = eligible.length - 1; i >= 0; i--) {
+        const s = eligible[i].attendanceStatus;
+        if (s === "present" || s === "late") streak++;
+        else break;
+      }
+
+      insightsByStudent[student.id] = {
+        absencePercent: summary.absencePercent,
+        ruleLevel: evaluated.level,
+        presentStreak: streak,
+      };
+    }
   }
 
   let noteBody = "";
@@ -293,7 +302,7 @@ export default async function AttendancePage({ searchParams }: Props) {
     <div>
       <PageHeader
         title="נוכחות"
-        description="שלב 1: תאריך בלוח → שלב 2: שיעור → שלב 3: סמני נוכחות (שמירה מיידית)"
+        description="שלב 1: תאריך → שלב 2: שיעור → שלב 3: סימון (מקלדת: נ/ע/ן · שמירה מיידית)"
       />
 
       <AttendanceBoard
@@ -309,10 +318,10 @@ export default async function AttendancePage({ searchParams }: Props) {
         teacherId={params.teacherId}
         subject={params.subject}
         studentId={params.studentId}
-        classes={classes ?? []}
-        tracks={tracks ?? []}
-        specializations={specializations ?? []}
-        teachers={(teachers ?? []).map((t) => ({ id: t.id, name: t.full_name }))}
+        classes={catalog.classes}
+        tracks={catalog.tracks}
+        specializations={catalog.specializations}
+        teachers={catalog.teachers}
         subjects={subjects}
         allStudents={allStudents}
         monthOccurrences={monthOccurrences}
@@ -326,6 +335,7 @@ export default async function AttendancePage({ searchParams }: Props) {
         noteBody={noteBody}
         noteLessonId={selectedOcc?.lessonId ?? null}
         completeDates={completeDates}
+        insightsByStudent={insightsByStudent}
       />
     </div>
   );
