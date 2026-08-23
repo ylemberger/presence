@@ -679,7 +679,10 @@ export async function syncTeachersAction(academicYearId: string) {
   }
 }
 
-export async function createTeachingAssignmentAction(formData: FormData) {
+async function insertTeachingAssignmentFromForm(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  formData: FormData
+) {
   const teacherId = requireId(formData.get("teacher_id"), "מורה");
   if (isError(teacherId)) return teacherId;
   const yearId = requireId(formData.get("academic_year_id"), "שנה אקדמית");
@@ -690,8 +693,6 @@ export async function createTeachingAssignmentAction(formData: FormData) {
   if (isError(gradeId)) return gradeId;
   const billing = parseLessonBilling(formData);
   if ("error" in billing) return billing;
-
-  const supabase = await createClient();
 
   if (billing.class_id) {
     const { data: cls } = await supabase
@@ -705,18 +706,35 @@ export async function createTeachingAssignmentAction(formData: FormData) {
     }
   }
 
-  const { error } = await supabase.from("teacher_teaching_assignments").insert({
-    teacher_id: teacherId,
-    academic_year_id: yearId,
-    subject,
-    billing_type: billing.billing_type,
-    grade_id: gradeId,
-    class_id: billing.class_id,
-    track_id: billing.track_id,
-    specialization_id: billing.specialization_id,
-    for_psychology: billing.for_psychology,
-  });
-  if (error) return { error: error.message };
+  const { data: assignment, error } = await supabase
+    .from("teacher_teaching_assignments")
+    .insert({
+      teacher_id: teacherId,
+      academic_year_id: yearId,
+      subject,
+      billing_type: billing.billing_type,
+      grade_id: gradeId,
+      class_id: billing.class_id,
+      track_id: billing.track_id,
+      specialization_id: billing.specialization_id,
+      for_psychology: billing.for_psychology,
+    })
+    .select(
+      "id, subject, billing_type, grade_id, class_id, track_id, specialization_id, for_psychology"
+    )
+    .single();
+
+  if (error || !assignment) {
+    return { error: error?.message ?? "יצירת שיבוץ הוראה נכשלה" };
+  }
+
+  return assignment;
+}
+
+export async function createTeachingAssignmentAction(formData: FormData) {
+  const supabase = await createClient();
+  const result = await insertTeachingAssignmentFromForm(supabase, formData);
+  if ("error" in result) return result;
   revalidatePath("/teachers");
   revalidatePath("/lessons");
   return { success: true };
@@ -725,8 +743,6 @@ export async function createTeachingAssignmentAction(formData: FormData) {
 async function buildLessonPayload(formData: FormData) {
   const yearId = requireId(formData.get("academic_year_id"), "שנה אקדמית");
   if (isError(yearId)) return yearId;
-  const teachingId = requireId(formData.get("teacher_teaching_assignment_id"), "שיבוץ הוראה");
-  if (isError(teachingId)) return teachingId;
   const rangeId = requireId(formData.get("activity_range_id"), "טווח פעילות");
   if (isError(rangeId)) return rangeId;
   const ruleId = requireId(formData.get("attendance_rule_id"), "כלל נוכחות");
@@ -742,18 +758,38 @@ async function buildLessonPayload(formData: FormData) {
   }
 
   const supabase = await createClient();
-  const { data: teaching, error: teachingError } = await supabase
-    .from("teacher_teaching_assignments")
-    .select(
-      "subject, billing_type, grade_id, class_id, track_id, specialization_id, for_psychology"
-    )
-    .eq("id", teachingId)
-    .single();
-  if (teachingError || !teaching) {
-    return { error: "שיבוץ ההוראה שנבחר אינו תקין" };
+  let teachingId = String(formData.get("teacher_teaching_assignment_id") ?? "").trim();
+  let teaching: {
+    subject: string;
+    billing_type: string;
+    grade_id: string | null;
+    class_id: string | null;
+    track_id: string | null;
+    specialization_id: string | null;
+    for_psychology: boolean;
+  };
+
+  if (teachingId) {
+    const { data, error: teachingError } = await supabase
+      .from("teacher_teaching_assignments")
+      .select(
+        "subject, billing_type, grade_id, class_id, track_id, specialization_id, for_psychology"
+      )
+      .eq("id", teachingId)
+      .single();
+    if (teachingError || !data) {
+      return { error: "שיבוץ ההוראה שנבחר אינו תקין" };
+    }
+    teaching = data;
+  } else {
+    const created = await insertTeachingAssignmentFromForm(supabase, formData);
+    if ("error" in created) return created;
+    teachingId = created.id;
+    teaching = created;
   }
+
   if (!teaching.billing_type) {
-    return { error: "לשיבוץ ההוראה חסר סוג (חובה/התמחות). עדכני את השיבוץ במסך מורות." };
+    return { error: "חסר סוג שיעור (חובה/התמחות)" };
   }
 
   let gradeId = teaching.grade_id as string | null;
@@ -766,11 +802,7 @@ async function buildLessonPayload(formData: FormData) {
     gradeId = cls?.grade_id ?? null;
   }
   if (!gradeId) {
-    const formGrade = requireId(formData.get("grade_id"), "שכבה");
-    if (isError(formGrade)) {
-      return { error: "לשיבוץ ההוראה חסרה שכבה. עדכני את השיבוץ במסך מורות." };
-    }
-    gradeId = formGrade;
+    return { error: "חסרה שכבה לשיעור" };
   }
 
   return {
@@ -791,9 +823,27 @@ async function buildLessonPayload(formData: FormData) {
 }
 
 // --- Lessons ---
+async function rollbackFailedLessonCreate(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  opts: { lessonId?: string; assignmentId?: string; removeAssignment?: boolean }
+) {
+  if (opts.lessonId) {
+    await supabase.from("lessons").delete().eq("id", opts.lessonId);
+  }
+  if (opts.removeAssignment && opts.assignmentId) {
+    await supabase
+      .from("teacher_teaching_assignments")
+      .delete()
+      .eq("id", opts.assignmentId);
+  }
+}
+
 export async function createLessonAction(formData: FormData) {
   const payload = await buildLessonPayload(formData);
   if ("error" in payload) return payload;
+
+  const isNewAssignment = !String(formData.get("teacher_teaching_assignment_id") ?? "").trim();
+  const assignmentId = payload.teacher_teaching_assignment_id;
 
   const supabase = await createClient();
   const { data: lesson, error } = await supabase
@@ -801,12 +851,22 @@ export async function createLessonAction(formData: FormData) {
     .insert(payload)
     .select("id")
     .single();
-  if (error || !lesson) return { error: error?.message ?? "יצירת שיעור נכשלה" };
+  if (error || !lesson) {
+    await rollbackFailedLessonCreate(supabase, {
+      assignmentId,
+      removeAssignment: isNewAssignment,
+    });
+    return { error: error?.message ?? "יצירת שיעור נכשלה" };
+  }
 
   try {
     await generateLessonOccurrences(lesson.id);
   } catch (e) {
-    await supabase.from("lessons").delete().eq("id", lesson.id);
+    await rollbackFailedLessonCreate(supabase, {
+      lessonId: lesson.id,
+      assignmentId,
+      removeAssignment: isNewAssignment,
+    });
     return { error: (e as Error).message };
   }
 
@@ -814,6 +874,7 @@ export async function createLessonAction(formData: FormData) {
 
   revalidatePath("/lessons");
   revalidatePath("/attendance");
+  revalidatePath("/teachers");
   return { success: true };
 }
 
@@ -824,6 +885,9 @@ export async function createLessonForDateAction(formData: FormData) {
   const payload = await buildLessonPayload(formData);
   if ("error" in payload) return payload;
 
+  const isNewAssignment = !String(formData.get("teacher_teaching_assignment_id") ?? "").trim();
+  const assignmentId = payload.teacher_teaching_assignment_id;
+
   const supabase = await createClient();
   const { data: lesson, error } = await supabase
     .from("lessons")
@@ -831,25 +895,30 @@ export async function createLessonForDateAction(formData: FormData) {
     .select("id")
     .single();
 
-  if (error || !lesson) return { error: error?.message ?? "יצירת שיעור נכשלה" };
-
-  const { error: occError } = await supabase.from("lesson_occurrences").insert({
-    lesson_id: lesson.id,
-    occurrence_date: occurrenceDate,
-    status: "scheduled",
-  });
-  if (occError) {
-    await supabase.from("lessons").delete().eq("id", lesson.id);
-    if (occError.code === "23505") {
-      return { error: "כבר קיים מופע לשיעור זה באותו תאריך" };
-    }
-    return { error: occError.message };
+  if (error || !lesson) {
+    await rollbackFailedLessonCreate(supabase, {
+      assignmentId,
+      removeAssignment: isNewAssignment,
+    });
+    return { error: error?.message ?? "יצירת שיעור נכשלה" };
   }
 
-  await autoAssignStudentsToLesson(lesson.id, payload.academic_year_id, occurrenceDate);
+  try {
+    await generateLessonOccurrences(lesson.id);
+  } catch (e) {
+    await rollbackFailedLessonCreate(supabase, {
+      lessonId: lesson.id,
+      assignmentId,
+      removeAssignment: isNewAssignment,
+    });
+    return { error: (e as Error).message };
+  }
+
+  await autoAssignStudentsToLesson(lesson.id, payload.academic_year_id);
 
   revalidatePath("/lessons");
   revalidatePath("/attendance");
+  revalidatePath("/teachers");
   return { success: true };
 }
 

@@ -19,12 +19,8 @@ import {
   completeOccurrenceAction,
   restoreOccurrenceAction,
 } from "../actions";
-import type {
-  ActivityRange,
-  AttendanceRule,
-  Lesson,
-} from "@/types/database";
-import type { TeachingAssignmentOption } from "./LessonsForm";
+import type { ActivityRange, AttendanceRule, Lesson } from "@/types/database";
+import type { LessonsFormProps } from "./LessonsForm";
 
 interface OccurrenceRow {
   id: string;
@@ -36,23 +32,17 @@ interface OccurrenceRow {
 }
 
 interface LessonsCalendarProps {
-  yearId: string;
   initialMonthIso?: string;
   occurrences: OccurrenceRow[];
   lessons: Lesson[];
-  teachingAssignments: TeachingAssignmentOption[];
-  ranges: ActivityRange[];
-  rules: AttendanceRule[];
+  formProps: Omit<LessonsFormProps, "onCreated" | "occurrenceDate">;
 }
 
 export function LessonsCalendar({
-  yearId,
   initialMonthIso,
   occurrences,
   lessons,
-  teachingAssignments,
-  ranges,
-  rules,
+  formProps,
 }: LessonsCalendarProps) {
   const router = useRouter();
   const seed = hebrewMonthFromIso(initialMonthIso || todayIso());
@@ -179,11 +169,8 @@ export function LessonsCalendar({
                 השיעור ייווצר לתבנית השבועית, ויווצר גם מופע ליום {formatHebrewDate(selectedIso)}.
               </p>
               <LessonsForm
-                yearId={yearId}
+                {...formProps}
                 occurrenceDate={selectedIso}
-                teachingAssignments={teachingAssignments}
-                ranges={ranges}
-                rules={rules}
                 onCreated={() => {
                   setCreating(false);
                   router.refresh();

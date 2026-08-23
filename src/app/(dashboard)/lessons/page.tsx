@@ -1,9 +1,11 @@
 import { createClient } from "@/lib/supabase/server";
 import { getActiveAcademicYear } from "@/lib/utils";
 import { PageHeader } from "@/components/ui/PageHeader";
+import { Card } from "@/components/ui/Card";
 import { GenerateOccurrencesButton } from "./GenerateOccurrencesButton";
 import { LessonsCalendar } from "./LessonsCalendar";
-import type { TeachingAssignmentOption } from "./LessonsForm";
+import { LessonsForm } from "./LessonsForm";
+import { filterFixedGrades } from "@/lib/years/grades";
 import {
   buildHebrewMonth,
   hebrewMonthFromIso,
@@ -31,28 +33,36 @@ export default async function LessonsPage({ searchParams }: Props) {
   const from = searchParams.from || month.rangeStart;
   const to = searchParams.to || month.rangeEnd;
 
-  const [lessons, teachingAssignments, ranges, rules, occurrences] = await Promise.all([
-    supabase
-      .from("lessons")
-      .select("*")
-      .eq("academic_year_id", activeYear.id)
-      .order("day_of_week"),
-    supabase
-      .from("teacher_teaching_assignments")
-      .select(
-        "id, subject, billing_type, teachers(full_name), grades(name), classes(name), tracks(name), specializations(name)"
-      )
-      .eq("academic_year_id", activeYear.id),
-    supabase.from("activity_ranges").select("*").eq("academic_year_id", activeYear.id),
-    supabase.from("attendance_rules").select("*"),
-    supabase
-      .from("lesson_occurrences")
-      .select("id, occurrence_date, status, notes, lesson_id, lessons!inner(subject, academic_year_id)")
-      .eq("lessons.academic_year_id", activeYear.id)
-      .gte("occurrence_date", from)
-      .lte("occurrence_date", to)
-      .order("occurrence_date"),
-  ]);
+  const [lessons, teachers, grades, classes, tracks, specializations, ranges, rules, occurrences] =
+    await Promise.all([
+      supabase
+        .from("lessons")
+        .select("*")
+        .eq("academic_year_id", activeYear.id)
+        .order("day_of_week"),
+      supabase.from("teachers").select("id, full_name").order("full_name"),
+      supabase.from("grades").select("id, name").eq("academic_year_id", activeYear.id).order("name"),
+      supabase
+        .from("classes")
+        .select("id, name, grade_id")
+        .eq("academic_year_id", activeYear.id)
+        .order("name"),
+      supabase.from("tracks").select("id, name").eq("academic_year_id", activeYear.id).order("name"),
+      supabase
+        .from("specializations")
+        .select("id, name")
+        .eq("academic_year_id", activeYear.id)
+        .order("name"),
+      supabase.from("activity_ranges").select("*").eq("academic_year_id", activeYear.id),
+      supabase.from("attendance_rules").select("*"),
+      supabase
+        .from("lesson_occurrences")
+        .select("id, occurrence_date, status, notes, lesson_id, lessons!inner(subject, academic_year_id)")
+        .eq("lessons.academic_year_id", activeYear.id)
+        .gte("occurrence_date", from)
+        .lte("occurrence_date", to)
+        .order("occurrence_date"),
+    ]);
 
   const occurrenceRows = (occurrences.data ?? []).map((o) => ({
     id: o.id,
@@ -63,35 +73,44 @@ export default async function LessonsPage({ searchParams }: Props) {
     subject: (o.lessons as unknown as { subject: string } | null)?.subject ?? "",
   }));
 
-  const teachingOptions: TeachingAssignmentOption[] = (teachingAssignments.data ?? []).map(
-    (t) => ({
-      id: t.id,
-      subject: t.subject,
-      billing_type: (t.billing_type as "mandatory" | "specialization") ?? "mandatory",
-      teachers: t.teachers as unknown as { full_name: string } | null,
-      gradeName: (t.grades as unknown as { name: string } | null)?.name ?? null,
-      className: (t.classes as unknown as { name: string } | null)?.name ?? null,
-      trackName: (t.tracks as unknown as { name: string } | null)?.name ?? null,
-      specializationName:
-        (t.specializations as unknown as { name: string } | null)?.name ?? null,
-    })
-  );
+  const formProps = {
+    yearId: activeYear.id,
+    teachers: teachers.data ?? [],
+    grades: filterFixedGrades(grades.data ?? []),
+    classes: classes.data ?? [],
+    tracks: tracks.data ?? [],
+    specializations: specializations.data ?? [],
+    ranges: ranges.data ?? [],
+    rules: rules.data ?? [],
+  };
 
   return (
     <div className="space-y-6">
       <PageHeader
         title="יומן שיעורים עברי"
-        description="הקהל לשיעור נקבע משיבוץ ההוראה: שכבה, וכיתה∩מסלול או התמחות."
+        description="יצירת שיעור חדש — מורה, קהל יעד, לוח זמנים וכל המופעים בטווח — הכל בטופס אחד."
         actions={<GenerateOccurrencesButton academicYearId={activeYear.id} />}
       />
+
+      <Card title="יצירת שיעור חדש">
+        {(formProps.teachers.length === 0 && (
+          <p className="mb-3 text-sm text-amber-700">
+            אין מורות במערכת.{" "}
+            <a href="/teachers" className="font-medium underline">
+              הוסיפי מורה
+            </a>{" "}
+            לפני יצירת שיעור.
+          </p>
+        )) ||
+          null}
+        <LessonsForm {...formProps} />
+      </Card>
+
       <LessonsCalendar
-        yearId={activeYear.id}
         initialMonthIso={from}
         occurrences={occurrenceRows}
         lessons={lessons.data ?? []}
-        teachingAssignments={teachingOptions}
-        ranges={ranges.data ?? []}
-        rules={rules.data ?? []}
+        formProps={formProps}
       />
     </div>
   );
