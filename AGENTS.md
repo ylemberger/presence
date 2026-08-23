@@ -10,7 +10,8 @@
 
 ## מסד נתונים
 
-- **אל תשנה סכימה** בלי מיגרציה חדשה ב-`supabase/migrations/`.
+- **סכימה מלאה:** [`supabase/setup_database.sql`](supabase/setup_database.sql) — קובץ יחיד לפרויקט חדש.
+- **שינוי סכימה:** עדכן את `setup_database.sql` + הוסף patch ב-`supabase/patches/` למסד קיים (ראי [`supabase/README.md`](supabase/README.md)).
 - **RLS:** כל הטבלאות — `authenticated` בלבד. אין גישה לאנונימי.
 - **טריגרים קיימים:** ביקורת נוכחות, מניעת חפיפת שיבוצים, שנה פעילה יחידה.
 - **מחיקה:** ב-UI — בדיקת הפניות לפני מחיקה. CASCADE רק לפעולות על-שנה.
@@ -32,10 +33,10 @@
 ## לפני שינוי
 
 1. האם זה משפיע על נתונים היסטוריים? אם כן — אל תדרוס, הוסף רשומה חדשה.
-2. האם נדרשת מיגרציה? אם כן — צור קובץ SQL חדש, אל תערוך `0001_init.sql`.
+2. האם נדרש שינוי סכימה? אם כן — עדכן `setup_database.sql` + patch ב-`supabase/patches/`, ואל תערוך ידנית טבלאות בפרודקשן.
 3. האם יש RLS/policy? שמור על authenticated-only.
 
 ## פריסה
 
 - `.env.local`: `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`.
-- הרץ מיגרציות ב-Supabase SQL Editor לפני שימוש.
+- הרץ `setup_database.sql` ב-Supabase SQL Editor לפני שימוש ראשון.
