@@ -1,6 +1,11 @@
 export const FIRST_ALLOWED_EMAIL = "t025959714@gmail.com";
 
-const ALLOWED_LOGIN_EMAILS = new Set([FIRST_ALLOWED_EMAIL]);
+const ALLOWED_LOGIN_EMAILS = new Set([
+  FIRST_ALLOWED_EMAIL,
+  "yehudit.b@bybs.org.il",
+  "y.lemberger@bybs.org.il",
+  "zipora.e@bybs.org.il",
+]);
 
 export function isAllowedLoginEmail(email: string | null | undefined): boolean {
   if (!email) return false;
