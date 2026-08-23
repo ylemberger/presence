@@ -19,8 +19,3 @@ truncate table
   academic_years,
   attendance_rules
 restart identity cascade;
-
-insert into attendance_rules (name, max_allowed_absence_percent) values
-  ('רגיל 20%', 20),
-  ('בטיחות 10%', 10),
-  ('עזרה ראשונה 1%', 1);

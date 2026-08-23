@@ -1,2 +1,0 @@
-﻿-- Do not run this file for production data.
--- To start empty, run reset_all_data.sql in Supabase SQL Editor instead.

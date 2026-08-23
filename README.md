@@ -5,10 +5,9 @@
 ## התקנה
 
 1. **Supabase:** צרי פרויקט חדש ב-[supabase.com](https://supabase.com)
-2. **מיגרציה:** הריצי ב-SQL Editor לפי הסדר:
-   - [`supabase/migrations/0001_init.sql`](supabase/migrations/0001_init.sql)
-   - [`supabase/migrations/0002_performance.sql`](supabase/migrations/0002_performance.sql)
-   - (אופציונלי) [`supabase/seed_demo.sql`](supabase/seed_demo.sql) — נתוני דמה לבדיקות
+2. **מסד נתונים:** ב-Supabase SQL Editor:
+   - פרויקט **חדש** — הריצי [`supabase/setup_database.sql`](supabase/setup_database.sql) (פעם אחת, יוצר את כל הטבלאות)
+   - **לרוקן נתונים** (שומר טבלאות) — [`supabase/reset_all_data.sql`](supabase/reset_all_data.sql)
 3. **Auth עם Google:**
    1. ב-[Google Cloud Console](https://console.cloud.google.com/) צרי OAuth 2.0 Client (Web)
    2. Authorized redirect URI: `https://<project-ref>.supabase.co/auth/v1/callback`
