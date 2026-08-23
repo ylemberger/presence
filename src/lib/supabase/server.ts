@@ -1,5 +1,6 @@
 import { createServerClient } from "@supabase/ssr";
 import { cookies } from "next/headers";
+import { isAllowedLoginEmail } from "@/lib/auth/allowed-emails";
 
 export async function createClient() {
   const cookieStore = await cookies();
@@ -24,4 +25,20 @@ export async function createClient() {
       },
     }
   );
+}
+
+/** For Server Actions — requires an allowed, authenticated user. */
+export async function createActionClient(): Promise<
+  { supabase: Awaited<ReturnType<typeof createClient>>; error?: never } | { error: string }
+> {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (!user || !isAllowedLoginEmail(user.email)) {
+    return { error: "אין הרשאה. התחברי מחדש." };
+  }
+
+  return { supabase };
 }
