@@ -4,7 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/Button";
 import { Input, Select } from "@/components/ui/Input";
-import { HebrewDateInput } from "@/components/ui/HebrewDateInput";
+import { HebrewDateRangePicker } from "@/components/ui/HebrewDateRangePicker";
 import { DeleteButton } from "@/components/ui/DeleteButton";
 import { RANGE_TYPE_LABELS } from "@/lib/constants";
 import { formatDate } from "@/lib/dates/hebrew";
@@ -238,8 +238,14 @@ export function EditableActivityRangeRow({
               label: l,
             }))}
           />
-          <HebrewDateInput label="מתאריך" name="start_date" defaultValue={startDate} required />
-          <HebrewDateInput label="עד תאריך" name="end_date" defaultValue={endDate} required />
+          <HebrewDateRangePicker
+            startName="start_date"
+            endName="end_date"
+            defaultStart={startDate}
+            defaultEnd={endDate}
+            required
+            className="basis-full"
+          />
           <Button type="submit" size="sm" disabled={saving}>
             {saving ? "שומר..." : "שמירה"}
           </Button>

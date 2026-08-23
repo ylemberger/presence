@@ -161,6 +161,61 @@ export function daysInHebrewMonth(year: number, month: number): number {
   return new HDate(1, month, year).daysInMonth();
 }
 
+export function hebrewMonthsInYear(year: number): number {
+  let count = 12;
+  for (let month = 1; month <= 14; month++) {
+    try {
+      const hd = new HDate(1, month, year);
+      if (hd.getFullYear() !== year) break;
+      count = month;
+    } catch {
+      break;
+    }
+  }
+  return count;
+}
+
+export function hebrewMonthOptionsForYear(year: number): Array<{
+  month: number;
+  label: string;
+}> {
+  const total = hebrewMonthsInYear(year);
+  const options: Array<{ month: number; label: string }> = [];
+  for (let month = 1; month <= total; month++) {
+    const first = new HDate(1, month, year);
+    options.push({
+      month,
+      label: first.renderGematriya(true).replace(/^א׳\s*/, ""),
+    });
+  }
+  return options;
+}
+
+export function hebrewYearOptions(centerIso: string, span = 20): Array<{
+  year: number;
+  label: string;
+}> {
+  const centerYear = isoToHDate(centerIso).getFullYear();
+  const options: Array<{ year: number; label: string }> = [];
+  for (let year = centerYear - span; year <= centerYear + span; year++) {
+    const sample = new HDate(1, 7, year);
+    const parts = sample.renderGematriya(true).split(" ");
+    options.push({
+      year,
+      label: parts[parts.length - 1] ?? String(year),
+    });
+  }
+  return options;
+}
+
+export function isIsoInRange(iso: string, start: string, end: string): boolean {
+  if (!start) return false;
+  const bound = end || start;
+  const lo = start <= bound ? start : bound;
+  const hi = start <= bound ? bound : start;
+  return iso >= lo && iso <= hi;
+}
+
 export function formatDate(date: string | Date | null | undefined): string {
   return formatHebrewDate(date);
 }
