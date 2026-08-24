@@ -1,6 +1,5 @@
 ---
-description: מניעת SSRF בקריאות רשת יוצאות
-alwaysApply: true
+alwaysApply: false
 ---
 # SSRF Prevention
 

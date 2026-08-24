@@ -1,0 +1,571 @@
+<!DOCTYPE html>
+
+<html dir="rtl" lang="he"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>מערכת ניהול פנימית - יומן שיעורים</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Hanken+Grotesk:wght@400;500;600;700&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+        tailwind.config = {
+          darkMode: "class",
+          theme: {
+            extend: {
+              "colors": {
+                      "surface-tint": "#42646a",
+                      "on-tertiary-fixed-variant": "#1e4d55",
+                      "surface-container": "#ebefee",
+                      "surface-container-high": "#e5e9e8",
+                      "tertiary-container": "#043b43",
+                      "secondary-container": "#fdd48e",
+                      "outline": "#71787a",
+                      "primary-container": "#163a40",
+                      "error": "#ba1a1a",
+                      "on-primary-fixed": "#001f24",
+                      "on-primary-fixed-variant": "#294c52",
+                      "tertiary-fixed": "#bceaf4",
+                      "surface-container-lowest": "#ffffff",
+                      "surface-container-low": "#f0f4f3",
+                      "secondary-fixed-dim": "#e8c17c",
+                      "surface-container-highest": "#dfe3e2",
+                      "inverse-surface": "#2d3131",
+                      "on-error-container": "#93000a",
+                      "on-surface-variant": "#414849",
+                      "primary-fixed-dim": "#a9cdd4",
+                      "background": "#f6faf9",
+                      "surface": "#f6faf9",
+                      "inverse-on-surface": "#edf2f1",
+                      "surface-variant": "#dfe3e2",
+                      "primary": "#00242a",
+                      "secondary": "#775a20",
+                      "outline-variant": "#c1c8c9",
+                      "on-primary-container": "#81a4ab",
+                      "secondary-fixed": "#ffdea7",
+                      "on-error": "#ffffff",
+                      "tertiary": "#00242a",
+                      "error-container": "#ffdad6",
+                      "on-tertiary-container": "#78a5ae",
+                      "primary-fixed": "#c4e9f0",
+                      "surface-dim": "#d7dbda",
+                      "on-tertiary-fixed": "#001f24",
+                      "on-secondary": "#ffffff",
+                      "on-secondary-fixed": "#271900",
+                      "on-background": "#181c1c",
+                      "on-secondary-fixed-variant": "#5c4208",
+                      "surface-bright": "#f6faf9",
+                      "on-primary": "#ffffff",
+                      "inverse-primary": "#a9cdd4",
+                      "on-tertiary": "#ffffff",
+                      "on-surface": "#181c1c",
+                      "on-secondary-container": "#775a20",
+                      "tertiary-fixed-dim": "#a0ced8"
+              },
+              "borderRadius": {
+                      "DEFAULT": "0.25rem",
+                      "lg": "0.5rem",
+                      "xl": "0.75rem",
+                      "full": "9999px"
+              },
+              "spacing": {
+                      "stack_lg": "2rem",
+                      "stack_md": "1rem",
+                      "container_padding": "2rem",
+                      "gutter": "1.5rem",
+                      "sidebar_width": "17.5rem",
+                      "stack_sm": "0.5rem"
+              },
+              "fontFamily": {
+                      "body-lg": [
+                              "Hanken Grotesk"
+                      ],
+                      "body-md": [
+                              "Hanken Grotesk"
+                      ],
+                      "headline-md": [
+                              "Hanken Grotesk"
+                      ],
+                      "headline-lg": [
+                              "Hanken Grotesk"
+                      ],
+                      "display-lg": [
+                              "Hanken Grotesk"
+                      ],
+                      "title-lg": [
+                              "Hanken Grotesk"
+                      ],
+                      "caption": [
+                              "Hanken Grotesk"
+                      ],
+                      "label-md": [
+                              "Hanken Grotesk"
+                      ]
+              },
+              "fontSize": {
+                      "body-lg": [
+                              "18px",
+                              {
+                                      "lineHeight": "28px",
+                                      "fontWeight": "400"
+                              }
+                      ],
+                      "body-md": [
+                              "16px",
+                              {
+                                      "lineHeight": "24px",
+                                      "fontWeight": "400"
+                              }
+                      ],
+                      "headline-md": [
+                              "24px",
+                              {
+                                      "lineHeight": "32px",
+                                      "fontWeight": "600"
+                              }
+                      ],
+                      "headline-lg": [
+                              "32px",
+                              {
+                                      "lineHeight": "40px",
+                                      "fontWeight": "600"
+                              }
+                      ],
+                      "display-lg": [
+                              "48px",
+                              {
+                                      "lineHeight": "56px",
+                                      "letterSpacing": "-0.02em",
+                                      "fontWeight": "700"
+                              }
+                      ],
+                      "title-lg": [
+                              "20px",
+                              {
+                                      "lineHeight": "28px",
+                                      "fontWeight": "500"
+                              }
+                      ],
+                      "caption": [
+                              "12px",
+                              {
+                                      "lineHeight": "16px",
+                                      "fontWeight": "400"
+                              }
+                      ],
+                      "label-md": [
+                              "14px",
+                              {
+                                      "lineHeight": "20px",
+                                      "letterSpacing": "0.01em",
+                                      "fontWeight": "600"
+                              }
+                      ]
+              }
+      },
+          },
+        }
+      </script>
+<style>
+        body {
+            background-color: theme('colors.background');
+            color: theme('colors.on-background');
+        }
+        .material-symbols-outlined {
+          font-variation-settings:
+          'FILL' 0,
+          'wght' 400,
+          'GRAD' 0,
+          'opsz' 24
+        }
+        
+        .nav-item-active {
+             background-color: theme('colors.primary-container');
+             color: theme('colors.secondary');
+             border-right-width: 4px;
+             border-color: theme('colors.secondary');
+        }
+        
+        .nav-item-inactive {
+             color: theme('colors.on-primary');
+        }
+        .nav-item-inactive:hover {
+            background-color: rgba(22, 58, 64, 0.5); /* primary-container with opacity */
+        }
+
+        .card-hover:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 12px 32px rgba(22, 58, 64, 0.12);
+        }
+        
+        .status-ok {
+            background-color: rgba(16, 185, 129, 0.1);
+            color: #10b981; /* attendance-present equivalent */
+        }
+        .status-warning {
+            background-color: rgba(245, 158, 11, 0.1);
+            color: #f59e0b; /* attendance-late equivalent */
+        }
+        .status-blocked {
+            background-color: rgba(244, 63, 94, 0.1);
+            color: #f43f5e; /* attendance-absent equivalent */
+        }
+    </style>
+</head>
+<body class="flex min-h-screen">
+<!-- SideNavBar -->
+<nav class="hidden md:flex flex-col h-full rtl bg-primary dark:bg-primary-container fixed right-0 top-0 w-[17.5rem] shadow-md shadow-lg z-50">
+<div class="p-stack_md flex items-center gap-4 border-b border-primary-container/20">
+<div class="w-10 h-10 rounded-full bg-secondary-container flex items-center justify-center font-bold text-on-secondary-container">
+                 נ
+             </div>
+<div>
+<h2 class="font-headline-md text-headline-md text-secondary">נוכחות סמינר</h2>
+<p class="font-caption text-caption text-on-primary-container">תשפ"ד - שנה פעילה</p>
+</div>
+</div>
+<ul class="flex-1 py-stack_md flex flex-col gap-1 overflow-y-auto">
+<li>
+<a class="flex items-center gap-3 px-stack_md py-3 font-body-md text-body-md nav-item-inactive transition-all hover:bg-primary-container" href="#">
+<span class="material-symbols-outlined" data-icon="dashboard">dashboard</span>
+<span>לוח בקרה</span>
+</a>
+</li>
+<li>
+<a class="flex items-center gap-3 px-stack_md py-3 font-body-md text-body-md nav-item-inactive transition-all hover:bg-primary-container" href="#">
+<span class="material-symbols-outlined" data-icon="group">group</span>
+<span>תלמידות</span>
+</a>
+</li>
+<li>
+<a class="flex items-center gap-3 px-stack_md py-3 font-body-md text-body-md nav-item-inactive transition-all hover:bg-primary-container" href="#">
+<span class="material-symbols-outlined" data-icon="fact_check">fact_check</span>
+<span>נוכחות</span>
+</a>
+</li>
+<li>
+<a class="flex items-center gap-3 px-stack_md py-3 font-body-md text-body-md nav-item-inactive transition-all hover:bg-primary-container" href="#">
+<span class="material-symbols-outlined" data-icon="edit_calendar">edit_calendar</span>
+<span>מבחני השלמה</span>
+</a>
+</li>
+<li>
+<a class="flex items-center gap-3 px-stack_md py-3 font-body-md text-body-md nav-item-active transition-all hover:bg-primary-container" href="#">
+<span class="material-symbols-outlined" data-icon="menu_book">menu_book</span>
+<span>שיעורים</span>
+</a>
+</li>
+<li>
+<a class="flex items-center gap-3 px-stack_md py-3 font-body-md text-body-md nav-item-inactive transition-all hover:bg-primary-container" href="#">
+<span class="material-symbols-outlined" data-icon="person_4">person_4</span>
+<span>מורות</span>
+</a>
+</li>
+<li>
+<a class="flex items-center gap-3 px-stack_md py-3 font-body-md text-body-md nav-item-inactive transition-all hover:bg-primary-container" href="#">
+<span class="material-symbols-outlined" data-icon="assessment">assessment</span>
+<span>דוחות</span>
+</a>
+</li>
+<li>
+<a class="flex items-center gap-3 px-stack_md py-3 font-body-md text-body-md nav-item-inactive transition-all hover:bg-primary-container" href="#">
+<span class="material-symbols-outlined" data-icon="settings">settings</span>
+<span>הגדרות</span>
+</a>
+</li>
+</ul>
+<div class="mt-auto border-t border-primary-container/20 p-stack_md">
+<a class="flex items-center gap-3 px-stack_md py-3 font-body-md text-body-md nav-item-inactive transition-all hover:bg-primary-container" href="#">
+<span class="material-symbols-outlined" data-icon="logout">logout</span>
+<span>התנתקות</span>
+</a>
+</div>
+</nav>
+<!-- Main Content Area -->
+<main class="flex-1 md:mr-[17.5rem] flex flex-col min-h-screen relative w-full">
+<!-- TopAppBar -->
+<header class="flex justify-between items-center px-stack_lg h-16 rtl bg-surface/95 dark:bg-surface-dim/95 sticky top-0 z-40 w-full border-b border-outline-variant backdrop-blur-md shadow-sm transition-opacity duration-200">
+<div class="flex items-center gap-4">
+<h1 class="font-headline-md text-headline-md text-primary font-bold">מערכת ניהול פנימית</h1>
+<nav class="hidden md:flex gap-4 mr-8">
+<a class="text-on-surface-variant font-label-md text-label-md hover:text-primary transition-colors" href="#">תשפ"ד</a>
+</nav>
+</div>
+<div class="flex items-center gap-4">
+<button class="flex items-center gap-2 text-on-surface-variant hover:text-primary transition-colors font-label-md text-label-md">
+<span>בורר שנה</span>
+<span class="material-symbols-outlined text-[20px]" data-icon="expand_more">expand_more</span>
+</button>
+<div class="flex items-center gap-2">
+<button class="p-2 text-on-surface-variant hover:text-primary transition-colors rounded-full hover:bg-surface-container">
+<span class="material-symbols-outlined" data-icon="notifications">notifications</span>
+</button>
+<button class="p-2 text-on-surface-variant hover:text-primary transition-colors rounded-full hover:bg-surface-container">
+<span class="material-symbols-outlined" data-icon="account_circle">account_circle</span>
+</button>
+</div>
+</div>
+</header>
+<!-- Canvas -->
+<div class="flex-1 p-stack_lg max-w-[1440px] mx-auto w-full">
+<!-- Page Header -->
+<div class="flex justify-between items-end mb-stack_lg">
+<div>
+<h2 class="font-display-lg text-display-lg text-primary mb-2">יומן שיעורים עברי</h2>
+<p class="font-body-lg text-body-lg text-on-surface-variant">ניהול מערכת השעות, מופעים חריגים ומעקב נוכחות מורות.</p>
+</div>
+<button class="bg-brand bg-primary text-surface font-label-md text-label-md px-6 py-3 rounded-lg shadow-sm hover:shadow-md transition-all flex items-center gap-2 h-12">
+<span class="material-symbols-outlined" data-icon="add">add</span>
+                    יצירת מופעים
+                </button>
+</div>
+<!-- Bento Grid Layout -->
+<div class="grid grid-cols-1 xl:grid-cols-12 gap-gutter">
+<!-- Create Lesson Form (Left Column on Lg screens) -->
+<div class="xl:col-span-4 flex flex-col gap-gutter">
+<div class="bg-surface rounded-xl p-stack_md shadow-[0_4px_20px_rgba(22,58,64,0.05)] border-t-4 border-secondary flex flex-col h-full card-hover transition-all">
+<h3 class="font-headline-md text-headline-md text-primary mb-stack_md flex items-center gap-2">
+<span class="material-symbols-outlined text-secondary" data-icon="edit_note">edit_note</span>
+                            יצירת שיעור חדש
+                        </h3>
+<form class="flex flex-col gap-stack_sm flex-1">
+<div>
+<label class="block font-label-md text-label-md text-on-surface mb-1">מורה</label>
+<select class="w-full rounded-lg border-outline bg-surface-container-low text-on-surface focus:border-primary focus:ring-2 focus:ring-primary-fixed-dim transition-all">
+<option>בחר מורה...</option>
+<option>רבקה כהן</option>
+<option>שרה לוי</option>
+</select>
+</div>
+<div class="grid grid-cols-2 gap-stack_sm">
+<div>
+<label class="block font-label-md text-label-md text-on-surface mb-1">סוג שיעור</label>
+<select class="w-full rounded-lg border-outline bg-surface-container-low text-on-surface focus:border-primary focus:ring-2 focus:ring-primary-fixed-dim transition-all">
+<option>רגיל</option>
+<option>מילוי מקום</option>
+<option>השלמה</option>
+</select>
+</div>
+<div>
+<label class="block font-label-md text-label-md text-on-surface mb-1">כיתה</label>
+<select class="w-full rounded-lg border-outline bg-surface-container-low text-on-surface focus:border-primary focus:ring-2 focus:ring-primary-fixed-dim transition-all">
+<option>ט' 1</option>
+<option>י' 2</option>
+</select>
+</div>
+</div>
+<div class="grid grid-cols-2 gap-stack_sm">
+<div>
+<label class="block font-label-md text-label-md text-on-surface mb-1">יום בשבוע</label>
+<select class="w-full rounded-lg border-outline bg-surface-container-low text-on-surface focus:border-primary focus:ring-2 focus:ring-primary-fixed-dim transition-all">
+<option>ראשון</option>
+<option>שני</option>
+<option>שלישי</option>
+<option>רביעי</option>
+<option>חמישי</option>
+<option>שישי</option>
+</select>
+</div>
+<div>
+<label class="block font-label-md text-label-md text-on-surface mb-1">מספר שיעור</label>
+<input class="w-full rounded-lg border-outline bg-surface-container-low text-on-surface focus:border-primary focus:ring-2 focus:ring-primary-fixed-dim transition-all" max="10" min="1" placeholder="1" type="number"/>
+</div>
+</div>
+<div class="mt-auto pt-stack_md">
+<button class="w-full bg-secondary-container text-on-secondary-container font-label-md text-label-md py-3 rounded-lg hover:bg-secondary-fixed transition-colors" type="button">
+                                    שמור שיעור
+                                </button>
+</div>
+</form>
+</div>
+</div>
+<!-- Calendar and Daily Events (Right Columns on Lg screens) -->
+<div class="xl:col-span-8 flex flex-col lg:flex-row gap-gutter">
+<!-- Hebrew Calendar Widget -->
+<div class="w-full lg:w-1/3 bg-surface rounded-xl p-stack_md shadow-[0_4px_20px_rgba(22,58,64,0.05)] border border-surface-variant flex flex-col">
+<div class="flex justify-between items-center mb-stack_md">
+<button class="p-1 hover:bg-surface-container rounded-full text-on-surface-variant transition-colors"><span class="material-symbols-outlined" data-icon="chevron_right">chevron_right</span></button>
+<h3 class="font-title-lg text-title-lg text-primary text-center">שבט תשפ"ד</h3>
+<button class="p-1 hover:bg-surface-container rounded-full text-on-surface-variant transition-colors"><span class="material-symbols-outlined" data-icon="chevron_left">chevron_left</span></button>
+</div>
+<div class="grid grid-cols-7 gap-1 text-center font-label-md text-label-md text-on-surface-variant mb-2">
+<div>א'</div><div>ב'</div><div>ג'</div><div>ד'</div><div>ה'</div><div>ו'</div><div>ש'</div>
+</div>
+<div class="grid grid-cols-7 gap-1 text-center font-body-md text-body-md">
+<!-- Empty cells for padding -->
+<div class="p-2 text-surface-dim"></div>
+<div class="p-2 text-surface-dim"></div>
+<!-- Days -->
+<div class="p-2 rounded-full cursor-pointer hover:bg-surface-container transition-colors">א</div>
+<div class="p-2 rounded-full cursor-pointer hover:bg-surface-container transition-colors">ב</div>
+<div class="p-2 rounded-full cursor-pointer hover:bg-surface-container transition-colors">ג</div>
+<div class="p-2 rounded-full cursor-pointer hover:bg-surface-container transition-colors">ד</div>
+<div class="p-2 rounded-full cursor-pointer hover:bg-surface-container transition-colors">ה</div>
+<div class="p-2 rounded-full cursor-pointer hover:bg-surface-container transition-colors">ו</div>
+<div class="p-2 rounded-full cursor-pointer hover:bg-surface-container transition-colors">ז</div>
+<div class="p-2 rounded-full cursor-pointer hover:bg-surface-container transition-colors">ח</div>
+<div class="p-2 rounded-full cursor-pointer hover:bg-surface-container transition-colors">ט</div>
+<div class="p-2 rounded-full cursor-pointer hover:bg-surface-container transition-colors">י</div>
+<div class="p-2 rounded-full cursor-pointer hover:bg-surface-container transition-colors">יא</div>
+<div class="p-2 rounded-full cursor-pointer hover:bg-surface-container transition-colors">יב</div>
+<div class="p-2 rounded-full bg-primary-container text-primary font-bold shadow-sm cursor-pointer">יג</div>
+<div class="p-2 rounded-full cursor-pointer hover:bg-surface-container transition-colors">יד</div>
+<div class="p-2 rounded-full cursor-pointer hover:bg-surface-container transition-colors">טו</div>
+<div class="p-2 rounded-full cursor-pointer hover:bg-surface-container transition-colors">טז</div>
+<div class="p-2 rounded-full cursor-pointer hover:bg-surface-container transition-colors relative">
+                                יז
+                                <div class="absolute bottom-1 left-1/2 -translate-x-1/2 w-1 h-1 bg-secondary rounded-full"></div>
+</div>
+<div class="p-2 rounded-full cursor-pointer hover:bg-surface-container transition-colors">יח</div>
+<div class="p-2 rounded-full cursor-pointer hover:bg-surface-container transition-colors">יט</div>
+<div class="p-2 rounded-full cursor-pointer hover:bg-surface-container transition-colors">כ</div>
+<div class="p-2 rounded-full cursor-pointer hover:bg-surface-container transition-colors">כא</div>
+<div class="p-2 rounded-full cursor-pointer hover:bg-surface-container transition-colors">כב</div>
+<div class="p-2 rounded-full cursor-pointer hover:bg-surface-container transition-colors">כג</div>
+<div class="p-2 rounded-full cursor-pointer hover:bg-surface-container transition-colors">כד</div>
+<div class="p-2 rounded-full cursor-pointer hover:bg-surface-container transition-colors">כה</div>
+<div class="p-2 rounded-full cursor-pointer hover:bg-surface-container transition-colors">כו</div>
+<div class="p-2 rounded-full cursor-pointer hover:bg-surface-container transition-colors">כז</div>
+<div class="p-2 rounded-full cursor-pointer hover:bg-surface-container transition-colors">כח</div>
+<div class="p-2 rounded-full cursor-pointer hover:bg-surface-container transition-colors">כט</div>
+<div class="p-2 rounded-full cursor-pointer hover:bg-surface-container transition-colors">ל</div>
+</div>
+</div>
+<!-- Daily Events List -->
+<div class="w-full lg:w-2/3 bg-surface rounded-xl p-stack_md shadow-[0_4px_20px_rgba(22,58,64,0.05)] border border-surface-variant flex flex-col h-full min-h-[500px]">
+<div class="flex justify-between items-center mb-stack_md border-b border-surface-variant pb-2">
+<h3 class="font-headline-md text-headline-md text-primary">
+                                 יום שלישי, י"ג שבט
+                             </h3>
+<span class="font-label-md text-label-md text-on-surface-variant bg-surface-container-high px-3 py-1 rounded-full">8 שיעורים מתוכננים</span>
+</div>
+<div class="flex-1 overflow-y-auto pr-2 flex flex-col gap-3 custom-scrollbar">
+<!-- Event Card: Completed -->
+<div class="bg-surface-container-lowest border border-outline-variant rounded-lg p-4 flex flex-col sm:flex-row justify-between sm:items-center gap-4 hover:border-primary-fixed-dim transition-colors group">
+<div class="flex items-start sm:items-center gap-4">
+<div class="w-12 h-12 bg-surface-container-high rounded-lg flex flex-col items-center justify-center border border-outline-variant shrink-0">
+<span class="font-label-md text-label-md text-on-surface">שיעור</span>
+<span class="font-headline-md text-headline-md text-primary leading-none">1</span>
+</div>
+<div>
+<h4 class="font-title-lg text-title-lg text-on-surface flex items-center gap-2">
+                                             תנ"ך - ספר שופטים
+                                             <span class="status-ok font-caption text-caption px-2 py-0.5 rounded-full flex items-center gap-1">
+<span class="material-symbols-outlined text-[14px]" data-icon="check_circle">check_circle</span>
+                                                 הושלם
+                                             </span>
+</h4>
+<div class="flex items-center gap-4 mt-1 text-on-surface-variant font-body-md text-body-md">
+<span class="flex items-center gap-1"><span class="material-symbols-outlined text-[16px]" data-icon="person">person</span> רבקה כהן</span>
+<span class="flex items-center gap-1"><span class="material-symbols-outlined text-[16px]" data-icon="meeting_room">meeting_room</span> כיתה ט' 1</span>
+</div>
+</div>
+</div>
+<div class="flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+<button class="p-2 text-outline hover:text-primary transition-colors rounded-lg hover:bg-surface-container" title="עריכה">
+<span class="material-symbols-outlined" data-icon="edit">edit</span>
+</button>
+</div>
+</div>
+<!-- Event Card: Planned -->
+<div class="bg-surface-container-lowest border-l-4 border-l-secondary border border-outline-variant rounded-lg p-4 flex flex-col sm:flex-row justify-between sm:items-center gap-4 hover:border-primary-fixed-dim transition-colors group shadow-sm">
+<div class="flex items-start sm:items-center gap-4">
+<div class="w-12 h-12 bg-surface-container-high rounded-lg flex flex-col items-center justify-center border border-outline-variant shrink-0">
+<span class="font-label-md text-label-md text-on-surface">שיעור</span>
+<span class="font-headline-md text-headline-md text-primary leading-none">2</span>
+</div>
+<div>
+<h4 class="font-title-lg text-title-lg text-on-surface flex items-center gap-2">
+                                             היסטוריה
+                                             <span class="bg-surface-container font-caption text-caption text-on-surface px-2 py-0.5 rounded-full flex items-center gap-1">
+<span class="material-symbols-outlined text-[14px]" data-icon="schedule">schedule</span>
+                                                 מתוכנן
+                                             </span>
+</h4>
+<div class="flex items-center gap-4 mt-1 text-on-surface-variant font-body-md text-body-md">
+<span class="flex items-center gap-1"><span class="material-symbols-outlined text-[16px]" data-icon="person">person</span> שרה לוי</span>
+<span class="flex items-center gap-1"><span class="material-symbols-outlined text-[16px]" data-icon="meeting_room">meeting_room</span> כיתה י' 2</span>
+</div>
+</div>
+</div>
+<div class="flex gap-2">
+<button class="px-3 py-1.5 border border-outline text-on-surface-variant font-label-md text-label-md rounded-lg hover:bg-surface-container transition-colors flex items-center gap-1" title="ביטול שיעור">
+<span class="material-symbols-outlined text-[18px]" data-icon="cancel">cancel</span>
+                                        ביטול
+                                    </button>
+<button class="px-3 py-1.5 bg-primary-container text-on-primary-container font-label-md text-label-md rounded-lg hover:bg-primary hover:text-surface transition-colors flex items-center gap-1" title="סימון כהושלם">
+<span class="material-symbols-outlined text-[18px]" data-icon="done_all">done_all</span>
+                                        השלמה
+                                    </button>
+</div>
+</div>
+<!-- Event Card: Cancelled -->
+<div class="bg-surface-container-low border border-error-container rounded-lg p-4 flex flex-col sm:flex-row justify-between sm:items-center gap-4 opacity-75 grayscale-[0.5] group">
+<div class="flex items-start sm:items-center gap-4">
+<div class="w-12 h-12 bg-surface-container-high rounded-lg flex flex-col items-center justify-center border border-outline-variant shrink-0">
+<span class="font-label-md text-label-md text-on-surface line-through">שיעור</span>
+<span class="font-headline-md text-headline-md text-on-surface-variant leading-none line-through">3</span>
+</div>
+<div>
+<h4 class="font-title-lg text-title-lg text-on-surface-variant flex items-center gap-2 line-through">
+                                             מתמטיקה
+                                             <span class="status-blocked font-caption text-caption px-2 py-0.5 rounded-full flex items-center gap-1 no-underline">
+<span class="material-symbols-outlined text-[14px]" data-icon="block">block</span>
+                                                 בוטל
+                                             </span>
+</h4>
+<div class="flex items-center gap-4 mt-1 text-on-surface-variant font-body-md text-body-md">
+<span class="flex items-center gap-1"><span class="material-symbols-outlined text-[16px]" data-icon="person">person</span> לאה כהן</span>
+<span class="flex items-center gap-1"><span class="material-symbols-outlined text-[16px]" data-icon="info">info</span> מחלת מורה</span>
+</div>
+</div>
+</div>
+<div class="flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+<button class="px-3 py-1.5 border border-outline text-on-surface-variant font-label-md text-label-md rounded-lg hover:bg-surface-container transition-colors flex items-center gap-1">
+<span class="material-symbols-outlined text-[18px]" data-icon="restore">restore</span>
+                                        שחזור
+                                    </button>
+</div>
+</div>
+<!-- Event Card: Planned -->
+<div class="bg-surface-container-lowest border-l-4 border-l-secondary border border-outline-variant rounded-lg p-4 flex flex-col sm:flex-row justify-between sm:items-center gap-4 hover:border-primary-fixed-dim transition-colors group shadow-sm">
+<div class="flex items-start sm:items-center gap-4">
+<div class="w-12 h-12 bg-surface-container-high rounded-lg flex flex-col items-center justify-center border border-outline-variant shrink-0">
+<span class="font-label-md text-label-md text-on-surface">שיעור</span>
+<span class="font-headline-md text-headline-md text-primary leading-none">4</span>
+</div>
+<div>
+<h4 class="font-title-lg text-title-lg text-on-surface flex items-center gap-2">
+                                             אנגלית
+                                             <span class="bg-surface-container font-caption text-caption text-on-surface px-2 py-0.5 rounded-full flex items-center gap-1">
+<span class="material-symbols-outlined text-[14px]" data-icon="schedule">schedule</span>
+                                                 מתוכנן
+                                             </span>
+</h4>
+<div class="flex items-center gap-4 mt-1 text-on-surface-variant font-body-md text-body-md">
+<span class="flex items-center gap-1"><span class="material-symbols-outlined text-[16px]" data-icon="person">person</span> רחל אברהמי</span>
+<span class="flex items-center gap-1"><span class="material-symbols-outlined text-[16px]" data-icon="meeting_room">meeting_room</span> מעבדת שפות</span>
+</div>
+</div>
+</div>
+<div class="flex gap-2">
+<button class="px-3 py-1.5 border border-outline text-on-surface-variant font-label-md text-label-md rounded-lg hover:bg-surface-container transition-colors flex items-center gap-1" title="ביטול שיעור">
+<span class="material-symbols-outlined text-[18px]" data-icon="cancel">cancel</span>
+                                        ביטול
+                                    </button>
+<button class="px-3 py-1.5 bg-primary-container text-on-primary-container font-label-md text-label-md rounded-lg hover:bg-primary hover:text-surface transition-colors flex items-center gap-1" title="סימון כהושלם">
+<span class="material-symbols-outlined text-[18px]" data-icon="done_all">done_all</span>
+                                        השלמה
+                                    </button>
+</div>
+</div>
+</div>
+</div>
+</div>
+</div>
+</div>
+</main>
+</body></html>
+<!-- Injection By NetFree -->
+<script src="//netfree.link/injection-script/go-payment.js" type="text/javascript" async ></script>
+<script src="//netfree.link/injection-script/popup-card-init.js" type="text/javascript" async ></script>

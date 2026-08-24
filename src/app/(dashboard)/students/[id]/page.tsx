@@ -12,6 +12,7 @@ import { StudentDetailForms } from "./StudentDetailForms";
 import { StudentLessonAssignments } from "./StudentLessonAssignments";
 import type { AttendanceStatus } from "@/types/database";
 import { cn } from "@/lib/cn";
+import { WeeklyTimetableGrid, type TimetableEntry } from "@/components/timetable/WeeklyTimetableGrid";
 
 interface Props {
   params: { id: string };
@@ -99,6 +100,7 @@ export default async function StudentDetailPage({ params }: Props) {
 
   let yearData = null;
   let lessons: Array<{ id: string; subject: string }> = [];
+  let weeklyTimetableEntries: TimetableEntry[] = [];
   let lessonAssignments: Array<{
     id: string;
     lesson_id: string;
@@ -143,7 +145,14 @@ export default async function StudentDetailPage({ params }: Props) {
         .order("subject"),
       supabase
         .from("student_lesson_assignments")
-        .select("*, lessons!inner(id, subject, academic_year_id)")
+        .select(
+          "*, lessons!inner(" +
+            "id, subject, academic_year_id, day_of_week, lesson_number, billing_type, for_psychology, " +
+            "class_id, track_id, specialization_id, " +
+            "teacher_teaching_assignments(teacher_id, teachers(full_name)), " +
+            "classes(name), tracks(name), specializations(name)" +
+          ")"
+        )
         .eq("student_id", id)
         .eq("lessons.academic_year_id", activeYear.id)
         .order("start_date", { ascending: false }),
@@ -157,14 +166,61 @@ export default async function StudentDetailPage({ params }: Props) {
       specializations: specializations.data ?? [],
     };
     lessons = yearLessons.data ?? [];
-    lessonAssignments = (sla.data ?? []).map((row) => ({
+    const slaRows = (sla.data ?? []) as unknown as Array<{
+      id: string;
+      lesson_id: string;
+      assignment_type: string;
+      start_date: string;
+      end_date: string | null;
+      lessons: {
+        id: string;
+        subject: string;
+        day_of_week: number;
+        lesson_number: number;
+        billing_type: string;
+        for_psychology: boolean;
+        classes: { name: string } | null;
+        tracks: { name: string } | null;
+        specializations: { name: string } | null;
+        teacher_teaching_assignments: {
+          teacher_id: string | null;
+          teachers: { full_name: string } | null;
+        } | null;
+      };
+    }>;
+    lessonAssignments = slaRows.map((row) => ({
       id: row.id,
       lesson_id: row.lesson_id,
-      subject: (row.lessons as unknown as { subject: string }).subject,
+      subject: row.lessons.subject,
       assignment_type: row.assignment_type,
       start_date: row.start_date,
       end_date: row.end_date,
     }));
+
+    weeklyTimetableEntries = slaRows.map((row) => {
+      const l = row.lessons as any;
+      const cls = l.classes as unknown as { name: string } | null;
+      const tr = l.tracks as unknown as { name: string } | null;
+      const spec = l.specializations as unknown as { name: string } | null;
+
+      let audienceLabel = "—";
+      if (l.billing_type === "specialization") audienceLabel = spec?.name ?? "—";
+      else audienceLabel = cls?.name ?? tr?.name ?? "—";
+
+      const teacherName = (l.teacher_teaching_assignments as any)?.teachers?.full_name ?? "";
+
+      return {
+        lessonId: l.id,
+        subject: l.subject,
+        teacherName,
+        teacherId: (l.teacher_teaching_assignments as any)?.teacher_id ?? null,
+        dayOfWeek: l.day_of_week,
+        lessonNumber: l.lesson_number,
+        billingType: l.billing_type,
+        forPsychology: l.for_psychology,
+        audienceLabel,
+      } satisfies TimetableEntry;
+    });
 
     const lessonIds = lessons.map((l) => l.id);
     if (lessonIds.length > 0) {
@@ -339,6 +395,28 @@ export default async function StudentDetailPage({ params }: Props) {
             lessons={lessons}
             assignments={lessonAssignments}
           />
+        </Card>
+      )}
+
+      {activeYear && (
+        <Card title="מערכת שעות שבועית" className="print:hidden">
+          <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
+            <p className="text-xs text-slate-500">
+              מוצג לפי השיוך הפעיל של התלמידה לשיעורים.
+            </p>
+            <a
+              href={`/timetable?studentId=${id}`}
+              className="inline-flex items-center rounded-xl bg-[var(--brand)] px-4 py-2 text-xs font-medium text-white shadow-[var(--shadow-sm)] transition-colors hover:bg-[var(--brand-soft)]"
+            >
+              פתח בטבלת מערכת שעות
+            </a>
+          </div>
+
+          {weeklyTimetableEntries.length === 0 ? (
+            <p className="text-sm text-slate-600">אין שיעורים פעילים לתלמידה בשנה הפעילה.</p>
+          ) : (
+            <WeeklyTimetableGrid entries={weeklyTimetableEntries} />
+          )}
         </Card>
       )}
 

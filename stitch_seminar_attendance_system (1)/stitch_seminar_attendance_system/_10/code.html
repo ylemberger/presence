@@ -1,0 +1,419 @@
+<!DOCTYPE html>
+
+<html dir="rtl" lang="he"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>מבחני השלמה והגדרות - מערכת ניהול פנימית</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Hanken+Grotesk:wght@400;500;600;700&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    "colors": {
+                        "surface-tint": "#42646a",
+                        "on-tertiary-fixed-variant": "#1e4d55",
+                        "surface-container": "#ebefee",
+                        "surface-container-high": "#e5e9e8",
+                        "tertiary-container": "#043b43",
+                        "secondary-container": "#fdd48e",
+                        "outline": "#71787a",
+                        "primary-container": "#163a40",
+                        "error": "#ba1a1a",
+                        "on-primary-fixed": "#001f24",
+                        "on-primary-fixed-variant": "#294c52",
+                        "tertiary-fixed": "#bceaf4",
+                        "surface-container-lowest": "#ffffff",
+                        "surface-container-low": "#f0f4f3",
+                        "secondary-fixed-dim": "#e8c17c",
+                        "surface-container-highest": "#dfe3e2",
+                        "inverse-surface": "#2d3131",
+                        "on-error-container": "#93000a",
+                        "on-surface-variant": "#414849",
+                        "primary-fixed-dim": "#a9cdd4",
+                        "background": "#f6faf9",
+                        "surface": "#f6faf9",
+                        "inverse-on-surface": "#edf2f1",
+                        "surface-variant": "#dfe3e2",
+                        "primary": "#00242a",
+                        "secondary": "#775a20",
+                        "outline-variant": "#c1c8c9",
+                        "on-primary-container": "#81a4ab",
+                        "secondary-fixed": "#ffdea7",
+                        "on-error": "#ffffff",
+                        "tertiary": "#00242a",
+                        "error-container": "#ffdad6",
+                        "on-tertiary-container": "#78a5ae",
+                        "primary-fixed": "#c4e9f0",
+                        "surface-dim": "#d7dbda",
+                        "on-tertiary-fixed": "#001f24",
+                        "on-secondary": "#ffffff",
+                        "on-secondary-fixed": "#271900",
+                        "on-background": "#181c1c",
+                        "on-secondary-fixed-variant": "#5c4208",
+                        "surface-bright": "#f6faf9",
+                        "on-primary": "#ffffff",
+                        "inverse-primary": "#a9cdd4",
+                        "on-tertiary": "#ffffff",
+                        "on-surface": "#181c1c",
+                        "on-secondary-container": "#775a20",
+                        "tertiary-fixed-dim": "#a0ced8",
+                        "brand": "#00242a",
+                        "brand-soft": "rgba(0, 36, 42, 0.05)",
+                        "accent": "#775a20",
+                        "accent-soft": "rgba(119, 90, 32, 0.1)",
+                        "attendance-present": "#10b981",
+                        "attendance-late": "#f59e0b",
+                        "attendance-absent": "#f43f5e"
+                    },
+                    "borderRadius": {
+                        "DEFAULT": "0.25rem",
+                        "lg": "0.5rem",
+                        "xl": "0.75rem",
+                        "full": "9999px"
+                    },
+                    "spacing": {
+                        "stack_lg": "2rem",
+                        "stack_md": "1rem",
+                        "container_padding": "2rem",
+                        "gutter": "1.5rem",
+                        "sidebar_width": "17.5rem",
+                        "stack_sm": "0.5rem"
+                    },
+                    "fontFamily": {
+                        "body-lg": ["Hanken Grotesk"],
+                        "body-md": ["Hanken Grotesk"],
+                        "headline-md": ["Hanken Grotesk"],
+                        "headline-lg": ["Hanken Grotesk"],
+                        "display-lg": ["Hanken Grotesk"],
+                        "title-lg": ["Hanken Grotesk"],
+                        "caption": ["Hanken Grotesk"],
+                        "label-md": ["Hanken Grotesk"]
+                    }
+                }
+            }
+        }
+    </script>
+<style>
+        body { font-family: 'Hanken Grotesk', sans-serif; }
+        .tab-content { display: none; }
+        .tab-content.active { display: block; }
+        
+        .shadow-soft { box-shadow: 0 4px 20px rgba(22, 58, 64, 0.05); }
+        .shadow-deep { box-shadow: 0 12px 32px rgba(22, 58, 64, 0.12); }
+        .card-hover:hover { transform: translateY(-2px); box-shadow: 0 12px 32px rgba(22, 58, 64, 0.12); }
+        
+        .nav-item-active { border-right: 4px solid var(--accent); background-color: var(--brand-soft); }
+    </style>
+</head>
+<body class="bg-background text-on-background flex h-screen overflow-hidden">
+<!-- SideNavBar -->
+<aside class="hidden md:flex flex-col h-full rtl bg-primary dark:bg-primary-container text-secondary dark:text-secondary-fixed font-body-md text-body-md w-[17.5rem] shadow-md z-50 shrink-0">
+<!-- Header -->
+<div class="p-6 flex items-center gap-4 border-b border-primary-container/20">
+<div class="w-12 h-12 bg-secondary rounded-full flex items-center justify-center text-primary font-bold text-xl">נ</div>
+<div>
+<h1 class="font-headline-md text-headline-md text-secondary">נוכחות סמינר</h1>
+<p class="text-secondary/70 text-sm">תשפ"ד - שנה פעילה</p>
+</div>
+</div>
+<!-- Navigation -->
+<nav class="flex-1 overflow-y-auto py-4">
+<ul class="space-y-1">
+<li>
+<a class="flex items-center gap-4 px-6 py-3 text-on-primary hover:bg-primary-container/50 transition-colors" href="#">
+<span class="material-symbols-outlined">dashboard</span>
+<span>לוח בקרה</span>
+</a>
+</li>
+<li>
+<a class="flex items-center gap-4 px-6 py-3 text-on-primary hover:bg-primary-container/50 transition-colors" href="#">
+<span class="material-symbols-outlined">group</span>
+<span>תלמידות</span>
+</a>
+</li>
+<li>
+<a class="flex items-center gap-4 px-6 py-3 text-on-primary hover:bg-primary-container/50 transition-colors" href="#">
+<span class="material-symbols-outlined">fact_check</span>
+<span>נוכחות</span>
+</a>
+</li>
+<li>
+<a class="flex items-center gap-4 px-6 py-3 bg-primary-container text-secondary border-r-4 border-secondary Active: scale-95 transition-all" href="#">
+<span class="material-symbols-outlined">edit_calendar</span>
+<span>מבחני השלמה</span>
+</a>
+</li>
+<li>
+<a class="flex items-center gap-4 px-6 py-3 text-on-primary hover:bg-primary-container/50 transition-colors" href="#">
+<span class="material-symbols-outlined">menu_book</span>
+<span>שיעורים</span>
+</a>
+</li>
+<li>
+<a class="flex items-center gap-4 px-6 py-3 text-on-primary hover:bg-primary-container/50 transition-colors" href="#">
+<span class="material-symbols-outlined">person_4</span>
+<span>מורות</span>
+</a>
+</li>
+<li>
+<a class="flex items-center gap-4 px-6 py-3 text-on-primary hover:bg-primary-container/50 transition-colors" href="#">
+<span class="material-symbols-outlined">assessment</span>
+<span>דוחות</span>
+</a>
+</li>
+<li>
+<a class="flex items-center gap-4 px-6 py-3 text-on-primary hover:bg-primary-container/50 transition-colors" href="#">
+<span class="material-symbols-outlined">settings</span>
+<span>הגדרות</span>
+</a>
+</li>
+</ul>
+</nav>
+<!-- Footer -->
+<div class="p-4 border-t border-primary-container/20">
+<a class="flex items-center gap-4 px-6 py-3 text-on-primary hover:bg-primary-container/50 transition-colors rounded-lg" href="#">
+<span class="material-symbols-outlined">logout</span>
+<span>התנתקות</span>
+</a>
+</div>
+</aside>
+<!-- Main Content -->
+<main class="flex-1 flex flex-col h-full overflow-hidden relative">
+<!-- TopAppBar -->
+<header class="sticky top-0 z-40 w-full bg-surface/95 dark:bg-surface-dim/95 text-primary dark:text-primary-fixed font-label-md text-label-md border-b border-outline-variant backdrop-blur-md shadow-sm transition-opacity duration-200 flex justify-between items-center px-stack_lg h-16 rtl shrink-0">
+<div class="flex items-center gap-6">
+<span class="font-headline-md text-headline-md text-primary">מערכת ניהול פנימית</span>
+<nav class="hidden lg:flex gap-4">
+<a class="text-on-surface-variant hover:text-primary" href="#">תשפ"ד</a>
+</nav>
+</div>
+<div class="flex items-center gap-4">
+<button class="px-4 py-2 border border-outline rounded-full text-on-surface-variant hover:text-primary transition-colors text-sm font-medium">בורר שנה</button>
+<button class="p-2 text-on-surface-variant hover:text-primary rounded-full hover:bg-surface-variant transition-colors">
+<span class="material-symbols-outlined">notifications</span>
+</button>
+<button class="p-2 text-on-surface-variant hover:text-primary rounded-full hover:bg-surface-variant transition-colors">
+<span class="material-symbols-outlined">account_circle</span>
+</button>
+</div>
+</header>
+<!-- Scrollable Content Canvas -->
+<div class="flex-1 overflow-y-auto p-container_padding bg-background">
+<div class="max-w-[1440px] mx-auto space-y-stack_lg">
+<!-- Page Header -->
+<div class="flex justify-between items-end pb-4 border-b border-outline-variant/30">
+<div>
+<h2 class="font-headline-lg text-headline-lg text-on-surface mb-2">ניהול מבחני השלמה והגדרות</h2>
+<p class="text-on-surface-variant">ניהול מבחני השלמה לתלמידות עם חריגות והגדרות מערכת מתקדמות.</p>
+</div>
+</div>
+<!-- Main Layout Grid -->
+<div class="grid grid-cols-1 xl:grid-cols-3 gap-gutter">
+<!-- Left Column: Settings (2 cols wide on XL) -->
+<div class="xl:col-span-2 space-y-stack_md">
+<!-- Settings Tabs Header -->
+<div class="bg-surface rounded-xl shadow-soft p-2 mb-4 flex gap-2 overflow-x-auto border-t-4 border-accent">
+<button class="tab-btn px-6 py-3 rounded-lg font-medium bg-brand-soft text-brand transition-colors whitespace-nowrap" data-target="tab-years">שנים</button>
+<button class="tab-btn px-6 py-3 rounded-lg font-medium text-on-surface-variant hover:bg-surface-variant transition-colors whitespace-nowrap" data-target="tab-levels">שכבות וכיתות</button>
+<button class="tab-btn px-6 py-3 rounded-lg font-medium text-on-surface-variant hover:bg-surface-variant transition-colors whitespace-nowrap" data-target="tab-ranges">טווחי פעילות</button>
+<button class="tab-btn px-6 py-3 rounded-lg font-medium text-on-surface-variant hover:bg-surface-variant transition-colors whitespace-nowrap" data-target="tab-rules">כללי נוכחות</button>
+</div>
+<!-- Settings Content Area -->
+<div class="bg-surface rounded-xl shadow-soft p-6 min-h-[400px]">
+<!-- Tab: Years -->
+<div class="tab-content active" id="tab-years">
+<div class="flex justify-between items-center mb-6">
+<h3 class="font-title-lg text-title-lg text-on-surface">ניהול שנות לימוד</h3>
+<button class="bg-accent text-brand px-4 py-2 rounded-lg font-medium flex items-center gap-2 hover:bg-secondary-fixed transition-colors">
+<span class="material-symbols-outlined text-sm">add</span>
+                                        הוסף שנה חדשה
+                                    </button>
+</div>
+<div class="overflow-x-auto">
+<table class="w-full text-right">
+<thead>
+<tr class="bg-background text-on-surface-variant text-sm border-b border-outline-variant/30">
+<th class="p-4 font-medium rounded-tr-lg">שנה</th>
+<th class="p-4 font-medium">סטטוס</th>
+<th class="p-4 font-medium">תאריך התחלה</th>
+<th class="p-4 font-medium">תאריך סיום</th>
+<th class="p-4 font-medium rounded-tl-lg">פעולות</th>
+</tr>
+</thead>
+<tbody>
+<tr class="border-b border-outline-variant/10 hover:bg-accent-soft/30 transition-colors">
+<td class="p-4 font-medium">תשפ"ד</td>
+<td class="p-4"><span class="px-3 py-1 rounded-full text-xs font-medium bg-attendance-present/10 text-attendance-present">פעילה</span></td>
+<td class="p-4 text-on-surface-variant">01/09/2023</td>
+<td class="p-4 text-on-surface-variant">30/06/2024</td>
+<td class="p-4">
+<div class="flex gap-2 text-on-surface-variant">
+<button class="hover:text-brand transition-colors"><span class="material-symbols-outlined text-sm">edit</span></button>
+<button class="hover:text-error transition-colors"><span class="material-symbols-outlined text-sm">delete</span></button>
+</div>
+</td>
+</tr>
+<tr class="border-b border-outline-variant/10 hover:bg-accent-soft/30 transition-colors">
+<td class="p-4 font-medium">תשפ"ג</td>
+<td class="p-4"><span class="px-3 py-1 rounded-full text-xs font-medium bg-outline-variant/20 text-on-surface-variant">ארכיון</span></td>
+<td class="p-4 text-on-surface-variant">01/09/2022</td>
+<td class="p-4 text-on-surface-variant">30/06/2023</td>
+<td class="p-4">
+<div class="flex gap-2 text-on-surface-variant">
+<button class="hover:text-brand transition-colors"><span class="material-symbols-outlined text-sm">visibility</span></button>
+</div>
+</td>
+</tr>
+</tbody>
+</table>
+</div>
+</div>
+<!-- Tab: Levels (Hidden by default) -->
+<div class="tab-content" id="tab-levels">
+<h3 class="font-title-lg text-title-lg text-on-surface mb-6">שכבות וכיתות (תצוגה בלבד)</h3>
+<p class="text-on-surface-variant">תוכן טאב זה יוצג בעת לחיצה.</p>
+</div>
+<!-- Tab: Ranges (Hidden by default) -->
+<div class="tab-content" id="tab-ranges">
+<h3 class="font-title-lg text-title-lg text-on-surface mb-6">טווחי פעילות (תצוגה בלבד)</h3>
+<p class="text-on-surface-variant">תוכן טאב זה יוצג בעת לחיצה.</p>
+</div>
+<!-- Tab: Rules (Hidden by default) -->
+<div class="tab-content" id="tab-rules">
+<h3 class="font-title-lg text-title-lg text-on-surface mb-6">כללי נוכחות (תצוגה בלבד)</h3>
+<p class="text-on-surface-variant">תוכן טאב זה יוצג בעת לחיצה.</p>
+</div>
+</div>
+</div>
+<!-- Right Column: Makeup Exams (1 col wide on XL) -->
+<div class="space-y-stack_md">
+<!-- Open Exam Form -->
+<div class="bg-surface rounded-xl shadow-soft p-6 border-t-4 border-brand card-hover transition-all">
+<h3 class="font-title-lg text-title-lg text-on-surface mb-4 flex items-center gap-2">
+<span class="material-symbols-outlined text-accent">post_add</span>
+                                פתיחת מבחן השלמה
+                            </h3>
+<form class="space-y-4">
+<div>
+<label class="block text-sm font-medium text-on-surface mb-1">נושא המבחן</label>
+<input class="w-full rounded-lg border-outline/50 bg-background focus:border-brand focus:ring focus:ring-accent-soft transition-all" placeholder="לדוגמא: השלמת חיסורים מתמטיקה" type="text"/>
+</div>
+<div class="grid grid-cols-2 gap-4">
+<div>
+<label class="block text-sm font-medium text-on-surface mb-1">תאריך</label>
+<input class="w-full rounded-lg border-outline/50 bg-background focus:border-brand focus:ring focus:ring-accent-soft transition-all" type="date"/>
+</div>
+<div>
+<label class="block text-sm font-medium text-on-surface mb-1">שעה</label>
+<input class="w-full rounded-lg border-outline/50 bg-background focus:border-brand focus:ring focus:ring-accent-soft transition-all" type="time"/>
+</div>
+</div>
+<div>
+<label class="block text-sm font-medium text-on-surface mb-1">שיוך לתלמידה (אופציונלי)</label>
+<select class="w-full rounded-lg border-outline/50 bg-background focus:border-brand focus:ring focus:ring-accent-soft transition-all text-on-surface-variant">
+<option>בחר תלמידה...</option>
+<option>רחל לוי</option>
+<option>מיכל כהן</option>
+</select>
+</div>
+<button class="w-full bg-brand text-surface py-3 rounded-lg font-medium hover:bg-primary-container transition-colors shadow-md" type="button">צור מבחן</button>
+</form>
+</div>
+<!-- Automated Suggestions -->
+<div class="bg-surface rounded-xl shadow-soft p-6">
+<h3 class="font-title-lg text-title-lg text-on-surface mb-4 flex items-center gap-2">
+<span class="material-symbols-outlined text-attendance-late">warning</span>
+                                חריגות סף (הצעות)
+                            </h3>
+<div class="space-y-3">
+<!-- Suggestion Card -->
+<div class="p-3 bg-attendance-absent/5 rounded-lg border border-attendance-absent/20 flex justify-between items-center">
+<div>
+<p class="font-medium text-on-surface text-sm">שירה כהן</p>
+<p class="text-xs text-on-surface-variant">30% חיסורים בתנ"ך</p>
+</div>
+<button class="text-xs bg-surface border border-outline px-2 py-1 rounded hover:bg-background transition-colors">שבץ</button>
+</div>
+<!-- Suggestion Card -->
+<div class="p-3 bg-attendance-late/5 rounded-lg border border-attendance-late/20 flex justify-between items-center">
+<div>
+<p class="font-medium text-on-surface text-sm">נועה לוי</p>
+<p class="text-xs text-on-surface-variant">25% חיסורים בהיסטוריה</p>
+</div>
+<button class="text-xs bg-surface border border-outline px-2 py-1 rounded hover:bg-background transition-colors">שבץ</button>
+</div>
+</div>
+</div>
+<!-- Existing Exams List -->
+<div class="bg-surface rounded-xl shadow-soft p-6">
+<h3 class="font-title-lg text-title-lg text-on-surface mb-4 flex items-center gap-2">
+<span class="material-symbols-outlined text-brand">event_available</span>
+                                מבחנים קרובים
+                            </h3>
+<ul class="space-y-4">
+<li class="flex items-start gap-3 pb-3 border-b border-outline-variant/20 last:border-0 last:pb-0">
+<div class="w-10 h-10 rounded-lg bg-accent-soft flex flex-col items-center justify-center shrink-0">
+<span class="text-xs font-bold text-accent">15</span>
+<span class="text-[10px] text-accent">אוק</span>
+</div>
+<div>
+<p class="font-medium text-sm text-on-surface">השלמה - מתמטיקה</p>
+<p class="text-xs text-on-surface-variant">14:00 | חדר 101 | 5 תלמידות</p>
+</div>
+</li>
+<li class="flex items-start gap-3 pb-3 border-b border-outline-variant/20 last:border-0 last:pb-0">
+<div class="w-10 h-10 rounded-lg bg-accent-soft flex flex-col items-center justify-center shrink-0">
+<span class="text-xs font-bold text-accent">22</span>
+<span class="text-[10px] text-accent">אוק</span>
+</div>
+<div>
+<p class="font-medium text-sm text-on-surface">השלמה - אנגלית</p>
+<p class="text-xs text-on-surface-variant">13:30 | ספריה | 2 תלמידות</p>
+</div>
+</li>
+</ul>
+<button class="w-full mt-4 text-sm text-brand font-medium hover:underline">הצג הכל</button>
+</div>
+</div>
+</div>
+</div>
+</div>
+</main>
+<script>
+        // Simple Tab Logic
+        document.addEventListener('DOMContentLoaded', () => {
+            const tabBtns = document.querySelectorAll('.tab-btn');
+            const tabContents = document.querySelectorAll('.tab-content');
+
+            tabBtns.forEach(btn => {
+                btn.addEventListener('click', () => {
+                    // Remove active styling from all buttons
+                    tabBtns.forEach(b => {
+                        b.classList.remove('bg-brand-soft', 'text-brand');
+                        b.classList.add('text-on-surface-variant');
+                    });
+                    
+                    // Add active styling to clicked button
+                    btn.classList.add('bg-brand-soft', 'text-brand');
+                    btn.classList.remove('text-on-surface-variant');
+
+                    // Hide all content
+                    tabContents.forEach(content => {
+                        content.classList.remove('active');
+                    });
+
+                    // Show target content
+                    const targetId = btn.getAttribute('data-target');
+                    document.getElementById(targetId).classList.add('active');
+                });
+            });
+        });
+    </script>
+</body></html>
+<!-- Injection By NetFree -->
+<script src="//netfree.link/injection-script/go-payment.js" type="text/javascript" async ></script>
+<script src="//netfree.link/injection-script/popup-card-init.js" type="text/javascript" async ></script>

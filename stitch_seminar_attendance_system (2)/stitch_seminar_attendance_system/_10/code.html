@@ -1,0 +1,446 @@
+<!DOCTYPE html>
+
+<html class="light" dir="rtl" lang="he"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>מבחני השלמה - מערכת ניהול פנימית</title>
+<link href="https://fonts.googleapis.com/css2?family=Hanken+Grotesk:wght@400;500;600;700&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    "colors": {
+                        "error-container": "#ffdad6",
+                        "on-tertiary-fixed": "#001f24",
+                        "primary-fixed": "#c4e9f0",
+                        "on-primary-container": "#81a4ab",
+                        "inverse-primary": "#a9cdd4",
+                        "secondary": "#775a20",
+                        "background": "#f6faf9",
+                        "surface-container-lowest": "#ffffff",
+                        "surface": "#f6faf9",
+                        "on-primary-fixed-variant": "#294c52",
+                        "on-tertiary": "#ffffff",
+                        "on-secondary-fixed": "#271900",
+                        "on-tertiary-fixed-variant": "#1e4d55",
+                        "error": "#ba1a1a",
+                        "on-primary-fixed": "#001f24",
+                        "surface-bright": "#f6faf9",
+                        "on-secondary-container": "#775a20",
+                        "secondary-fixed": "#ffdea7",
+                        "surface-tint": "#42646a",
+                        "surface-container-low": "#f0f4f3",
+                        "primary-fixed-dim": "#a9cdd4",
+                        "on-background": "#181c1c",
+                        "surface-container-high": "#e5e9e8",
+                        "on-surface": "#181c1c",
+                        "on-error-container": "#93000a",
+                        "primary": "#00242a",
+                        "surface-variant": "#dfe3e2",
+                        "surface-dim": "#d7dbda",
+                        "outline-variant": "#c1c8c9",
+                        "tertiary": "#00242a",
+                        "surface-container-highest": "#dfe3e2",
+                        "surface-container": "#ebefee",
+                        "inverse-on-surface": "#edf2f1",
+                        "on-secondary-fixed-variant": "#5c4208",
+                        "on-surface-variant": "#414849",
+                        "primary-container": "#163a40",
+                        "on-primary": "#ffffff",
+                        "on-tertiary-container": "#78a5ae",
+                        "on-error": "#ffffff",
+                        "inverse-surface": "#2d3131",
+                        "on-secondary": "#ffffff",
+                        "tertiary-fixed": "#bceaf4",
+                        "secondary-fixed-dim": "#e8c17c",
+                        "secondary-container": "#fdd48e",
+                        "tertiary-container": "#043b43",
+                        "outline": "#71787a",
+                        "tertiary-fixed-dim": "#a0ced8"
+                    },
+                    "borderRadius": {
+                        "DEFAULT": "0.25rem",
+                        "lg": "0.5rem",
+                        "xl": "0.75rem",
+                        "full": "9999px"
+                    },
+                    "spacing": {
+                        "sidebar_width": "17.5rem",
+                        "stack_lg": "2rem",
+                        "gutter": "1.5rem",
+                        "stack_sm": "0.5rem",
+                        "container_padding": "2rem",
+                        "stack_md": "1rem"
+                    },
+                    "fontFamily": {
+                        "headline-lg": ["Hanken Grotesk"],
+                        "body-md": ["Hanken Grotesk"],
+                        "body-lg": ["Hanken Grotesk"],
+                        "label-md": ["Hanken Grotesk"],
+                        "caption": ["Hanken Grotesk"],
+                        "headline-md": ["Hanken Grotesk"],
+                        "display-lg": ["Hanken Grotesk"],
+                        "title-lg": ["Hanken Grotesk"]
+                    },
+                    "fontSize": {
+                        "headline-lg": ["32px", { "lineHeight": "40px", "fontWeight": "600" }],
+                        "body-md": ["16px", { "lineHeight": "24px", "fontWeight": "400" }],
+                        "body-lg": ["18px", { "lineHeight": "28px", "fontWeight": "400" }],
+                        "label-md": ["14px", { "lineHeight": "20px", "letterSpacing": "0.01em", "fontWeight": "600" }],
+                        "caption": ["12px", { "lineHeight": "16px", "fontWeight": "400" }],
+                        "headline-md": ["24px", { "lineHeight": "32px", "fontWeight": "600" }],
+                        "display-lg": ["48px", { "lineHeight": "56px", "letterSpacing": "-0.02em", "fontWeight": "700" }],
+                        "title-lg": ["20px", { "lineHeight": "28px", "fontWeight": "500" }]
+                    }
+                }
+            }
+        }
+    </script>
+<style>
+        body { font-family: 'Hanken Grotesk', sans-serif; }
+        .ambient-shadow-sm { box-shadow: 0 4px 20px rgba(22, 58, 64, 0.05); }
+        .ambient-shadow-md { box-shadow: 0 12px 32px rgba(22, 58, 64, 0.12); }
+        
+        /* Interactive Row Hover */
+        .table-row-hover:hover {
+            background-color: theme('colors.surface-container-lowest');
+            transform: translateY(-1px);
+            box-shadow: 0 2px 8px rgba(22, 58, 64, 0.03);
+        }
+        
+        /* Glassmorphism subtle effect for headers */
+        .glass-header {
+            background: rgba(246, 250, 249, 0.85);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+        }
+    </style>
+</head>
+<body class="bg-background text-on-background min-h-screen flex">
+<!-- SideNavBar -->
+<nav class="fixed right-0 top-0 h-full w-[17.5rem] bg-primary-container shadow-sm flex flex-col h-full border-l border-outline-variant rtl z-50">
+<!-- Header -->
+<div class="p-6 border-b border-outline-variant/30 flex items-center gap-4">
+<div class="w-12 h-12 rounded-full bg-surface flex items-center justify-center font-display-lg text-display-lg text-secondary">
+                נ
+            </div>
+<div>
+<h1 class="font-headline-md text-headline-md text-on-primary">סמינר</h1>
+<p class="font-body-md text-body-md text-on-primary-container">ניהול פנימי</p>
+</div>
+</div>
+<!-- Navigation Links -->
+<div class="flex-1 overflow-y-auto py-4 flex flex-col gap-1 px-2">
+<a class="flex items-center gap-3 py-3 px-4 text-on-primary-container/80 hover:bg-primary/50 transition-colors rounded-lg" href="#">
+<span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 0;">dashboard</span>
+<span class="font-label-md text-label-md">לוח בקרה</span>
+</a>
+<a class="flex items-center gap-3 py-3 px-4 text-on-primary-container/80 hover:bg-primary/50 transition-colors rounded-lg" href="#">
+<span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 0;">group</span>
+<span class="font-label-md text-label-md">תלמידים</span>
+</a>
+<a class="flex items-center gap-3 py-3 px-4 text-on-primary-container/80 hover:bg-primary/50 transition-colors rounded-lg" href="#">
+<span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 0;">fact_check</span>
+<span class="font-label-md text-label-md">נוכחות</span>
+</a>
+<!-- ACTIVE TAB -->
+<a class="flex items-center gap-3 py-3 px-4 bg-primary text-on-primary border-r-4 border-secondary rounded-l-lg translate-x-[-2px] transition-transform" href="#">
+<span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 1;">edit_note</span>
+<span class="font-label-md text-label-md">מבחני השלמה</span>
+</a>
+<a class="flex items-center gap-3 py-3 px-4 text-on-primary-container/80 hover:bg-primary/50 transition-colors rounded-lg" href="#">
+<span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 0;">menu_book</span>
+<span class="font-label-md text-label-md">שיעורים</span>
+</a>
+<a class="flex items-center gap-3 py-3 px-4 text-on-primary-container/80 hover:bg-primary/50 transition-colors rounded-lg" href="#">
+<span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 0;">person_4</span>
+<span class="font-label-md text-label-md">מורות</span>
+</a>
+<a class="flex items-center gap-3 py-3 px-4 text-on-primary-container/80 hover:bg-primary/50 transition-colors rounded-lg" href="#">
+<span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 0;">assessment</span>
+<span class="font-label-md text-label-md">דוחות</span>
+</a>
+<a class="flex items-center gap-3 py-3 px-4 text-on-primary-container/80 hover:bg-primary/50 transition-colors rounded-lg" href="#">
+<span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 0;">settings</span>
+<span class="font-label-md text-label-md">הגדרות</span>
+</a>
+</div>
+<!-- Footer / CTA -->
+<div class="p-4 border-t border-outline-variant/30">
+<a class="flex items-center gap-3 py-2 px-4 text-on-primary-container/80 hover:text-on-primary transition-colors" href="#">
+<span class="material-symbols-outlined">calendar_today</span>
+<span class="font-label-md text-label-md">תשפ"ה</span>
+</a>
+<button class="w-full mt-4 py-2 border border-outline-variant text-on-primary-container font-label-md text-label-md rounded-lg hover:bg-primary hover:text-on-primary transition-colors">
+                התנתקות
+            </button>
+</div>
+</nav>
+<!-- Main Content Wrapper -->
+<main class="flex-1 w-[calc(100%-17.5rem)] mr-[17.5rem] flex flex-col min-h-screen">
+<!-- TopAppBar -->
+<header class="sticky top-0 z-40 bg-surface/95 backdrop-blur-md border-b border-outline-variant shadow-sm flex justify-between items-center px-gutter py-4 rtl">
+<div class="flex items-center gap-6">
+<h2 class="font-headline-md text-headline-md font-bold text-primary">מערכת ניהול פנימית</h2>
+<nav class="hidden lg:flex gap-6">
+<a class="text-primary font-bold border-b-2 border-secondary pb-1 font-label-md text-label-md" href="#">תשפ"ה</a>
+</nav>
+</div>
+<div class="flex items-center gap-4">
+<button class="font-label-md text-label-md bg-secondary-container text-on-secondary-container px-4 py-2 rounded-full hover:bg-secondary hover:text-on-secondary transition-colors">
+                    בחירת שנה
+                </button>
+<button class="text-on-surface-variant hover:text-secondary transition-colors w-10 h-10 flex items-center justify-center rounded-full">
+<span class="material-symbols-outlined">notifications</span>
+</button>
+<button class="text-on-surface-variant hover:text-secondary transition-colors w-10 h-10 flex items-center justify-center rounded-full">
+<span class="material-symbols-outlined">account_circle</span>
+</button>
+</div>
+</header>
+<!-- Page Content Canvas -->
+<div class="p-container_padding max-w-[1440px] mx-auto w-full flex-1 flex flex-col gap-stack_lg">
+<!-- Page Header -->
+<div class="flex items-end justify-between border-b border-outline-variant/30 pb-4">
+<div>
+<h2 class="font-headline-lg text-headline-lg text-on-background">מבחני השלמה</h2>
+<p class="font-body-md text-body-md text-on-surface-variant mt-1">ניהול ומעקב אחר השלמות פערים אקדמיים.</p>
+</div>
+</div>
+<!-- Bento Grid Layout -->
+<div class="grid grid-cols-1 xl:grid-cols-12 gap-stack_lg">
+<!-- Right Column (Form) -->
+<section class="xl:col-span-4 flex flex-col gap-4">
+<div class="bg-surface rounded-xl ambient-shadow-sm p-6 border-t-4 border-secondary relative overflow-hidden">
+<div class="absolute -right-12 -top-12 w-32 h-32 bg-secondary-fixed-dim/20 rounded-full blur-2xl"></div>
+<h3 class="font-title-lg text-title-lg text-primary mb-6 flex items-center gap-2">
+<span class="material-symbols-outlined text-secondary">add_circle</span>
+                            פתיחת מבחן השלמה
+                        </h3>
+<form class="flex flex-col gap-5 relative z-10">
+<div class="flex flex-col gap-1">
+<label class="font-label-md text-label-md text-on-surface">תלמידה</label>
+<select class="w-full border border-outline-variant rounded-lg px-4 py-2 bg-surface focus:border-primary focus:ring-2 focus:ring-primary-fixed-dim text-body-md text-on-background outline-none transition-all">
+<option disabled="" selected="" value="">בחירת תלמידה</option>
+<option>אביגיל כהן</option>
+<option>שירה לוי</option>
+<option>נועה שמש</option>
+</select>
+</div>
+<div class="flex flex-col gap-1">
+<label class="font-label-md text-label-md text-on-surface">שיעור / מקצוע</label>
+<select class="w-full border border-outline-variant rounded-lg px-4 py-2 bg-surface focus:border-primary focus:ring-2 focus:ring-primary-fixed-dim text-body-md text-on-background outline-none transition-all">
+<option disabled="" selected="" value="">בחירת מקצוע</option>
+<option>היסטוריה של עם ישראל</option>
+<option>מתמטיקה מורחבת</option>
+<option>ספרות</option>
+</select>
+</div>
+<div class="flex flex-col gap-1">
+<label class="font-label-md text-label-md text-on-surface">כמות מבחנים נדרשת</label>
+<input class="w-full border border-outline-variant rounded-lg px-4 py-2 bg-surface focus:border-primary focus:ring-2 focus:ring-primary-fixed-dim text-body-md text-on-background outline-none transition-all" max="5" min="1" type="number" value="1"/>
+</div>
+<div class="flex flex-col gap-1">
+<label class="font-label-md text-label-md text-on-surface">הערות (אופציונלי)</label>
+<textarea class="w-full border border-outline-variant rounded-lg px-4 py-2 bg-surface focus:border-primary focus:ring-2 focus:ring-primary-fixed-dim text-body-md text-on-background outline-none transition-all resize-none" placeholder="פירוט נושאים או מיקוד..." rows="3"></textarea>
+</div>
+<button class="mt-2 w-full bg-primary text-on-primary font-label-md text-label-md py-3 rounded-lg hover:bg-tertiary transition-colors ambient-shadow-sm flex items-center justify-center gap-2" type="button">
+<span class="material-symbols-outlined" style="font-size: 20px;">save</span>
+                                פתיחת מבחן
+                            </button>
+</form>
+</div>
+</section>
+<!-- Left Column (Suggestions) -->
+<section class="xl:col-span-8 flex flex-col gap-4">
+<div class="bg-surface rounded-xl ambient-shadow-sm h-full border border-outline-variant/30 flex flex-col">
+<div class="p-6 border-b border-outline-variant/30 flex items-center justify-between glass-header rounded-t-xl z-10">
+<div>
+<h3 class="font-title-lg text-title-lg text-primary flex items-center gap-2">
+<span class="material-symbols-outlined text-secondary">model_training</span>
+                                    הצעות אוטומטיות לפתיחה
+                                </h3>
+<p class="font-caption text-caption text-on-surface-variant mt-1">מבוסס על חריגה מאחוז ההיעדרות המותר לכל מקצוע.</p>
+</div>
+</div>
+<div class="flex-1 overflow-x-auto">
+<table class="w-full text-right border-collapse">
+<thead class="bg-surface-container-low text-on-surface-variant font-label-md text-label-md">
+<tr>
+<th class="py-3 px-4 font-semibold">תלמידה</th>
+<th class="py-3 px-4 font-semibold">שיעור</th>
+<th class="py-3 px-4 font-semibold">% היעדרות</th>
+<th class="py-3 px-4 font-semibold">רף מותר</th>
+<th class="py-3 px-4 font-semibold">המלצה</th>
+<th class="py-3 px-4 font-semibold text-center">פעולה</th>
+</tr>
+</thead>
+<tbody class="font-body-md text-body-md text-on-background">
+<!-- Row 1 -->
+<tr class="table-row-hover border-b border-outline-variant/20 transition-all cursor-default">
+<td class="py-4 px-4 font-medium text-primary">רחל אברהמי</td>
+<td class="py-4 px-4">היסטוריה של עם ישראל</td>
+<td class="py-4 px-4 text-error font-semibold">28%</td>
+<td class="py-4 px-4 text-on-surface-variant">20%</td>
+<td class="py-4 px-4">
+<span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-secondary-fixed text-on-secondary-fixed">
+                                                מבחן 1 נדרש
+                                            </span>
+</td>
+<td class="py-4 px-4 text-center">
+<button class="text-secondary hover:text-primary font-label-md text-label-md transition-colors flex items-center justify-center mx-auto gap-1 border border-secondary px-3 py-1 rounded-md hover:bg-secondary-fixed">
+<span class="material-symbols-outlined" style="font-size: 18px;">open_in_new</span>
+                                                פתח
+                                            </button>
+</td>
+</tr>
+<!-- Row 2 -->
+<tr class="table-row-hover border-b border-outline-variant/20 transition-all cursor-default bg-error-container/10">
+<td class="py-4 px-4 font-medium text-primary">לאה גולדברג</td>
+<td class="py-4 px-4">מתמטיקה מורחבת</td>
+<td class="py-4 px-4 text-error font-semibold">35%</td>
+<td class="py-4 px-4 text-on-surface-variant">15%</td>
+<td class="py-4 px-4">
+<span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-error-container text-on-error-container">
+                                                2 מבחנים נדרשים
+                                            </span>
+</td>
+<td class="py-4 px-4 text-center">
+<button class="text-secondary hover:text-primary font-label-md text-label-md transition-colors flex items-center justify-center mx-auto gap-1 border border-secondary px-3 py-1 rounded-md hover:bg-secondary-fixed">
+<span class="material-symbols-outlined" style="font-size: 18px;">open_in_new</span>
+                                                פתח
+                                            </button>
+</td>
+</tr>
+</tbody>
+</table>
+<!-- Empty State Concept (Hidden by default, shown here as part of design vocabulary) -->
+<div class="hidden p-8 flex-col items-center justify-center text-center opacity-70">
+<span class="material-symbols-outlined text-display-lg text-outline mb-2">check_circle</span>
+<p class="font-body-md text-body-md">אין הצעות למבחני השלמה כרגע.<br/>כל התלמידות בטווח הנוכחות התקין.</p>
+</div>
+</div>
+</div>
+</section>
+<!-- Bottom Full Width (Main List) -->
+<section class="xl:col-span-12 mt-4">
+<div class="bg-surface rounded-xl ambient-shadow-md border border-outline-variant/30 overflow-hidden">
+<div class="p-6 border-b border-outline-variant/30 flex items-center justify-between bg-surface-bright z-10">
+<h3 class="font-title-lg text-title-lg text-primary flex items-center gap-2">
+<span class="material-symbols-outlined text-secondary">list_alt</span>
+                                רשימת מבחני השלמה
+                            </h3>
+<!-- Simple Filter/Search stub -->
+<div class="flex items-center gap-3">
+<div class="relative">
+<span class="material-symbols-outlined absolute right-3 top-1/2 -translate-y-1/2 text-outline-variant">search</span>
+<input class="pl-4 pr-10 py-2 border border-outline-variant rounded-full text-body-md text-on-background focus:border-primary focus:ring-1 focus:ring-primary w-64 outline-none" placeholder="חיפוש תלמידה או מקצוע..." type="text"/>
+</div>
+<button class="p-2 text-on-surface-variant border border-outline-variant rounded-lg hover:bg-surface-container transition-colors">
+<span class="material-symbols-outlined">filter_list</span>
+</button>
+</div>
+</div>
+<div class="overflow-x-auto">
+<table class="w-full text-right border-collapse">
+<thead class="bg-surface-container-low text-on-surface-variant font-label-md text-label-md">
+<tr>
+<th class="py-4 px-6 font-semibold w-1/4">תלמידה</th>
+<th class="py-4 px-6 font-semibold w-1/4">שיעור</th>
+<th class="py-4 px-6 font-semibold text-center">נדרש</th>
+<th class="py-4 px-6 font-semibold text-center">בוצע</th>
+<th class="py-4 px-6 font-semibold text-center">סטטוס</th>
+<th class="py-4 px-6 font-semibold text-left">פעולות</th>
+</tr>
+</thead>
+<tbody class="font-body-md text-body-md text-on-background">
+<!-- Row 1: Open -->
+<tr class="table-row-hover border-b border-outline-variant/10 transition-all group">
+<td class="py-4 px-6 font-medium text-primary">מרים כהן</td>
+<td class="py-4 px-6 text-on-surface-variant">ספרות מורחב</td>
+<td class="py-4 px-6 text-center">1</td>
+<td class="py-4 px-6 text-center text-outline">0</td>
+<td class="py-4 px-6 text-center">
+<span class="inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold bg-tertiary-fixed text-on-tertiary-fixed-variant">
+                                                פתוח
+                                            </span>
+</td>
+<td class="py-4 px-6 text-left">
+<div class="flex items-center justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+<button class="p-1.5 text-on-surface-variant hover:text-primary hover:bg-primary-fixed-dim rounded-md transition-colors" title="עריכה">
+<span class="material-symbols-outlined" style="font-size: 20px;">edit</span>
+</button>
+<button class="p-1.5 text-on-surface-variant hover:text-tertiary hover:bg-tertiary-fixed rounded-md transition-colors" title="סמן כבוצע">
+<span class="material-symbols-outlined" style="font-size: 20px;">check_circle</span>
+</button>
+</div>
+</td>
+</tr>
+<!-- Row 2: Done -->
+<tr class="table-row-hover border-b border-outline-variant/10 transition-all bg-surface-container-lowest/50 group">
+<td class="py-4 px-6 font-medium text-on-surface-variant">חנה לוי</td>
+<td class="py-4 px-6 text-on-surface-variant">הלכה השקפה</td>
+<td class="py-4 px-6 text-center">2</td>
+<td class="py-4 px-6 text-center font-semibold text-tertiary">2</td>
+<td class="py-4 px-6 text-center">
+<span class="inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold bg-surface-container text-on-surface-variant">
+                                                בוצע
+                                            </span>
+</td>
+<td class="py-4 px-6 text-left">
+<div class="flex items-center justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+<button class="p-1.5 text-on-surface-variant hover:text-primary hover:bg-primary-fixed-dim rounded-md transition-colors" title="צפייה בפרטים">
+<span class="material-symbols-outlined" style="font-size: 20px;">visibility</span>
+</button>
+</div>
+</td>
+</tr>
+<!-- Row 3: Blocked / Overdue -->
+<tr class="table-row-hover border-b border-outline-variant/10 transition-all group">
+<td class="py-4 px-6 font-medium text-primary">שירה שטרן</td>
+<td class="py-4 px-6 text-on-surface-variant">אנגלית מדוברת</td>
+<td class="py-4 px-6 text-center">1</td>
+<td class="py-4 px-6 text-center text-outline">0</td>
+<td class="py-4 px-6 text-center">
+<span class="inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold bg-error-container text-on-error-container">
+                                                נחסם (עבר זמן)
+                                            </span>
+</td>
+<td class="py-4 px-6 text-left">
+<div class="flex items-center justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+<button class="p-1.5 text-on-surface-variant hover:text-primary hover:bg-primary-fixed-dim rounded-md transition-colors" title="הארכת זמן">
+<span class="material-symbols-outlined" style="font-size: 20px;">more_time</span>
+</button>
+</div>
+</td>
+</tr>
+</tbody>
+</table>
+</div>
+<!-- Pagination Stub -->
+<div class="p-4 border-t border-outline-variant/30 flex items-center justify-between text-on-surface-variant font-label-md text-label-md bg-surface-container-lowest">
+<span>מציג 1-3 מתוך 24 רשומות</span>
+<div class="flex gap-1">
+<button class="w-8 h-8 flex items-center justify-center rounded border border-outline-variant hover:bg-surface-container transition-colors disabled:opacity-50" disabled="">
+<span class="material-symbols-outlined" style="font-size: 18px;">chevron_right</span>
+</button>
+<button class="w-8 h-8 flex items-center justify-center rounded border border-secondary bg-secondary-fixed text-on-secondary-fixed transition-colors">1</button>
+<button class="w-8 h-8 flex items-center justify-center rounded border border-outline-variant hover:bg-surface-container transition-colors">2</button>
+<button class="w-8 h-8 flex items-center justify-center rounded border border-outline-variant hover:bg-surface-container transition-colors">
+<span class="material-symbols-outlined" style="font-size: 18px;">chevron_left</span>
+</button>
+</div>
+</div>
+</div>
+</section>
+</div>
+</div>
+</main>
+</body></html>
+<!-- Injection By NetFree -->
+<script src="//netfree.link/injection-script/go-payment.js" type="text/javascript" async ></script>
+<script src="//netfree.link/injection-script/popup-card-init.js" type="text/javascript" async ></script>

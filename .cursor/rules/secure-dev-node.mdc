@@ -1,6 +1,4 @@
 ---
-description: Node.js / Next.js — אבטחת קוד TypeScript ו-JavaScript
-globs: "**/*.{ts,tsx,js}"
 alwaysApply: false
 ---
 # Secure Node.js Development

@@ -1,6 +1,5 @@
 import Link from "next/link";
 import { Card } from "@/components/ui/Card";
-import { PageHeader } from "@/components/ui/PageHeader";
 import { getActiveAcademicYear, getYearCatalog } from "@/lib/utils";
 import { createClient } from "@/lib/supabase/server";
 import { todayIso, formatHebrewDate, addDays } from "@/lib/dates/hebrew";
@@ -12,6 +11,8 @@ import { getPendingAttendanceSummary } from "@/lib/attendance/pending";
 import { AttendanceReminderBanner } from "@/components/attendance/AttendanceReminderBanner";
 import { cn } from "@/lib/cn";
 
+const HEBREW_LESSON_LABEL = ["א'", "ב'", "ג'", "ד'", "ה'", "ו'", "ז'", "ח'", "ט'"] as const;
+
 export default async function DashboardPage() {
   const activeYear = await getActiveAcademicYear();
   const supabase = await createClient();
@@ -22,6 +23,8 @@ export default async function DashboardPage() {
     id: string;
     subject: string;
     teacherName: string;
+    className: string | null;
+    lessonNumber: number | null;
     marked: number;
     total: number;
   }> = [];
@@ -65,7 +68,8 @@ export default async function DashboardPage() {
         .select(
           `id, lesson_id,
            lessons!inner(
-             subject, academic_year_id, attendance_rule_id,
+             subject, academic_year_id, attendance_rule_id, class_id, lesson_number,
+             classes(name),
              teacher_teaching_assignments(teachers(full_name))
            )`
         )
@@ -102,7 +106,9 @@ export default async function DashboardPage() {
       todayLessons = todayRows.map((o) => {
         const lesson = o.lessons as unknown as {
           subject: string;
+          lesson_number: number | null;
           teacher_teaching_assignments: { teachers: { full_name: string } | null } | null;
+          classes: { name: string } | null;
         };
         let total = 0;
         for (const link of links ?? []) {
@@ -117,13 +123,16 @@ export default async function DashboardPage() {
           id: o.id,
           subject: lesson.subject,
           teacherName: lesson.teacher_teaching_assignments?.teachers?.full_name ?? "",
+          className: lesson.classes?.name ?? null,
+          lessonNumber: lesson.lesson_number ?? null,
           marked,
           total,
         };
       });
+
+      todayLessons.sort((a, b) => (a.lessonNumber ?? 99) - (b.lessonNumber ?? 99));
     }
 
-    // At-risk students this month (sample: active assignments + absences)
     const monthStart = `${today.slice(0, 8)}01`;
     const defaultRule = catalog.rules[0];
     const threshold = defaultRule ? Number(defaultRule.max_allowed_absence_percent) : 15;
@@ -204,43 +213,66 @@ export default async function DashboardPage() {
     ? await getPendingAttendanceSummary(activeYear.id)
     : { pendingCount: 0, todayPending: 0, pastPending: 0, items: [] };
 
-  const cards = [
-    { label: "תלמידות בשנה", value: stats.students, href: "/students", hint: "עם שיבוץ פעיל" },
-    { label: "כיתות", value: stats.classes, href: "/settings", hint: "מבנה השנה" },
-    { label: "תבניות שיעור", value: stats.lessons, href: "/lessons", hint: "שיעורים קבועים" },
+  const kpis = [
+    {
+      label: "תלמידות בשנה",
+      value: stats.students,
+      href: "/students",
+      icon: "groups",
+      accent: "secondary" as const,
+    },
+    {
+      label: "כיתות",
+      value: stats.classes,
+      href: "/settings",
+      icon: "class",
+      accent: "outline" as const,
+    },
+    {
+      label: "תבניות שיעור",
+      value: stats.lessons,
+      href: "/lessons",
+      icon: "auto_awesome_mosaic",
+      accent: "outline" as const,
+    },
     {
       label: "שיעורים בלי רישום",
       value: stats.unmarked,
       href: `/attendance?date=${today}`,
-      hint: "השבוע · לטיפול",
+      icon: "pending_actions",
+      accent: "attendance-late" as const,
       alert: stats.unmarked > 0,
     },
   ];
 
   return (
-    <div className="space-y-6">
-      <PageHeader
-        title="לוח בקרה"
-        description={
-          activeYear
-            ? `שנת ${activeYear.name} · ${formatHebrewDate(today)}`
-            : "כדי להתחיל, הגדירי שנה אקדמית פעילה"
-        }
-        actions={
-          <Link
-            href={`/attendance?date=${today}`}
-            className="inline-flex items-center rounded-xl bg-[var(--brand)] px-4 py-2.5 text-sm font-medium text-white shadow-[var(--shadow-sm)] transition-colors hover:bg-[var(--brand-soft)]"
-          >
-            סמני היום
-          </Link>
-        }
-      />
+    <>
+      {/* Page Header */}
+      <div className="flex flex-wrap items-end justify-between gap-4">
+        <div className="flex min-w-0 flex-col gap-1">
+          <h2 className="font-display-lg text-display-lg text-primary">לוח בקרה</h2>
+          <p className="font-body-lg text-body-lg text-on-surface-variant">
+            {activeYear
+              ? `שנת ${activeYear.name} · ${formatHebrewDate(today)}`
+              : "כדי להתחיל, הגדירי שנה אקדמית פעילה"}
+          </p>
+        </div>
+        <Link
+          href={`/attendance?date=${today}`}
+          className="flex items-center gap-2 rounded-lg bg-primary px-6 py-3 text-label-md text-surface shadow-tactile-sm transition-colors hover:bg-primary-container"
+        >
+          <span className="material-symbols-outlined text-[20px]" aria-hidden>
+            fact_check
+          </span>
+          סמני היום
+        </Link>
+      </div>
 
       {!activeYear ? (
         <Card>
-          <p className="text-slate-600">
+          <p className="text-on-surface-variant">
             לא הוגדרה שנה אקדמית פעילה.{" "}
-            <Link href="/settings" className="font-medium text-[var(--brand)] hover:underline">
+            <Link href="/settings" className="font-medium text-primary hover:underline">
               מעבר להגדרות
             </Link>
           </p>
@@ -249,122 +281,220 @@ export default async function DashboardPage() {
         <>
           <AttendanceReminderBanner summary={pendingSummary} />
 
-          <div className="flex flex-wrap gap-2">
-            {(
-              [
-                [`/attendance?date=${today}`, "סמני היום"],
-                ["/reports?run=1", "דוח שבועי"],
-                ["/students", "תלמידה חדשה"],
-                ["/lessons", "שיעור חדש"],
-              ] as const
-            ).map(([href, label]) => (
-              <Link
-                key={href}
-                href={href}
-                className="rounded-xl border border-stone-200 bg-white px-3 py-2 text-sm font-medium text-slate-700 shadow-sm hover:border-[var(--border-strong)]"
-              >
-                {label}
-              </Link>
-            ))}
+          {/* Quick Actions & KPI Grid */}
+          <div className="grid grid-cols-12 gap-gutter">
+            <div className="col-span-12">
+              <div className="flex flex-wrap gap-3">
+                {(
+                  [
+                    [`/attendance?date=${today}`, "סמני היום", "check_circle"],
+                    ["/reports?run=1", "דוח שבועי", "bar_chart"],
+                    ["/students", "תלמידה חדשה", "person_add"],
+                    ["/lessons", "שיעור חדש", "add_box"],
+                  ] as const
+                ).map(([href, label, icon]) => (
+                  <Link
+                    key={href}
+                    href={href}
+                    className="flex items-center gap-2 rounded-full border border-outline-variant bg-surface-container-lowest px-5 py-2.5 text-label-md text-primary shadow-tactile-sm transition-colors hover:bg-surface-container-low"
+                  >
+                    <span className="material-symbols-outlined text-[18px]" aria-hidden>
+                      {icon}
+                    </span>
+                    {label}
+                  </Link>
+                ))}
+              </div>
+            </div>
+
+            <div className="col-span-12 grid grid-cols-2 gap-gutter md:grid-cols-4">
+              {kpis.map((kpi) => (
+                <Link key={kpi.label} href={kpi.href} className="group block">
+                  <Card
+                    accent={kpi.accent}
+                    className={cn(
+                      "card-hover relative flex h-full flex-col justify-between p-6",
+                      kpi.alert && "overflow-hidden"
+                    )}
+                  >
+                    {kpi.alert && (
+                      <div
+                        className="dot-warning absolute left-4 top-4 h-3 w-3 rounded-full bg-attendance-late"
+                        aria-hidden
+                      />
+                    )}
+                    <p className="mb-4 font-body-md text-body-md text-on-surface-variant">
+                      {kpi.label}
+                    </p>
+                    <div className="flex items-end justify-between">
+                      <span className="font-headline-lg text-headline-lg text-primary">
+                        {kpi.value}
+                      </span>
+                      <span
+                        className={cn(
+                          "material-symbols-outlined text-3xl",
+                          kpi.alert ? "text-attendance-late/40" : "text-outline-variant"
+                        )}
+                        aria-hidden
+                      >
+                        {kpi.icon}
+                      </span>
+                    </div>
+                  </Card>
+                </Link>
+              ))}
+            </div>
           </div>
 
           {stats.markedThisWeek >= 5 && (
-            <p className="rounded-xl bg-emerald-50 px-4 py-3 text-sm text-emerald-800">
+            <div className="rounded-xl bg-attendance-present/10 px-4 py-3 text-caption font-semibold text-attendance-present">
               סמנת {stats.markedThisWeek} שיעורים השבוע — כל הכבוד!
-            </p>
+            </div>
           )}
 
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
-            {cards.map((card) => (
-              <Link key={card.label} href={card.href} className="group block">
-                <Card className="h-full transition-all duration-200 group-hover:-translate-y-0.5 group-hover:border-[var(--border-strong)]">
-                  <div className="flex items-start justify-between gap-3">
-                    <p className="text-sm font-medium text-slate-500">{card.label}</p>
-                    {"alert" in card && card.alert ? (
-                      <span className="mt-0.5 h-2 w-2 rounded-full bg-amber-500" aria-hidden />
-                    ) : null}
-                  </div>
-                  <p className="mt-4 text-4xl font-semibold tracking-tight text-[var(--brand)]">
-                    {card.value}
-                  </p>
-                  <p className="mt-3 text-xs leading-relaxed text-slate-400">{card.hint}</p>
-                </Card>
-              </Link>
-            ))}
-          </div>
+          {/* Two Column: Today lessons + At-risk */}
+          <div className="grid flex-1 grid-cols-12 gap-gutter">
+            {/* Today lessons */}
+            <div className="col-span-12 flex flex-col rounded-xl bg-surface-container-lowest p-6 shadow-tactile-md lg:col-span-8">
+              <div className="mb-6 flex items-center justify-between">
+                <h3 className="inline-block border-b-2 border-secondary pb-1 font-title-lg text-title-lg text-primary">
+                  שיעורי היום
+                </h3>
+                <Link
+                  href="/timetable"
+                  className="text-label-md text-secondary hover:underline"
+                >
+                  צפייה במערכת השעות
+                </Link>
+              </div>
 
-          <div className="grid gap-4 lg:grid-cols-2">
-            <Card title="שיעורי היום">
               {todayLessons.length === 0 ? (
-                <p className="text-sm text-slate-500">אין שיעורים היום.</p>
+                <p className="text-body-md text-on-surface-variant">אין שיעורים היום.</p>
               ) : (
-                <ul className="space-y-2">
+                <div className="flex flex-col gap-3">
                   {todayLessons.map((lesson) => {
                     const done = lesson.total > 0 && lesson.marked >= lesson.total;
+                    const progress =
+                      lesson.total > 0 ? Math.round((lesson.marked / lesson.total) * 100) : 0;
+                    const label = HEBREW_LESSON_LABEL[(lesson.lessonNumber ?? 1) - 1] ?? "?";
                     return (
-                      <li key={lesson.id}>
-                        <Link
-                          href={`/attendance?date=${today}&occurrenceId=${lesson.id}`}
-                          className={cn(
-                            "flex items-center justify-between rounded-xl border px-3 py-3 transition-colors",
-                            done
-                              ? "border-emerald-200 bg-emerald-50/50"
-                              : "border-stone-100 hover:bg-stone-50"
-                          )}
-                        >
-                          <div>
-                            <div className="font-medium text-slate-800">{lesson.subject}</div>
-                            <div className="text-xs text-slate-500">{lesson.teacherName || "—"}</div>
-                          </div>
-                          <div className="text-left text-xs font-medium text-slate-600">
-                            {done ? (
-                              <span className="text-emerald-700">✓ הושלם</span>
-                            ) : (
-                              <>
-                                {lesson.marked}/{lesson.total}
-                                <span className="mr-2 text-[var(--brand)]">סמני ←</span>
-                              </>
+                      <Link
+                        key={lesson.id}
+                        href={`/attendance?date=${today}&occurrenceId=${lesson.id}`}
+                        className="flex items-center justify-between gap-4 rounded-lg border border-outline-variant/30 bg-background p-4 transition-colors hover:bg-[var(--accent-soft)]"
+                      >
+                        <div className="flex min-w-0 items-center gap-4">
+                          <div
+                            className={cn(
+                              "flex h-12 w-12 shrink-0 items-center justify-center rounded-md font-bold",
+                              done
+                                ? "bg-primary-container text-on-primary-container"
+                                : "bg-surface-variant text-on-surface-variant"
                             )}
+                            aria-hidden
+                          >
+                            {label}
                           </div>
-                        </Link>
-                      </li>
+                          <div className="min-w-0">
+                            <h4 className="truncate font-label-md text-label-md text-primary">
+                              {lesson.subject}
+                            </h4>
+                            <p className="text-caption text-on-surface-variant">
+                              {lesson.teacherName || "—"}
+                              {lesson.className ? ` • ${lesson.className}` : ""}
+                            </p>
+                          </div>
+                        </div>
+                        {done ? (
+                          <span className="status-pill-ok flex items-center gap-1 rounded-full px-3 py-1 text-caption font-semibold">
+                            <span className="material-symbols-outlined text-[16px]">
+                              check
+                            </span>
+                            הושלם
+                          </span>
+                        ) : lesson.marked > 0 ? (
+                          <div className="flex flex-col items-end gap-1">
+                            <span className="text-caption text-on-surface-variant">
+                              {lesson.marked}/{lesson.total}
+                            </span>
+                            <div
+                              className="h-2.5 w-32 overflow-hidden rounded-full bg-surface-variant"
+                              aria-hidden
+                            >
+                              <div
+                                className="h-2.5 rounded-full bg-attendance-late"
+                                style={{ width: `${progress}%` }}
+                              />
+                            </div>
+                          </div>
+                        ) : (
+                          <span className="rounded border border-secondary px-3 py-1 text-label-md text-secondary transition-colors hover:bg-secondary/10">
+                            סמני נוכחות
+                          </span>
+                        )}
+                      </Link>
                     );
                   })}
-                </ul>
+                </div>
               )}
-            </Card>
+            </div>
 
-            <Card title="תלמידות חורגות / קרובות לסף">
+            {/* At-risk students */}
+            <div className="col-span-12 flex flex-col rounded-xl bg-surface-container-lowest p-6 shadow-tactile-md lg:col-span-4">
+              <div className="mb-6 flex items-center justify-between">
+                <h3 className="inline-block border-b-2 border-attendance-absent pb-1 font-title-lg text-title-lg text-primary">
+                  תלמידות חורגות
+                </h3>
+              </div>
               {atRisk.length === 0 ? (
-                <p className="text-sm text-slate-500">אין חריגות החודש — מעולה.</p>
+                <p className="text-body-md text-on-surface-variant">
+                  אין חריגות החודש — מעולה.
+                </p>
               ) : (
-                <ul className="space-y-2">
+                <ul className="flex flex-col gap-4">
                   {atRisk.map((s) => (
-                    <li key={s.id}>
+                    <li
+                      key={s.id}
+                      className="flex items-center justify-between border-b border-outline-variant/20 pb-3 last:border-0 last:pb-0"
+                    >
                       <Link
                         href={`/students/${s.id}`}
-                        className="flex items-center justify-between rounded-xl border border-stone-100 px-3 py-2.5 hover:bg-stone-50"
+                        className="flex items-center gap-3 hover:underline"
                       >
-                        <span className="font-medium text-slate-800">{s.name}</span>
-                        <span
-                          className={cn(
-                            "rounded-full px-2 py-0.5 text-xs font-semibold",
-                            s.level === "blocked"
-                              ? "bg-rose-100 text-rose-800"
-                              : "bg-amber-100 text-amber-800"
-                          )}
+                        <div
+                          className="flex h-8 w-8 items-center justify-center rounded-full bg-primary text-sm font-bold text-surface"
+                          aria-hidden
                         >
-                          {s.percent}%
+                          {s.name.charAt(0)}
+                        </div>
+                        <span className="font-label-md text-label-md text-primary">
+                          {s.name}
                         </span>
                       </Link>
+                      <span
+                        className={cn(
+                          "rounded px-2 py-0.5 text-xs font-semibold",
+                          s.level === "blocked"
+                            ? "status-pill-blocked"
+                            : "status-pill-warning"
+                        )}
+                      >
+                        {s.percent}% היעדרות
+                      </span>
                     </li>
                   ))}
                 </ul>
               )}
-            </Card>
+              <Link
+                href="/reports"
+                className="mt-4 block w-full rounded-md bg-surface-container-low py-2 text-center text-label-md text-on-surface-variant transition-colors hover:text-primary"
+              >
+                צפייה בדוח מלא
+              </Link>
+            </div>
           </div>
         </>
       )}
-    </div>
+    </>
   );
 }

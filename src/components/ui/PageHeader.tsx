@@ -10,12 +10,13 @@ export function PageHeader({
   actions?: React.ReactNode;
 }) {
   return (
-    <div className="mb-8 flex flex-wrap items-end justify-between gap-4">
-      <div className="min-w-0">
-        <div className="mb-2 h-1 w-10 rounded-full bg-[var(--accent)]" aria-hidden />
-        <h1 className="text-3xl font-semibold tracking-tight text-[var(--brand)]">{title}</h1>
+    <div className="flex flex-wrap items-end justify-between gap-4">
+      <div className="flex min-w-0 flex-col gap-1">
+        <h2 className="font-display-lg text-display-lg text-primary">{title}</h2>
         {description && (
-          <p className="mt-1.5 max-w-2xl text-sm leading-relaxed text-slate-500">{description}</p>
+          <p className="font-body-lg text-body-lg text-on-surface-variant">
+            {description}
+          </p>
         )}
       </div>
       {actions && <div className="flex flex-wrap items-center gap-2">{actions}</div>}
@@ -31,15 +32,15 @@ export function StatusPill({
   children: React.ReactNode;
 }) {
   const tones = {
-    ok: "bg-emerald-50 text-emerald-800 ring-1 ring-emerald-100",
-    warn: "bg-amber-50 text-amber-900 ring-1 ring-amber-100",
-    danger: "bg-rose-50 text-rose-800 ring-1 ring-rose-100",
-    muted: "bg-slate-100 text-slate-600 ring-1 ring-slate-200/70",
-  };
+    ok: "status-pill-ok",
+    warn: "status-pill-warning",
+    danger: "status-pill-blocked",
+    muted: "bg-surface-container-low text-on-surface-variant",
+  } as const;
   return (
     <span
       className={cn(
-        "inline-flex items-center rounded-lg px-2.5 py-0.5 text-xs font-medium",
+        "inline-flex items-center rounded-full px-2.5 py-0.5 text-caption font-semibold",
         tones[tone]
       )}
     >

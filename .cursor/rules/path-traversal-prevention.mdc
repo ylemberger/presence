@@ -1,6 +1,5 @@
 ---
-description: מניעת path traversal בגישה לקבצים
-alwaysApply: true
+alwaysApply: false
 ---
 # Path Traversal Prevention
 

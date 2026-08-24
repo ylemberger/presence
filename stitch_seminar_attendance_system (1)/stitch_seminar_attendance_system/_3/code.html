@@ -1,0 +1,461 @@
+<!DOCTYPE html>
+
+<html class="dark" dir="rtl" lang="he"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>מערכת ניהול פנימית - תלמידות</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Hanken+Grotesk:wght@400;500;600;700&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    "colors": {
+                        "surface-tint": "#42646a",
+                        "on-tertiary-fixed-variant": "#1e4d55",
+                        "surface-container": "#ebefee",
+                        "surface-container-high": "#e5e9e8",
+                        "tertiary-container": "#043b43",
+                        "secondary-container": "#fdd48e",
+                        "outline": "#71787a",
+                        "primary-container": "#163a40",
+                        "error": "#ba1a1a",
+                        "on-primary-fixed": "#001f24",
+                        "on-primary-fixed-variant": "#294c52",
+                        "tertiary-fixed": "#bceaf4",
+                        "surface-container-lowest": "#ffffff",
+                        "surface-container-low": "#f0f4f3",
+                        "secondary-fixed-dim": "#e8c17c",
+                        "surface-container-highest": "#dfe3e2",
+                        "inverse-surface": "#2d3131",
+                        "on-error-container": "#93000a",
+                        "on-surface-variant": "#414849",
+                        "primary-fixed-dim": "#a9cdd4",
+                        "background": "#f6faf9",
+                        "surface": "#f6faf9",
+                        "inverse-on-surface": "#edf2f1",
+                        "surface-variant": "#dfe3e2",
+                        "primary": "#00242a",
+                        "secondary": "#775a20",
+                        "outline-variant": "#c1c8c9",
+                        "on-primary-container": "#81a4ab",
+                        "secondary-fixed": "#ffdea7",
+                        "on-error": "#ffffff",
+                        "tertiary": "#00242a",
+                        "error-container": "#ffdad6",
+                        "on-tertiary-container": "#78a5ae",
+                        "primary-fixed": "#c4e9f0",
+                        "surface-dim": "#d7dbda",
+                        "on-tertiary-fixed": "#001f24",
+                        "on-secondary": "#ffffff",
+                        "on-secondary-fixed": "#271900",
+                        "on-background": "#181c1c",
+                        "on-secondary-fixed-variant": "#5c4208",
+                        "surface-bright": "#f6faf9",
+                        "on-primary": "#ffffff",
+                        "inverse-primary": "#a9cdd4",
+                        "on-tertiary": "#ffffff",
+                        "on-surface": "#181c1c",
+                        "on-secondary-container": "#775a20",
+                        "tertiary-fixed-dim": "#a0ced8"
+                    },
+                    "borderRadius": {
+                        "DEFAULT": "0.25rem",
+                        "lg": "0.5rem",
+                        "xl": "0.75rem",
+                        "full": "9999px"
+                    },
+                    "spacing": {
+                        "stack_lg": "2rem",
+                        "stack_md": "1rem",
+                        "container_padding": "2rem",
+                        "gutter": "1.5rem",
+                        "sidebar_width": "17.5rem",
+                        "stack_sm": "0.5rem"
+                    },
+                    "fontFamily": {
+                        "body-lg": ["Hanken Grotesk"],
+                        "body-md": ["Hanken Grotesk"],
+                        "headline-md": ["Hanken Grotesk"],
+                        "headline-lg": ["Hanken Grotesk"],
+                        "display-lg": ["Hanken Grotesk"],
+                        "title-lg": ["Hanken Grotesk"],
+                        "caption": ["Hanken Grotesk"],
+                        "label-md": ["Hanken Grotesk"]
+                    },
+                    "fontSize": {
+                        "body-lg": ["18px", { "lineHeight": "28px", "fontWeight": "400" }],
+                        "body-md": ["16px", { "lineHeight": "24px", "fontWeight": "400" }],
+                        "headline-md": ["24px", { "lineHeight": "32px", "fontWeight": "600" }],
+                        "headline-lg": ["32px", { "lineHeight": "40px", "fontWeight": "600" }],
+                        "display-lg": ["48px", { "lineHeight": "56px", "letterSpacing": "-0.02em", "fontWeight": "700" }],
+                        "title-lg": ["20px", { "lineHeight": "28px", "fontWeight": "500" }],
+                        "caption": ["12px", { "lineHeight": "16px", "fontWeight": "400" }],
+                        "label-md": ["14px", { "lineHeight": "20px", "letterSpacing": "0.01em", "fontWeight": "600" }]
+                    }
+                }
+            }
+        }
+    </script>
+<style>
+        body { font-family: 'Hanken Grotesk', sans-serif; }
+    </style>
+</head>
+<body class="bg-background text-on-background min-h-screen rtl flex selection:bg-secondary-container selection:text-on-secondary-container">
+<!-- SideNavBar -->
+<aside class="fixed right-0 top-0 h-full w-[17.5rem] bg-primary dark:bg-primary-container text-secondary dark:text-secondary-fixed shadow-md z-50 flex flex-col rtl">
+<div class="p-stack_lg flex items-center gap-4">
+<div class="w-10 h-10 rounded-full bg-secondary-container text-on-secondary-container flex items-center justify-center font-headline-md font-bold">
+                נ
+            </div>
+<div>
+<h1 class="text-headline-lg font-headline-lg text-secondary">נוכחות סמינר</h1>
+<p class="font-caption text-caption text-on-primary-container">תשפ"ד - שנה פעילה</p>
+</div>
+</div>
+<nav class="flex-1 px-stack_md flex flex-col gap-2 mt-4">
+<a class="flex items-center gap-3 px-4 py-3 rounded-lg text-on-primary hover:bg-primary-container/50 font-body-md text-body-md transition-colors group" href="#">
+<span class="material-symbols-outlined" data-icon="dashboard">dashboard</span>
+<span>לוח בקרה</span>
+</a>
+<a class="flex items-center gap-3 px-4 py-3 rounded-lg bg-primary-container text-secondary border-r-4 border-secondary font-body-md text-body-md Active: scale-95 transition-all group" href="#">
+<span class="material-symbols-outlined" data-icon="group" data-weight="fill" style="font-variation-settings: 'FILL' 1;">group</span>
+<span>תלמידות</span>
+</a>
+<a class="flex items-center gap-3 px-4 py-3 rounded-lg text-on-primary hover:bg-primary-container/50 font-body-md text-body-md transition-colors group" href="#">
+<span class="material-symbols-outlined" data-icon="fact_check">fact_check</span>
+<span>נוכחות</span>
+</a>
+<a class="flex items-center gap-3 px-4 py-3 rounded-lg text-on-primary hover:bg-primary-container/50 font-body-md text-body-md transition-colors group" href="#">
+<span class="material-symbols-outlined" data-icon="edit_calendar">edit_calendar</span>
+<span>מבחני השלמה</span>
+</a>
+<a class="flex items-center gap-3 px-4 py-3 rounded-lg text-on-primary hover:bg-primary-container/50 font-body-md text-body-md transition-colors group" href="#">
+<span class="material-symbols-outlined" data-icon="menu_book">menu_book</span>
+<span>שיעורים</span>
+</a>
+<a class="flex items-center gap-3 px-4 py-3 rounded-lg text-on-primary hover:bg-primary-container/50 font-body-md text-body-md transition-colors group" href="#">
+<span class="material-symbols-outlined" data-icon="person_4">person_4</span>
+<span>מורות</span>
+</a>
+<a class="flex items-center gap-3 px-4 py-3 rounded-lg text-on-primary hover:bg-primary-container/50 font-body-md text-body-md transition-colors group" href="#">
+<span class="material-symbols-outlined" data-icon="assessment">assessment</span>
+<span>דוחות</span>
+</a>
+<a class="flex items-center gap-3 px-4 py-3 rounded-lg text-on-primary hover:bg-primary-container/50 font-body-md text-body-md transition-colors group" href="#">
+<span class="material-symbols-outlined" data-icon="settings">settings</span>
+<span>הגדרות</span>
+</a>
+</nav>
+<div class="p-stack_md mt-auto">
+<button class="flex items-center w-full gap-3 px-4 py-3 rounded-lg text-on-primary hover:bg-primary-container/50 font-body-md text-body-md transition-colors">
+<span class="material-symbols-outlined" data-icon="logout">logout</span>
+<span>התנתקות</span>
+</button>
+</div>
+</aside>
+<!-- Main Content Wrapper -->
+<div class="flex-1 mr-[17.5rem] flex flex-col min-h-screen">
+<!-- TopAppBar -->
+<header class="sticky top-0 z-40 w-full bg-surface/95 dark:bg-surface-dim/95 border-b border-outline-variant backdrop-blur-md shadow-sm flex justify-between items-center px-stack_lg h-16 rtl">
+<div class="flex items-center gap-6">
+<h2 class="font-headline-md text-headline-md text-primary">מערכת ניהול פנימית</h2>
+<nav class="hidden md:flex gap-4">
+<a class="font-label-md text-label-md text-on-surface-variant hover:text-primary transition-opacity duration-200" href="#">תשפ"ד</a>
+</nav>
+</div>
+<div class="flex items-center gap-4">
+<button class="font-label-md text-label-md text-on-surface-variant flex items-center gap-1 hover:text-primary transition-opacity duration-200">
+                    בורר שנה
+                    <span class="material-symbols-outlined text-sm">expand_more</span>
+</button>
+<div class="flex gap-2">
+<button class="text-primary dark:text-primary-fixed p-2 rounded-full hover:bg-surface-variant/50 transition-colors">
+<span class="material-symbols-outlined" data-icon="notifications">notifications</span>
+</button>
+<button class="text-primary dark:text-primary-fixed p-2 rounded-full hover:bg-surface-variant/50 transition-colors">
+<span class="material-symbols-outlined" data-icon="account_circle">account_circle</span>
+</button>
+</div>
+</div>
+</header>
+<!-- Main Canvas -->
+<main class="flex-1 p-container_padding flex flex-col gap-8 max-w-[1440px] mx-auto w-full">
+<!-- Page Header -->
+<div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+<div>
+<h2 class="font-display-lg text-display-lg text-primary mb-2">תלמידות</h2>
+<p class="font-body-md text-body-md text-on-surface-variant max-w-2xl">
+                        ניהול רשומות תלמידות, שיבוצים למסלולים והתמחויות, ומעקב אחר סטטוס פעילות. השתמשי במסננים לאיתור מהיר של תלמידות.
+                    </p>
+</div>
+<button class="bg-secondary text-on-secondary px-6 py-3 rounded-lg font-label-md text-label-md flex items-center gap-2 hover:bg-secondary-fixed-dim transition-colors shadow-sm hover:shadow-md hover:-translate-y-[2px] active:translate-y-0" onclick="document.getElementById('new-student-modal').classList.remove('hidden')">
+<span class="material-symbols-outlined">person_add</span>
+                    תלמידה חדשה
+                </button>
+</div>
+<!-- Filter Panel -->
+<div class="bg-surface rounded-xl p-6 shadow-[0_4px_20px_rgba(22,58,64,0.05)] border border-surface-variant">
+<div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4">
+<div class="relative">
+<span class="material-symbols-outlined absolute right-3 top-1/2 -translate-y-1/2 text-outline">search</span>
+<input class="w-full pl-3 pr-10 py-2 bg-surface-container-lowest border border-outline rounded-lg font-body-md text-body-md focus:border-primary focus:ring-2 focus:ring-secondary-fixed-dim/50 transition-all outline-none" placeholder="חיפוש לפי שם או ת.ז" type="text"/>
+</div>
+<select class="w-full px-3 py-2 bg-surface-container-lowest border border-outline rounded-lg font-body-md text-body-md focus:border-primary focus:ring-2 focus:ring-secondary-fixed-dim/50 transition-all outline-none appearance-none cursor-pointer">
+<option value="">כל השכבות</option>
+<option value="9">ט'</option>
+<option value="10">י'</option>
+<option value="11">י"א</option>
+<option value="12">י"ב</option>
+</select>
+<select class="w-full px-3 py-2 bg-surface-container-lowest border border-outline rounded-lg font-body-md text-body-md focus:border-primary focus:ring-2 focus:ring-secondary-fixed-dim/50 transition-all outline-none appearance-none cursor-pointer">
+<option value="">כל הכיתות</option>
+<option value="1">1</option>
+<option value="2">2</option>
+<option value="3">3</option>
+</select>
+<select class="w-full px-3 py-2 bg-surface-container-lowest border border-outline rounded-lg font-body-md text-body-md focus:border-primary focus:ring-2 focus:ring-secondary-fixed-dim/50 transition-all outline-none appearance-none cursor-pointer">
+<option value="">כל המסלולים</option>
+<option value="general">עיוני</option>
+<option value="tech">טכנולוגי</option>
+</select>
+<select class="w-full px-3 py-2 bg-surface-container-lowest border border-outline rounded-lg font-body-md text-body-md focus:border-primary focus:ring-2 focus:ring-secondary-fixed-dim/50 transition-all outline-none appearance-none cursor-pointer">
+<option value="">כל ההתמחויות</option>
+<option value="cs">מדעי המחשב</option>
+<option value="bio">ביולוגיה</option>
+<option value="art">אמנות</option>
+</select>
+<select class="w-full px-3 py-2 bg-surface-container-lowest border border-outline rounded-lg font-body-md text-body-md focus:border-primary focus:ring-2 focus:ring-secondary-fixed-dim/50 transition-all outline-none appearance-none cursor-pointer">
+<option value="">סטטוס פעילות</option>
+<option value="active">פעילה</option>
+<option value="inactive">לא פעילה</option>
+</select>
+</div>
+</div>
+<!-- Students Table -->
+<div class="bg-surface rounded-xl shadow-[0_4px_20px_rgba(22,58,64,0.05)] overflow-hidden border border-surface-variant flex-1">
+<div class="overflow-x-auto">
+<table class="w-full text-right border-collapse min-w-[1000px]">
+<thead>
+<tr class="bg-background border-b border-surface-variant">
+<th class="p-4 font-label-md text-label-md text-on-surface-variant font-semibold">תלמידה</th>
+<th class="p-4 font-label-md text-label-md text-on-surface-variant font-semibold">ת.ז</th>
+<th class="p-4 font-label-md text-label-md text-on-surface-variant font-semibold">מחזור</th>
+<th class="p-4 font-label-md text-label-md text-on-surface-variant font-semibold">שכבה</th>
+<th class="p-4 font-label-md text-label-md text-on-surface-variant font-semibold">כיתה</th>
+<th class="p-4 font-label-md text-label-md text-on-surface-variant font-semibold">מסלול</th>
+<th class="p-4 font-label-md text-label-md text-on-surface-variant font-semibold">התמחות</th>
+<th class="p-4 font-label-md text-label-md text-on-surface-variant font-semibold">סטטוס</th>
+<th class="p-4 font-label-md text-label-md text-on-surface-variant font-semibold text-center">פעולות</th>
+</tr>
+</thead>
+<tbody class="divide-y divide-surface-variant">
+<!-- Row 1 -->
+<tr class="hover:bg-primary-fixed/5 transition-colors group">
+<td class="p-4">
+<div class="flex items-center gap-3">
+<div class="w-10 h-10 rounded-full overflow-hidden bg-surface-variant border border-outline-variant">
+<img class="w-full h-full object-cover" data-alt="A professional, slightly abstract 3D rendered avatar of a female student character. Soft studio lighting, pastel background, modern corporate vector art style. The character is smiling slightly, facing forward. High quality, clean rendering suitable for an enterprise dashboard." src="https://lh3.googleusercontent.com/aida-public/AB6AXuC3_rivHbC_nVR0azR4LJOULeLwHhndbVY3J5UFrMxFzh1hlxL6Fgjb5UN96qfriy4zcZ9WOJZBN8gDu_Jvm1CHf-wYMrsOSTAP6hzGeMDWcNayfLzQ3-k6mSaHEjXWDRLfg8eN5huokgJs_2AGdA8tp2Eu_qv7VIiCduIKVSIWLtXn-OCM40XpLvSVGyFiXwLyxJnjt4JJpRdMmEiMS7AsrHuGNqNdYu0qfa0mzv8441vtFZmyVWbW"/>
+</div>
+<div>
+<div class="font-body-md text-body-md font-semibold text-primary">רחל כהן</div>
+<div class="font-caption text-caption text-on-surface-variant">הנדסת תוכנה</div>
+</div>
+</div>
+</td>
+<td class="p-4 font-body-md text-body-md text-on-surface ltr text-left">204593847</td>
+<td class="p-4 font-body-md text-body-md text-on-surface">תשפ"ד</td>
+<td class="p-4 font-body-md text-body-md text-on-surface">י"א</td>
+<td class="p-4 font-body-md text-body-md text-on-surface">2</td>
+<td class="p-4 font-body-md text-body-md text-on-surface">טכנולוגי</td>
+<td class="p-4 font-body-md text-body-md text-on-surface">מדעי המחשב</td>
+<td class="p-4">
+<span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-emerald-100 text-emerald-800">
+                                        פעילה
+                                    </span>
+</td>
+<td class="p-4 text-center">
+<button class="text-on-surface-variant hover:text-secondary transition-colors p-2 rounded-full hover:bg-secondary-container/50">
+<span class="material-symbols-outlined">visibility</span>
+</button>
+</td>
+</tr>
+<!-- Row 2 -->
+<tr class="hover:bg-primary-fixed/5 transition-colors group">
+<td class="p-4">
+<div class="flex items-center gap-3">
+<div class="w-10 h-10 rounded-full overflow-hidden bg-surface-variant border border-outline-variant">
+<img class="w-full h-full object-cover" data-alt="A professional, slightly abstract 3D rendered avatar of a female student character. Soft studio lighting, pastel background, modern corporate vector art style. The character is wearing glasses and has a neutral expression. High quality, clean rendering suitable for an enterprise dashboard." src="https://lh3.googleusercontent.com/aida-public/AB6AXuCenivsdt9V0_Aqr36CG7T3b4AXsF3JpLSu9lye1lcyd2vokKnWNjEh54FbEqvQ9fArO_G4fwy0Sxwz93EVwcU_d4XbiX088FQpafYTGdH70sqAVXm4MgrjoHjVm0IgAPqpUhRkXBoCO_DwpymN2_zPP-WtO_j_3rdkyBFfMqNwfw1T9NB-9HSxCMTP-g8TxMV_qTHQYareUorWbWZzvzqKD6H9ug75K_7OJkoQffd1Cyfy7HjjtWdC"/>
+</div>
+<div>
+<div class="font-body-md text-body-md font-semibold text-primary">מיכל לוי</div>
+<div class="font-caption text-caption text-on-surface-variant">מגמת אמנות</div>
+</div>
+</div>
+</td>
+<td class="p-4 font-body-md text-body-md text-on-surface ltr text-left">312485901</td>
+<td class="p-4 font-body-md text-body-md text-on-surface">תשפ"ג</td>
+<td class="p-4 font-body-md text-body-md text-on-surface">י"ב</td>
+<td class="p-4 font-body-md text-body-md text-on-surface">1</td>
+<td class="p-4 font-body-md text-body-md text-on-surface">עיוני</td>
+<td class="p-4 font-body-md text-body-md text-on-surface">אמנות</td>
+<td class="p-4">
+<span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-rose-100 text-rose-800">
+                                        לא פעילה
+                                    </span>
+</td>
+<td class="p-4 text-center">
+<button class="text-on-surface-variant hover:text-secondary transition-colors p-2 rounded-full hover:bg-secondary-container/50">
+<span class="material-symbols-outlined">visibility</span>
+</button>
+</td>
+</tr>
+<!-- Row 3 -->
+<tr class="hover:bg-primary-fixed/5 transition-colors group">
+<td class="p-4">
+<div class="flex items-center gap-3">
+<div class="w-10 h-10 rounded-full overflow-hidden bg-surface-variant border border-outline-variant flex items-center justify-center text-on-surface-variant font-bold">
+                                            שא
+                                        </div>
+<div>
+<div class="font-body-md text-body-md font-semibold text-primary">שירה אברהמי</div>
+<div class="font-caption text-caption text-on-surface-variant">ביולוגיה - כימיה</div>
+</div>
+</div>
+</td>
+<td class="p-4 font-body-md text-body-md text-on-surface ltr text-left">208394851</td>
+<td class="p-4 font-body-md text-body-md text-on-surface">תשפ"ד</td>
+<td class="p-4 font-body-md text-body-md text-on-surface">י'</td>
+<td class="p-4 font-body-md text-body-md text-on-surface">3</td>
+<td class="p-4 font-body-md text-body-md text-on-surface">עיוני</td>
+<td class="p-4 font-body-md text-body-md text-on-surface">ביולוגיה</td>
+<td class="p-4">
+<span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-emerald-100 text-emerald-800">
+                                        פעילה
+                                    </span>
+</td>
+<td class="p-4 text-center">
+<button class="text-on-surface-variant hover:text-secondary transition-colors p-2 rounded-full hover:bg-secondary-container/50">
+<span class="material-symbols-outlined">visibility</span>
+</button>
+</td>
+</tr>
+</tbody>
+</table>
+</div>
+</div>
+</main>
+</div>
+<!-- Modal: New Student -->
+<div class="hidden fixed inset-0 z-[100] flex items-center justify-center px-4" id="new-student-modal">
+<div class="absolute inset-0 bg-primary/40 backdrop-blur-sm" onclick="document.getElementById('new-student-modal').classList.add('hidden')"></div>
+<div class="bg-surface rounded-2xl shadow-[0_12px_32px_rgba(22,58,64,0.12)] w-full max-w-3xl relative z-10 flex flex-col max-h-[921px]">
+<div class="p-6 border-b border-surface-variant flex justify-between items-center">
+<h3 class="font-headline-md text-headline-md text-primary">הוספת תלמידה חדשה</h3>
+<button class="text-on-surface-variant hover:bg-surface-variant p-2 rounded-full transition-colors" onclick="document.getElementById('new-student-modal').classList.add('hidden')">
+<span class="material-symbols-outlined">close</span>
+</button>
+</div>
+<div class="p-6 overflow-y-auto flex-1 custom-scrollbar">
+<form class="space-y-6">
+<!-- Personal Info -->
+<div>
+<h4 class="font-title-lg text-title-lg text-primary mb-4 border-b-2 border-secondary inline-block pb-1">פרטים אישיים</h4>
+<div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+<div>
+<label class="block font-label-md text-label-md text-on-surface mb-1">שם פרטי</label>
+<input class="w-full px-3 py-2 bg-surface-container-lowest border border-outline rounded-lg focus:border-primary focus:ring-2 focus:ring-secondary-fixed-dim/50 outline-none" type="text"/>
+</div>
+<div>
+<label class="block font-label-md text-label-md text-on-surface mb-1">שם משפחה</label>
+<input class="w-full px-3 py-2 bg-surface-container-lowest border border-outline rounded-lg focus:border-primary focus:ring-2 focus:ring-secondary-fixed-dim/50 outline-none" type="text"/>
+</div>
+<div>
+<label class="block font-label-md text-label-md text-on-surface mb-1">תעודת זהות</label>
+<input class="w-full px-3 py-2 bg-surface-container-lowest border border-outline rounded-lg focus:border-primary focus:ring-2 focus:ring-secondary-fixed-dim/50 outline-none text-left" dir="ltr" type="text"/>
+</div>
+<div>
+<label class="block font-label-md text-label-md text-on-surface mb-1">תאריך לידה</label>
+<input class="w-full px-3 py-2 bg-surface-container-lowest border border-outline rounded-lg focus:border-primary focus:ring-2 focus:ring-secondary-fixed-dim/50 outline-none" type="date"/>
+</div>
+</div>
+</div>
+<!-- Academic Info -->
+<div>
+<h4 class="font-title-lg text-title-lg text-primary mb-4 border-b-2 border-secondary inline-block pb-1">פרטים אקדמיים</h4>
+<div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+<div>
+<label class="block font-label-md text-label-md text-on-surface mb-1">מחזור</label>
+<input class="w-full px-3 py-2 bg-surface-container-lowest border border-outline rounded-lg focus:border-primary focus:ring-2 focus:ring-secondary-fixed-dim/50 outline-none" type="text" value='תשפ"ד'/>
+</div>
+<div>
+<label class="block font-label-md text-label-md text-on-surface mb-1">שכבה</label>
+<select class="w-full px-3 py-2 bg-surface-container-lowest border border-outline rounded-lg focus:border-primary focus:ring-2 focus:ring-secondary-fixed-dim/50 outline-none">
+<option>ט'</option>
+<option>י'</option>
+<option>י"א</option>
+<option>י"ב</option>
+</select>
+</div>
+<div>
+<label class="block font-label-md text-label-md text-on-surface mb-1">כיתה</label>
+<select class="w-full px-3 py-2 bg-surface-container-lowest border border-outline rounded-lg focus:border-primary focus:ring-2 focus:ring-secondary-fixed-dim/50 outline-none">
+<option>1</option>
+<option>2</option>
+<option>3</option>
+</select>
+</div>
+</div>
+</div>
+<!-- Specialization Info -->
+<div>
+<h4 class="font-title-lg text-title-lg text-primary mb-4 border-b-2 border-secondary inline-block pb-1">שיבוץ</h4>
+<div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+<div>
+<label class="block font-label-md text-label-md text-on-surface mb-1">מסלול</label>
+<select class="w-full px-3 py-2 bg-surface-container-lowest border border-outline rounded-lg focus:border-primary focus:ring-2 focus:ring-secondary-fixed-dim/50 outline-none">
+<option>עיוני</option>
+<option>טכנולוגי</option>
+</select>
+</div>
+<div>
+<label class="block font-label-md text-label-md text-on-surface mb-1">התמחות ראשי</label>
+<select class="w-full px-3 py-2 bg-surface-container-lowest border border-outline rounded-lg focus:border-primary focus:ring-2 focus:ring-secondary-fixed-dim/50 outline-none">
+<option>מדעי המחשב</option>
+<option>ביולוגיה</option>
+<option>אמנות</option>
+</select>
+</div>
+</div>
+</div>
+</form>
+</div>
+<div class="p-6 border-t border-surface-variant flex justify-end gap-4 bg-background rounded-b-2xl">
+<button class="px-6 py-2 border border-outline text-primary rounded-lg font-label-md hover:bg-surface-variant/50 transition-colors" onclick="document.getElementById('new-student-modal').classList.add('hidden')">
+                    ביטול
+                </button>
+<button class="px-6 py-2 bg-primary text-on-primary rounded-lg font-label-md hover:bg-primary-container hover:text-secondary transition-colors shadow-sm">
+                    שמירת תלמידה
+                </button>
+</div>
+</div>
+</div>
+<style>
+        .custom-scrollbar::-webkit-scrollbar {
+            width: 6px;
+        }
+        .custom-scrollbar::-webkit-scrollbar-track {
+            background: transparent;
+        }
+        .custom-scrollbar::-webkit-scrollbar-thumb {
+            background-color: var(--color-outline-variant);
+            border-radius: 20px;
+        }
+    </style>
+</body></html>
+<!-- Injection By NetFree -->
+<script src="//netfree.link/injection-script/go-payment.js" type="text/javascript" async ></script>
+<script src="//netfree.link/injection-script/popup-card-init.js" type="text/javascript" async ></script>

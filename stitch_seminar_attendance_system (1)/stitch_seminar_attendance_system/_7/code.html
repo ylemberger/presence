@@ -1,0 +1,372 @@
+<!DOCTYPE html>
+
+<html dir="rtl" lang="he"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>מערכת ניהול פנימית - מורות</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Hanken+Grotesk:wght@400;500;600;700&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    "colors": {
+                        "surface-tint": "#42646a",
+                        "on-tertiary-fixed-variant": "#1e4d55",
+                        "surface-container": "#ebefee",
+                        "surface-container-high": "#e5e9e8",
+                        "tertiary-container": "#043b43",
+                        "secondary-container": "#fdd48e",
+                        "outline": "#71787a",
+                        "primary-container": "#163a40",
+                        "error": "#ba1a1a",
+                        "on-primary-fixed": "#001f24",
+                        "on-primary-fixed-variant": "#294c52",
+                        "tertiary-fixed": "#bceaf4",
+                        "surface-container-lowest": "#ffffff",
+                        "surface-container-low": "#f0f4f3",
+                        "secondary-fixed-dim": "#e8c17c",
+                        "surface-container-highest": "#dfe3e2",
+                        "inverse-surface": "#2d3131",
+                        "on-error-container": "#93000a",
+                        "on-surface-variant": "#414849",
+                        "primary-fixed-dim": "#a9cdd4",
+                        "background": "#f6faf9",
+                        "surface": "#f6faf9",
+                        "inverse-on-surface": "#edf2f1",
+                        "surface-variant": "#dfe3e2",
+                        "primary": "#00242a",
+                        "secondary": "#775a20",
+                        "outline-variant": "#c1c8c9",
+                        "on-primary-container": "#81a4ab",
+                        "secondary-fixed": "#ffdea7",
+                        "on-error": "#ffffff",
+                        "tertiary": "#00242a",
+                        "error-container": "#ffdad6",
+                        "on-tertiary-container": "#78a5ae",
+                        "primary-fixed": "#c4e9f0",
+                        "surface-dim": "#d7dbda",
+                        "on-tertiary-fixed": "#001f24",
+                        "on-secondary": "#ffffff",
+                        "on-secondary-fixed": "#271900",
+                        "on-background": "#181c1c",
+                        "on-secondary-fixed-variant": "#5c4208",
+                        "surface-bright": "#f6faf9",
+                        "on-primary": "#ffffff",
+                        "inverse-primary": "#a9cdd4",
+                        "on-tertiary": "#ffffff",
+                        "on-surface": "#181c1c",
+                        "on-secondary-container": "#775a20",
+                        "tertiary-fixed-dim": "#a0ced8"
+                    },
+                    "borderRadius": {
+                        "DEFAULT": "0.25rem",
+                        "lg": "0.5rem",
+                        "xl": "0.75rem",
+                        "full": "9999px"
+                    },
+                    "spacing": {
+                        "stack_lg": "2rem",
+                        "stack_md": "1rem",
+                        "container_padding": "2rem",
+                        "gutter": "1.5rem",
+                        "sidebar_width": "17.5rem",
+                        "stack_sm": "0.5rem"
+                    },
+                    "fontFamily": {
+                        "body-lg": ["Hanken Grotesk"],
+                        "body-md": ["Hanken Grotesk"],
+                        "headline-md": ["Hanken Grotesk"],
+                        "headline-lg": ["Hanken Grotesk"],
+                        "display-lg": ["Hanken Grotesk"],
+                        "title-lg": ["Hanken Grotesk"],
+                        "caption": ["Hanken Grotesk"],
+                        "label-md": ["Hanken Grotesk"]
+                    },
+                    "fontSize": {
+                        "body-lg": ["18px", { "lineHeight": "28px", "fontWeight": "400" }],
+                        "body-md": ["16px", { "lineHeight": "24px", "fontWeight": "400" }],
+                        "headline-md": ["24px", { "lineHeight": "32px", "fontWeight": "600" }],
+                        "headline-lg": ["32px", { "lineHeight": "40px", "fontWeight": "600" }],
+                        "display-lg": ["48px", { "lineHeight": "56px", "letterSpacing": "-0.02em", "fontWeight": "700" }],
+                        "title-lg": ["20px", { "lineHeight": "28px", "fontWeight": "500" }],
+                        "caption": ["12px", { "lineHeight": "16px", "fontWeight": "400" }],
+                        "label-md": ["14px", { "lineHeight": "20px", "letterSpacing": "0.01em", "fontWeight": "600" }]
+                    }
+                }
+            }
+        }
+    </script>
+<style>
+        body { font-family: 'Hanken Grotesk', sans-serif; background-color: theme('colors.background'); color: theme('colors.on-background'); }
+        .card-shadow { box-shadow: 0 4px 20px rgba(22, 58, 64, 0.05); }
+        .card-hover:hover { transform: translateY(-2px); box-shadow: 0 12px 32px rgba(22, 58, 64, 0.12); }
+        .input-focus:focus-within { border-color: theme('colors.primary'); box-shadow: 0 0 0 2px theme('colors.secondary-container'); }
+    </style>
+</head>
+<body class="flex min-h-screen bg-background text-on-background">
+<!-- SideNavBar -->
+<aside class="hidden md:flex flex-col h-full bg-primary dark:bg-primary-container fixed right-0 top-0 w-sidebar_width shadow-md z-50">
+<div class="p-stack_lg flex items-center gap-4 border-b border-primary-container/30">
+<div class="w-12 h-12 bg-secondary rounded-full flex items-center justify-center text-on-secondary font-headline-md text-headline-md">
+                נ
+            </div>
+<div>
+<h1 class="text-headline-lg font-headline-lg text-secondary">נוכחות סמינר</h1>
+<p class="text-on-primary font-caption text-caption opacity-80">תשפ"ד - שנה פעילה</p>
+</div>
+</div>
+<nav class="flex-1 py-stack_md overflow-y-auto">
+<ul class="space-y-2 px-stack_sm">
+<li>
+<a class="flex items-center gap-4 px-4 py-3 rounded-lg text-on-primary hover:bg-primary-container transition-colors font-body-md text-body-md" href="#">
+<span class="material-symbols-outlined">dashboard</span>
+                        לוח בקרה
+                    </a>
+</li>
+<li>
+<a class="flex items-center gap-4 px-4 py-3 rounded-lg text-on-primary hover:bg-primary-container transition-colors font-body-md text-body-md" href="#">
+<span class="material-symbols-outlined">group</span>
+                        תלמידות
+                    </a>
+</li>
+<li>
+<a class="flex items-center gap-4 px-4 py-3 rounded-lg text-on-primary hover:bg-primary-container transition-colors font-body-md text-body-md" href="#">
+<span class="material-symbols-outlined">fact_check</span>
+                        נוכחות
+                    </a>
+</li>
+<li>
+<a class="flex items-center gap-4 px-4 py-3 rounded-lg text-on-primary hover:bg-primary-container transition-colors font-body-md text-body-md" href="#">
+<span class="material-symbols-outlined">edit_calendar</span>
+                        מבחני השלמה
+                    </a>
+</li>
+<li>
+<a class="flex items-center gap-4 px-4 py-3 rounded-lg text-on-primary hover:bg-primary-container transition-colors font-body-md text-body-md" href="#">
+<span class="material-symbols-outlined">menu_book</span>
+                        שיעורים
+                    </a>
+</li>
+<li>
+<a class="flex items-center gap-4 px-4 py-3 rounded-lg bg-primary-container text-secondary border-r-4 border-secondary transition-all font-body-md text-body-md" href="#">
+<span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 1;">person_4</span>
+                        מורות
+                    </a>
+</li>
+<li>
+<a class="flex items-center gap-4 px-4 py-3 rounded-lg text-on-primary hover:bg-primary-container transition-colors font-body-md text-body-md" href="#">
+<span class="material-symbols-outlined">assessment</span>
+                        דוחות
+                    </a>
+</li>
+<li>
+<a class="flex items-center gap-4 px-4 py-3 rounded-lg text-on-primary hover:bg-primary-container transition-colors font-body-md text-body-md" href="#">
+<span class="material-symbols-outlined">settings</span>
+                        הגדרות
+                    </a>
+</li>
+</ul>
+</nav>
+<div class="p-stack_md border-t border-primary-container/30">
+<a class="flex items-center gap-4 px-4 py-3 rounded-lg text-on-primary hover:bg-primary-container transition-colors font-body-md text-body-md" href="#">
+<span class="material-symbols-outlined">logout</span>
+                התנתקות
+            </a>
+</div>
+</aside>
+<!-- Main Content -->
+<main class="flex-1 md:pr-sidebar_width flex flex-col min-h-screen relative">
+<!-- TopAppBar -->
+<header class="sticky top-0 z-40 w-full bg-surface/95 dark:bg-surface-dim/95 border-b border-outline-variant backdrop-blur-md flex justify-between items-center px-stack_lg h-16 rtl shadow-sm transition-opacity duration-200">
+<div class="flex items-center gap-6">
+<h2 class="font-headline-md text-headline-md text-primary">מערכת ניהול פנימית</h2>
+<nav class="hidden md:flex gap-4">
+<a class="text-primary font-bold border-b-2 border-secondary font-label-md text-label-md pb-1" href="#">תשפ"ד</a>
+</nav>
+</div>
+<div class="flex items-center gap-4">
+<button class="flex items-center gap-2 px-3 py-1.5 rounded-full border border-outline text-primary hover:bg-surface-variant transition-colors font-label-md text-label-md">
+                    בורר שנה
+                    <span class="material-symbols-outlined text-[18px]">arrow_drop_down</span>
+</button>
+<div class="flex gap-2">
+<button class="w-10 h-10 rounded-full flex items-center justify-center text-on-surface-variant hover:text-primary hover:bg-surface-variant transition-colors">
+<span class="material-symbols-outlined">notifications</span>
+</button>
+<button class="w-10 h-10 rounded-full flex items-center justify-center text-on-surface-variant hover:text-primary hover:bg-surface-variant transition-colors">
+<span class="material-symbols-outlined">account_circle</span>
+</button>
+</div>
+</div>
+</header>
+<!-- Canvas -->
+<div class="p-container_padding flex-1 max-w-[1440px] mx-auto w-full @container">
+<div class="mb-stack_lg flex justify-between items-end">
+<div>
+<h1 class="font-display-lg text-display-lg text-primary mb-2">ניהול מורות</h1>
+<p class="font-body-lg text-body-lg text-on-surface-variant">הוספה, עריכה וצפייה בשיבוצי מורות במערכת.</p>
+</div>
+</div>
+<!-- Bento Grid Layout -->
+<div class="grid grid-cols-1 lg:grid-cols-12 gap-gutter">
+<!-- Add Teacher Form (Span 4) -->
+<div class="lg:col-span-4 bg-surface rounded-xl p-stack_md card-shadow border-t-4 border-secondary card-hover transition-all">
+<h3 class="font-title-lg text-title-lg text-primary mb-4 flex items-center gap-2">
+<span class="material-symbols-outlined text-secondary">person_add</span>
+                        הוספת מורה חדשה
+                    </h3>
+<form class="space-y-4">
+<div class="input-focus rounded-lg border border-outline bg-surface-container-lowest p-1 transition-all">
+<label class="block font-caption text-caption text-on-surface-variant px-2 pt-1">שם מלא</label>
+<input class="w-full bg-transparent border-none focus:ring-0 font-body-md text-body-md text-on-surface px-2 pb-1 placeholder-outline-variant" placeholder="ישראל ישראלי" type="text"/>
+</div>
+<div class="input-focus rounded-lg border border-outline bg-surface-container-lowest p-1 transition-all">
+<label class="block font-caption text-caption text-on-surface-variant px-2 pt-1">תעודת זהות</label>
+<input class="w-full bg-transparent border-none focus:ring-0 font-body-md text-body-md text-on-surface px-2 pb-1 placeholder-outline-variant" placeholder="000000000" type="text"/>
+</div>
+<div class="input-focus rounded-lg border border-outline bg-surface-container-lowest p-1 transition-all">
+<label class="block font-caption text-caption text-on-surface-variant px-2 pt-1">טלפון</label>
+<input class="w-full bg-transparent border-none focus:ring-0 font-body-md text-body-md text-on-surface px-2 pb-1 placeholder-outline-variant" placeholder="050-0000000" type="tel"/>
+</div>
+<div class="input-focus rounded-lg border border-outline bg-surface-container-lowest p-1 transition-all">
+<label class="block font-caption text-caption text-on-surface-variant px-2 pt-1">דוא"ל</label>
+<input class="w-full bg-transparent border-none focus:ring-0 font-body-md text-body-md text-on-surface px-2 pb-1 placeholder-outline-variant" placeholder="teacher@seminar.edu" type="email"/>
+</div>
+<button class="w-full bg-primary text-surface py-3 rounded-lg font-label-md text-label-md hover:bg-primary-container transition-colors flex justify-center items-center gap-2" type="button">
+<span class="material-symbols-outlined">add</span>
+                            הוסף מורה
+                        </button>
+</form>
+</div>
+<!-- Teacher List (Span 8) -->
+<div class="lg:col-span-8 bg-surface rounded-xl p-stack_md card-shadow flex flex-col">
+<div class="flex justify-between items-center mb-6">
+<h3 class="font-title-lg text-title-lg text-primary flex items-center gap-2">
+<span class="material-symbols-outlined text-primary-container">list_alt</span>
+                            רשימת מורות
+                        </h3>
+<div class="relative w-64 input-focus">
+<span class="material-symbols-outlined absolute right-3 top-1/2 -translate-y-1/2 text-outline-variant">search</span>
+<input class="w-full bg-surface-container-lowest border border-outline rounded-full py-2 pr-10 pl-4 focus:ring-0 font-body-md text-body-md text-on-surface" placeholder="חיפוש מורה..." type="text"/>
+</div>
+</div>
+<div class="overflow-x-auto flex-1">
+<table class="w-full text-right border-collapse">
+<thead>
+<tr class="bg-background text-on-surface-variant border-b border-outline-variant">
+<th class="py-3 px-4 font-label-md text-label-md font-medium">שם המורה</th>
+<th class="py-3 px-4 font-label-md text-label-md font-medium">ת"ז</th>
+<th class="py-3 px-4 font-label-md text-label-md font-medium">טלפון</th>
+<th class="py-3 px-4 font-label-md text-label-md font-medium">דוא"ל</th>
+<th class="py-3 px-4 font-label-md text-label-md font-medium text-center">פעולות</th>
+</tr>
+</thead>
+<tbody>
+<tr class="border-b border-surface-variant hover:bg-surface-variant/50 transition-colors group">
+<td class="py-3 px-4 font-body-md text-body-md text-on-surface">רחל אברהמי</td>
+<td class="py-3 px-4 font-body-md text-body-md text-on-surface-variant">012345678</td>
+<td class="py-3 px-4 font-body-md text-body-md text-on-surface-variant">052-1112233</td>
+<td class="py-3 px-4 font-body-md text-body-md text-on-surface-variant">rachel.a@seminar.edu</td>
+<td class="py-3 px-4 text-center">
+<button class="text-primary-container hover:text-primary transition-colors p-1 rounded hover:bg-surface-variant inline-flex items-center">
+<span class="material-symbols-outlined text-[20px]">edit</span>
+</button>
+</td>
+</tr>
+<tr class="border-b border-surface-variant hover:bg-surface-variant/50 transition-colors group">
+<td class="py-3 px-4 font-body-md text-body-md text-on-surface">שרה כהן</td>
+<td class="py-3 px-4 font-body-md text-body-md text-on-surface-variant">234567890</td>
+<td class="py-3 px-4 font-body-md text-body-md text-on-surface-variant">054-9988776</td>
+<td class="py-3 px-4 font-body-md text-body-md text-on-surface-variant">sara.c@seminar.edu</td>
+<td class="py-3 px-4 text-center">
+<button class="text-primary-container hover:text-primary transition-colors p-1 rounded hover:bg-surface-variant inline-flex items-center">
+<span class="material-symbols-outlined text-[20px]">edit</span>
+</button>
+</td>
+</tr>
+<tr class="border-b border-surface-variant hover:bg-surface-variant/50 transition-colors group">
+<td class="py-3 px-4 font-body-md text-body-md text-on-surface">לאה לוי</td>
+<td class="py-3 px-4 font-body-md text-body-md text-on-surface-variant">345678901</td>
+<td class="py-3 px-4 font-body-md text-body-md text-on-surface-variant">050-4455667</td>
+<td class="py-3 px-4 font-body-md text-body-md text-on-surface-variant">lea.l@seminar.edu</td>
+<td class="py-3 px-4 text-center">
+<button class="text-primary-container hover:text-primary transition-colors p-1 rounded hover:bg-surface-variant inline-flex items-center">
+<span class="material-symbols-outlined text-[20px]">edit</span>
+</button>
+</td>
+</tr>
+</tbody>
+</table>
+</div>
+</div>
+<!-- Lessons by Teacher (Full Width Below) -->
+<div class="lg:col-span-12 bg-surface rounded-xl p-stack_md card-shadow border-t-4 border-primary">
+<h3 class="font-title-lg text-title-lg text-primary mb-6 flex items-center gap-2">
+<span class="material-symbols-outlined text-primary">menu_book</span>
+                        שיעורים לפי מורה <span class="font-caption text-caption text-on-surface-variant font-normal">(קריאה בלבד)</span>
+</h3>
+<div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+<!-- Teacher Card 1 -->
+<div class="border border-outline-variant rounded-lg overflow-hidden bg-background">
+<div class="bg-surface-container p-3 border-b border-outline-variant flex justify-between items-center">
+<span class="font-label-md text-label-md text-primary font-bold">רחל אברהמי</span>
+<span class="bg-[rgba(16,185,129,0.1)] text-[#10b981] px-2 py-0.5 rounded text-[10px] font-bold">פעילה</span>
+</div>
+<ul class="divide-y divide-surface-variant p-2">
+<li class="py-2 px-2 flex justify-between items-center hover:bg-surface-variant/30 rounded transition-colors">
+<span class="font-body-md text-body-md text-on-surface">תנ"ך - שכבה י'</span>
+<span class="font-caption text-caption text-on-surface-variant bg-surface px-2 py-1 rounded border border-outline-variant">יום א', 08:00</span>
+</li>
+<li class="py-2 px-2 flex justify-between items-center hover:bg-surface-variant/30 rounded transition-colors">
+<span class="font-body-md text-body-md text-on-surface">היסטוריה - שכבה י"א</span>
+<span class="font-caption text-caption text-on-surface-variant bg-surface px-2 py-1 rounded border border-outline-variant">יום ג', 10:00</span>
+</li>
+</ul>
+</div>
+<!-- Teacher Card 2 -->
+<div class="border border-outline-variant rounded-lg overflow-hidden bg-background">
+<div class="bg-surface-container p-3 border-b border-outline-variant flex justify-between items-center">
+<span class="font-label-md text-label-md text-primary font-bold">שרה כהן</span>
+<span class="bg-[rgba(16,185,129,0.1)] text-[#10b981] px-2 py-0.5 rounded text-[10px] font-bold">פעילה</span>
+</div>
+<ul class="divide-y divide-surface-variant p-2">
+<li class="py-2 px-2 flex justify-between items-center hover:bg-surface-variant/30 rounded transition-colors">
+<span class="font-body-md text-body-md text-on-surface">מתמטיקה - שכבה ט'</span>
+<span class="font-caption text-caption text-on-surface-variant bg-surface px-2 py-1 rounded border border-outline-variant">יום ב', 09:00</span>
+</li>
+<li class="py-2 px-2 flex justify-between items-center hover:bg-surface-variant/30 rounded transition-colors">
+<span class="font-body-md text-body-md text-on-surface">מתמטיקה - שכבה י'</span>
+<span class="font-caption text-caption text-on-surface-variant bg-surface px-2 py-1 rounded border border-outline-variant">יום ד', 11:30</span>
+</li>
+<li class="py-2 px-2 flex justify-between items-center hover:bg-surface-variant/30 rounded transition-colors">
+<span class="font-body-md text-body-md text-on-surface">חינוך - שכבה ט'</span>
+<span class="font-caption text-caption text-on-surface-variant bg-surface px-2 py-1 rounded border border-outline-variant">יום ה', 08:00</span>
+</li>
+</ul>
+</div>
+<!-- Teacher Card 3 -->
+<div class="border border-outline-variant rounded-lg overflow-hidden bg-background">
+<div class="bg-surface-container p-3 border-b border-outline-variant flex justify-between items-center">
+<span class="font-label-md text-label-md text-primary font-bold">לאה לוי</span>
+<span class="bg-[rgba(245,158,11,0.1)] text-[#f59e0b] px-2 py-0.5 rounded text-[10px] font-bold">חלקית</span>
+</div>
+<ul class="divide-y divide-surface-variant p-2">
+<li class="py-2 px-2 flex justify-between items-center hover:bg-surface-variant/30 rounded transition-colors">
+<span class="font-body-md text-body-md text-on-surface">אנגלית - שכבה י"ב</span>
+<span class="font-caption text-caption text-on-surface-variant bg-surface px-2 py-1 rounded border border-outline-variant">יום א', 12:00</span>
+</li>
+</ul>
+</div>
+</div>
+</div>
+</div>
+</div>
+</main>
+</body></html>
+<!-- Injection By NetFree -->
+<script src="//netfree.link/injection-script/go-payment.js" type="text/javascript" async ></script>
+<script src="//netfree.link/injection-script/popup-card-init.js" type="text/javascript" async ></script>

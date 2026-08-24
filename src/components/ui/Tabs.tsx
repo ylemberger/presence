@@ -12,17 +12,17 @@ export function Tabs({
 
   return (
     <div>
-      <div className="inline-flex flex-wrap gap-1 rounded-2xl border border-[var(--border)] bg-white p-1.5 shadow-[var(--shadow-sm)]">
+      <div className="inline-flex flex-wrap gap-1 rounded-xl bg-surface-container-lowest p-1.5 shadow-tactile-sm">
         {tabs.map((tab) => (
           <button
             key={tab.id}
             type="button"
             onClick={() => setActive(tab.id)}
             className={cn(
-              "rounded-xl px-4 py-2 text-sm font-medium transition-colors",
+              "rounded-lg px-4 py-2 text-label-md transition-colors",
               active === tab.id
-                ? "bg-[var(--brand)] text-white shadow-[var(--shadow-sm)]"
-                : "text-slate-600 hover:bg-[var(--surface-muted)] hover:text-slate-800"
+                ? "bg-primary text-on-primary shadow-tactile-sm"
+                : "text-on-surface-variant hover:bg-surface-container-low hover:text-primary"
             )}
           >
             {tab.label}

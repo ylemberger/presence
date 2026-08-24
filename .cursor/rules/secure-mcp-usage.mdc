@@ -1,6 +1,5 @@
 ---
-description: שימוש מאובטח ב-MCP וכלים חיצוניים
-alwaysApply: true
+alwaysApply: false
 ---
 # Secure MCP Usage
 

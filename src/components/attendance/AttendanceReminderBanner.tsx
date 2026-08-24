@@ -9,6 +9,10 @@ interface AttendanceReminderBannerProps {
   compact?: boolean;
 }
 
+/**
+ * Full-width Stitch banner: bg-surface with a left accent border in attendance-late,
+ * a circular icon chip and a linked call to action.
+ */
 export function AttendanceReminderBanner({
   summary,
   compact,
@@ -25,16 +29,16 @@ export function AttendanceReminderBanner({
       <Link
         href={href}
         className={cn(
-          "print:hidden inline-flex max-w-full items-center gap-2 rounded-xl px-3 py-1.5 text-xs font-medium transition-colors",
+          "print:hidden inline-flex max-w-full items-center gap-2 rounded-full px-3 py-1.5 text-caption font-semibold transition-colors",
           summary.pastPending > 0
-            ? "bg-amber-50 text-amber-900 ring-1 ring-amber-200/80 hover:bg-amber-100"
-            : "bg-sky-50 text-sky-900 ring-1 ring-sky-200/80 hover:bg-sky-100"
+            ? "status-pill-warning ring-1 ring-attendance-late/25 hover:brightness-95"
+            : "status-pill-ok ring-1 ring-attendance-present/25 hover:brightness-95"
         )}
       >
         <span
           className={cn(
             "h-1.5 w-1.5 shrink-0 rounded-full",
-            summary.pastPending > 0 ? "bg-amber-500" : "bg-sky-500"
+            summary.pastPending > 0 ? "bg-attendance-late dot-warning" : "bg-attendance-present"
           )}
           aria-hidden
         />
@@ -48,51 +52,45 @@ export function AttendanceReminderBanner({
     );
   }
 
+  const isLate = summary.pastPending > 0;
+
   return (
     <div
       className={cn(
-        "print:hidden mb-5 rounded-2xl border px-4 py-3 sm:px-5",
-        summary.pastPending > 0
-          ? "border-amber-200 bg-amber-50/80"
-          : "border-sky-200 bg-sky-50/80"
+        "print:hidden card-hover flex flex-col gap-3 rounded-r-lg rounded-l-md border-l-4 bg-surface p-4 shadow-tactile-sm sm:flex-row sm:items-center sm:justify-between",
+        isLate ? "border-attendance-late" : "border-secondary"
       )}
       role="status"
     >
-      <div className="flex flex-wrap items-start justify-between gap-3">
+      <div className="flex items-start gap-3">
+        <div
+          className={cn(
+            "flex h-10 w-10 shrink-0 items-center justify-center rounded-full",
+            isLate
+              ? "bg-attendance-late/10 text-attendance-late"
+              : "bg-secondary/10 text-secondary"
+          )}
+          aria-hidden
+        >
+          <span className="material-symbols-outlined">notification_important</span>
+        </div>
         <div>
-          <p
-            className={cn(
-              "text-sm font-semibold",
-              summary.pastPending > 0 ? "text-amber-950" : "text-sky-950"
-            )}
-          >
-            {summary.pastPending > 0
-              ? "יש שיעורים שעדיין לא נרשמה בהם נוכחות"
-              : "יש שיעורים היום שממתינים לרישום"}
-          </p>
-          <p className="mt-1 text-xs leading-relaxed text-slate-600">
-            {summary.pastPending > 0 && (
-              <>
-                {summary.pastPending} מימים קודמים
-                {summary.todayPending > 0 ? ` · ${summary.todayPending} היום` : ""}
-                . רישום קצר עכשיו שומר על הדוחות מדויקים.
-              </>
-            )}
-            {summary.pastPending === 0 && (
-              <>סמני את שיעורי היום לפני שסוגרים את היום — זה לוקח דקה.</>
-            )}
+          <p className="font-body-lg text-body-lg font-medium text-primary">
+            {isLate
+              ? `ישנם ${summary.pastPending} שיעורים ממתינים לרישום נוכחות`
+              : `ישנם ${summary.todayPending} שיעורים היום ממתינים לרישום`}
           </p>
           {summary.items.length > 0 && (
-            <ul className="mt-2 space-y-1 text-xs text-slate-700">
-              {summary.items.slice(0, 4).map((item) => (
+            <ul className="mt-1 space-y-0.5 text-caption text-on-surface-variant">
+              {summary.items.slice(0, 3).map((item) => (
                 <li key={item.id}>
                   <Link
                     href={`/attendance?date=${item.date}&occurrenceId=${item.id}`}
-                    className="font-medium text-[var(--brand)] hover:underline"
+                    className="font-medium text-primary hover:underline"
                   >
                     {formatHebrewDate(item.date)} · {item.subject}
                   </Link>
-                  <span className="text-slate-500">
+                  <span className="text-on-surface-variant">
                     {" "}
                     ({item.marked}/{item.total})
                   </span>
@@ -101,16 +99,16 @@ export function AttendanceReminderBanner({
             </ul>
           )}
         </div>
-        <Link
-          href={href}
-          className={cn(
-            "shrink-0 rounded-xl px-3.5 py-2 text-sm font-medium text-white shadow-sm",
-            summary.pastPending > 0 ? "bg-amber-700 hover:bg-amber-800" : "bg-[var(--brand)] hover:bg-[var(--brand-soft)]"
-          )}
-        >
-          השלמת רישום
-        </Link>
       </div>
+      <Link
+        href={href}
+        className="inline-flex shrink-0 items-center gap-1 self-end text-label-md text-secondary transition-colors hover:underline sm:self-auto"
+      >
+        לרישום
+        <span className="material-symbols-outlined text-[18px]" aria-hidden>
+          arrow_back
+        </span>
+      </Link>
     </div>
   );
 }

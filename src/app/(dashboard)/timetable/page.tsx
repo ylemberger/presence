@@ -1,0 +1,244 @@
+import { PageHeader } from "@/components/ui/PageHeader";
+import { createClient } from "@/lib/supabase/server";
+import { getActiveAcademicYear } from "@/lib/utils";
+import { WeeklyTimetableGrid, type TimetableEntry } from "@/components/timetable/WeeklyTimetableGrid";
+import { TimetableFilters } from "./TimetableFilters";
+import { Card } from "@/components/ui/Card";
+
+interface Props {
+  searchParams: {
+    classId?: string;
+    trackId?: string;
+    specializationId?: string;
+    teacherId?: string;
+    subject?: string;
+    studentId?: string;
+    activityRangeId?: string;
+    forPsychology?: "yes" | "no" | string;
+  };
+}
+
+export default async function TimetablePage({ searchParams }: Props) {
+  const params = searchParams;
+  const activeYear = await getActiveAcademicYear();
+  const supabase = await createClient();
+
+  if (!activeYear) {
+    return (
+      <div>
+        <PageHeader title="מערכת שעות" description="יש להגדיר שנה אקדמית פעילה." />
+      </div>
+    );
+  }
+
+  const forPsychology =
+    params.forPsychology === "yes"
+      ? true
+      : params.forPsychology === "no"
+        ? false
+        : undefined;
+
+  const [
+    { data: classes },
+    { data: tracks },
+    { data: specializations },
+    { data: teachers },
+    { data: students },
+    { data: activityRanges },
+    { data: subjectsRows },
+  ] = await Promise.all([
+    supabase
+      .from("classes")
+      .select("id, name")
+      .eq("academic_year_id", activeYear.id)
+      .order("name"),
+    supabase
+      .from("tracks")
+      .select("id, name")
+      .eq("academic_year_id", activeYear.id)
+      .order("name"),
+    supabase
+      .from("specializations")
+      .select("id, name")
+      .eq("academic_year_id", activeYear.id)
+      .order("name"),
+    supabase.from("teachers").select("id, full_name").order("full_name"),
+    supabase
+      .from("students")
+      .select("id, full_name")
+      .eq("is_active", true)
+      .order("full_name"),
+    supabase
+      .from("activity_ranges")
+      .select("id, name")
+      .eq("academic_year_id", activeYear.id)
+      .order("start_date"),
+    supabase
+      .from("lessons")
+      .select("subject")
+      .eq("academic_year_id", activeYear.id),
+  ]);
+
+  const subjects = [...new Set((subjectsRows ?? []).map((r: any) => r.subject))].sort((a, b) =>
+    a.localeCompare(b, "he")
+  );
+
+  // 1) determine lesson candidates (optionally student-specific)
+  let lessonIdFilter: string[] | null = null;
+  if (params.studentId) {
+    const { data: lessonIds } = await supabase
+      .from("student_lesson_assignments")
+      .select("lesson_id")
+      .eq("student_id", params.studentId)
+      .is("end_date", null);
+    lessonIdFilter = (lessonIds ?? []).map((r: any) => r.lesson_id);
+  }
+
+  // 2) fetch lessons templates
+  let lessonsQuery = supabase
+    .from("lessons")
+    .select(
+      `
+        id, subject, day_of_week, lesson_number, billing_type, for_psychology,
+        class_id, track_id, specialization_id,
+        teacher_teaching_assignments(teacher_id, teachers(full_name)),
+        classes(name),
+        tracks(name),
+        specializations(name),
+        activity_ranges(id, name)
+      `
+    )
+    .eq("academic_year_id", activeYear.id);
+
+  if (lessonIdFilter) {
+    if (lessonIdFilter.length === 0) {
+      return (
+        <div className="space-y-6">
+          <PageHeader title="מערכת שעות" description="סינון לפי תלמידה, לא נמצאו שיעורים פעילים." />
+          <div className="print:hidden">
+            <TimetableFilters
+              classes={(classes ?? []).map((c: any) => ({ id: c.id, name: c.name }))}
+              tracks={(tracks ?? []).map((t: any) => ({ id: t.id, name: t.name }))}
+              specializations={(specializations ?? []).map((s: any) => ({ id: s.id, name: s.name }))}
+              teachers={(teachers ?? []).map((t: any) => ({ id: t.id, name: t.full_name }))}
+              students={(students ?? []).map((s: any) => ({ id: s.id, full_name: s.full_name }))}
+              subjects={subjects}
+              activityRanges={(activityRanges ?? []).map((r: any) => ({ id: r.id, name: r.name }))}
+              defaults={{
+                classId: params.classId,
+                trackId: params.trackId,
+                specializationId: params.specializationId,
+                teacherId: params.teacherId,
+                subject: params.subject,
+                studentId: params.studentId,
+                activityRangeId: params.activityRangeId,
+                forPsychology:
+                  params.forPsychology === "yes"
+                    ? "yes"
+                    : params.forPsychology === "no"
+                      ? "no"
+                      : "all",
+              }}
+            />
+          </div>
+          <Card>
+            <p className="text-sm text-slate-600">לא נמצאו שיעורים פעילים לתלמידה שבחרת.</p>
+          </Card>
+        </div>
+      );
+    }
+
+    lessonsQuery = lessonsQuery.in("id", lessonIdFilter);
+  }
+  if (params.classId) lessonsQuery = lessonsQuery.eq("class_id", params.classId);
+  if (params.trackId) lessonsQuery = lessonsQuery.eq("track_id", params.trackId);
+  if (params.specializationId) lessonsQuery = lessonsQuery.eq("specialization_id", params.specializationId);
+  if (params.teacherId) {
+    // We'll filter in-memory after join because teacher_teaching_assignments is a nested relation
+  }
+  if (params.subject) lessonsQuery = lessonsQuery.eq("subject", params.subject);
+  if (params.activityRangeId) lessonsQuery = lessonsQuery.eq("activity_range_id", params.activityRangeId);
+  if (forPsychology !== undefined) lessonsQuery = lessonsQuery.eq("for_psychology", forPsychology);
+
+  const { data: lessonsRows } = await lessonsQuery;
+
+  const entries: TimetableEntry[] = (lessonsRows ?? [])
+    .filter((l: any) => {
+      if (!params.teacherId) return true;
+      const teacherId = (l.teacher_teaching_assignments as any)?.teacher_id ?? null;
+      return teacherId === params.teacherId;
+    })
+    .map((l: any) => {
+      const teacher = (l.teacher_teaching_assignments as any)?.teachers as
+        | { full_name: string }
+        | null;
+      const teacherId = (l.teacher_teaching_assignments as any)?.teacher_id ?? null;
+
+      let audienceLabel = "";
+      if (l.billing_type === "specialization") {
+        const spec = l.specializations as unknown as { name: string } | null;
+        audienceLabel = spec?.name ?? "—";
+      } else {
+        const cls = l.classes as unknown as { name: string } | null;
+        const tr = l.tracks as unknown as { name: string } | null;
+        audienceLabel = cls?.name ?? tr?.name ?? "—";
+      }
+
+      return {
+        lessonId: l.id,
+        subject: l.subject,
+        teacherName: teacher?.full_name ?? "",
+        teacherId,
+        dayOfWeek: l.day_of_week,
+        lessonNumber: l.lesson_number,
+        billingType: l.billing_type,
+        forPsychology: l.for_psychology,
+        audienceLabel,
+      };
+    });
+
+  return (
+    <div className="space-y-6">
+      <PageHeader
+        title="מערכת שעות"
+        description="סינון לפי כיתה/מסלול/התמחות/מורה/מקצוע/תלמידה, כולל פסיכולוגיה."
+      />
+
+      <div className="print:hidden">
+        <TimetableFilters
+          classes={(classes ?? []).map((c: any) => ({ id: c.id, name: c.name }))}
+          tracks={(tracks ?? []).map((t: any) => ({ id: t.id, name: t.name }))}
+          specializations={(specializations ?? []).map((s: any) => ({ id: s.id, name: s.name }))}
+          teachers={(teachers ?? []).map((t: any) => ({ id: t.id, name: t.full_name }))}
+          students={(students ?? []).map((s: any) => ({ id: s.id, full_name: s.full_name }))}
+          subjects={subjects}
+          activityRanges={(activityRanges ?? []).map((r: any) => ({ id: r.id, name: r.name }))}
+          defaults={{
+            classId: params.classId,
+            trackId: params.trackId,
+            specializationId: params.specializationId,
+            teacherId: params.teacherId,
+            subject: params.subject,
+            studentId: params.studentId,
+            activityRangeId: params.activityRangeId,
+            forPsychology:
+              params.forPsychology === "yes"
+                ? "yes"
+                : params.forPsychology === "no"
+                  ? "no"
+                  : "all",
+          }}
+        />
+      </div>
+
+      {entries.length === 0 ? (
+        <Card>
+          <p className="text-sm text-slate-600">לא נמצאו שיעורים לסינון שבחרת.</p>
+        </Card>
+      ) : (
+        <WeeklyTimetableGrid entries={entries} />
+      )}
+    </div>
+  );
+}
+

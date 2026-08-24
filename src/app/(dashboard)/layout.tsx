@@ -32,22 +32,44 @@ export default async function DashboardLayout({
         activeYearName={activeYear?.name}
         attendancePendingCount={pending.pendingCount}
       />
-      <main className="flex min-w-0 flex-1 flex-col">
-        <header className="print:hidden sticky top-0 z-20 flex items-center justify-between gap-4 border-b border-[var(--border)] bg-white/85 px-6 py-3.5 backdrop-blur-md sm:px-8">
-          <div className="min-w-0">
-            <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-[var(--brand-muted)]">
-              מערכת ניהול פנימית
-            </p>
-            <p className="truncate text-sm text-slate-500">
-              {activeYear ? `שנה פעילה · ${activeYear.name}` : "לא הוגדרה שנה פעילה"}
-            </p>
+      {/* Main Content Area — offset right by the fixed sidebar width */}
+      <main className="relative mr-[17.5rem] flex min-h-screen w-[calc(100%-17.5rem)] min-w-0 flex-1 flex-col">
+        {/* TopAppBar */}
+        <header className="print:hidden sticky top-0 z-40 flex items-center justify-between gap-4 bg-surface/95 px-container_padding py-4 shadow-tactile-sm backdrop-blur-md">
+          <div className="font-headline-md text-headline-md font-bold text-primary">
+            מערכת ניהול פנימית
           </div>
-          <div className="flex flex-wrap items-center justify-end gap-2">
+          <div className="hidden items-center gap-6 md:flex">
+            {activeYear && (
+              <span className="border-b-2 border-secondary pb-1 text-label-md font-bold text-primary">
+                {activeYear.name}
+              </span>
+            )}
+          </div>
+          <div className="flex items-center gap-3">
             <AttendanceReminderBanner summary={pending} compact />
+            <button
+              type="button"
+              className="text-on-surface-variant transition-colors hover:text-secondary"
+              aria-label="התראות"
+            >
+              <span className="material-symbols-outlined">notifications</span>
+            </button>
+            <button
+              type="button"
+              className="text-on-surface-variant transition-colors hover:text-secondary"
+              aria-label="פרופיל"
+            >
+              <span className="material-symbols-outlined">account_circle</span>
+            </button>
+            <div className="mx-2 hidden h-6 w-px bg-outline-variant md:block" />
             <YearSelector years={years} activeYearId={activeYear?.id} />
           </div>
         </header>
-        <div className="flex-1 px-6 py-7 sm:px-8">{children}</div>
+        {/* Canvas */}
+        <div className="mx-auto flex w-full max-w-canvas flex-1 flex-col gap-stack_lg p-container_padding">
+          {children}
+        </div>
       </main>
     </div>
   );

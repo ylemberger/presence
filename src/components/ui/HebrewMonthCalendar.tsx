@@ -57,7 +57,7 @@ export function HebrewMonthCalendar({
   }
 
   return (
-    <div className="overflow-hidden rounded-2xl border border-stone-200/80 bg-white shadow-[0_8px_30px_rgb(28,43,48,0.04)]">
+    <div className="overflow-hidden rounded-xl border border-[var(--border)] bg-white shadow-[var(--shadow-md)]">
       <div className="flex items-center justify-between border-b border-stone-100 px-4 py-3">
         <Button variant="secondary" size="sm" type="button" onClick={() => navigate(-1)}>
           חודש קודם
@@ -111,9 +111,9 @@ export function HebrewMonthCalendar({
               className={cn(
                 "relative min-h-[4.25rem] p-1.5 text-right transition-colors",
                 !complete && !partial && "bg-white hover:bg-stone-50",
-                complete && !selected && "bg-emerald-100/90 hover:bg-emerald-100",
-                partial && !selected && !isPastPartial && "bg-amber-50/90 hover:bg-amber-50",
-                isPastPartial && !selected && "bg-amber-100 hover:bg-amber-100/90",
+                complete && !selected && "bg-[var(--day-completed)] hover:brightness-95",
+                partial && !selected && !isPastPartial && "bg-[var(--day-partial)] hover:brightness-95",
+                isPastPartial && !selected && "bg-[var(--day-partial)] hover:brightness-95",
                 count > 0 && !selected && !complete && !partial && "bg-teal-50/50",
                 selected && "ring-2 ring-inset ring-[var(--brand)]",
                 selected && complete && "bg-emerald-50",

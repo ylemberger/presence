@@ -1,0 +1,359 @@
+<!DOCTYPE html>
+
+<html dir="rtl" lang="he"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>נוכחות סמינר - מערכת ניהול פנימית</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Hanken+Grotesk:wght@400;500;600;700&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    "colors": {
+                            "surface-tint": "#42646a",
+                            "on-tertiary-fixed-variant": "#1e4d55",
+                            "surface-container": "#ebefee",
+                            "surface-container-high": "#e5e9e8",
+                            "tertiary-container": "#043b43",
+                            "secondary-container": "#fdd48e",
+                            "outline": "#71787a",
+                            "primary-container": "#163a40",
+                            "error": "#ba1a1a",
+                            "on-primary-fixed": "#001f24",
+                            "on-primary-fixed-variant": "#294c52",
+                            "tertiary-fixed": "#bceaf4",
+                            "surface-container-lowest": "#ffffff",
+                            "surface-container-low": "#f0f4f3",
+                            "secondary-fixed-dim": "#e8c17c",
+                            "surface-container-highest": "#dfe3e2",
+                            "inverse-surface": "#2d3131",
+                            "on-error-container": "#93000a",
+                            "on-surface-variant": "#414849",
+                            "primary-fixed-dim": "#a9cdd4",
+                            "background": "#f6faf9",
+                            "surface": "#f6faf9",
+                            "inverse-on-surface": "#edf2f1",
+                            "surface-variant": "#dfe3e2",
+                            "primary": "#00242a",
+                            "secondary": "#775a20",
+                            "outline-variant": "#c1c8c9",
+                            "on-primary-container": "#81a4ab",
+                            "secondary-fixed": "#ffdea7",
+                            "on-error": "#ffffff",
+                            "tertiary": "#00242a",
+                            "error-container": "#ffdad6",
+                            "on-tertiary-container": "#78a5ae",
+                            "primary-fixed": "#c4e9f0",
+                            "surface-dim": "#d7dbda",
+                            "on-tertiary-fixed": "#001f24",
+                            "on-secondary": "#ffffff",
+                            "on-secondary-fixed": "#271900",
+                            "on-background": "#181c1c",
+                            "on-secondary-fixed-variant": "#5c4208",
+                            "surface-bright": "#f6faf9",
+                            "on-primary": "#ffffff",
+                            "inverse-primary": "#a9cdd4",
+                            "on-tertiary": "#ffffff",
+                            "on-surface": "#181c1c",
+                            "on-secondary-container": "#775a20",
+                            "tertiary-fixed-dim": "#a0ced8",
+                            "attendance-present": "#059669",
+                            "attendance-late": "#d97706",
+                            "attendance-absent": "#e11d48",
+                            "day-completed": "#10b981",
+                            "day-partial": "#f59e0b"
+                    },
+                    "borderRadius": {
+                            "DEFAULT": "0.25rem",
+                            "lg": "0.5rem",
+                            "xl": "0.75rem",
+                            "full": "9999px"
+                    },
+                    "spacing": {
+                            "stack_lg": "2rem",
+                            "stack_md": "1rem",
+                            "container_padding": "2rem",
+                            "gutter": "1.5rem",
+                            "sidebar_width": "17.5rem",
+                            "stack_sm": "0.5rem"
+                    },
+                    "fontFamily": {
+                            "body-lg": ["Hanken Grotesk"],
+                            "body-md": ["Hanken Grotesk"],
+                            "headline-md": ["Hanken Grotesk"],
+                            "headline-lg": ["Hanken Grotesk"],
+                            "display-lg": ["Hanken Grotesk"],
+                            "title-lg": ["Hanken Grotesk"],
+                            "caption": ["Hanken Grotesk"],
+                            "label-md": ["Hanken Grotesk"]
+                    },
+                    "fontSize": {
+                            "body-lg": ["18px", {"lineHeight": "28px", "fontWeight": "400"}],
+                            "body-md": ["16px", {"lineHeight": "24px", "fontWeight": "400"}],
+                            "headline-md": ["24px", {"lineHeight": "32px", "fontWeight": "600"}],
+                            "headline-lg": ["32px", {"lineHeight": "40px", "fontWeight": "600"}],
+                            "display-lg": ["48px", {"lineHeight": "56px", "letterSpacing": "-0.02em", "fontWeight": "700"}],
+                            "title-lg": ["20px", {"lineHeight": "28px", "fontWeight": "500"}],
+                            "caption": ["12px", {"lineHeight": "16px", "fontWeight": "400"}],
+                            "label-md": ["14px", {"lineHeight": "20px", "letterSpacing": "0.01em", "fontWeight": "600"}]
+                    }
+                }
+            }
+        }
+    </script>
+<style>
+        body { font-family: 'Hanken Grotesk', sans-serif; }
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+        }
+        .material-symbols-outlined.fill {
+            font-variation-settings: 'FILL' 1;
+        }
+    </style>
+</head>
+<body class="bg-background text-on-background min-h-screen rtl flex">
+<!-- SideNavBar -->
+<nav class="hidden md:flex flex-col h-full rtl bg-primary dark:bg-primary-container fixed right-0 top-0 w-[17.5rem] shadow-md z-50">
+<div class="p-stack_lg flex items-center gap-4">
+<div class="w-12 h-12 rounded-full bg-secondary-container flex items-center justify-center text-on-secondary-container font-headline-md text-headline-md">
+                נ
+            </div>
+<div>
+<h1 class="text-secondary dark:text-secondary-fixed font-headline-lg text-title-lg">נוכחות סמינר</h1>
+<p class="text-secondary-fixed-dim font-caption text-caption">תשפ"ד - שנה פעילה</p>
+</div>
+</div>
+<ul class="flex-1 px-stack_sm space-y-1">
+<li>
+<a class="flex items-center gap-4 px-4 py-3 rounded-lg text-on-primary hover:bg-primary-container/50 font-body-md text-body-md transition-colors hover:bg-primary-container" href="#">
+<span class="material-symbols-outlined">dashboard</span>
+                    לוח בקרה
+                </a>
+</li>
+<li>
+<a class="flex items-center gap-4 px-4 py-3 rounded-lg text-on-primary hover:bg-primary-container/50 font-body-md text-body-md transition-colors hover:bg-primary-container" href="#">
+<span class="material-symbols-outlined">group</span>
+                    תלמידות
+                </a>
+</li>
+<li>
+<a class="flex items-center gap-4 px-4 py-3 rounded-lg bg-primary-container text-secondary border-r-4 border-secondary font-body-md text-body-md transition-all scale-95" href="#">
+<span class="material-symbols-outlined">fact_check</span>
+                    נוכחות
+                </a>
+</li>
+<li>
+<a class="flex items-center gap-4 px-4 py-3 rounded-lg text-on-primary hover:bg-primary-container/50 font-body-md text-body-md transition-colors hover:bg-primary-container" href="#">
+<span class="material-symbols-outlined">edit_calendar</span>
+                    מבחני השלמה
+                </a>
+</li>
+<li>
+<a class="flex items-center gap-4 px-4 py-3 rounded-lg text-on-primary hover:bg-primary-container/50 font-body-md text-body-md transition-colors hover:bg-primary-container" href="#">
+<span class="material-symbols-outlined">menu_book</span>
+                    שיעורים
+                </a>
+</li>
+<li>
+<a class="flex items-center gap-4 px-4 py-3 rounded-lg text-on-primary hover:bg-primary-container/50 font-body-md text-body-md transition-colors hover:bg-primary-container" href="#">
+<span class="material-symbols-outlined">person_4</span>
+                    מורות
+                </a>
+</li>
+<li>
+<a class="flex items-center gap-4 px-4 py-3 rounded-lg text-on-primary hover:bg-primary-container/50 font-body-md text-body-md transition-colors hover:bg-primary-container" href="#">
+<span class="material-symbols-outlined">assessment</span>
+                    דוחות
+                </a>
+</li>
+<li>
+<a class="flex items-center gap-4 px-4 py-3 rounded-lg text-on-primary hover:bg-primary-container/50 font-body-md text-body-md transition-colors hover:bg-primary-container" href="#">
+<span class="material-symbols-outlined">settings</span>
+                    הגדרות
+                </a>
+</li>
+</ul>
+<div class="p-stack_md">
+<a class="flex items-center gap-4 px-4 py-3 rounded-lg text-on-primary hover:bg-primary-container/50 font-body-md text-body-md transition-colors hover:bg-primary-container" href="#">
+<span class="material-symbols-outlined">logout</span>
+                התנתקות
+            </a>
+</div>
+</nav>
+<!-- Main Content Area -->
+<main class="flex-1 md:mr-[17.5rem] flex flex-col min-h-screen">
+<!-- TopAppBar -->
+<header class="sticky top-0 z-40 w-full flex justify-between items-center px-stack_lg h-16 rtl bg-surface/95 dark:bg-surface-dim/95 border-b border-outline-variant backdrop-blur-md shadow-sm transition-opacity duration-200">
+<div class="flex items-center gap-8">
+<span class="font-headline-md text-headline-md text-primary dark:text-primary-fixed">מערכת ניהול פנימית</span>
+<nav class="hidden lg:flex gap-6">
+<a class="font-label-md text-label-md text-on-surface-variant hover:text-primary" href="#">תשפ"ד</a>
+</nav>
+</div>
+<div class="flex items-center gap-4">
+<button class="font-label-md text-label-md text-primary dark:text-primary-fixed hover:text-primary flex items-center gap-2">
+                    בורר שנה
+                    <span class="material-symbols-outlined text-sm">arrow_drop_down</span>
+</button>
+<button class="text-on-surface-variant hover:text-primary rounded-full p-2">
+<span class="material-symbols-outlined">notifications</span>
+</button>
+<button class="text-on-surface-variant hover:text-primary rounded-full p-2">
+<span class="material-symbols-outlined">account_circle</span>
+</button>
+</div>
+</header>
+<div class="p-container_padding max-w-[1440px] mx-auto w-full flex-1 flex flex-col gap-stack_lg">
+<!-- Page Header & Stepper -->
+<div class="flex flex-col gap-4">
+<h2 class="font-display-lg text-display-lg text-primary">נוכחות</h2>
+<div class="flex items-center gap-4 text-on-surface-variant font-label-md text-label-md">
+<span class="flex items-center gap-2 text-primary font-bold">
+<div class="w-6 h-6 rounded-full bg-primary text-on-primary flex items-center justify-center text-xs">1</div>
+                        בחירת תאריך
+                    </span>
+<div class="w-8 h-px bg-outline-variant"></div>
+<span class="flex items-center gap-2">
+<div class="w-6 h-6 rounded-full border border-outline text-outline flex items-center justify-center text-xs">2</div>
+                        הזנת נוכחות
+                    </span>
+</div>
+</div>
+<!-- Bento Grid Layout -->
+<div class="grid grid-cols-1 lg:grid-cols-12 gap-gutter items-start">
+<!-- Left Panel: Selected Day Classes (Takes up 5 columns on lg) -->
+<div class="lg:col-span-5 flex flex-col gap-stack_md order-2 lg:order-1">
+<div class="bg-surface rounded-xl shadow-[0_4px_20px_rgba(22,58,64,0.05)] p-stack_lg border-t-4 border-secondary flex flex-col gap-stack_md">
+<div class="flex justify-between items-start border-b border-surface-variant pb-4">
+<div>
+<h3 class="font-headline-md text-headline-md text-primary">יום שלישי</h3>
+<p class="font-body-md text-body-md text-on-surface-variant">ט"ו באייר תשפ"ד • 23 מאי 2024</p>
+</div>
+<div class="bg-[rgba(16,185,129,0.1)] text-attendance-present px-3 py-1 rounded-full font-label-md text-label-md flex items-center gap-1">
+<span class="material-symbols-outlined text-sm">check_circle</span>
+                                הושלם
+                            </div>
+</div>
+<div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-1 gap-4">
+<!-- Class Card 1 -->
+<div class="bg-surface-container-lowest border border-outline-variant rounded-lg p-4 hover:-translate-y-0.5 hover:shadow-md transition-all cursor-pointer relative overflow-hidden group">
+<div class="absolute left-0 top-0 bottom-0 w-1 bg-day-completed"></div>
+<div class="flex justify-between items-start mb-2">
+<span class="font-label-md text-label-md text-on-surface-variant bg-surface-variant px-2 py-0.5 rounded">שיעור 1-2</span>
+<span class="font-caption text-caption text-on-surface-variant">08:30 - 10:00</span>
+</div>
+<h4 class="font-title-lg text-title-lg text-primary mb-1">היסטוריה של עם ישראל</h4>
+<p class="font-body-md text-body-md text-on-surface-variant mb-3 flex items-center gap-2">
+<span class="material-symbols-outlined text-sm">person</span>
+                                    המורה: שרה כהן
+                                </p>
+<div class="flex justify-between items-center mt-auto">
+<div class="flex -space-x-2 -space-x-reverse">
+<div class="w-6 h-6 rounded-full bg-secondary-container border border-surface flex justify-center items-center text-[10px] text-on-secondary-container">א</div>
+<div class="w-6 h-6 rounded-full bg-tertiary-container border border-surface flex justify-center items-center text-[10px] text-on-tertiary-container">ב</div>
+<div class="w-6 h-6 rounded-full bg-surface-variant border border-surface flex justify-center items-center text-[10px] text-on-surface-variant">+28</div>
+</div>
+<span class="font-label-md text-label-md text-day-completed flex items-center gap-1">
+<span class="material-symbols-outlined text-[16px]">done_all</span>
+                                        30/30 סומנו
+                                    </span>
+</div>
+</div>
+<!-- Class Card 2 -->
+<div class="bg-surface-container-lowest border border-outline-variant rounded-lg p-4 hover:-translate-y-0.5 hover:shadow-md transition-all cursor-pointer relative overflow-hidden group">
+<div class="absolute left-0 top-0 bottom-0 w-1 bg-day-partial"></div>
+<div class="flex justify-between items-start mb-2">
+<span class="font-label-md text-label-md text-on-surface-variant bg-surface-variant px-2 py-0.5 rounded">שיעור 3-4</span>
+<span class="font-caption text-caption text-on-surface-variant">10:15 - 11:45</span>
+</div>
+<h4 class="font-title-lg text-title-lg text-primary mb-1">מתמטיקה מתקדמת</h4>
+<p class="font-body-md text-body-md text-on-surface-variant mb-3 flex items-center gap-2">
+<span class="material-symbols-outlined text-sm">person</span>
+                                    המורה: רחל לוי
+                                </p>
+<div class="flex justify-between items-center mt-auto">
+<div class="flex -space-x-2 -space-x-reverse opacity-50">
+<div class="w-6 h-6 rounded-full bg-surface-variant border border-surface flex justify-center items-center text-[10px] text-on-surface-variant">?</div>
+</div>
+<span class="font-label-md text-label-md text-day-partial flex items-center gap-1">
+<span class="material-symbols-outlined text-[16px]">pending_actions</span>
+                                        15/30 סומנו
+                                    </span>
+</div>
+</div>
+</div>
+</div>
+</div>
+<!-- Right Panel: Calendar (Takes up 7 columns on lg) -->
+<div class="lg:col-span-7 bg-surface rounded-xl shadow-[0_4px_20px_rgba(22,58,64,0.05)] p-stack_lg order-1 lg:order-2">
+<div class="flex justify-between items-center mb-6">
+<h3 class="font-headline-md text-headline-md text-primary">אייר תשפ"ד</h3>
+<div class="flex gap-2">
+<button class="p-2 rounded hover:bg-surface-variant text-on-surface-variant transition-colors">
+<span class="material-symbols-outlined">chevron_right</span>
+</button>
+<button class="font-label-md text-label-md px-4 py-2 border border-outline rounded-lg text-primary hover:bg-surface-variant transition-colors">היום</button>
+<button class="p-2 rounded hover:bg-surface-variant text-on-surface-variant transition-colors">
+<span class="material-symbols-outlined">chevron_left</span>
+</button>
+</div>
+</div>
+<!-- Calendar Grid -->
+<div class="w-full">
+<div class="grid grid-cols-7 gap-2 mb-2 text-center font-label-md text-label-md text-on-surface-variant">
+<div>א'</div><div>ב'</div><div>ג'</div><div>ד'</div><div>ה'</div><div>ו'</div><div>ש'</div>
+</div>
+<div class="grid grid-cols-7 gap-2">
+<!-- Example Empty Days -->
+<div class="aspect-square p-2 rounded-lg border border-transparent"></div>
+<div class="aspect-square p-2 rounded-lg border border-transparent"></div>
+<!-- Example Calendar Days -->
+<div class="aspect-square p-2 rounded-lg border border-outline-variant hover:border-primary cursor-pointer flex flex-col justify-between items-end relative overflow-hidden bg-[rgba(16,185,129,0.05)]">
+<div class="absolute bottom-0 left-0 w-full h-1 bg-day-completed"></div>
+<span class="font-body-md text-body-md text-primary">א'</span>
+<span class="font-caption text-caption text-on-surface-variant self-start">9</span>
+</div>
+<div class="aspect-square p-2 rounded-lg border border-outline-variant hover:border-primary cursor-pointer flex flex-col justify-between items-end relative overflow-hidden bg-[rgba(16,185,129,0.05)]">
+<div class="absolute bottom-0 left-0 w-full h-1 bg-day-completed"></div>
+<span class="font-body-md text-body-md text-primary">ב'</span>
+<span class="font-caption text-caption text-on-surface-variant self-start">10</span>
+</div>
+<div class="aspect-square p-2 rounded-lg border border-outline-variant hover:border-primary cursor-pointer flex flex-col justify-between items-end relative overflow-hidden bg-[rgba(245,158,11,0.05)]">
+<div class="absolute bottom-0 left-0 w-full h-1 bg-day-partial"></div>
+<span class="font-body-md text-body-md text-primary">ג'</span>
+<span class="font-caption text-caption text-on-surface-variant self-start">11</span>
+</div>
+<div class="aspect-square p-2 rounded-lg border-2 border-primary bg-primary-container/20 cursor-pointer flex flex-col justify-between items-end relative overflow-hidden shadow-sm">
+<span class="font-body-md text-body-md text-primary font-bold">ד'</span>
+<span class="font-caption text-caption text-on-surface-variant self-start">12</span>
+</div>
+<div class="aspect-square p-2 rounded-lg border border-surface-variant bg-surface-variant/30 flex flex-col justify-between items-end opacity-50">
+<span class="font-body-md text-body-md text-on-surface-variant">ה'</span>
+<span class="font-caption text-caption text-on-surface-variant self-start">13</span>
+</div>
+<div class="aspect-square p-2 rounded-lg border border-surface-variant bg-surface-variant/30 flex flex-col justify-between items-end opacity-50">
+<span class="font-body-md text-body-md text-on-surface-variant">ו'</span>
+<span class="font-caption text-caption text-on-surface-variant self-start">14</span>
+</div>
+<div class="aspect-square p-2 rounded-lg border border-surface-variant bg-surface-variant/30 flex flex-col justify-between items-end opacity-50">
+<span class="font-body-md text-body-md text-on-surface-variant">ש'</span>
+<span class="font-caption text-caption text-on-surface-variant self-start">15</span>
+</div>
+</div>
+</div>
+<div class="mt-6 flex gap-4 font-caption text-caption text-on-surface-variant justify-end">
+<div class="flex items-center gap-1"><div class="w-3 h-3 rounded-sm bg-day-completed"></div> הושלם</div>
+<div class="flex items-center gap-1"><div class="w-3 h-3 rounded-sm bg-day-partial"></div> חלקי</div>
+</div>
+</div>
+</div>
+</div>
+</main>
+</body></html>
+<!-- Injection By NetFree -->
+<script src="//netfree.link/injection-script/go-payment.js" type="text/javascript" async ></script>
+<script src="//netfree.link/injection-script/popup-card-init.js" type="text/javascript" async ></script>

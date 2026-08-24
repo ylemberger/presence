@@ -1,6 +1,5 @@
 ---
-description: שימוש מאובטח ב-SQL ו-Supabase
-alwaysApply: true
+alwaysApply: false
 ---
 # Secure SQL Usage
 

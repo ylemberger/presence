@@ -1,7 +1,7 @@
 import { cn } from "@/lib/cn";
 
 const fieldClass =
-  "rounded-xl border border-[var(--border)] bg-white px-3.5 py-2.5 text-sm text-slate-800 shadow-[var(--shadow-sm)] transition-colors placeholder:text-slate-400 focus:border-[var(--brand)] focus:outline-none focus:ring-2 focus:ring-[var(--ring)]";
+  "rounded-lg border border-outline-variant bg-surface-container-lowest px-3.5 py-2.5 text-body-md text-on-surface shadow-tactile-sm transition-colors placeholder:text-on-surface-variant/70 focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary";
 
 interface InputProps extends React.InputHTMLAttributes<HTMLInputElement> {
   label?: string;
@@ -13,16 +13,16 @@ export function Input({ label, error, className, id, ...props }: InputProps) {
   return (
     <div className="flex flex-col gap-1.5">
       {label && (
-        <label htmlFor={inputId} className="text-sm font-medium text-slate-600">
+        <label htmlFor={inputId} className="block font-label-md text-label-md text-on-surface">
           {label}
         </label>
       )}
       <input
         id={inputId}
-        className={cn(fieldClass, error && "border-rose-400 focus:ring-rose-200", className)}
+        className={cn(fieldClass, error && "border-error focus:ring-error", className)}
         {...props}
       />
-      {error && <span className="text-xs text-rose-600">{error}</span>}
+      {error && <span className="text-caption text-error">{error}</span>}
     </div>
   );
 }
@@ -38,7 +38,7 @@ export function Select({ label, error, options, className, id, ...props }: Selec
   return (
     <div className="flex flex-col gap-1.5">
       {label && (
-        <label htmlFor={selectId} className="text-sm font-medium text-slate-600">
+        <label htmlFor={selectId} className="block font-label-md text-label-md text-on-surface">
           {label}
         </label>
       )}
@@ -47,7 +47,7 @@ export function Select({ label, error, options, className, id, ...props }: Selec
         className={cn(
           fieldClass,
           "appearance-none bg-[length:1rem] bg-[left_0.85rem_center] bg-no-repeat pe-9 ps-3.5",
-          error && "border-rose-400 focus:ring-rose-200",
+          error && "border-error focus:ring-error",
           className
         )}
         style={{
@@ -61,7 +61,7 @@ export function Select({ label, error, options, className, id, ...props }: Selec
           </option>
         ))}
       </select>
-      {error && <span className="text-xs text-rose-600">{error}</span>}
+      {error && <span className="text-caption text-error">{error}</span>}
     </div>
   );
 }

@@ -1,9 +1,6 @@
 ---
-description: Next.js App Router + Tailwind CSS — מותאם לפרויקט presence
-globs: "**/*.{tsx,ts,css}"
-alwaysApply: false
+alwaysApply: true
 ---
-
 # Next.js + Tailwind (presence)
 
 מבוסס על [awesome-cursorrules tailwind-css-nextjs-guide](https://github.com/PatrickJS/awesome-cursorrules), מותאם לפרויקט.

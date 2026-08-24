@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import Link from "next/link";
 import { Input } from "@/components/ui/Input";
 import { Table, TableRow, TableCell } from "@/components/ui/Table";
 import type { Teacher } from "@/types/database";
@@ -27,13 +28,21 @@ export function TeachersDirectory({ teachers }: { teachers: Teacher[] }) {
         value={query}
         onChange={(e) => setQuery(e.target.value)}
       />
-      <Table headers={["שם", 'ת"ז', "טלפון", "אימייל"]}>
+      <Table headers={["שם", 'ת"ז', "טלפון", "אימייל", ""]}>
         {filtered.map((t) => (
           <TableRow key={t.id}>
             <TableCell>{t.full_name}</TableCell>
             <TableCell>{t.identity_number}</TableCell>
             <TableCell>{t.phone}</TableCell>
             <TableCell>{t.email}</TableCell>
+            <TableCell>
+              <Link
+                href={`/teachers/${t.id}`}
+                className="text-sm font-medium text-[var(--brand)] hover:underline"
+              >
+                כרטיס
+              </Link>
+            </TableCell>
           </TableRow>
         ))}
       </Table>

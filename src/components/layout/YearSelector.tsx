@@ -1,8 +1,8 @@
 "use client";
 
 import { useRouter } from "next/navigation";
+import { useTransition } from "react";
 import type { AcademicYear } from "@/types/database";
-import { Select } from "@/components/ui/Input";
 import { setActiveYearAction } from "@/app/(dashboard)/actions";
 
 interface YearSelectorProps {
@@ -10,28 +10,57 @@ interface YearSelectorProps {
   activeYearId?: string;
 }
 
+/**
+ * Compact "בחירת שנה" pill that mirrors the Stitch top-app-bar button.
+ * The native select overlay keeps accessibility while the label stays visual.
+ */
 export function YearSelector({ years, activeYearId }: YearSelectorProps) {
   const router = useRouter();
-
-  async function handleChange(e: React.ChangeEvent<HTMLSelectElement>) {
-    await setActiveYearAction(e.target.value);
-    router.refresh();
-  }
+  const [isPending, startTransition] = useTransition();
 
   if (years.length === 0) return null;
 
+  const activeYear = years.find((y) => y.id === activeYearId);
+
+  function handleChange(e: React.ChangeEvent<HTMLSelectElement>) {
+    const nextId = e.target.value;
+    if (!nextId || nextId === activeYearId) return;
+    startTransition(async () => {
+      await setActiveYearAction(nextId);
+      router.refresh();
+    });
+  }
+
   return (
-    <div className="print:hidden min-w-[11rem]">
-      <Select
-        label="שנה אקדמית"
+    <div className="relative print:hidden">
+      <button
+        type="button"
+        aria-hidden
+        tabIndex={-1}
+        className="pointer-events-none inline-flex items-center gap-1.5 rounded-md bg-secondary px-4 py-2 text-label-md font-semibold text-primary shadow-tactile-sm transition-colors hover:bg-secondary-fixed-dim"
+      >
+        <span className="material-symbols-outlined text-[18px]" aria-hidden>
+          calendar_today
+        </span>
+        <span>{activeYear ? activeYear.name : "בחירת שנה"}</span>
+        <span className="material-symbols-outlined text-[18px] opacity-80" aria-hidden>
+          expand_more
+        </span>
+      </button>
+      <select
+        aria-label="בחירת שנה אקדמית"
         value={activeYearId || ""}
         onChange={handleChange}
-        options={years.map((y) => ({
-          value: y.id,
-          label: `${y.name}${y.is_active ? " (פעילה)" : ""}`,
-        }))}
-        className="w-full min-w-[11rem] sm:w-52"
-      />
+        disabled={isPending}
+        className="absolute inset-0 cursor-pointer opacity-0"
+      >
+        {years.map((y) => (
+          <option key={y.id} value={y.id}>
+            {y.name}
+            {y.is_active ? " (פעילה)" : ""}
+          </option>
+        ))}
+      </select>
     </div>
   );
 }

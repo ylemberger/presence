@@ -2,7 +2,6 @@
 
 import { useEffect } from "react";
 import { cn } from "@/lib/cn";
-import { Button } from "@/components/ui/Button";
 
 interface ModalProps {
   open: boolean;
@@ -12,6 +11,8 @@ interface ModalProps {
   children: React.ReactNode;
   className?: string;
   dismissible?: boolean;
+  /** Optional footer (buttons row). Rendered on bg-surface-container-lowest. */
+  footer?: React.ReactNode;
 }
 
 export function Modal({
@@ -22,6 +23,7 @@ export function Modal({
   children,
   className,
   dismissible = true,
+  footer,
 }: ModalProps) {
   useEffect(() => {
     if (!open) return;
@@ -41,40 +43,46 @@ export function Modal({
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center p-4 animate-[fadeIn_160ms_ease-out]"
+      className="fixed inset-0 z-50 flex items-center justify-center p-4 animate-[fadeIn_160ms_ease-out] sm:p-6"
       role="dialog"
       aria-modal="true"
     >
       <button
         type="button"
         aria-label="סגירה"
-        className="absolute inset-0 bg-[var(--brand)]/35 backdrop-blur-[3px]"
+        className="absolute inset-0 bg-on-background/50 backdrop-blur-sm"
         onClick={() => dismissible && onClose()}
       />
       <div
         className={cn(
-          "relative z-10 w-full max-w-2xl overflow-hidden rounded-2xl border border-[var(--border)] bg-white shadow-[var(--shadow-md)] animate-[scaleIn_180ms_ease-out]",
+          "relative z-10 flex max-h-[92vh] w-full max-w-2xl flex-col overflow-hidden rounded-xl bg-surface shadow-tactile-lg animate-[scaleIn_180ms_ease-out]",
           className
         )}
       >
-        <div className="flex items-start justify-between gap-4 border-b border-[var(--border)] bg-[var(--brand)] px-6 py-5 text-white">
+        <div className="flex items-center justify-between gap-4 rounded-t-xl border-b border-outline-variant/30 bg-surface-container-low px-6 py-4">
           <div>
-            <h2 className="text-xl font-semibold tracking-tight">{title}</h2>
-            {description && <p className="mt-1 text-sm text-white/75">{description}</p>}
+            <h2 className="font-title-lg text-title-lg text-primary">{title}</h2>
+            {description && (
+              <p className="mt-1 text-caption text-on-surface-variant">{description}</p>
+            )}
           </div>
           {dismissible && (
-            <Button
+            <button
               type="button"
-              variant="ghost"
-              size="sm"
               onClick={onClose}
-              className="text-white/90 hover:bg-white/10 hover:text-white"
+              aria-label="סגירה"
+              className="rounded-full p-1 text-on-surface-variant transition-colors hover:bg-error-container/20 hover:text-error"
             >
-              סגירה
-            </Button>
+              <span className="material-symbols-outlined">close</span>
+            </button>
           )}
         </div>
-        <div className="max-h-[min(80vh,40rem)] overflow-y-auto px-6 py-5">{children}</div>
+        <div className="flex-1 overflow-y-auto p-6">{children}</div>
+        {footer && (
+          <div className="flex justify-end gap-3 rounded-b-xl border-t border-outline-variant/30 bg-surface-container-lowest px-6 py-4">
+            {footer}
+          </div>
+        )}
       </div>
     </div>
   );

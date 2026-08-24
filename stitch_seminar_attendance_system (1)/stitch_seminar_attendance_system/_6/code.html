@@ -1,0 +1,361 @@
+<!DOCTYPE html>
+
+<html dir="rtl" lang="he"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>נוכחות סמינר - רישום נוכחות</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Hanken+Grotesk:wght@400;500;600;700&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    "colors": {
+                        "surface-tint": "#42646a",
+                        "on-tertiary-fixed-variant": "#1e4d55",
+                        "surface-container": "#ebefee",
+                        "surface-container-high": "#e5e9e8",
+                        "tertiary-container": "#043b43",
+                        "secondary-container": "#fdd48e",
+                        "outline": "#71787a",
+                        "primary-container": "#163a40",
+                        "error": "#ba1a1a",
+                        "on-primary-fixed": "#001f24",
+                        "on-primary-fixed-variant": "#294c52",
+                        "tertiary-fixed": "#bceaf4",
+                        "surface-container-lowest": "#ffffff",
+                        "surface-container-low": "#f0f4f3",
+                        "secondary-fixed-dim": "#e8c17c",
+                        "surface-container-highest": "#dfe3e2",
+                        "inverse-surface": "#2d3131",
+                        "on-error-container": "#93000a",
+                        "on-surface-variant": "#414849",
+                        "primary-fixed-dim": "#a9cdd4",
+                        "background": "#f6faf9",
+                        "surface": "#f6faf9",
+                        "inverse-on-surface": "#edf2f1",
+                        "surface-variant": "#dfe3e2",
+                        "primary": "#00242a",
+                        "secondary": "#775a20",
+                        "outline-variant": "#c1c8c9",
+                        "on-primary-container": "#81a4ab",
+                        "secondary-fixed": "#ffdea7",
+                        "on-error": "#ffffff",
+                        "tertiary": "#00242a",
+                        "error-container": "#ffdad6",
+                        "on-tertiary-container": "#78a5ae",
+                        "primary-fixed": "#c4e9f0",
+                        "surface-dim": "#d7dbda",
+                        "on-tertiary-fixed": "#001f24",
+                        "on-secondary": "#ffffff",
+                        "on-secondary-fixed": "#271900",
+                        "on-background": "#181c1c",
+                        "on-secondary-fixed-variant": "#5c4208",
+                        "surface-bright": "#f6faf9",
+                        "on-primary": "#ffffff",
+                        "inverse-primary": "#a9cdd4",
+                        "on-tertiary": "#ffffff",
+                        "on-surface": "#181c1c",
+                        "on-secondary-container": "#775a20",
+                        "tertiary-fixed-dim": "#a0ced8",
+                        "attendance-present": "#10b981",
+                        "attendance-late": "#f59e0b",
+                        "attendance-absent": "#f43f5e"
+                    },
+                    "borderRadius": {
+                        "DEFAULT": "0.25rem",
+                        "lg": "0.5rem",
+                        "xl": "0.75rem",
+                        "full": "9999px"
+                    },
+                    "spacing": {
+                        "stack_lg": "2rem",
+                        "stack_md": "1rem",
+                        "container_padding": "2rem",
+                        "gutter": "1.5rem",
+                        "sidebar_width": "17.5rem",
+                        "stack_sm": "0.5rem"
+                    },
+                    "fontFamily": {
+                        "body-lg": ["Hanken Grotesk"],
+                        "body-md": ["Hanken Grotesk"],
+                        "headline-md": ["Hanken Grotesk"],
+                        "headline-lg": ["Hanken Grotesk"],
+                        "display-lg": ["Hanken Grotesk"],
+                        "title-lg": ["Hanken Grotesk"],
+                        "caption": ["Hanken Grotesk"],
+                        "label-md": ["Hanken Grotesk"]
+                    },
+                    "fontSize": {
+                        "body-lg": ["18px", { "lineHeight": "28px", "fontWeight": "400" }],
+                        "body-md": ["16px", { "lineHeight": "24px", "fontWeight": "400" }],
+                        "headline-md": ["24px", { "lineHeight": "32px", "fontWeight": "600" }],
+                        "headline-lg": ["32px", { "lineHeight": "40px", "fontWeight": "600" }],
+                        "display-lg": ["48px", { "lineHeight": "56px", "letterSpacing": "-0.02em", "fontWeight": "700" }],
+                        "title-lg": ["20px", { "lineHeight": "28px", "fontWeight": "500" }],
+                        "caption": ["12px", { "lineHeight": "16px", "fontWeight": "400" }],
+                        "label-md": ["14px", { "lineHeight": "20px", "letterSpacing": "0.01em", "fontWeight": "600" }]
+                    }
+                }
+            }
+        }
+    </script>
+<style>
+        body { font-family: 'Hanken Grotesk', sans-serif; }
+        .attendance-ok { background-color: rgba(16, 185, 129, 0.1); color: var(--attendance-present); }
+        .attendance-warning { background-color: rgba(245, 158, 11, 0.1); color: var(--attendance-late); }
+        .attendance-blocked { background-color: rgba(244, 63, 94, 0.1); color: var(--attendance-absent); }
+        .unmarked-row { border-right: 4px solid #f59e0b; background-color: rgba(245, 158, 11, 0.05); }
+    </style>
+</head>
+<body class="bg-background text-on-background antialiased flex rtl min-h-screen">
+<!-- SideNavBar -->
+<nav class="hidden md:flex flex-col h-full rtl bg-primary dark:bg-primary-container text-secondary dark:text-secondary-fixed fixed right-0 top-0 w-sidebar_width shadow-md z-50">
+<div class="p-stack_lg border-b border-primary-container/20">
+<div class="flex items-center gap-4">
+<div class="w-12 h-12 rounded-full bg-secondary-container flex items-center justify-center text-primary font-headline-lg text-headline-lg">נ</div>
+<div>
+<h1 class="text-headline-lg font-headline-lg text-secondary">נוכחות סמינר</h1>
+<p class="text-on-primary-container font-caption text-caption">תשפ"ד - שנה פעילה</p>
+</div>
+</div>
+</div>
+<div class="flex-1 overflow-y-auto py-stack_md flex flex-col gap-2 px-4">
+<a class="flex items-center gap-3 px-4 py-3 rounded-lg text-on-primary hover:bg-primary-container/50 transition-colors font-body-md text-body-md" href="#">
+<span class="material-symbols-outlined">dashboard</span>
+                לוח בקרה
+            </a>
+<a class="flex items-center gap-3 px-4 py-3 rounded-lg text-on-primary hover:bg-primary-container/50 transition-colors font-body-md text-body-md" href="#">
+<span class="material-symbols-outlined">group</span>
+                תלמידות
+            </a>
+<a class="flex items-center gap-3 px-4 py-3 rounded-lg bg-primary-container text-secondary border-r-4 border-secondary transition-all transform scale-95 font-body-md text-body-md" href="#">
+<span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 1;">fact_check</span>
+                נוכחות
+            </a>
+<a class="flex items-center gap-3 px-4 py-3 rounded-lg text-on-primary hover:bg-primary-container/50 transition-colors font-body-md text-body-md" href="#">
+<span class="material-symbols-outlined">edit_calendar</span>
+                מבחני השלמה
+            </a>
+<a class="flex items-center gap-3 px-4 py-3 rounded-lg text-on-primary hover:bg-primary-container/50 transition-colors font-body-md text-body-md" href="#">
+<span class="material-symbols-outlined">menu_book</span>
+                שיעורים
+            </a>
+<a class="flex items-center gap-3 px-4 py-3 rounded-lg text-on-primary hover:bg-primary-container/50 transition-colors font-body-md text-body-md" href="#">
+<span class="material-symbols-outlined">person_4</span>
+                מורות
+            </a>
+<a class="flex items-center gap-3 px-4 py-3 rounded-lg text-on-primary hover:bg-primary-container/50 transition-colors font-body-md text-body-md" href="#">
+<span class="material-symbols-outlined">assessment</span>
+                דוחות
+            </a>
+<a class="flex items-center gap-3 px-4 py-3 rounded-lg text-on-primary hover:bg-primary-container/50 transition-colors font-body-md text-body-md" href="#">
+<span class="material-symbols-outlined">settings</span>
+                הגדרות
+            </a>
+</div>
+<div class="p-4 border-t border-primary-container/20">
+<a class="flex items-center gap-3 px-4 py-3 rounded-lg text-on-primary hover:bg-primary-container/50 transition-colors font-body-md text-body-md" href="#">
+<span class="material-symbols-outlined">logout</span>
+                התנתקות
+            </a>
+</div>
+</nav>
+<!-- Main Content -->
+<main class="flex-1 w-full md:pr-sidebar_width flex flex-col min-h-screen">
+<!-- TopAppBar -->
+<header class="sticky top-0 z-40 w-full flex justify-between items-center px-stack_lg h-16 rtl bg-surface/95 dark:bg-surface-dim/95 border-b border-outline-variant backdrop-blur-md shadow-sm transition-opacity duration-200">
+<div class="flex items-center gap-6">
+<span class="font-headline-md text-headline-md text-primary">מערכת ניהול פנימית</span>
+<nav class="hidden md:flex gap-4">
+<a class="text-primary font-bold border-b-2 border-secondary font-label-md text-label-md py-4" href="#">תשפ"ד</a>
+</nav>
+</div>
+<div class="flex items-center gap-4">
+<button class="text-on-surface-variant hover:text-primary font-label-md text-label-md border border-outline rounded-full px-4 py-1.5 flex items-center gap-2">
+                    בורר שנה
+                    <span class="material-symbols-outlined text-sm">expand_more</span>
+</button>
+<button class="text-on-surface-variant hover:text-primary transition-colors">
+<span class="material-symbols-outlined">notifications</span>
+</button>
+<button class="text-on-surface-variant hover:text-primary transition-colors">
+<span class="material-symbols-outlined">account_circle</span>
+</button>
+</div>
+</header>
+<div class="p-container_padding flex-1 max-w-[1440px] mx-auto w-full flex flex-col gap-stack_lg relative">
+<!-- Sticky Class Header -->
+<div class="sticky top-16 z-30 bg-surface rounded-xl shadow-[0_4px_20px_rgba(22,58,64,0.05)] p-stack_md flex flex-col gap-4 border-t-4 border-secondary">
+<div class="flex flex-col md:flex-row md:items-center justify-between gap-4">
+<div>
+<h2 class="font-headline-lg text-headline-lg text-primary">תנ"ך - הרבנית כהן</h2>
+<p class="font-body-md text-body-md text-on-surface-variant">יום שלישי, ט"ו שבט תשפ"ד | 09:00 - 10:30</p>
+</div>
+<div class="flex flex-col md:flex-row gap-3">
+<button class="bg-primary text-surface font-label-md text-label-md px-6 py-2 rounded-lg flex items-center justify-center gap-2 hover:-translate-y-0.5 transition-transform shadow-md">
+<span class="material-symbols-outlined">done_all</span>
+                            סמני את כולן נוכחות
+                        </button>
+<button class="bg-secondary-container text-primary font-label-md text-label-md px-6 py-2 rounded-lg flex items-center justify-center gap-2 hover:-translate-y-0.5 transition-transform">
+<span class="material-symbols-outlined">content_copy</span>
+                            העתק מקודם
+                        </button>
+</div>
+</div>
+<!-- Progress Bar -->
+<div>
+<div class="flex justify-between font-label-md text-label-md text-on-surface-variant mb-1">
+<span>הושלם רישום נוכחות</span>
+<span>45%</span>
+</div>
+<div class="w-full bg-surface-variant rounded-full h-2.5">
+<div class="bg-secondary h-2.5 rounded-full" style="width: 45%"></div>
+</div>
+</div>
+</div>
+<!-- Students List -->
+<div class="bg-surface rounded-xl shadow-[0_4px_20px_rgba(22,58,64,0.05)] overflow-hidden">
+<table class="w-full text-right border-collapse">
+<thead class="bg-background border-b border-surface-variant font-label-md text-label-md text-on-surface-variant">
+<tr>
+<th class="p-4 w-1/4">שם תלמידה</th>
+<th class="p-4 w-1/6">היעדרות ממוצעת</th>
+<th class="p-4 text-center">סטטוס נוכחות</th>
+<th class="p-4 w-1/4">הערות / סיבה</th>
+</tr>
+</thead>
+<tbody class="font-body-md text-body-md text-on-surface">
+<!-- Student 1 (Marked) -->
+<tr class="border-b border-surface-variant hover:bg-primary-fixed/10 transition-colors">
+<td class="p-4 flex items-center gap-3">
+<img class="w-10 h-10 rounded-full object-cover border border-outline-variant" data-alt="A small, elegant circular profile picture placeholder for a student, featuring a subtle geometric pattern in soft pastel greens and whites, clean, modern educational system aesthetic, high resolution." src="https://lh3.googleusercontent.com/aida-public/AB6AXuCNfU9k92YCcAqxvNo_9eufSm9DiSOsXMYANPRzrXHR6-3u8LldevMGapziZxxTav9kkfMjUjjNP6vkl6673-x8KnaBOj9Y_n9-ro8V8Yrakc_s0LLHMgcORhWBcU_IsHz8_wXWrEnzaOSyU1nuya04LWuvT_j-BwOafS5Fhs4AhUyWfDaZCwrYv_Mv_6aNiRoaffOSKX7cZTErPyrig_r9ej7m-ftZhBHgbhWDHa0vbhFN7LwRMP2N"/>
+<div>
+<div class="font-title-lg text-title-lg text-primary">אביגיל לוי</div>
+<div class="font-caption text-caption text-on-surface-variant">ת"ז: 123456789</div>
+</div>
+</td>
+<td class="p-4">
+<span class="px-2 py-1 rounded-full attendance-ok font-label-md text-label-md text-sm">2%</span>
+</td>
+<td class="p-4">
+<div class="flex justify-center gap-2">
+<button class="w-10 h-10 rounded-full bg-primary text-surface flex items-center justify-center shadow-md">
+<span class="material-symbols-outlined">check</span>
+</button>
+<button class="w-10 h-10 rounded-full border border-outline text-outline hover:bg-error-container hover:text-error hover:border-error transition-colors flex items-center justify-center">
+<span class="material-symbols-outlined">close</span>
+</button>
+<button class="w-10 h-10 rounded-full border border-outline text-outline hover:bg-secondary-container hover:text-secondary-fixed-variant hover:border-secondary transition-colors flex items-center justify-center">
+<span class="material-symbols-outlined">schedule</span>
+</button>
+</div>
+</td>
+<td class="p-4">
+<span class="text-on-surface-variant">-</span>
+</td>
+</tr>
+<!-- Student 2 (Unmarked - Highlighted) -->
+<tr class="border-b border-surface-variant hover:bg-primary-fixed/10 transition-colors unmarked-row">
+<td class="p-4 flex items-center gap-3">
+<img class="w-10 h-10 rounded-full object-cover border border-outline-variant" data-alt="A small, elegant circular profile picture placeholder for a student, featuring a subtle geometric pattern in soft pastel greens and whites, clean, modern educational system aesthetic, high resolution." src="https://lh3.googleusercontent.com/aida-public/AB6AXuBNOiTphg4qAL0-s8oliBljGmXoFsG7IKFtlRfODmaW4ZvRPQgtOwmxZFUHXIGfnRcMq6ZcMQvASTTG9y2Mfxo_7X1AH9T0dVGJQrjbepjZWV8wP0HYq6Etnvj9zYdWAyfndFsMDai-sWAM2YLxH4z8uL5b5JyHHOE7dSyL2AoX-ZmApQdD3_0ienw36qfyDZ7yHLyB5ji9-h4aMink02qnqS4_zDK4avhTuIbKNWc1HyHkj16Ao2-R"/>
+<div>
+<div class="font-title-lg text-title-lg text-primary">חנה כהן</div>
+<div class="font-caption text-caption text-on-surface-variant">ת"ז: 987654321</div>
+</div>
+</td>
+<td class="p-4">
+<span class="px-2 py-1 rounded-full attendance-warning font-label-md text-label-md text-sm">15%</span>
+</td>
+<td class="p-4">
+<div class="flex justify-center gap-2">
+<button class="w-10 h-10 rounded-full border border-outline text-outline hover:bg-primary hover:text-surface transition-colors flex items-center justify-center">
+<span class="material-symbols-outlined">check</span>
+</button>
+<button class="w-10 h-10 rounded-full border border-outline text-outline hover:bg-error-container hover:text-error hover:border-error transition-colors flex items-center justify-center">
+<span class="material-symbols-outlined">close</span>
+</button>
+<button class="w-10 h-10 rounded-full border border-outline text-outline hover:bg-secondary-container hover:text-secondary-fixed-variant hover:border-secondary transition-colors flex items-center justify-center">
+<span class="material-symbols-outlined">schedule</span>
+</button>
+</div>
+</td>
+<td class="p-4">
+<select class="w-full bg-transparent border border-outline rounded-lg px-3 py-2 text-on-surface focus:border-primary focus:ring-2 focus:ring-primary-fixed-dim font-body-md text-body-md">
+<option disabled="" selected="" value="">בחר סיבה (אם נעדרה)</option>
+<option value="sick">מחלה</option>
+<option value="event">אירוע משפחתי</option>
+<option value="unknown">לא ידוע</option>
+</select>
+</td>
+</tr>
+<!-- Student 3 (Marked Absent) -->
+<tr class="border-b border-surface-variant hover:bg-primary-fixed/10 transition-colors">
+<td class="p-4 flex items-center gap-3">
+<img class="w-10 h-10 rounded-full object-cover border border-outline-variant" data-alt="A small, elegant circular profile picture placeholder for a student, featuring a subtle geometric pattern in soft pastel greens and whites, clean, modern educational system aesthetic, high resolution." src="https://lh3.googleusercontent.com/aida-public/AB6AXuALgzg1k1P4r5kfQuf6ZXtlec_-kmUiJLvmNgRNRFJy3LrhRDNhqOJJ032ufRriDz-n53h0KR--Bb039onGGkWPBW35u-VKT7bIUdv8Rf2kBuZY27LP47V3UVNa7CF62ezd95-rxhwyZzfckgZBL5sQjIQRcAatbny9O6XTKaSvy8g2EuZ1zZSyCoixkMxdGm3gmbW_e1ullhgg_NYw4cEMO-6H2sCAIhbeVzuZSEDXj6Y2MJJC4NPf"/>
+<div>
+<div class="font-title-lg text-title-lg text-primary">רחל ישראלי</div>
+<div class="font-caption text-caption text-on-surface-variant">ת"ז: 456123789</div>
+</div>
+</td>
+<td class="p-4">
+<span class="px-2 py-1 rounded-full attendance-blocked font-label-md text-label-md text-sm">28%</span>
+</td>
+<td class="p-4">
+<div class="flex justify-center gap-2">
+<button class="w-10 h-10 rounded-full border border-outline text-outline hover:bg-primary hover:text-surface transition-colors flex items-center justify-center">
+<span class="material-symbols-outlined">check</span>
+</button>
+<button class="w-10 h-10 rounded-full bg-error-container text-error border-error border flex items-center justify-center shadow-md">
+<span class="material-symbols-outlined">close</span>
+</button>
+<button class="w-10 h-10 rounded-full border border-outline text-outline hover:bg-secondary-container hover:text-secondary-fixed-variant hover:border-secondary transition-colors flex items-center justify-center">
+<span class="material-symbols-outlined">schedule</span>
+</button>
+</div>
+</td>
+<td class="p-4">
+<select class="w-full bg-transparent border border-outline rounded-lg px-3 py-2 text-on-surface focus:border-primary focus:ring-2 focus:ring-primary-fixed-dim font-body-md text-body-md">
+<option selected="" value="sick">מחלה</option>
+<option value="event">אירוע משפחתי</option>
+<option value="unknown">לא ידוע</option>
+</select>
+</td>
+</tr>
+</tbody>
+</table>
+</div>
+<!-- General Notes -->
+<div class="bg-surface rounded-xl shadow-[0_4px_20px_rgba(22,58,64,0.05)] p-stack_md border-l-4 border-primary">
+<label class="block font-label-md text-label-md text-primary mb-2" for="general-notes">הערות כלליות לשיעור</label>
+<textarea class="w-full border border-outline rounded-lg p-3 text-on-surface focus:border-primary focus:ring-2 focus:ring-primary-fixed-dim transition-all font-body-md text-body-md" id="general-notes" placeholder="הקלידי הערות מיוחדות, אירועים חריגים או בקשות הקשורות לשיעור זה..." rows="3"></textarea>
+<div class="mt-4 flex justify-end">
+<button class="bg-primary text-surface font-label-md text-label-md px-8 py-3 rounded-lg hover:-translate-y-0.5 transition-transform shadow-md flex items-center gap-2">
+<span class="material-symbols-outlined">save</span>
+                        שמור נוכחות
+                    </button>
+</div>
+</div>
+</div>
+</main>
+<!-- Toast Notification (Simulated) -->
+<div class="fixed bottom-8 left-8 bg-inverse-surface text-inverse-on-surface px-6 py-4 rounded-lg shadow-[0_12px_32px_rgba(22,58,64,0.12)] flex items-center gap-4 z-50 transform transition-transform duration-300 translate-y-0" id="toast">
+<span class="font-body-md text-body-md">סטטוס נוכחות של רחל ישראלי שונה ל'נעדרה'</span>
+<button class="text-secondary-fixed font-label-md text-label-md hover:underline" onclick="document.getElementById('toast').classList.add('translate-y-24', 'opacity-0')">בטל (Undo)</button>
+</div>
+<script>
+        // Simple toast dismissal logic
+        setTimeout(() => {
+            const toast = document.getElementById('toast');
+            if(toast) {
+                toast.classList.add('translate-y-24', 'opacity-0');
+            }
+        }, 5000);
+    </script>
+</body></html>
+<!-- Injection By NetFree -->
+<script src="//netfree.link/injection-script/go-payment.js" type="text/javascript" async ></script>
+<script src="//netfree.link/injection-script/popup-card-init.js" type="text/javascript" async ></script>

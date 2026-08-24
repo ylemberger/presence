@@ -76,3 +76,78 @@ export function evaluateAbsenceAgainstRule(
 
   return { level: "ok", label: "תקין", isExceeded: false };
 }
+
+export type MakeupTier = "tier1" | "tier2" | "blocked";
+
+export interface MakeupEvaluation {
+  /** האם קיימת דרישת מבחן השלמה לפי חוקי המערכת */
+  tier: MakeupTier | "none";
+  /** 0 = חסומה/אין אפשרות להשלים */
+  requiredExams: 0 | 1 | 2;
+  /** תצוגה בלבד: "חסומה" */
+  isBlocked: boolean;
+  label: string;
+  /** absencePercent / maxAllowed */
+  ratio: number;
+}
+
+/**
+ * כללי מבחני השלמה:
+ * - מעל 1.2× מהסף → 1 מבחן השלמה
+ * - מעל 1.4× מהסף → 2 מבחנים
+ * - מעל 1.6× מהסף → חסומה (הערה מודגשת, אין אפשרות להשלים)
+ */
+export function evaluateMakeupRequirement(
+  absencePercent: number,
+  maxAllowedPercent: number | null | undefined
+): MakeupEvaluation {
+  const max = maxAllowedPercent == null ? NaN : Number(maxAllowedPercent);
+  if (Number.isNaN(max) || max <= 0) {
+    return {
+      tier: "none",
+      requiredExams: 0,
+      isBlocked: false,
+      label: "אין כלל נוכחות לחישוב מבחני השלמה",
+      ratio: 0,
+    };
+  }
+
+  const ratio = absencePercent / max;
+  if (ratio > 1.6) {
+    return {
+      tier: "blocked",
+      requiredExams: 0,
+      isBlocked: true,
+      label: "חריגה מעל 60% — אין איך להשלים",
+      ratio,
+    };
+  }
+
+  if (ratio > 1.4) {
+    return {
+      tier: "tier2",
+      requiredExams: 2,
+      isBlocked: false,
+      label: "חריגה מעל 40% — 2 מבחנים",
+      ratio,
+    };
+  }
+
+  if (ratio > 1.2) {
+    return {
+      tier: "tier1",
+      requiredExams: 1,
+      isBlocked: false,
+      label: "חריגה מעל 20% — מבחן השלמה",
+      ratio,
+    };
+  }
+
+  return {
+    tier: "none",
+    requiredExams: 0,
+    isBlocked: false,
+    label: "אין צורך במבחני השלמה",
+    ratio,
+  };
+}

@@ -1,8 +1,6 @@
 ---
-description: כללי ליבה למערכת נוכחות סמינר — עברית, Supabase, AGENTS.md
-alwaysApply: true
+alwaysApply: false
 ---
-
 # מערכת נוכחות סמינר
 
 קראי `AGENTS.md` לפני שינוי סכימה או לוגיקה עסקית.

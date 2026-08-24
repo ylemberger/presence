@@ -1,6 +1,5 @@
 ---
-description: עקרונות פיתוח מאובטח — חל על כל הקוד
-alwaysApply: true
+alwaysApply: false
 ---
 # Secure Development Principles
 
