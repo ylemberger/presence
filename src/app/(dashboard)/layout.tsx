@@ -5,7 +5,7 @@ import { NavigationProgress } from "@/components/layout/NavigationProgress";
 import { AttendanceReminderBanner } from "@/components/attendance/AttendanceReminderBanner";
 import { requireAuthenticatedUser } from "@/lib/supabase/server";
 import { getActiveAcademicYear, getAllAcademicYears } from "@/lib/utils";
-import { getPendingAttendanceSummary } from "@/lib/attendance/pending";
+import { getPendingAttendanceSummary, EMPTY_PENDING_SUMMARY } from "@/lib/attendance/pending";
 import { Icon } from "@/components/ui/Icon";
 
 export default async function DashboardLayout({
@@ -22,7 +22,7 @@ export default async function DashboardLayout({
 
   const pending = activeYear
     ? await getPendingAttendanceSummary(activeYear.id)
-    : { pendingCount: 0, todayPending: 0, pastPending: 0, items: [] };
+    : EMPTY_PENDING_SUMMARY;
 
   return (
     <div className="flex min-h-screen">

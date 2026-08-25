@@ -128,6 +128,19 @@ create table lessons (
   created_at timestamptz default now()
 );
 
+create table lesson_audience (
+  id uuid primary key default gen_random_uuid(),
+  lesson_id uuid not null references lessons(id) on delete cascade,
+  class_id uuid references classes(id) on delete cascade,
+  track_id uuid references tracks(id) on delete cascade,
+  specialization_id uuid references specializations(id) on delete cascade,
+  constraint lesson_audience_one_target check (
+    (class_id is not null)::int
+    + (track_id is not null)::int
+    + (specialization_id is not null)::int = 1
+  )
+);
+
 create table lesson_occurrences (
   id uuid primary key default gen_random_uuid(),
   lesson_id uuid references lessons(id) on delete cascade,
@@ -181,6 +194,7 @@ create index idx_student_assignments_dates on student_assignments(start_date, en
 create index idx_teacher_teaching_assignments_teacher on teacher_teaching_assignments(teacher_id);
 create index idx_teacher_teaching_assignments_year on teacher_teaching_assignments(academic_year_id);
 create index idx_lessons_academic_year on lessons(academic_year_id);
+create index idx_lesson_audience_lesson on lesson_audience(lesson_id);
 create index idx_lesson_occurrences_date on lesson_occurrences(occurrence_date);
 create index idx_lesson_occurrences_lesson on lesson_occurrences(lesson_id);
 create index idx_student_lesson_assignments_student on student_lesson_assignments(student_id);
@@ -244,6 +258,7 @@ alter table teachers enable row level security;
 alter table teacher_source_records enable row level security;
 alter table teacher_teaching_assignments enable row level security;
 alter table lessons enable row level security;
+alter table lesson_audience enable row level security;
 alter table lesson_occurrences enable row level security;
 alter table student_lesson_assignments enable row level security;
 alter table attendance enable row level security;
@@ -257,7 +272,7 @@ begin
     'academic_years', 'grades', 'classes', 'tracks', 'specializations',
     'activity_ranges', 'holiday_periods', 'attendance_rules', 'students', 'student_assignments',
     'teachers', 'teacher_source_records', 'teacher_teaching_assignments',
-    'lessons', 'lesson_occurrences', 'student_lesson_assignments',
+    'lessons', 'lesson_audience', 'lesson_occurrences', 'student_lesson_assignments',
     'attendance', 'attendance_change_log'
   ]
   loop
@@ -478,7 +493,6 @@ alter table lessons
     or (
       billing_type = 'mandatory'
       and specialization_id is null
-      and (class_id is not null or track_id is not null)
     )
   );
 
@@ -685,11 +699,6 @@ alter table lessons
     or (
       billing_type = 'mandatory'
       and specialization_id is null
-      and (
-        for_psychology = true
-        or class_id is not null
-        or track_id is not null
-      )
     )
   );
 
@@ -708,11 +717,6 @@ alter table teacher_teaching_assignments
     or (
       billing_type = 'mandatory'
       and specialization_id is null
-      and (
-        for_psychology = true
-        or class_id is not null
-        or track_id is not null
-      )
     )
   );
 

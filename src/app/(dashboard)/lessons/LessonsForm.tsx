@@ -10,6 +10,7 @@ import { createLessonAction } from "../actions";
 import { describeAudienceScope } from "@/lib/validation";
 import type { ActivityRange, AttendanceRule, Teacher } from "@/types/database";
 import { Icon } from "@/components/ui/Icon";
+import { MultiSelect } from "@/components/ui/MultiSelect";
 
 export interface LessonsFormProps {
   yearId: string;
@@ -41,9 +42,10 @@ export function LessonsForm({
   const [billingType, setBillingType] = useState<"mandatory" | "specialization">("mandatory");
   const [forPsychology, setForPsychology] = useState(false);
   const [gradeId, setGradeId] = useState("");
-  const [classId, setClassId] = useState("");
-  const [trackId, setTrackId] = useState("");
-  const [specializationId, setSpecializationId] = useState("");
+  const [classIds, setClassIds] = useState<string[]>([]);
+  const [trackIds, setTrackIds] = useState<string[]>([]);
+  const [specializationIds, setSpecializationIds] = useState<string[]>([]);
+  const [wholeGrade, setWholeGrade] = useState(false);
 
   const filteredClasses = useMemo(
     () => classes.filter((c) => !gradeId || c.grade_id === gradeId),
@@ -51,17 +53,20 @@ export function LessonsForm({
   );
 
   const gradeName = grades.find((g) => g.id === gradeId)?.name;
-  const className = classes.find((c) => c.id === classId)?.name;
-  const trackName = tracks.find((t) => t.id === trackId)?.name;
-  const specializationName = specializations.find((s) => s.id === specializationId)?.name;
+  const classNames = classes.filter((c) => classIds.includes(c.id)).map((c) => c.name);
+  const trackNames = tracks.filter((t) => trackIds.includes(t.id)).map((t) => t.name);
+  const specializationNames = specializations
+    .filter((s) => specializationIds.includes(s.id))
+    .map((s) => s.name);
 
   const audienceSummary = describeAudienceScope({
     billing_type: billingType,
     gradeName,
-    className,
-    trackName,
-    specializationName,
+    classNames,
+    trackNames,
+    specializationNames,
     forPsychology,
+    wholeGrade,
   });
 
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
@@ -73,6 +78,7 @@ export function LessonsForm({
       const fd = new FormData(form);
       fd.set("academic_year_id", yearId);
       fd.set("billing_type", billingType);
+      if (wholeGrade) fd.set("whole_grade", "1");
       if (billingType === "specialization") {
         fd.set("class_id", "");
         fd.set("track_id", "");
@@ -84,9 +90,6 @@ export function LessonsForm({
         fd.set("specialization_id", "");
       } else {
         fd.set("for_psychology", "");
-        fd.set("specialization_id", "");
-        fd.set("class_id", classId);
-        fd.set("track_id", trackId);
       }
 
       const result = await createLessonAction(fd);
@@ -100,9 +103,10 @@ export function LessonsForm({
       setBillingType("mandatory");
       setForPsychology(false);
       setGradeId("");
-      setClassId("");
-      setTrackId("");
-      setSpecializationId("");
+      setClassIds([]);
+      setTrackIds([]);
+      setSpecializationIds([]);
+      setWholeGrade(false);
       setFormEpoch((n) => n + 1);
       onCreated?.();
       router.refresh();
@@ -139,7 +143,7 @@ export function LessonsForm({
             value={gradeId}
             onChange={(v) => {
               setGradeId(v);
-              setClassId("");
+              setClassIds([]);
             }}
             options={grades.map((g) => ({ value: g.id, label: g.name }))}
             emptyLabel="בחרי שכבה"
@@ -156,15 +160,16 @@ export function LessonsForm({
             }))}
           />
           {billingType === "specialization" ? (
-            <Combobox
-              label="התמחות"
-              name="specialization_id"
-              required
-              value={specializationId}
-              onChange={setSpecializationId}
-              options={specializations.map((s) => ({ value: s.id, label: s.name }))}
-              emptyLabel="בחרי התמחות"
-            />
+            <div className="sm:col-span-2">
+              <MultiSelect
+                label="התמחויות"
+                name="specialization_ids"
+                values={specializationIds}
+                onChange={setSpecializationIds}
+                options={specializations.map((s) => ({ value: s.id, label: s.name }))}
+                hint="אפשר כמה. תלמידה תשויך אם יש לה אחת מהן (ראשית או נוספת)."
+              />
+            </div>
           ) : (
             <>
               <label className="flex items-center gap-2 font-label-md text-label-md text-on-surface sm:col-span-2">
@@ -174,8 +179,10 @@ export function LessonsForm({
                   onChange={(e) => {
                     setForPsychology(e.target.checked);
                     if (e.target.checked) {
-                      setClassId("");
-                      setTrackId("");
+                      setClassIds([]);
+                      setTrackIds([]);
+                      setSpecializationIds([]);
+                      setWholeGrade(false);
                     }
                   }}
                   className="rounded border-outline-variant"
@@ -184,22 +191,52 @@ export function LessonsForm({
               </label>
               {!forPsychology && (
                 <>
-                  <Combobox
-                    label="כיתה"
-                    name="class_id"
-                    value={classId}
-                    onChange={setClassId}
-                    options={filteredClasses.map((c) => ({ value: c.id, label: c.name }))}
-                    emptyLabel="ללא (כל הכיתות בשכבה)"
-                  />
-                  <Combobox
-                    label="מסלול"
-                    name="track_id"
-                    value={trackId}
-                    onChange={setTrackId}
-                    options={tracks.map((t) => ({ value: t.id, label: t.name }))}
-                    emptyLabel="ללא (כל המסלולים)"
-                  />
+                  <label className="flex items-center gap-2 font-label-md text-label-md text-on-surface sm:col-span-2">
+                    <input
+                      type="checkbox"
+                      checked={wholeGrade}
+                      onChange={(e) => {
+                        setWholeGrade(e.target.checked);
+                        if (e.target.checked) {
+                          setClassIds([]);
+                          setTrackIds([]);
+                          setSpecializationIds([]);
+                        }
+                      }}
+                      className="rounded border-outline-variant"
+                    />
+                    כל השכבה
+                  </label>
+                  {!wholeGrade && (
+                    <>
+                      <MultiSelect
+                        label="כיתות"
+                        name="class_ids"
+                        values={classIds}
+                        onChange={setClassIds}
+                        options={filteredClasses.map((c) => ({ value: c.id, label: c.name }))}
+                        hint="בחירה מרובה — מי שבאחת הכיתות."
+                      />
+                      <MultiSelect
+                        label="מסלולים"
+                        name="track_ids"
+                        values={trackIds}
+                        onChange={setTrackIds}
+                        options={tracks.map((t) => ({ value: t.id, label: t.name }))}
+                        hint="בחירה מרובה — מי שבאחד המסלולים."
+                      />
+                      <div className="sm:col-span-2">
+                        <MultiSelect
+                          label="התמחויות (רשות)"
+                          name="specialization_ids"
+                          values={specializationIds}
+                          onChange={setSpecializationIds}
+                          options={specializations.map((s) => ({ value: s.id, label: s.name }))}
+                          hint="גם כאן: מי שיש לה אחת מההתמחויות האלה תשויך."
+                        />
+                      </div>
+                    </>
+                  )}
                 </>
               )}
             </>
@@ -209,14 +246,10 @@ export function LessonsForm({
           {forPsychology
             ? "ישויכו רק תלמידות המסומנות כפסיכולוגיה בשכבה זו."
             : billingType === "specialization"
-              ? "ישויכו תלמידות עם ההתמחות בשכבה שנבחרה."
-              : classId && trackId
-                ? "נבחרו כיתה ומסלול — ישויכו רק תלמידות בשניהם."
-                : classId
-                  ? "נבחרה כיתה — כל תלמידות הכיתה."
-                  : trackId
-                    ? "נבחר מסלול — כל תלמידות המסלול בשכבה."
-                    : "בחובה: בחרי כיתה או מסלול (או שניהם), או סמני פסיכולוגיה."}
+              ? "ישויכו תלמידות בשכבה עם אחת מההתמחויות שנבחרו."
+              : wholeGrade || (classIds.length === 0 && trackIds.length === 0 && specializationIds.length === 0)
+                ? "כל תלמידות השכבה ישויכו."
+                : "תלמידה תשויך אם היא באחת הכיתות, או באחד המסלולים, או באחת ההתמחויות שנבחרו."}
         </p>
       </div>
 

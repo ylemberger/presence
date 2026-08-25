@@ -9,6 +9,7 @@ import { Section } from "@/components/ui/Section";
 import { Icon } from "@/components/ui/Icon";
 
 interface ReportsFilterProps {
+  grades: { id: string; name: string }[];
   classes: { id: string; name: string }[];
   tracks: { id: string; name: string }[];
   specializations: { id: string; name: string }[];
@@ -20,6 +21,7 @@ interface ReportsFilterProps {
     startDate: string;
     endDate: string;
     minAbsence: string;
+    gradeId?: string;
     classId?: string;
     trackId?: string;
     specializationId?: string;
@@ -31,6 +33,7 @@ interface ReportsFilterProps {
 }
 
 export function ReportsFilter({
+  grades,
   classes,
   tracks,
   specializations,
@@ -47,6 +50,7 @@ export function ReportsFilter({
     const fd = new FormData(e.currentTarget);
     const params = new URLSearchParams();
     for (const key of [
+      "gradeId",
       "classId",
       "trackId",
       "specializationId",
@@ -70,7 +74,14 @@ export function ReportsFilter({
       <form onSubmit={handleSubmit} className="flex flex-col gap-6">
         <div className="grid grid-cols-1 gap-4 md:grid-cols-3 lg:grid-cols-4">
           <Combobox
-            label="שכבה / כיתה"
+            label="שכבה נוכחית"
+            name="gradeId"
+            defaultValue={defaults.gradeId ?? ""}
+            options={grades.map((g) => ({ value: g.id, label: g.name }))}
+            emptyLabel="כל השכבות"
+          />
+          <Combobox
+            label="כיתה נוכחית"
             name="classId"
             defaultValue={defaults.classId ?? ""}
             options={classes.map((c) => ({ value: c.id, label: c.name }))}
@@ -114,18 +125,21 @@ export function ReportsFilter({
           <div className="md:col-span-2">
             <div className="grid grid-cols-2 gap-3">
               <HebrewDateInput
-                label="מתאריך (עברי)"
+                label="מתאריך (רשות)"
                 name="startDate"
                 defaultValue={defaults.startDate}
-                required
+                allowEmpty
               />
               <HebrewDateInput
-                label="עד תאריך (עברי)"
+                label="עד תאריך (רשות)"
                 name="endDate"
                 defaultValue={defaults.endDate}
-                required
+                allowEmpty
               />
             </div>
+            <p className="mt-1 font-caption text-caption text-on-surface-variant">
+              אם ריק — הדוח הוא על כל השנה הפעילה, לפי השיבוץ הנוכחי.
+            </p>
           </div>
           <Combobox
             label="כלל נוכחות"

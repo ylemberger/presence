@@ -229,6 +229,13 @@ export function addDays(dateStr: string, days: number): string {
   return `${yy}-${mm}-${dd}`;
 }
 
+/** Sunday-start week (ISO date of that week's Sunday). */
+export function startOfWeekSunday(iso: string): string {
+  const date = parseIsoDate(iso);
+  date.setDate(date.getDate() - date.getDay());
+  return toIsoDate(date);
+}
+
 export function expandIsoRange(start: string, end: string): string[] {
   if (!start || !end || end < start) return [];
   const dates: string[] = [];

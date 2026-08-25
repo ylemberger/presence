@@ -15,7 +15,14 @@ import {
 } from "../actions";
 import type { AttendanceStatus } from "@/types/database";
 import { cn } from "@/lib/cn";
-import { formatGregorianDate, formatHebrewDate } from "@/lib/dates/hebrew";
+import {
+  addDays,
+  expandIsoRange,
+  formatGregorianDate,
+  formatHebrewDate,
+  startOfWeekSunday,
+  todayIso,
+} from "@/lib/dates/hebrew";
 import { ABSENCE_REASONS, type AbsenceReason } from "@/lib/attendance/reasons";
 import { Icon } from "@/components/ui/Icon";
 import {
@@ -222,6 +229,30 @@ export function AttendanceBoard({
   }, [monthOccurrences]);
 
   const completeDateSet = useMemo(() => new Set(completeDates), [completeDates]);
+  const weekWarning = useMemo(() => {
+    const today = todayIso();
+    const weekStart = startOfWeekSunday(selectedDate);
+    const weekDays = expandIsoRange(weekStart, addDays(weekStart, 6));
+    const prevStart = addDays(weekStart, -7);
+    const prevDays = expandIsoRange(prevStart, addDays(prevStart, 6));
+    const occDates = new Set(monthOccurrences.map((o) => o.date));
+    const partialSet = new Set(partialDates);
+    const completeSet = new Set(completeDates);
+    const holidaySet = new Set(holidayDates);
+
+    function incompleteIn(days: string[], onlyPast: boolean) {
+      return days.filter((d) => {
+        if (onlyPast && d >= today) return false;
+        if (holidaySet.has(d)) return false;
+        if (!occDates.has(d)) return false;
+        return partialSet.has(d) || !completeSet.has(d);
+      });
+    }
+
+    const thisWeekPartial = weekDays.filter((d) => partialSet.has(d));
+    const prevIncomplete = incompleteIn(prevDays, true);
+    return { thisWeekPartial, prevIncomplete, weekStart, prevStart };
+  }, [selectedDate, monthOccurrences, partialDates, completeDates, holidayDates]);
 
   function buildParams(patch: Record<string, string | undefined>) {
     const params = new URLSearchParams();
@@ -696,6 +727,17 @@ export function AttendanceBoard({
                   <Icon name="task_alt" className="text-[14px]" />
                   הושלם
                 </span>
+              )}
+              {weekWarning.thisWeekPartial.length > 0 && (
+                <p className="mt-2 rounded-lg bg-attendance-late/10 px-3 py-2 font-caption text-caption text-attendance-late">
+                  בשבוע זה יש שיעורים שסומנו רק חלקית. השלימי את כל התלמידות לפני שממשיכות הלאה.
+                </p>
+              )}
+              {weekWarning.prevIncomplete.length > 0 && (
+                <p className="mt-2 rounded-lg bg-error-container/50 px-3 py-2 font-caption text-caption text-on-error-container">
+                  לא מולאה נוכחות מלאה לשבוע {formatHebrewDate(weekWarning.prevStart)} –{" "}
+                  {formatHebrewDate(addDays(weekWarning.prevStart, 6))}.
+                </p>
               )}
             </div>
 

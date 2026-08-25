@@ -44,9 +44,13 @@ export function AttendanceReminderBanner({
           aria-hidden
         />
         <span className="truncate">
-          {summary.pastPending > 0
-            ? `${summary.pastPending} שיעורים ממתינים לרישום`
-            : `${summary.todayPending} שיעורים היום ממתינים`}
+          {summary.partialCount > 0
+            ? `${summary.partialCount} שיעורים סומנו חלקית`
+            : summary.incompleteWeeks.length > 0
+              ? `שבוע לא הושלם (${formatHebrewDate(summary.incompleteWeeks[0].weekStart)})`
+              : summary.pastPending > 0
+                ? `${summary.pastPending} שיעורים ממתינים לרישום`
+                : `${summary.todayPending} שיעורים היום ממתינים`}
         </span>
         <span className="shrink-0 opacity-70">←</span>
       </Link>
@@ -77,10 +81,23 @@ export function AttendanceReminderBanner({
         </div>
         <div>
           <p className="font-body-lg text-body-lg font-medium text-primary">
-            {isLate
-              ? `ישנם ${summary.pastPending} שיעורים ממתינים לרישום נוכחות`
-              : `ישנם ${summary.todayPending} שיעורים היום ממתינים לרישום`}
+            {summary.partialCount > 0
+              ? `יש ${summary.partialCount} שיעורים שסומנו רק חלקית — השלימי לפני רישום השבוע`
+              : isLate
+                ? `ישנם ${summary.pastPending} שיעורים ממתינים לרישום נוכחות`
+                : `ישנם ${summary.todayPending} שיעורים היום ממתינים לרישום`}
           </p>
+          {summary.incompleteWeeks.length > 0 && (
+            <p className="mt-1 text-caption text-on-surface-variant">
+              לא מולאה נוכחות מלאה לשבוע{" "}
+              {formatHebrewDate(summary.incompleteWeeks[0].weekStart)} –{" "}
+              {formatHebrewDate(summary.incompleteWeeks[0].weekEnd)}
+              {summary.incompleteWeeks.length > 1
+                ? ` ועוד ${summary.incompleteWeeks.length - 1} שבועות`
+                : ""}
+              .
+            </p>
+          )}
           {summary.items.length > 0 && (
             <ul className="mt-1 space-y-0.5 text-caption text-on-surface-variant">
               {summary.items.slice(0, 3).map((item) => (

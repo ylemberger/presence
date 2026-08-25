@@ -7,7 +7,7 @@ import {
   evaluateAbsenceAgainstRule,
   summarizeAttendance,
 } from "@/lib/attendance/calculator";
-import { getPendingAttendanceSummary } from "@/lib/attendance/pending";
+import { getPendingAttendanceSummary, EMPTY_PENDING_SUMMARY } from "@/lib/attendance/pending";
 import { AttendanceReminderBanner } from "@/components/attendance/AttendanceReminderBanner";
 import { cn } from "@/lib/cn";
 import { Icon } from "@/components/ui/Icon";
@@ -212,7 +212,7 @@ export default async function DashboardPage() {
 
   const pendingSummary = activeYear
     ? await getPendingAttendanceSummary(activeYear.id)
-    : { pendingCount: 0, todayPending: 0, pastPending: 0, items: [] };
+    : EMPTY_PENDING_SUMMARY;
 
   const kpis = [
     {

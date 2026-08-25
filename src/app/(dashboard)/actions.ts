@@ -853,15 +853,16 @@ async function insertTeachingAssignmentFromForm(
   const billing = parseLessonBilling(formData);
   if ("error" in billing) return billing;
 
-  if (billing.class_id) {
-    const { data: cls } = await supabase
+  if (billing.class_ids.length > 0) {
+    const { data: clsRows } = await supabase
       .from("classes")
       .select("id, grade_id")
-      .eq("id", billing.class_id)
-      .maybeSingle();
-    if (!cls) return { error: "׳”׳›׳™׳×׳” ׳©׳ ׳‘׳—׳¨׳” ׳׳™׳ ׳” ׳×׳§׳™׳ ׳”" };
-    if (cls.grade_id !== gradeId) {
-      return { error: "׳”׳›׳™׳×׳” ׳—׳™׳™׳‘׳× ׳׳”׳™׳•׳× ׳׳×׳•׳ ׳”׳©׳›׳‘׳” ׳©׳ ׳‘׳—׳¨׳”" };
+      .in("id", billing.class_ids);
+    if ((clsRows ?? []).length !== billing.class_ids.length) {
+      return { error: "אחת הכיתות שנבחרו אינה תקינה" };
+    }
+    if ((clsRows ?? []).some((c) => c.grade_id !== gradeId)) {
+      return { error: "כל הכיתות חייבות להיות מתוך השכבה שנבחרה" };
     }
   }
 
@@ -1021,7 +1022,42 @@ export async function createLessonAction(formData: FormData) {
       assignmentId,
       removeAssignment: isNewAssignment,
     });
-    return { error: error?.message ?? "׳™׳¦׳™׳¨׳× ׳©׳™׳¢׳•׳¨ ׳ ׳›׳©׳׳”" };
+    return { error: error?.message ?? "יצירת שיעור נכשלה" };
+  }
+
+  const billing = parseLessonBilling(formData);
+  if (!("error" in billing)) {
+    const audienceRows = [
+      ...billing.class_ids.map((class_id) => ({
+        lesson_id: lesson.id,
+        class_id,
+        track_id: null as string | null,
+        specialization_id: null as string | null,
+      })),
+      ...billing.track_ids.map((track_id) => ({
+        lesson_id: lesson.id,
+        class_id: null as string | null,
+        track_id,
+        specialization_id: null as string | null,
+      })),
+      ...billing.specialization_ids.map((specialization_id) => ({
+        lesson_id: lesson.id,
+        class_id: null as string | null,
+        track_id: null as string | null,
+        specialization_id,
+      })),
+    ];
+    if (audienceRows.length > 0) {
+      const { error: audienceError } = await supabase.from("lesson_audience").insert(audienceRows);
+      if (audienceError) {
+        await rollbackFailedLessonCreate(supabase, {
+          lessonId: lesson.id,
+          assignmentId,
+          removeAssignment: isNewAssignment,
+        });
+        return { error: audienceError.message };
+      }
+    }
   }
 
   try {

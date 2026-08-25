@@ -1,6 +1,6 @@
 import { cache } from "react";
 import { createClient } from "@/lib/supabase/server";
-import { addDays, todayIso } from "@/lib/dates/hebrew";
+import { addDays, startOfWeekSunday, todayIso } from "@/lib/dates/hebrew";
 
 export type PendingOccurrence = {
   id: string;
@@ -10,11 +10,30 @@ export type PendingOccurrence = {
   total: number;
 };
 
+export type IncompleteWeek = {
+  weekStart: string;
+  weekEnd: string;
+  pendingCount: number;
+};
+
 export type PendingAttendanceSummary = {
   pendingCount: number;
   todayPending: number;
   pastPending: number;
+  partialCount: number;
+  unmarkedCount: number;
+  incompleteWeeks: IncompleteWeek[];
   items: PendingOccurrence[];
+};
+
+export const EMPTY_PENDING_SUMMARY: PendingAttendanceSummary = {
+  pendingCount: 0,
+  todayPending: 0,
+  pastPending: 0,
+  partialCount: 0,
+  unmarkedCount: 0,
+  incompleteWeeks: [],
+  items: [],
 };
 
 /**
@@ -26,6 +45,15 @@ export const getPendingAttendanceSummary = cache(
     academicYearId: string,
     lookbackDays = 14
   ): Promise<PendingAttendanceSummary> => {
+    const empty: PendingAttendanceSummary = {
+      pendingCount: 0,
+      todayPending: 0,
+      pastPending: 0,
+      partialCount: 0,
+      unmarkedCount: 0,
+      incompleteWeeks: [],
+      items: [],
+    };
     const supabase = await createClient();
     const today = todayIso();
     const from = addDays(today, -lookbackDays);
@@ -42,9 +70,7 @@ export const getPendingAttendanceSummary = cache(
       .neq("status", "cancelled")
       .order("occurrence_date", { ascending: false });
 
-    if (!occs?.length) {
-      return { pendingCount: 0, todayPending: 0, pastPending: 0, items: [] };
-    }
+    if (!occs?.length) return empty;
 
     const lessonIds = [...new Set(occs.map((o) => o.lesson_id))];
     const occIds = occs.map((o) => o.id);
@@ -95,11 +121,29 @@ export const getPendingAttendanceSummary = cache(
 
     const todayPending = items.filter((i) => i.date === today).length;
     const pastPending = items.filter((i) => i.date < today).length;
+    const partialCount = items.filter((i) => i.marked > 0 && i.marked < i.total).length;
+    const unmarkedCount = items.filter((i) => i.marked === 0).length;
+
+    const weekMap = new Map<string, IncompleteWeek>();
+    for (const item of items) {
+      if (item.date >= today) continue;
+      const weekStart = startOfWeekSunday(item.date);
+      const weekEnd = addDays(weekStart, 6);
+      const existing = weekMap.get(weekStart);
+      if (existing) existing.pendingCount += 1;
+      else weekMap.set(weekStart, { weekStart, weekEnd, pendingCount: 1 });
+    }
+    const incompleteWeeks = [...weekMap.values()].sort((a, b) =>
+      b.weekStart.localeCompare(a.weekStart)
+    );
 
     return {
       pendingCount: items.length,
       todayPending,
       pastPending,
+      partialCount,
+      unmarkedCount,
+      incompleteWeeks,
       items: items.slice(0, 8),
     };
   }

@@ -22,11 +22,12 @@
 | [`patches/003_attendance_reason.sql`](patches/003_attendance_reason.sql) | שדה `reason` להיעדרות |
 | [`patches/004_makeup_blocked_status.sql`](patches/004_makeup_blocked_status.sql) | מאפשר `required_exams=0` לחסומות |
 | [`patches/005_holiday_periods.sql`](patches/005_holiday_periods.sql) | לוח חופשות שנתי (`holiday_periods`) |
+| [`patches/006_lesson_audience.sql`](patches/006_lesson_audience.sql) | קהל מרובה לשיעור (`lesson_audience`) |
 
 ## טבלאות עיקריות
 
 - **שנה:** `academic_years`, `grades`, `classes`, `tracks`, `specializations`, `activity_ranges`, `holiday_periods`
 - **תלמידות:** `students`, `student_assignments`, `student_lesson_assignments`
 - **מורות:** `teachers`, `teacher_teaching_assignments`, `teacher_source_records`
-- **שיעורים:** `lessons`, `lesson_occurrences`
+- **שיעורים:** `lessons`, `lesson_audience`, `lesson_occurrences`
 - **נוכחות:** `attendance`, `attendance_change_log`, `attendance_rules`, `attendance_notes`, `makeup_exams`

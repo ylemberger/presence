@@ -6,6 +6,7 @@ truncate table
   attendance_notes,
   makeup_exams,
   lesson_occurrences,
+  lesson_audience,
   student_lesson_assignments,
   lessons,
   teacher_teaching_assignments,
