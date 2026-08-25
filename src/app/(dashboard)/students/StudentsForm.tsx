@@ -79,7 +79,10 @@ export function StudentsForm({
   }
 
   const missingStructure =
-    grades.length === 0 || classes.length === 0 || tracks.length === 0;
+    grades.length === 0 ||
+    classes.length === 0 ||
+    tracks.length === 0 ||
+    specializations.length === 0;
 
   return (
     <form onSubmit={handleSubmit} className="space-y-6">
@@ -102,12 +105,12 @@ export function StudentsForm({
       <section className="space-y-3 border-t border-stone-100 pt-5">
         <h3 className="text-sm font-semibold text-slate-800">שיבוץ ראשוני (חובה)</h3>
         <p className="text-xs text-slate-500">
-          הרשימות מגיעות מהגדרות השנה (שכבות / כיתות / מסלולים). שינוי באמצע השנה — בהעברה.
+          חובה למלא שכבה, כיתה, מסלול והתמחות. התמחות נוספת היא רשות. שינוי באמצע השנה — בהעברה.
         </p>
 
         {missingStructure && (
           <p className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900">
-            חסרות הגדרות בשנה הפעילה. בהגדרות יש להוסיף לפחות שכבה, כיתה ומסלול לפני שיבוץ תלמידה.
+            חסרות הגדרות בשנה הפעילה. בהגדרות יש להוסיף שכבה, כיתה, מסלול והתמחות לפני שיבוץ תלמידה.
           </p>
         )}
 
@@ -157,8 +160,9 @@ export function StudentsForm({
           <Combobox
             label="התמחות"
             name="specialization_id"
+            required
             options={specializations.map((s) => ({ value: s.id, label: s.name }))}
-            emptyLabel="ללא התמחות"
+            emptyLabel={specializations.length ? "בחרי התמחות" : "אין התמחויות בהגדרות"}
           />
           <Combobox
             label="התמחות נוספת"

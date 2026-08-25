@@ -134,9 +134,10 @@ export function StudentsDirectory({
 
   const hasSettingsLists = Boolean(
     yearOptions &&
-      (yearOptions.grades.length ||
-        yearOptions.classes.length ||
-        yearOptions.tracks.length)
+      yearOptions.grades.length &&
+      yearOptions.classes.length &&
+      yearOptions.tracks.length &&
+      yearOptions.specializations.length
   );
 
   return (
@@ -201,7 +202,7 @@ export function StudentsDirectory({
           <div className="flex w-full flex-wrap items-center justify-between gap-3">
             {!hasSettingsLists && yearOptions && (
               <p className="text-body-md text-secondary">
-                אין עדיין שכבות/כיתות בהגדרות —{" "}
+                אין עדיין שכבות/כיתות/מסלולים/התמחויות בהגדרות —{" "}
                 <Link href="/settings" className="font-medium underline">
                   מעבר להגדרות
                 </Link>
@@ -213,7 +214,7 @@ export function StudentsDirectory({
                   !yearOptions
                     ? "יש להגדיר שנה אקדמית פעילה לפני ייבוא."
                     : !hasSettingsLists
-                      ? "יש להוסיף שכבה, כיתה ומסלול בהגדרות לפני ייבוא."
+                      ? "יש להוסיף שכבה, כיתה, מסלול והתמחות בהגדרות לפני ייבוא."
                       : undefined
                 }
               />

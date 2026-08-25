@@ -47,7 +47,7 @@ export interface ParsedStudentImportRow {
   gradeId: string;
   classId: string;
   trackId: string;
-  specializationId: string | null;
+  specializationId: string;
   secondarySpecializationId: string | null;
   isPsychology: boolean;
   startDate: string;
@@ -122,9 +122,9 @@ function parsePsychology(raw: string): boolean | { error: string } {
   return { error: 'בשדה פסיכולוגיה יש למלא "כן" או "לא"' };
 }
 
-function parseStartDate(raw: string, fallback: string): string | { error: string } {
+function parseStartDate(raw: string): string | { error: string } {
   const value = raw.trim();
-  if (!value) return fallback;
+  if (!value) return { error: "חסר תאריך תחילה" };
   if (/^\d{4}-\d{2}-\d{2}$/.test(value)) return value;
   const dotted = value.match(/^(\d{1,2})[./](\d{1,2})[./](\d{4})$/);
   if (dotted) {
@@ -184,6 +184,9 @@ export function parseStudentImportWorkbook(
     "grade",
     "className",
     "track",
+    "specialization",
+    "psychology",
+    "startDate",
   ];
   const missing = required.filter((key) => !columnIndex.has(key));
   if (missing.length > 0) {
@@ -267,19 +270,24 @@ export function parseStudentImportWorkbook(
     if (!gradeName) rowErrors.push("חסרה שכבה");
     else if (!grade) rowErrors.push(`שכבה לא נמצאה בהגדרות: ${gradeName}`);
 
-    const classRow = lookupByName(catalogs.classes, className);
+    const classRow = grade
+      ? catalogs.classes.find(
+          (c) =>
+            c.grade_id === grade.id &&
+            c.name.trim().replace(/\s+/g, " ") === className.trim().replace(/\s+/g, " ")
+        )
+      : lookupByName(catalogs.classes, className);
     if (!className) rowErrors.push("חסרה כיתה");
-    else if (!classRow) rowErrors.push(`כיתה לא נמצאה בהגדרות: ${className}`);
-    else if (grade && classRow.grade_id !== grade.id) {
-      rowErrors.push(`הכיתה ${className} אינה שייכת לשכבה ${gradeName}`);
-    }
+    else if (!classRow) rowErrors.push(`כיתה לא נמצאה בהגדרות לשכבה ${gradeName || ""}: ${className}`);
 
     const track = lookupByName(catalogs.tracks, trackName);
     if (!trackName) rowErrors.push("חסר מסלול");
     else if (!track) rowErrors.push(`מסלול לא נמצא בהגדרות: ${trackName}`);
 
     let specializationId: string | null = null;
-    if (specName) {
+    if (!specName) {
+      rowErrors.push("חסרה התמחות");
+    } else {
       const spec = lookupByName(catalogs.specializations, specName);
       if (!spec) rowErrors.push(`התמחות לא נמצאה בהגדרות: ${specName}`);
       else specializationId = spec.id;
@@ -289,13 +297,18 @@ export function parseStudentImportWorkbook(
     if (secondarySpecName) {
       const spec = lookupByName(catalogs.specializations, secondarySpecName);
       if (!spec) rowErrors.push(`התמחות נוספת לא נמצאה בהגדרות: ${secondarySpecName}`);
-      else secondarySpecializationId = spec.id;
+      else if (specializationId && spec.id === specializationId) {
+        rowErrors.push("התמחות נוספת חייבת להיות שונה מההתמחות הראשית");
+      } else secondarySpecializationId = spec.id;
     }
 
+    if (!psychologyRaw) {
+      rowErrors.push("חסר שדה פסיכולוגיה (כן / לא)");
+    }
     const psychology = parsePsychology(psychologyRaw);
-    if (typeof psychology !== "boolean") rowErrors.push(psychology.error);
+    if (psychologyRaw && typeof psychology !== "boolean") rowErrors.push(psychology.error);
 
-    const startDate = parseStartDate(startDateRaw, defaultStartDate);
+    const startDate = parseStartDate(startDateRaw);
     if (typeof startDate !== "string") rowErrors.push(startDate.error);
 
     if (typeof identity === "string") {
@@ -320,7 +333,7 @@ export function parseStudentImportWorkbook(
       gradeId: grade!.id,
       classId: classRow!.id,
       trackId: track!.id,
-      specializationId,
+      specializationId: specializationId as string,
       secondarySpecializationId,
       isPsychology: psychology as boolean,
       startDate: startDate as string,
@@ -341,7 +354,7 @@ export function buildStudentImportTemplate(catalogs: StudentImportCatalogs): Uin
     catalogs.classes[0]?.name ??
     "א1";
   const exampleTrack = catalogs.tracks[0]?.name ?? "כללי";
-  const exampleSpec = catalogs.specializations[0]?.name ?? "";
+  const exampleSpec = catalogs.specializations[0]?.name ?? "חינוך";
 
   const workbook = XLSX.utils.book_new();
   const dataSheet = XLSX.utils.aoa_to_sheet([
@@ -369,7 +382,7 @@ export function buildStudentImportTemplate(catalogs: StudentImportCatalogs): Uin
     ["1. מחקי את שורת הדוגמה ומלאי תלמידות אמיתיות."],
     ['2. אם תעודת זהות כבר קיימת במערכת — השם, המחזור והשיבוץ יעודכנו (לא תיווצר כפילות).'],
     ["3. שמות שכבה / כיתה / מסלול / התמחות חייבים להתאים בדיוק להגדרות השנה הפעילה."],
-    ["4. פסיכולוגיה: כן או לא. תאריך: YYYY-MM-DD או DD.MM.YYYY. אם ריק — היום."],
+    ["4. חובה למלא את כל העמודות מלבד התמחות נוספת. פסיכולוגיה: כן או לא. תאריך: YYYY-MM-DD או DD.MM.YYYY."],
     ["5. עמודת תעודת זהות עדיף כטקסט, כדי לשמור אפסים בתחילת המספר."],
     [],
     ["ערכים מותרים בשנה הפעילה"],
@@ -386,7 +399,7 @@ export function buildStudentImportTemplate(catalogs: StudentImportCatalogs): Uin
     ["מסלולים", catalogs.tracks.map((t) => t.name).join(" | ") || "אין"],
     [
       "התמחויות",
-      catalogs.specializations.map((s) => s.name).join(" | ") || "אין (אפשר להשאיר ריק)",
+      catalogs.specializations.map((s) => s.name).join(" | ") || "אין — חובה להגדיר התמחות",
     ],
   ];
   const helpSheet = XLSX.utils.aoa_to_sheet(allowed);

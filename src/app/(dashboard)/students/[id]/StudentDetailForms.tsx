@@ -121,8 +121,9 @@ export function StudentDetailForms({ studentId, yearData }: Props) {
           <Combobox
             label="התמחות"
             name="specialization_id"
+            required
             options={yearData.specializations.map((s) => ({ value: s.id, label: s.name }))}
-            emptyLabel="ללא"
+            emptyLabel={yearData.specializations.length ? "בחרי" : "אין התמחויות בהגדרות"}
           />
           <Combobox
             label="התמחות נוספת"
