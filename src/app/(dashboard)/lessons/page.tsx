@@ -15,6 +15,7 @@ import {
 import { DAY_OF_WEEK_LABELS } from "@/lib/constants";
 import { Icon } from "@/components/ui/Icon";
 import type { Lesson } from "@/types/database";
+import { holidayDateSet } from "@/lib/lessons/holidays";
 
 interface Props {
   searchParams: {
@@ -54,7 +55,7 @@ export default async function LessonsPage({ searchParams }: Props) {
   const to = searchParams.to || month.rangeEnd;
   const today = todayIso();
 
-  const [lessonsRes, teachers, grades, classes, tracks, specializations, ranges, rules] =
+  const [lessonsRes, teachers, grades, classes, tracks, specializations, ranges, rules, holidays] =
     await Promise.all([
       supabase
         .from("lessons")
@@ -84,6 +85,10 @@ export default async function LessonsPage({ searchParams }: Props) {
         .order("name"),
       supabase.from("activity_ranges").select("*").eq("academic_year_id", activeYear.id),
       supabase.from("attendance_rules").select("*"),
+      supabase
+        .from("holiday_periods")
+        .select("start_date, end_date")
+        .eq("academic_year_id", activeYear.id),
     ]);
 
   type LessonRow = Lesson & {
@@ -209,7 +214,7 @@ export default async function LessonsPage({ searchParams }: Props) {
     <div className="flex flex-col gap-stack_lg">
       <PageHeader
         title="יומן שיעורים עברי"
-        description="יצירת שיעור פותחת אוטומטית את כל המופעים בטווח הפעילות שנבחר."
+        description="יצירת שיעור פותחת אוטומטית את המופעים בטווח שנבחר. אין יצירת מופע בודד — ליום אחד מגדירים טווח של יום אחד. ימי חופשה לא נכללים."
       />
 
       <LessonsFilters
@@ -287,6 +292,7 @@ export default async function LessonsPage({ searchParams }: Props) {
             occurrences={occurrenceRows}
             lessons={filteredLessons}
             monthQuery={filterQuery.toString()}
+            holidayDates={[...holidayDateSet(holidays.data ?? [])]}
           />
         </div>
       </div>

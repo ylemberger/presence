@@ -22,7 +22,9 @@ export interface HebrewMonthCalendarProps {
   completeDates?: string[];
   /** dates with lessons that are not fully marked yet */
   partialDates?: string[];
-  onSelectDate: (iso: string) => void;
+  /** dates with no studies (holiday / vacation) */
+  holidayDates?: string[];
+  onSelectDate?: (iso: string) => void;
   onMonthRangeChange?: (rangeStart: string, rangeEnd: string) => void;
   /** Compact month grid used on the attendance screen. */
   compact?: boolean;
@@ -34,6 +36,7 @@ export function HebrewMonthCalendar({
   countsByDate = {},
   completeDates = [],
   partialDates = [],
+  holidayDates = [],
   onSelectDate,
   onMonthRangeChange,
   compact = false,
@@ -41,6 +44,7 @@ export function HebrewMonthCalendar({
   const seed = hebrewMonthFromIso(initialMonthIso || selectedDate || todayIso());
   const [cursor, setCursor] = useState(seed);
   const today = todayIso();
+  const holidaySet = useMemo(() => new Set(holidayDates), [holidayDates]);
 
   useEffect(() => {
     if (initialMonthIso) {
@@ -98,16 +102,19 @@ export function HebrewMonthCalendar({
             const selected = selectedDate === day.iso;
             const complete = completeDates.includes(day.iso);
             const partial = !complete && partialDates.includes(day.iso);
+            const holiday = holidaySet.has(day.iso);
             return (
               <button
                 key={day.iso}
                 type="button"
-                onClick={() => onSelectDate(day.iso)}
+                onClick={() => onSelectDate?.(day.iso)}
                 className={cn(
                   "relative rounded-lg p-2 transition-colors",
                   selected
                     ? "bg-primary-container font-bold text-white shadow-tactile-sm"
-                    : "text-on-surface hover:bg-surface-container"
+                    : holiday
+                      ? "bg-secondary-container/70 text-on-secondary-container hover:bg-secondary-container"
+                      : "text-on-surface hover:bg-surface-container"
                 )}
               >
                 {day.label}
@@ -135,6 +142,12 @@ export function HebrewMonthCalendar({
             <span className="h-2.5 w-2.5 rounded-sm bg-attendance-late" />
             חלקי
           </span>
+          {holidayDates.length > 0 && (
+            <span className="inline-flex items-center gap-1.5">
+              <span className="h-2.5 w-2.5 rounded-sm bg-secondary-container" />
+              חופשה
+            </span>
+          )}
         </div>
       </section>
     );
@@ -165,6 +178,12 @@ export function HebrewMonthCalendar({
           <span className="h-2.5 w-2.5 rounded-sm bg-teal-300" aria-hidden />
           יש שיעורים
         </span>
+        {holidayDates.length > 0 && (
+          <span className="inline-flex items-center gap-1.5">
+            <span className="h-2.5 w-2.5 rounded-sm bg-secondary-container" aria-hidden />
+            חופשה / אין לימודים
+          </span>
+        )}
       </div>
 
       <div className="grid grid-cols-7 gap-px bg-stone-100 p-px">
@@ -186,22 +205,25 @@ export function HebrewMonthCalendar({
           const partial = !complete && partialDates.includes(day.iso);
           const isToday = day.iso === today;
           const isPastPartial = partial && day.iso < today;
+          const holiday = holidaySet.has(day.iso);
 
           return (
             <button
               key={day.iso}
               type="button"
-              onClick={() => onSelectDate(day.iso)}
+              onClick={() => onSelectDate?.(day.iso)}
               className={cn(
                 "relative min-h-[4.25rem] p-1.5 text-right transition-colors",
-                !complete && !partial && "bg-white hover:bg-stone-50",
+                !complete && !partial && !holiday && "bg-white hover:bg-stone-50",
+                holiday && !selected && !complete && !partial && "bg-secondary-container/50 hover:brightness-95",
                 complete && !selected && "bg-[var(--day-completed)] hover:brightness-95",
                 partial && !selected && !isPastPartial && "bg-[var(--day-partial)] hover:brightness-95",
                 isPastPartial && !selected && "bg-[var(--day-partial)] hover:brightness-95",
-                count > 0 && !selected && !complete && !partial && "bg-teal-50/50",
+                count > 0 && !selected && !complete && !partial && !holiday && "bg-teal-50/50",
                 selected && "ring-2 ring-inset ring-[var(--brand)]",
                 selected && complete && "bg-emerald-50",
                 selected && partial && "bg-amber-50",
+                selected && holiday && !complete && !partial && "bg-secondary-container/70",
                 isToday && !selected && "outline outline-1 outline-offset-[-1px] outline-[var(--brand)]/40"
               )}
             >

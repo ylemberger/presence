@@ -14,6 +14,7 @@ truncate table
   students,
   teachers,
   activity_ranges,
+  holiday_periods,
   classes,
   grades,
   tracks,

@@ -24,6 +24,8 @@ interface HebrewDateRangePickerProps {
   defaultEnd?: string;
   required?: boolean;
   className?: string;
+  /** First click selects a single day; second click expands to a range. */
+  singleClickSelectsDay?: boolean;
 }
 
 export function HebrewDateRangePicker({
@@ -33,6 +35,7 @@ export function HebrewDateRangePicker({
   defaultEnd,
   required,
   className,
+  singleClickSelectsDay = false,
 }: HebrewDateRangePickerProps) {
   const seedIso = defaultStart || defaultEnd || todayIso();
   const [cursor, setCursor] = useState(() => hebrewMonthFromIso(seedIso));
@@ -58,6 +61,26 @@ export function HebrewDateRangePicker({
   const previewEnd = end || (start && hoverIso ? hoverIso : "");
 
   function handleDayClick(iso: string) {
+    if (singleClickSelectsDay) {
+      if (!start) {
+        setStart(iso);
+        setEnd(iso);
+        return;
+      }
+      if (start === end) {
+        if (iso === start) return;
+        if (iso < start) {
+          setEnd(start);
+          setStart(iso);
+          return;
+        }
+        setEnd(iso);
+        return;
+      }
+      setStart(iso);
+      setEnd(iso);
+      return;
+    }
     if (!start || (start && end)) {
       setStart(iso);
       setEnd("");
@@ -204,14 +227,25 @@ export function HebrewDateRangePicker({
               )}
             </div>
           ) : (
-            <p className="text-slate-500">לחצי על תאריך התחלה, ואחר כך על תאריך סיום</p>
+            <p className="text-slate-500">
+              {singleClickSelectsDay
+                ? "לחצי על תאריך ליום אחד, ואפשר להרחיב בלחיצה על תאריך נוסף"
+                : "לחצי על תאריך התחלה, ואחר כך על תאריך סיום. ליום אחד — לחצי פעמיים על אותו תאריך"}
+            </p>
           )}
         </div>
-        {(start || end) && (
-          <Button variant="secondary" size="sm" type="button" onClick={clearRange}>
-            ניקוי
-          </Button>
-        )}
+        <div className="flex flex-wrap gap-2">
+          {start && !end && (
+            <Button variant="secondary" size="sm" type="button" onClick={() => setEnd(start)}>
+              יום אחד בלבד
+            </Button>
+          )}
+          {(start || end) && (
+            <Button variant="secondary" size="sm" type="button" onClick={clearRange}>
+              ניקוי
+            </Button>
+          )}
+        </div>
       </div>
     </div>
   );

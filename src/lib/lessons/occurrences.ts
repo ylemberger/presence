@@ -1,6 +1,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { parseIsoDate, toIsoDate } from "@/lib/dates/hebrew";
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { fetchHolidayDateSet, holidayDateSet } from "./holidays";
 
 export interface GenerateOccurrencesResult {
   created: number;
@@ -38,7 +39,7 @@ export async function generateLessonOccurrences(
 
   let lessonsQuery = supabase
     .from("lessons")
-    .select("id, subject, day_of_week, activity_ranges(start_date, end_date)");
+    .select("id, subject, day_of_week, academic_year_id, activity_ranges(start_date, end_date)");
 
   if (lessonId) {
     lessonsQuery = lessonsQuery.eq("id", lessonId);
@@ -49,8 +50,20 @@ export async function generateLessonOccurrences(
   const { data: lessons, error } = await lessonsQuery;
   if (error) throw error;
   if (!lessons?.length) {
-    throw new Error("לא נמצאו שיעורים ליצירת מופעים");
+    if (lessonId) {
+      throw new Error("לא נמצאו שיעורים ליצירת מופעים");
+    }
+    return result;
   }
+
+  const yearIds = [
+    ...new Set(
+      lessons
+        .map((lesson) => lesson.academic_year_id)
+        .filter((id): id is string => Boolean(id))
+    ),
+  ];
+  const holidaysByYear = await fetchHolidayDateSet(supabase, yearIds);
 
   const rowsToInsert: { lesson_id: string; occurrence_date: string; status: "scheduled" }[] = [];
 
@@ -64,11 +77,18 @@ export async function generateLessonOccurrences(
       throw new Error(`לשיעור "${lesson.subject}" חסר טווח פעילות`);
     }
 
-    const dates = getDatesForDayOfWeek(range.start_date, range.end_date, lesson.day_of_week);
-    if (dates.length === 0) {
+    const weekdayDates = getDatesForDayOfWeek(range.start_date, range.end_date, lesson.day_of_week);
+    if (weekdayDates.length === 0) {
       throw new Error(
         `לא נוצרו מופעים לשיעור "${lesson.subject}" — אין תאריכים תואמים בטווח הפעילות ליום שנבחר`
       );
+    }
+
+    const holidays = holidaysByYear.get(lesson.academic_year_id) ?? new Set<string>();
+    const dates = weekdayDates.filter((date) => !holidays.has(date));
+    if (dates.length === 0) {
+      result.skipped += weekdayDates.length;
+      continue;
     }
 
     const { data: existing } = await supabase
@@ -97,7 +117,6 @@ export async function generateLessonOccurrences(
     const { error: insertError } = await supabase.from("lesson_occurrences").insert(chunk);
     if (insertError) {
       if (insertError.code === "23505") {
-        // Race / partial overlap — insert one-by-one for this chunk only
         for (const row of chunk) {
           const { error: oneErr } = await supabase.from("lesson_occurrences").insert(row);
           if (!oneErr) result.created++;
@@ -111,9 +130,84 @@ export async function generateLessonOccurrences(
     result.created += chunk.length;
   }
 
-  if (result.created === 0 && result.skipped === 0) {
-    throw new Error("לא נוצרו מופעי שיעור כלל");
+  return result;
+}
+
+async function chunkedIn<T>(
+  ids: string[],
+  chunkSize: number,
+  run: (chunk: string[]) => Promise<T>
+): Promise<T[]> {
+  const out: T[] = [];
+  for (let i = 0; i < ids.length; i += chunkSize) {
+    out.push(await run(ids.slice(i, i + chunkSize)));
+  }
+  return out;
+}
+
+/**
+ * After holiday calendar changes: create missing non-holiday occurrences,
+ * then drop (or cancel if attendance exists) occurrences that fall on holidays.
+ */
+export async function applyHolidaysToYearOccurrences(
+  academicYearId: string,
+  supabase: SupabaseClient
+): Promise<{ created: number; skipped: number; removed: number; cancelled: number }> {
+  const gen = await generateLessonOccurrences(undefined, academicYearId, supabase);
+
+  const { data: periods, error: periodError } = await supabase
+    .from("holiday_periods")
+    .select("start_date, end_date")
+    .eq("academic_year_id", academicYearId);
+  if (periodError) throw periodError;
+
+  const holidays = holidayDateSet(periods ?? []);
+  if (holidays.size === 0) {
+    return { created: gen.created, skipped: gen.skipped, removed: 0, cancelled: 0 };
   }
 
-  return result;
+  const { data: occs, error: occError } = await supabase
+    .from("lesson_occurrences")
+    .select("id, occurrence_date, status, lessons!inner(academic_year_id)")
+    .eq("lessons.academic_year_id", academicYearId);
+  if (occError) throw occError;
+
+  const onHoliday = (occs ?? []).filter(
+    (o) => holidays.has(o.occurrence_date) && o.status !== "cancelled"
+  );
+  if (onHoliday.length === 0) {
+    return { created: gen.created, skipped: gen.skipped, removed: 0, cancelled: 0 };
+  }
+
+  const ids = onHoliday.map((o) => o.id);
+  const attended = new Set<string>();
+  await chunkedIn(ids, 200, async (chunk) => {
+    const { data: att, error } = await supabase
+      .from("attendance")
+      .select("lesson_occurrence_id")
+      .in("lesson_occurrence_id", chunk);
+    if (error) throw error;
+    for (const row of att ?? []) attended.add(row.lesson_occurrence_id);
+  });
+
+  const toDelete = ids.filter((id) => !attended.has(id));
+  const toCancel = ids.filter((id) => attended.has(id));
+  let removed = 0;
+  let cancelled = 0;
+
+  await chunkedIn(toDelete, 200, async (chunk) => {
+    const { error } = await supabase.from("lesson_occurrences").delete().in("id", chunk);
+    if (error) throw error;
+    removed += chunk.length;
+  });
+  await chunkedIn(toCancel, 200, async (chunk) => {
+    const { error } = await supabase
+      .from("lesson_occurrences")
+      .update({ status: "cancelled" })
+      .in("id", chunk);
+    if (error) throw error;
+    cancelled += chunk.length;
+  });
+
+  return { created: gen.created, skipped: gen.skipped, removed, cancelled };
 }

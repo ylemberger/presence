@@ -27,6 +27,7 @@ import {
   updateAttendanceRuleAction,
 } from "../actions";
 import { SettingsForms } from "./SettingsForms";
+import { HolidayCalendar } from "./HolidayCalendar";
 import {
   EditableActivityRangeRow,
   EditableAttendanceRuleRow,
@@ -66,7 +67,7 @@ export default async function SettingsPage() {
     await ensureFixedGrades(yearId);
   }
 
-  const [grades, classes, tracks, specializations, ranges, rules] = yearId
+  const [grades, classes, tracks, specializations, ranges, holidays, rules] = yearId
     ? await Promise.all([
         supabase.from("grades").select("*").eq("academic_year_id", yearId).order("name"),
         supabase
@@ -85,9 +86,15 @@ export default async function SettingsPage() {
           .select("*")
           .eq("academic_year_id", yearId)
           .order("start_date"),
+        supabase
+          .from("holiday_periods")
+          .select("*")
+          .eq("academic_year_id", yearId)
+          .order("start_date"),
         supabase.from("attendance_rules").select("*").order("name"),
       ])
     : [
+        { data: [] },
         { data: [] },
         { data: [] },
         { data: [] },
@@ -260,6 +267,11 @@ export default async function SettingsPage() {
   const rangesPanel = yearId ? (
     <Section icon="date_range" title="טווחי פעילות" bodyBleed>
       <div className="p-6">
+        <p className="mb-4 font-caption text-caption text-on-surface-variant">
+          טווח הפעילות של השיעור — שנתי, סמסטר או קורס קצר. אפשר לבחור יום אחד בלבד
+          (לחיצה פעמיים על אותו תאריך, או «יום אחד בלבד»). מופעים נוצרים מתוך השיעור
+          והטווח; ימי חופשה בלוח החופשות לא נכללים.
+        </p>
         <SettingsForms
           type="activity_range"
           yearId={yearId}
@@ -287,6 +299,16 @@ export default async function SettingsPage() {
           </tbody>
         </table>
       </div>
+    </Section>
+  ) : (
+    <Section>
+      <p className="text-body-md text-on-surface-variant">צרי שנה אקדמית פעילה תחילה.</p>
+    </Section>
+  );
+
+  const holidaysPanel = yearId ? (
+    <Section icon="event_busy" title="לוח חופשות" bodyBleed>
+      <HolidayCalendar yearId={yearId} periods={holidays.data ?? []} />
     </Section>
   ) : (
     <Section>
@@ -327,7 +349,7 @@ export default async function SettingsPage() {
     <div className="flex flex-col gap-stack_lg">
       <PageHeader
         title="הגדרות מוסד"
-        description="ניהול תצורת המערכת, שנות לימוד, שכבות, מסלולים, טווחי פעילות וכללי נוכחות."
+        description="ניהול תצורת המערכת, שנות לימוד, שכבות, מסלולים, טווחי פעילות, לוח חופשות וכללי נוכחות."
         size="headline"
       />
       <Tabs
@@ -336,6 +358,7 @@ export default async function SettingsPage() {
           { id: "year", label: "שנים אקדמיות", content: yearPanel },
           { id: "structure", label: "שכבות וכיתות", content: structurePanel },
           { id: "ranges", label: "טווחי פעילות", content: rangesPanel },
+          { id: "holidays", label: "לוח חופשות", content: holidaysPanel },
           { id: "rules", label: "כללי נוכחות", content: rulesPanel },
         ]}
       />

@@ -4,7 +4,7 @@ import { revalidatePath } from "next/cache";
 import { createActionClient, createClient } from "@/lib/supabase/server";
 import { setActiveAcademicYear, getActiveAcademicYear } from "@/lib/utils";
 import { syncTeacherSourceRecords } from "@/lib/sync/teachers";
-import { generateLessonOccurrences } from "@/lib/lessons/occurrences";
+import { generateLessonOccurrences, applyHolidaysToYearOccurrences } from "@/lib/lessons/occurrences";
 import {
   autoAssignStudentsToLesson,
   lessonMismatchMessage,
@@ -26,6 +26,7 @@ import {
   isError,
   parseLessonBilling,
   requireId,
+  requireIsoDate,
   requireText,
   validateEmail,
   validateIsraeliId,
@@ -175,6 +176,110 @@ export async function createActivityRangeAction(formData: FormData) {
     end_date: formData.get("end_date"),
     range_type: formData.get("range_type"),
   });
+}
+
+function revalidateLessonCalendarPaths() {
+  revalidatePath("/settings");
+  revalidatePath("/lessons");
+  revalidatePath("/attendance");
+  revalidatePath("/timetable");
+}
+
+function parseHolidayPeriodForm(formData: FormData) {
+  const yearId = requireId(formData.get("academic_year_id"), "שנה אקדמית");
+  if (isError(yearId)) return yearId;
+  const name = requireText(formData.get("name"), "שם החופשה");
+  if (isError(name)) return name;
+  const startDate = requireIsoDate(formData.get("start_date"), "תאריך התחלה");
+  if (isError(startDate)) return startDate;
+  const endRaw = String(formData.get("end_date") ?? "").trim().slice(0, 10);
+  const endDate = requireIsoDate(endRaw || startDate, "תאריך סיום");
+  if (isError(endDate)) return endDate;
+  if (endDate < startDate) {
+    return { error: "תאריך הסיום חייב להיות באותו יום או אחרי תאריך ההתחלה" };
+  }
+  return {
+    academic_year_id: yearId,
+    name,
+    start_date: startDate,
+    end_date: endDate,
+  };
+}
+
+export async function createHolidayPeriodAction(formData: FormData) {
+  const payload = parseHolidayPeriodForm(formData);
+  if ("error" in payload) return payload;
+
+  const actionAuth = await createActionClient();
+  if ("error" in actionAuth) return { error: actionAuth.error };
+  const supabase = actionAuth.supabase;
+
+  const { error } = await supabase.from("holiday_periods").insert(payload);
+  if (error) return { error: error.message };
+
+  try {
+    await applyHolidaysToYearOccurrences(payload.academic_year_id, supabase);
+  } catch (e) {
+    return { error: (e as Error).message };
+  }
+
+  revalidateLessonCalendarPaths();
+  return { success: true };
+}
+
+export async function updateHolidayPeriodAction(id: string, formData: FormData) {
+  const payload = parseHolidayPeriodForm(formData);
+  if ("error" in payload) return payload;
+
+  const actionAuth = await createActionClient();
+  if ("error" in actionAuth) return { error: actionAuth.error };
+  const supabase = actionAuth.supabase;
+
+  const { error } = await supabase
+    .from("holiday_periods")
+    .update({
+      name: payload.name,
+      start_date: payload.start_date,
+      end_date: payload.end_date,
+    })
+    .eq("id", id)
+    .eq("academic_year_id", payload.academic_year_id);
+  if (error) return { error: error.message };
+
+  try {
+    await applyHolidaysToYearOccurrences(payload.academic_year_id, supabase);
+  } catch (e) {
+    return { error: (e as Error).message };
+  }
+
+  revalidateLessonCalendarPaths();
+  return { success: true };
+}
+
+export async function deleteHolidayPeriodAction(id: string) {
+  const actionAuth = await createActionClient();
+  if ("error" in actionAuth) return { error: actionAuth.error };
+  const supabase = actionAuth.supabase;
+
+  const { data: existing, error: loadError } = await supabase
+    .from("holiday_periods")
+    .select("academic_year_id")
+    .eq("id", id)
+    .maybeSingle();
+  if (loadError) return { error: loadError.message };
+  if (!existing) return { error: "תקופת החופשה לא נמצאה" };
+
+  const { error } = await supabase.from("holiday_periods").delete().eq("id", id);
+  if (error) return { error: error.message };
+
+  try {
+    await applyHolidaysToYearOccurrences(existing.academic_year_id, supabase);
+  } catch (e) {
+    return { error: (e as Error).message };
+  }
+
+  revalidateLessonCalendarPaths();
+  return { success: true };
 }
 
 export async function createAttendanceRuleAction(formData: FormData) {
@@ -443,11 +548,15 @@ export async function createStudentAction(formData: FormData) {
   const cohortRaw = String(formData.get("cohort_number") ?? "").trim();
   const cohortNumber = parseInt(cohortRaw, 10);
   if (!cohortRaw || Number.isNaN(cohortNumber) || cohortNumber < 1) {
-    return { error: "׳™׳© ׳׳”׳–׳™׳ ׳׳¡׳₪׳¨ ׳׳—׳–׳•׳¨ ׳×׳§׳™׳ (1 ׳•׳׳¢׳׳”)" };
+    return { error: "יש להזין מספר מחזור תקין (1 ומעלה)" };
   }
-  const specId = String(formData.get("specialization_id") ?? "").trim() || null;
+  const specId = requireId(formData.get("specialization_id"), "התמחות");
+  if (isError(specId)) return specId;
   const secondarySpecId =
     String(formData.get("secondary_specialization_id") ?? "").trim() || null;
+  if (secondarySpecId && secondarySpecId === specId) {
+    return { error: "התמחות נוספת חייבת להיות שונה מההתמחות הראשית" };
+  }
   const isPsychology =
     formData.get("is_psychology") === "on" || formData.get("is_psychology") === "1";
 
@@ -600,9 +709,13 @@ function parsePlacementFields(formData: FormData) {
     "׳‘׳×׳•׳§׳£ ׳׳×׳׳¨׳™׳"
   );
   if (isError(startDate)) return startDate;
-  const specId = String(formData.get("specialization_id") ?? "").trim() || null;
+  const specId = requireId(formData.get("specialization_id"), "התמחות");
+  if (isError(specId)) return specId;
   const secondarySpecId =
     String(formData.get("secondary_specialization_id") ?? "").trim() || null;
+  if (secondarySpecId && secondarySpecId === specId) {
+    return { error: "התמחות נוספת חייבת להיות שונה מההתמחות הראשית" };
+  }
   const isPsychology =
     formData.get("is_psychology") === "on" || formData.get("is_psychology") === "1";
   return {
@@ -1365,8 +1478,13 @@ export async function importStudentsFromExcelAction(formData: FormData) {
     tracks: tracks ?? [],
     specializations: specializations ?? [],
   };
-  if (catalogs.grades.length === 0 || catalogs.classes.length === 0 || catalogs.tracks.length === 0) {
-    return { error: "חסרות הגדרות בשנה הפעילה. יש להוסיף שכבה, כיתה ומסלול לפני ייבוא." };
+  if (
+    catalogs.grades.length === 0 ||
+    catalogs.classes.length === 0 ||
+    catalogs.tracks.length === 0 ||
+    catalogs.specializations.length === 0
+  ) {
+    return { error: "חסרות הגדרות בשנה הפעילה. יש להוסיף שכבה, כיתה, מסלול והתמחות לפני ייבוא." };
   }
 
   const parsed = parseStudentImportWorkbook(await file.arrayBuffer(), file.name, catalogs);

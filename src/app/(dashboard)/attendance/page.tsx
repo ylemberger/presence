@@ -11,6 +11,7 @@ import {
   summarizeAttendance,
 } from "@/lib/attendance/calculator";
 import { getPendingAttendanceSummary } from "@/lib/attendance/pending";
+import { holidayDateSet } from "@/lib/lessons/holidays";
 import { AttendanceReminderBanner } from "@/components/attendance/AttendanceReminderBanner";
 import {
   AttendanceBoard,
@@ -60,7 +61,8 @@ export default async function AttendancePage({ searchParams }: Props) {
 
   const catalog = await getYearCatalog(activeYear.id);
 
-  const [{ data: yearStudents }, { data: monthOccurrencesRaw }] = await Promise.all([
+  const [{ data: yearStudents }, { data: monthOccurrencesRaw }, { data: holidayRows }] =
+    await Promise.all([
     supabase
       .from("student_assignments")
       .select("student_id, class_id, track_id, specialization_id, students(id, full_name, is_active)")
@@ -80,6 +82,10 @@ export default async function AttendancePage({ searchParams }: Props) {
       .lte("occurrence_date", monthTo)
       .neq("status", "cancelled")
       .order("occurrence_date"),
+    supabase
+      .from("holiday_periods")
+      .select("start_date, end_date")
+      .eq("academic_year_id", activeYear.id),
   ]);
 
   type LessonJoin = {
@@ -349,6 +355,7 @@ export default async function AttendancePage({ searchParams }: Props) {
         noteLessonId={selectedOcc?.lessonId ?? null}
         completeDates={completeDates}
         partialDates={partialDates}
+        holidayDates={[...holidayDateSet(holidayRows ?? [])]}
         insightsByStudent={insightsByStudent}
       />
     </div>

@@ -30,6 +30,7 @@ interface LessonsCalendarProps {
   occurrences: OccurrenceRow[];
   lessons: Lesson[];
   monthQuery: string;
+  holidayDates?: string[];
 }
 
 const STATUS_META: Record<string, { pillClass: string; icon: string; label: string }> = {
@@ -50,6 +51,7 @@ export function LessonsCalendar({
   occurrences,
   lessons,
   monthQuery,
+  holidayDates = [],
 }: LessonsCalendarProps) {
   const router = useRouter();
   const seed = hebrewMonthFromIso(initialMonthIso || todayIso());
@@ -73,6 +75,7 @@ export function LessonsCalendar({
 
   const selectedOccurrences = selectedIso ? byDate.get(selectedIso) ?? [] : [];
   const todayStr = todayIso();
+  const holidaySet = useMemo(() => new Set(holidayDates), [holidayDates]);
 
   function navigate(delta: number) {
     const next = shiftHebrewMonth(cursor.year, cursor.month, delta);
@@ -125,6 +128,7 @@ export function LessonsCalendar({
             const selected = selectedIso === day.iso;
             const isToday = day.iso === todayStr;
             const hasEvents = dayOcc.length > 0;
+            const holiday = holidaySet.has(day.iso);
             return (
               <button
                 key={day.iso}
@@ -134,11 +138,13 @@ export function LessonsCalendar({
                   "relative flex aspect-square items-center justify-center rounded-full p-2 transition-colors",
                   selected
                     ? "bg-primary-container font-bold text-white shadow-tactile-sm"
-                    : isToday
-                      ? "ring-1 ring-inset ring-secondary text-primary"
-                      : "text-on-surface hover:bg-surface-container"
+                    : holiday
+                      ? "bg-secondary-container/70 text-on-secondary-container"
+                      : isToday
+                        ? "ring-1 ring-inset ring-secondary text-primary"
+                        : "text-on-surface hover:bg-surface-container"
                 )}
-                aria-label={day.iso}
+                aria-label={holiday ? `${day.iso} חופשה` : day.iso}
               >
                 <span>{day.label}</span>
                 {hasEvents && (
@@ -169,9 +175,14 @@ export function LessonsCalendar({
 
           {selectedIso && selectedOccurrences.length === 0 && (
             <div className="flex flex-1 flex-col items-center justify-center rounded-xl border border-dashed border-outline-variant/50 bg-surface-container-low/60 px-4 py-8 text-center">
-              <Icon name="event_available" className="mb-2 text-[36px] text-secondary" />
+              <Icon
+                name={holidaySet.has(selectedIso) ? "event_busy" : "event_available"}
+                className="mb-2 text-[36px] text-secondary"
+              />
               <p className="font-body-md text-body-md text-on-surface-variant">
-                אין שיעורים ביום זה.
+                {holidaySet.has(selectedIso)
+                  ? "יום חופשה — אין לימודים ולא נספרת נוכחות."
+                  : "אין שיעורים ביום זה."}
               </p>
             </div>
           )}

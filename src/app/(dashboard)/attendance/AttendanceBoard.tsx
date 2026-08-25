@@ -87,6 +87,7 @@ interface Props {
   noteLessonId?: string | null;
   completeDates?: string[];
   partialDates?: string[];
+  holidayDates?: string[];
   insightsByStudent?: Record<string, StudentInsight>;
 }
 
@@ -130,6 +131,7 @@ export function AttendanceBoard({
   noteLessonId = null,
   completeDates = [],
   partialDates = [],
+  holidayDates = [],
   insightsByStudent = {},
 }: Props) {
   const router = useRouter();
@@ -673,6 +675,7 @@ export function AttendanceBoard({
         countsByDate={countsByDate}
         completeDates={completeDates}
         partialDates={partialDates}
+        holidayDates={holidayDates}
         onSelectDate={selectDate}
         onMonthRangeChange={(from, to) => {
           navigate(buildParams({ from, to, date: selectedDate, occurrenceId: undefined }));
@@ -700,15 +703,19 @@ export function AttendanceBoard({
               <div className="px-2 py-6 text-center">
                 <Icon name="event_busy" className="mb-2 inline-block text-[36px] text-secondary" />
                 <p className="font-body-md text-body-md text-on-surface-variant">
-                  אין שיעורים ביום זה.
+                  {holidayDates.includes(selectedDate)
+                    ? "יום חופשה — אין לימודים ולא נספרת נוכחות."
+                    : "אין שיעורים ביום זה."}
                 </p>
-                <Link
-                  href="/lessons"
-                  className="mt-3 inline-flex items-center gap-1 font-label-md text-label-md text-secondary hover:underline"
-                >
-                  <Icon name="add" className="text-[16px]" />
-                  צרי שיעורים או מופעים
-                </Link>
+                {!holidayDates.includes(selectedDate) && (
+                  <Link
+                    href="/lessons"
+                    className="mt-3 inline-flex items-center gap-1 font-label-md text-label-md text-secondary hover:underline"
+                  >
+                    <Icon name="add" className="text-[16px]" />
+                    צרי שיעור (עם טווח תאריכים)
+                  </Link>
+                )}
               </div>
             ) : (
               <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">

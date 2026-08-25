@@ -42,6 +42,16 @@ create table activity_ranges (
   constraint activity_ranges_dates_check check (end_date >= start_date)
 );
 
+-- ימי חופשה / ימים ללא לימודים. לא נוצרים בהם מופעי שיעור, ולכן לא נספרת נוכחות.
+create table holiday_periods (
+  id uuid primary key default gen_random_uuid(),
+  academic_year_id uuid not null references academic_years(id) on delete cascade,
+  name text not null,
+  start_date date not null,
+  end_date date not null,
+  constraint holiday_periods_dates_check check (end_date >= start_date)
+);
+
 create table attendance_rules (
   id uuid primary key default gen_random_uuid(),
   name text not null,
@@ -163,6 +173,8 @@ create index idx_classes_grade on classes(grade_id);
 create index idx_tracks_academic_year on tracks(academic_year_id);
 create index idx_specializations_academic_year on specializations(academic_year_id);
 create index idx_activity_ranges_academic_year on activity_ranges(academic_year_id);
+create index idx_holiday_periods_academic_year on holiday_periods(academic_year_id);
+create index idx_holiday_periods_dates on holiday_periods(academic_year_id, start_date, end_date);
 create index idx_student_assignments_student on student_assignments(student_id);
 create index idx_student_assignments_year on student_assignments(academic_year_id);
 create index idx_student_assignments_dates on student_assignments(start_date, end_date);
@@ -224,6 +236,7 @@ alter table classes enable row level security;
 alter table tracks enable row level security;
 alter table specializations enable row level security;
 alter table activity_ranges enable row level security;
+alter table holiday_periods enable row level security;
 alter table attendance_rules enable row level security;
 alter table students enable row level security;
 alter table student_assignments enable row level security;
@@ -242,7 +255,7 @@ declare
 begin
   foreach tbl in array array[
     'academic_years', 'grades', 'classes', 'tracks', 'specializations',
-    'activity_ranges', 'attendance_rules', 'students', 'student_assignments',
+    'activity_ranges', 'holiday_periods', 'attendance_rules', 'students', 'student_assignments',
     'teachers', 'teacher_source_records', 'teacher_teaching_assignments',
     'lessons', 'lesson_occurrences', 'student_lesson_assignments',
     'attendance', 'attendance_change_log'

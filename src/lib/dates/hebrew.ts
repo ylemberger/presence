@@ -229,6 +229,17 @@ export function addDays(dateStr: string, days: number): string {
   return `${yy}-${mm}-${dd}`;
 }
 
+export function expandIsoRange(start: string, end: string): string[] {
+  if (!start || !end || end < start) return [];
+  const dates: string[] = [];
+  let cur = start;
+  while (cur <= end) {
+    dates.push(cur);
+    cur = addDays(cur, 1);
+  }
+  return dates;
+}
+
 export function isDateInRange(
   date: string,
   startDate: string,

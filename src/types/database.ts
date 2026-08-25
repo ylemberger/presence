@@ -45,6 +45,14 @@ export interface ActivityRange {
   range_type: RangeType;
 }
 
+export interface HolidayPeriod {
+  id: string;
+  academic_year_id: string;
+  name: string;
+  start_date: string;
+  end_date: string;
+}
+
 export interface AttendanceRule {
   id: string;
   name: string;
@@ -195,6 +203,7 @@ export interface Database {
       tracks: { Row: Track; Insert: Omit<Track, "id"> & { id?: string }; Update: Partial<Track> };
       specializations: { Row: Specialization; Insert: Omit<Specialization, "id"> & { id?: string }; Update: Partial<Specialization> };
       activity_ranges: { Row: ActivityRange; Insert: Omit<ActivityRange, "id"> & { id?: string }; Update: Partial<ActivityRange> };
+      holiday_periods: { Row: HolidayPeriod; Insert: Omit<HolidayPeriod, "id"> & { id?: string }; Update: Partial<HolidayPeriod> };
       attendance_rules: { Row: AttendanceRule; Insert: Omit<AttendanceRule, "id"> & { id?: string }; Update: Partial<AttendanceRule> };
       students: { Row: Student; Insert: Omit<Student, "id" | "created_at"> & { id?: string; created_at?: string }; Update: Partial<Student> };
       student_assignments: { Row: StudentAssignment; Insert: Omit<StudentAssignment, "id" | "created_at"> & { id?: string; created_at?: string }; Update: Partial<StudentAssignment> };

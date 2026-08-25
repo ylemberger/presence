@@ -10,6 +10,12 @@ export function requireId(value: FormDataEntryValue | null, label: string): stri
   return text;
 }
 
+export function requireIsoDate(value: FormDataEntryValue | null, label: string): string | { error: string } {
+  const text = String(value ?? "").trim().slice(0, 10);
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(text)) return { error: `יש לבחור ${label}` };
+  return text;
+}
+
 export function isError(result: string | { error: string }): result is { error: string } {
   return typeof result === "object" && "error" in result;
 }
