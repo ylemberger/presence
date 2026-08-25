@@ -123,6 +123,8 @@ create table lessons (
   billing_type text check (billing_type in ('mandatory', 'specialization')) not null,
   day_of_week smallint not null check (day_of_week between 0 and 6),
   lesson_number smallint not null check (lesson_number between 1 and 9),
+  period_count smallint not null default 1 check (period_count between 1 and 9),
+  constraint lessons_period_span_check check (lesson_number + period_count - 1 between 1 and 9),
   activity_range_id uuid references activity_ranges(id) on delete cascade,
   attendance_rule_id uuid references attendance_rules(id) on delete set null,
   created_at timestamptz default now()

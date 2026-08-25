@@ -71,7 +71,7 @@ export async function createAcademicYearAction(formData: FormData) {
     .insert({ name, is_active: isActive })
     .select("id")
     .single();
-  if (error || !created) return { error: error?.message ?? "׳™׳¦׳™׳¨׳× ׳©׳ ׳” ׳ ׳›׳©׳׳”" };
+  if (error || !created) return { error: error?.message ?? "יצירת שנה נכשלה" };
 
   await ensureFixedGrades(created.id);
 
@@ -93,7 +93,7 @@ export async function deleteAcademicYearAction(id: string) {
     .from("student_assignments")
     .select("*", { count: "exact", head: true })
     .eq("academic_year_id", id);
-  if (count && count > 0) return { error: "׳׳ ׳ ׳™׳×׳ ׳׳׳—׳•׳§ ׳©׳ ׳” ׳¢׳ ׳©׳™׳‘׳•׳¦׳™ ׳×׳׳׳™׳“׳•׳×" };
+  if (count && count > 0) return { error: "לא ניתן למחוק שנה עם שיבוצי תלמידות" };
 
   const { error } = await supabase.from("academic_years").delete().eq("id", id);
   if (error) return { error: error.message };
@@ -123,7 +123,7 @@ async function createYearEntity(
 export async function createGradeAction(formData: FormData) {
   const name = String(formData.get("name") ?? "").trim();
   if (!(FIXED_GRADE_NAMES as readonly string[]).includes(name)) {
-    return { error: "׳©׳›׳‘׳” ׳—׳™׳™׳‘׳× ׳׳”׳™׳•׳× ׳, ׳‘ ׳׳• ׳’ ׳‘׳׳‘׳“" };
+    return { error: "שכבה חייבת להיות א, ב או ג בלבד" };
   }
   return createYearEntity("grades", {
     academic_year_id: formData.get("academic_year_id"),
@@ -133,7 +133,7 @@ export async function createGradeAction(formData: FormData) {
 
 export async function createClassAction(formData: FormData) {
   const gradeId = String(formData.get("grade_id") ?? "").trim();
-  if (!gradeId) return { error: "׳™׳© ׳׳‘׳—׳•׳¨ ׳©׳›׳‘׳” (׳ / ׳‘ / ׳’)" };
+  if (!gradeId) return { error: "יש לבחור שכבה (א / ב / ג)" };
 
   const actionAuth = await createActionClient();
   if ("error" in actionAuth) return { error: actionAuth.error };
@@ -144,7 +144,7 @@ export async function createClassAction(formData: FormData) {
     .eq("id", gradeId)
     .maybeSingle();
   if (!grade || !(FIXED_GRADE_NAMES as readonly string[]).includes(grade.name)) {
-    return { error: "׳©׳›׳‘׳” ׳—׳™׳™׳‘׳× ׳׳”׳™׳•׳× ׳, ׳‘ ׳׳• ׳’ ׳‘׳׳‘׳“" };
+    return { error: "שכבה חייבת להיות א, ב או ג בלבד" };
   }
 
   return createYearEntity("classes", {
@@ -325,7 +325,7 @@ async function deleteEntityWithChecks(
   const supabase = actionAuth.supabase;
   for (const check of checks) {
     const count = await countRefs(supabase, check.table, check.column, id);
-    if (count > 0) return { error: `׳׳ ׳ ׳™׳×׳ ׳׳׳—׳•׳§ ${entityLabel} - ׳§׳™׳™׳׳•׳× ׳”׳₪׳ ׳™׳•׳×` };
+    if (count > 0) return { error: `לא ניתן למחוק ${entityLabel} - קיימות הפניות` };
   }
 
   const { error } = await supabase.from(table).delete().eq("id", id);
@@ -344,7 +344,7 @@ export async function deleteGradeAction(id: string) {
       { table: "lessons", column: "grade_id" },
       { table: "teacher_teaching_assignments", column: "grade_id" },
     ],
-    "׳©׳›׳‘׳”"
+    "שכבה"
   );
 }
 
@@ -357,7 +357,7 @@ export async function deleteClassAction(id: string) {
       { table: "lessons", column: "class_id" },
       { table: "teacher_teaching_assignments", column: "class_id" },
     ],
-    "׳›׳™׳×׳”"
+    "כיתה"
   );
 }
 
@@ -370,7 +370,7 @@ export async function deleteTrackAction(id: string) {
       { table: "lessons", column: "track_id" },
       { table: "teacher_teaching_assignments", column: "track_id" },
     ],
-    "׳׳¡׳׳•׳"
+    "מסלול"
   );
 }
 
@@ -384,7 +384,7 @@ export async function deleteSpecializationAction(id: string) {
       { table: "lessons", column: "specialization_id" },
       { table: "teacher_teaching_assignments", column: "specialization_id" },
     ],
-    "׳”׳×׳׳—׳•׳×"
+    "התמחות"
   );
 }
 
@@ -393,7 +393,7 @@ export async function deleteActivityRangeAction(id: string) {
     "activity_ranges",
     id,
     [{ table: "lessons", column: "activity_range_id" }],
-    "׳˜׳•׳•׳— ׳₪׳¢׳™׳׳•׳×"
+    "טווח פעילות"
   );
 }
 
@@ -402,7 +402,7 @@ export async function deleteAttendanceRuleAction(id: string) {
     "attendance_rules",
     id,
     [{ table: "lessons", column: "attendance_rule_id" }],
-    "׳›׳׳ ׳ ׳•׳›׳—׳•׳×"
+    "כלל נוכחות"
   );
 }
 
@@ -427,7 +427,7 @@ export async function updateAcademicYearAction(id: string, formData: FormData) {
 export async function updateGradeAction(id: string, formData: FormData) {
   const name = String(formData.get("name") ?? "").trim();
   if (!(FIXED_GRADE_NAMES as readonly string[]).includes(name)) {
-    return { error: "׳©׳›׳‘׳” ׳—׳™׳™׳‘׳× ׳׳”׳™׳•׳× ׳, ׳‘ ׳׳• ׳’ ׳‘׳׳‘׳“" };
+    return { error: "שכבה חייבת להיות א, ב או ג בלבד" };
   }
   const actionAuth = await createActionClient();
   if ("error" in actionAuth) return { error: actionAuth.error };
@@ -440,7 +440,7 @@ export async function updateGradeAction(id: string, formData: FormData) {
 
 export async function updateClassAction(id: string, formData: FormData) {
   const gradeId = String(formData.get("grade_id") ?? "").trim();
-  if (!gradeId) return { error: "׳™׳© ׳׳‘׳—׳•׳¨ ׳©׳›׳‘׳” (׳ / ׳‘ / ׳’)" };
+  if (!gradeId) return { error: "יש לבחור שכבה (א / ב / ג)" };
 
   const actionAuth = await createActionClient();
   if ("error" in actionAuth) return { error: actionAuth.error };
@@ -451,7 +451,7 @@ export async function updateClassAction(id: string, formData: FormData) {
     .eq("id", gradeId)
     .maybeSingle();
   if (!grade || !(FIXED_GRADE_NAMES as readonly string[]).includes(grade.name)) {
-    return { error: "׳©׳›׳‘׳” ׳—׳™׳™׳‘׳× ׳׳”׳™׳•׳× ׳, ׳‘ ׳׳• ׳’ ׳‘׳׳‘׳“" };
+    return { error: "שכבה חייבת להיות א, ב או ג בלבד" };
   }
 
   const { error } = await supabase
@@ -530,20 +530,20 @@ export async function updateAttendanceRuleAction(id: string, formData: FormData)
 
 // --- Students ---
 export async function createStudentAction(formData: FormData) {
-  const fullName = requireText(formData.get("full_name"), "׳©׳ ׳׳׳");
+  const fullName = requireText(formData.get("full_name"), "שם מלא");
   if (isError(fullName)) return fullName;
   const identity = validateIsraeliId(String(formData.get("identity_number") ?? ""));
   if (isError(identity)) return identity;
 
-  const yearId = requireId(formData.get("academic_year_id"), "׳©׳ ׳” ׳׳§׳“׳׳™׳×");
+  const yearId = requireId(formData.get("academic_year_id"), "שנה אקדמית");
   if (isError(yearId)) return yearId;
-  const gradeId = requireId(formData.get("grade_id"), "׳©׳›׳‘׳”");
+  const gradeId = requireId(formData.get("grade_id"), "שכבה");
   if (isError(gradeId)) return gradeId;
-  const classId = requireId(formData.get("class_id"), "׳›׳™׳×׳”");
+  const classId = requireId(formData.get("class_id"), "כיתה");
   if (isError(classId)) return classId;
-  const trackId = requireId(formData.get("track_id"), "׳׳¡׳׳•׳");
+  const trackId = requireId(formData.get("track_id"), "מסלול");
   if (isError(trackId)) return trackId;
-  const startDate = requireText(formData.get("start_date"), "׳‘׳×׳•׳§׳£ ׳׳×׳׳¨׳™׳");
+  const startDate = requireText(formData.get("start_date"), "בתוקף מתאריך");
   if (isError(startDate)) return startDate;
   const cohortRaw = String(formData.get("cohort_number") ?? "").trim();
   const cohortNumber = parseInt(cohortRaw, 10);
@@ -573,8 +573,8 @@ export async function createStudentAction(formData: FormData) {
     .select("id")
     .single();
   if (error || !student) {
-    if (error?.code === "23505") return { error: '׳׳¡׳₪׳¨ ׳×׳¢׳•׳“׳× ׳–׳”׳•׳× ׳›׳‘׳¨ ׳§׳™׳™׳ ׳‘׳׳¢׳¨׳›׳×' };
-    return { error: error?.message ?? "׳™׳¦׳™׳¨׳× ׳×׳׳׳™׳“׳” ׳ ׳›׳©׳׳”" };
+    if (error?.code === "23505") return { error: 'מספר תעודת זהות כבר קיים במערכת' };
+    return { error: error?.message ?? "יצירת תלמידה נכשלה" };
   }
 
   const { error: placementError } = await supabase.from("student_assignments").insert({
@@ -591,7 +591,7 @@ export async function createStudentAction(formData: FormData) {
   });
   if (placementError) {
     await supabase.from("students").update({ is_active: false }).eq("id", student.id);
-    return { error: `׳”׳×׳׳׳™׳“׳” ׳ ׳•׳¦׳¨׳” ׳׳ ׳”׳©׳™׳‘׳•׳¥ ׳ ׳›׳©׳: ${placementError.message}` };
+    return { error: `התלמידה נוצרה אך השיבוץ נכשל: ${placementError.message}` };
   }
 
   await refreshAutomaticLessonAssignmentsForStudent(
@@ -637,11 +637,11 @@ export async function createStudentLessonAssignmentAction(formData: FormData) {
   const actionAuth = await createActionClient();
   if ("error" in actionAuth) return { error: actionAuth.error };
   const supabase = actionAuth.supabase;
-  const studentId = requireId(formData.get("student_id"), "׳×׳׳׳™׳“׳”");
+  const studentId = requireId(formData.get("student_id"), "תלמידה");
   if (isError(studentId)) return studentId;
-  const lessonId = requireId(formData.get("lesson_id"), "׳©׳™׳¢׳•׳¨");
+  const lessonId = requireId(formData.get("lesson_id"), "שיעור");
   if (isError(lessonId)) return lessonId;
-  const startDate = requireText(formData.get("start_date"), "׳׳×׳׳¨׳™׳");
+  const startDate = requireText(formData.get("start_date"), "מתאריך");
   if (isError(startDate)) return startDate;
   const force = formData.get("force_mismatch") === "1";
 
@@ -663,8 +663,8 @@ export async function createStudentLessonAssignmentAction(formData: FormData) {
       .maybeSingle(),
   ]);
 
-  if (!lesson) return { error: "׳”׳©׳™׳¢׳•׳¨ ׳׳ ׳ ׳׳¦׳" };
-  if (!placement) return { error: "׳׳×׳׳׳™׳“׳” ׳׳™׳ ׳©׳™׳‘׳•׳¥ ׳₪׳¢׳™׳ ׳‘׳©׳ ׳” ׳”׳ ׳•׳›׳—׳™׳×" };
+  if (!lesson) return { error: "השיעור לא נמצא" };
+  if (!placement) return { error: "לתלמידה אין שיבוץ פעיל בשנה הנוכחית" };
 
   const mismatch = lessonMismatchMessage(placement, lesson);
   if (mismatch && !force) {
@@ -694,19 +694,19 @@ export async function deleteStudentLessonAssignmentAction(id: string, studentId:
 }
 
 function parsePlacementFields(formData: FormData) {
-  const studentId = requireId(formData.get("student_id"), "׳×׳׳׳™׳“׳”");
+  const studentId = requireId(formData.get("student_id"), "תלמידה");
   if (isError(studentId)) return studentId;
-  const yearId = requireId(formData.get("academic_year_id"), "׳©׳ ׳” ׳׳§׳“׳׳™׳×");
+  const yearId = requireId(formData.get("academic_year_id"), "שנה אקדמית");
   if (isError(yearId)) return yearId;
-  const gradeId = requireId(formData.get("grade_id"), "׳©׳›׳‘׳”");
+  const gradeId = requireId(formData.get("grade_id"), "שכבה");
   if (isError(gradeId)) return gradeId;
-  const classId = requireId(formData.get("class_id"), "׳›׳™׳×׳”");
+  const classId = requireId(formData.get("class_id"), "כיתה");
   if (isError(classId)) return classId;
-  const trackId = requireId(formData.get("track_id"), "׳׳¡׳׳•׳");
+  const trackId = requireId(formData.get("track_id"), "מסלול");
   if (isError(trackId)) return trackId;
   const startDate = requireText(
     formData.get("start_date") ?? formData.get("transfer_date"),
-    "׳‘׳×׳•׳§׳£ ׳׳×׳׳¨׳™׳"
+    "בתוקף מתאריך"
   );
   if (isError(startDate)) return startDate;
   const specId = requireId(formData.get("specialization_id"), "התמחות");
@@ -732,7 +732,7 @@ function parsePlacementFields(formData: FormData) {
 }
 
 export async function createStudentAssignmentAction(_formData: FormData) {
-  return { error: "׳׳™׳ ׳™׳¦׳™׳¨׳× ׳©׳™׳‘׳•׳¥ ׳ ׳₪׳¨׳“. ׳‘׳¢׳× ׳™׳¦׳™׳¨׳× ׳×׳׳׳™׳“׳” ׳׳׳׳׳™׳ ׳׳× ׳›׳ ׳”׳₪׳¨׳˜׳™׳, ׳•׳©׳™׳ ׳•׳™ ׳ ׳¢׳©׳” ׳¨׳§ ׳‘׳”׳¢׳‘׳¨׳”." };
+  return { error: "אין יצירת שיבוץ נפרד. בעת יצירת תלמידה ממלאים את כל הפרטים, ושינוי נעשה רק בהעברה." };
 }
 
 export async function transferStudentAction(formData: FormData) {
@@ -785,7 +785,7 @@ export async function transferStudentAction(formData: FormData) {
 
 // --- Teachers ---
 export async function createTeacherAction(formData: FormData) {
-  const fullName = requireText(formData.get("full_name"), "׳©׳ ׳׳׳");
+  const fullName = requireText(formData.get("full_name"), "שם מלא");
   if (isError(fullName)) return fullName;
   const identity = validateIsraeliId(String(formData.get("identity_number") ?? ""));
   if (isError(identity)) return identity;
@@ -805,7 +805,7 @@ export async function createTeacherAction(formData: FormData) {
     is_local: true,
   });
   if (error) {
-    if (error.code === "23505") return { error: '׳׳¡׳₪׳¨ ׳×׳¢׳•׳“׳× ׳–׳”׳•׳× ׳›׳‘׳¨ ׳§׳™׳™׳ ׳‘׳׳¢׳¨׳›׳×' };
+    if (error.code === "23505") return { error: 'מספר תעודת זהות כבר קיים במערכת' };
     return { error: error.message };
   }
   revalidatePath("/teachers");
@@ -842,13 +842,13 @@ async function insertTeachingAssignmentFromForm(
   supabase: Awaited<ReturnType<typeof createClient>>,
   formData: FormData
 ) {
-  const teacherId = requireId(formData.get("teacher_id"), "׳׳•׳¨׳”");
+  const teacherId = requireId(formData.get("teacher_id"), "מורה");
   if (isError(teacherId)) return teacherId;
-  const yearId = requireId(formData.get("academic_year_id"), "׳©׳ ׳” ׳׳§׳“׳׳™׳×");
+  const yearId = requireId(formData.get("academic_year_id"), "שנה אקדמית");
   if (isError(yearId)) return yearId;
-  const subject = requireText(formData.get("subject"), "׳׳§׳¦׳•׳¢");
+  const subject = requireText(formData.get("subject"), "מקצוע");
   if (isError(subject)) return subject;
-  const gradeId = requireId(formData.get("grade_id"), "׳©׳›׳‘׳”");
+  const gradeId = requireId(formData.get("grade_id"), "שכבה");
   if (isError(gradeId)) return gradeId;
   const billing = parseLessonBilling(formData);
   if ("error" in billing) return billing;
@@ -885,7 +885,7 @@ async function insertTeachingAssignmentFromForm(
     .single();
 
   if (error || !assignment) {
-    return { error: error?.message ?? "׳™׳¦׳™׳¨׳× ׳©׳™׳‘׳•׳¥ ׳”׳•׳¨׳׳” ׳ ׳›׳©׳׳”" };
+    return { error: error?.message ?? "יצירת שיבוץ הוראה נכשלה" };
   }
 
   return assignment;
@@ -903,20 +903,27 @@ export async function createTeachingAssignmentAction(formData: FormData) {
 }
 
 async function buildLessonPayload(formData: FormData) {
-  const yearId = requireId(formData.get("academic_year_id"), "׳©׳ ׳” ׳׳§׳“׳׳™׳×");
+  const yearId = requireId(formData.get("academic_year_id"), "שנה אקדמית");
   if (isError(yearId)) return yearId;
-  const rangeId = requireId(formData.get("activity_range_id"), "׳˜׳•׳•׳— ׳₪׳¢׳™׳׳•׳×");
+  const rangeId = requireId(formData.get("activity_range_id"), "טווח פעילות");
   if (isError(rangeId)) return rangeId;
-  const ruleId = requireId(formData.get("attendance_rule_id"), "׳›׳׳ ׳ ׳•׳›׳—׳•׳×");
+  const ruleId = requireId(formData.get("attendance_rule_id"), "כלל נוכחות");
   if (isError(ruleId)) return ruleId;
 
   const dayOfWeek = parseInt(String(formData.get("day_of_week") ?? ""), 10);
   if (Number.isNaN(dayOfWeek) || dayOfWeek < 0 || dayOfWeek > 6) {
-    return { error: "׳™׳© ׳׳‘׳—׳•׳¨ ׳™׳•׳ ׳‘׳©׳‘׳•׳¢" };
+    return { error: "יש לבחור יום בשבוע" };
   }
   const lessonNumber = parseInt(String(formData.get("lesson_number") ?? ""), 10);
   if (Number.isNaN(lessonNumber) || lessonNumber < 1 || lessonNumber > 9) {
-    return { error: "׳׳¡׳₪׳¨ ׳©׳™׳¢׳•׳¨ ׳—׳™׳™׳‘ ׳׳”׳™׳•׳× ׳‘׳™׳ 1 ׳-9" };
+    return { error: "מספר שיעור חייב להיות בין 1 ל-9" };
+  }
+  const periodCount = parseInt(String(formData.get("period_count") ?? "1"), 10);
+  if (Number.isNaN(periodCount) || periodCount < 1 || periodCount > 9) {
+    return { error: "מספר השעות הרצופות חייב להיות בין 1 ל-9" };
+  }
+  if (lessonNumber + periodCount - 1 > 9) {
+    return { error: "השעות הרצופות חורגות משיעור 9. בחרי התחלה מוקדמת יותר או משך קצר יותר." };
   }
 
   const actionAuth = await createActionClient();
@@ -942,7 +949,7 @@ async function buildLessonPayload(formData: FormData) {
       .eq("id", teachingId)
       .single();
     if (teachingError || !data) {
-      return { error: "׳©׳™׳‘׳•׳¥ ׳”׳”׳•׳¨׳׳” ׳©׳ ׳‘׳—׳¨ ׳׳™׳ ׳• ׳×׳§׳™׳" };
+      return { error: "שיבוץ ההוראה שנבחר אינו תקין" };
     }
     teaching = data;
   } else {
@@ -953,7 +960,7 @@ async function buildLessonPayload(formData: FormData) {
   }
 
   if (!teaching.billing_type) {
-    return { error: "׳—׳¡׳¨ ׳¡׳•׳’ ׳©׳™׳¢׳•׳¨ (׳—׳•׳‘׳”/׳”׳×׳׳—׳•׳×)" };
+    return { error: "חסר סוג שיעור (חובה/התמחות)" };
   }
 
   let gradeId = teaching.grade_id as string | null;
@@ -966,7 +973,7 @@ async function buildLessonPayload(formData: FormData) {
     gradeId = cls?.grade_id ?? null;
   }
   if (!gradeId) {
-    return { error: "׳—׳¡׳¨׳” ׳©׳›׳‘׳” ׳׳©׳™׳¢׳•׳¨" };
+    return { error: "חסרה שכבה לשיעור" };
   }
 
   return {
@@ -981,6 +988,7 @@ async function buildLessonPayload(formData: FormData) {
     for_psychology: Boolean(teaching.for_psychology),
     day_of_week: dayOfWeek,
     lesson_number: lessonNumber,
+    period_count: periodCount,
     activity_range_id: rangeId,
     attendance_rule_id: ruleId,
   };
@@ -1123,14 +1131,14 @@ export async function setOccurrenceGapHandlingAction(
 }
 
 export async function upsertAttendanceNoteAction(formData: FormData) {
-  const yearId = requireId(formData.get("academic_year_id"), "׳©׳ ׳”");
+  const yearId = requireId(formData.get("academic_year_id"), "שנה");
   if (isError(yearId)) return yearId;
-  const body = requireText(formData.get("body"), "׳”׳¢׳¨׳”");
+  const body = requireText(formData.get("body"), "הערה");
   if (isError(body)) return body;
   const studentId = String(formData.get("student_id") ?? "").trim() || null;
   const lessonId = String(formData.get("lesson_id") ?? "").trim() || null;
-  if (!studentId && !lessonId) return { error: "׳—׳¡׳¨ ׳”׳§׳©׳¨ ׳׳”׳¢׳¨׳”" };
-  if (studentId && lessonId) return { error: "׳”׳¢׳¨׳” ׳›׳׳׳™׳× ׳”׳™׳ ׳׳×׳׳׳™׳“׳” ׳׳• ׳׳©׳™׳¢׳•׳¨, ׳׳ ׳׳©׳ ׳™׳”׳" };
+  if (!studentId && !lessonId) return { error: "חסר הקשר להערה" };
+  if (studentId && lessonId) return { error: "הערה כללית היא לתלמידה או לשיעור, לא לשניהם" };
 
   const actionAuth = await createActionClient();
   if ("error" in actionAuth) return { error: actionAuth.error };
@@ -1178,15 +1186,15 @@ export async function upsertAttendanceNoteAction(formData: FormData) {
 }
 
 export async function upsertMakeupExamAction(formData: FormData) {
-  const yearId = requireId(formData.get("academic_year_id"), "׳©׳ ׳”");
+  const yearId = requireId(formData.get("academic_year_id"), "שנה");
   if (isError(yearId)) return yearId;
-  const studentId = requireId(formData.get("student_id"), "׳×׳׳׳™׳“׳”");
+  const studentId = requireId(formData.get("student_id"), "תלמידה");
   if (isError(studentId)) return studentId;
-  const lessonId = requireId(formData.get("lesson_id"), "׳©׳™׳¢׳•׳¨");
+  const lessonId = requireId(formData.get("lesson_id"), "שיעור");
   if (isError(lessonId)) return lessonId;
   const required = parseInt(String(formData.get("required_exams") ?? "1"), 10);
   if (Number.isNaN(required) || required < 1 || required > 4) {
-    return { error: "׳׳¡׳₪׳¨ ׳׳‘׳—׳ ׳™׳ ׳—׳™׳™׳‘ ׳׳”׳™׳•׳× ׳‘׳™׳ 1 ׳-4" };
+    return { error: "מספר מבחנים חייב להיות בין 1 ל-4" };
   }
 
   const actionAuth = await createActionClient();
@@ -1211,7 +1219,7 @@ export async function updateMakeupExamAction(id: string, formData: FormData) {
   const completed = parseInt(String(formData.get("completed_exams") ?? "0"), 10);
   const required = parseInt(String(formData.get("required_exams") ?? "1"), 10);
   const status = String(formData.get("status") ?? "open");
-  if (!["open", "done", "blocked"].includes(status)) return { error: "׳¡׳˜׳˜׳•׳¡ ׳׳ ׳×׳§׳™׳" };
+  if (!["open", "done", "blocked"].includes(status)) return { error: "סטטוס לא תקין" };
 
   const actionAuth = await createActionClient();
   if ("error" in actionAuth) return { error: actionAuth.error };

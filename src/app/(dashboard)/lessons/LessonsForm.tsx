@@ -8,6 +8,7 @@ import { Input, Select } from "@/components/ui/Input";
 import { DAY_OF_WEEK_LABELS, BILLING_TYPE_LABELS } from "@/lib/constants";
 import { createLessonAction } from "../actions";
 import { describeAudienceScope } from "@/lib/validation";
+import { formatLessonHours } from "@/lib/lessons/hours";
 import type { ActivityRange, AttendanceRule, Teacher } from "@/types/database";
 import { Icon } from "@/components/ui/Icon";
 import { MultiSelect } from "@/components/ui/MultiSelect";
@@ -46,6 +47,8 @@ export function LessonsForm({
   const [trackIds, setTrackIds] = useState<string[]>([]);
   const [specializationIds, setSpecializationIds] = useState<string[]>([]);
   const [wholeGrade, setWholeGrade] = useState(false);
+  const [lessonNumber, setLessonNumber] = useState("1");
+  const [periodCount, setPeriodCount] = useState("1");
 
   const filteredClasses = useMemo(
     () => classes.filter((c) => !gradeId || c.grade_id === gradeId),
@@ -78,6 +81,12 @@ export function LessonsForm({
       const fd = new FormData(form);
       fd.set("academic_year_id", yearId);
       fd.set("billing_type", billingType);
+      if (gradeId) fd.set("grade_id", gradeId);
+      if (!gradeId) {
+        setError("יש לבחור שכבה");
+        setLoading(false);
+        return;
+      }
       if (wholeGrade) fd.set("whole_grade", "1");
       if (billingType === "specialization") {
         fd.set("class_id", "");
@@ -107,6 +116,8 @@ export function LessonsForm({
       setTrackIds([]);
       setSpecializationIds([]);
       setWholeGrade(false);
+      setLessonNumber("1");
+      setPeriodCount("1");
       setFormEpoch((n) => n + 1);
       onCreated?.();
       router.refresh();
@@ -262,13 +273,27 @@ export function LessonsForm({
             required
             options={DAY_OF_WEEK_LABELS.map((l, i) => ({ value: String(i), label: l }))}
           />
-          <Input
-            label="מספר שיעור (1-9)"
+          <Select
+            label="שעת התחלה"
             name="lesson_number"
-            type="number"
-            min={1}
-            max={9}
             required
+            value={lessonNumber}
+            onChange={(e) => setLessonNumber(e.target.value)}
+            options={Array.from({ length: 9 }, (_, i) => ({
+              value: String(i + 1),
+              label: `שיעור ${i + 1}`,
+            }))}
+          />
+          <Select
+            label="מספר שעות רצופות"
+            name="period_count"
+            required
+            value={periodCount}
+            onChange={(e) => setPeriodCount(e.target.value)}
+            options={Array.from({ length: 9 }, (_, i) => ({
+              value: String(i + 1),
+              label: i === 0 ? "שעה אחת" : `${i + 1} שעות`,
+            }))}
           />
           <Combobox
             label="טווח פעילות"
@@ -289,8 +314,8 @@ export function LessonsForm({
           />
         </div>
         <p className="mt-2 font-caption text-caption text-on-surface-variant">
-          השיעור הוא תבנית שבועית בטווח התאריכים שנבחר. טווח יכול להיות יום אחד (מוגדר
-          בטווחי פעילות). ימי חופשה מלוח החופשות לא מקבלים מופע ולא נספרים בנוכחות.
+          שיעור של שעתיים רצופות: שעת התחלה 1 ומשך 2 ({formatLessonHours(1, 2)}). ימי חופשה
+          מגדירים ב־הגדרות ← לשונית «לוח חופשות».
         </p>
       </div>
 
@@ -298,6 +323,9 @@ export function LessonsForm({
         <div className="rounded-lg border border-secondary/20 bg-secondary-container/40 px-3 py-2 font-body-sm text-body-sm text-primary">
           <div className="font-semibold">סיכום</div>
           <div className="mt-1 text-on-surface-variant">קהל: {audienceSummary}</div>
+          <div className="mt-1 text-on-surface-variant">
+            שעות: {formatLessonHours(Number(lessonNumber) || 1, Number(periodCount) || 1)}
+          </div>
         </div>
       )}
 

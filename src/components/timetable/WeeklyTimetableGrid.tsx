@@ -2,6 +2,7 @@
 
 import { useMemo } from "react";
 import { hebrewWeekdayLabels } from "@/lib/dates/hebrew";
+import { formatLessonHours, occupiedLessonNumbers } from "@/lib/lessons/hours";
 import { cn } from "@/lib/cn";
 
 export type TimetableBillingType = "mandatory" | "specialization";
@@ -13,6 +14,7 @@ export interface TimetableEntry {
   teacherId?: string | null;
   dayOfWeek: number; // 0-6 (ראשון-שבת)
   lessonNumber: number; // 1-9
+  periodCount?: number;
   billingType: TimetableBillingType;
   forPsychology?: boolean;
   audienceLabel?: string;
@@ -33,9 +35,12 @@ export function WeeklyTimetableGrid({
     const m = new Map<string, TimetableEntry[]>();
     for (const e of entries) {
       if (e.dayOfWeek < 0 || e.dayOfWeek > 6) continue;
-      if (e.lessonNumber < 1 || e.lessonNumber > maxLessonNumber) continue;
-      const key = `${e.dayOfWeek}::${e.lessonNumber}`;
-      m.set(key, [...(m.get(key) ?? []), e]);
+      const hours = occupiedLessonNumbers(e.lessonNumber, e.periodCount ?? 1);
+      for (const hour of hours) {
+        if (hour < 1 || hour > maxLessonNumber) continue;
+        const key = `${e.dayOfWeek}::${hour}`;
+        m.set(key, [...(m.get(key) ?? []), e]);
+      }
     }
     return m;
   }, [entries, maxLessonNumber]);
@@ -116,6 +121,11 @@ export function WeeklyTimetableGrid({
                                 <div className="truncate font-label-md text-label-md leading-tight text-primary">
                                   {e.subject}
                                 </div>
+                                {(e.periodCount ?? 1) > 1 && (
+                                  <div className="font-caption text-caption leading-tight text-primary">
+                                    {formatLessonHours(e.lessonNumber, e.periodCount)}
+                                  </div>
+                                )}
                                 {(e.teacherName || e.audienceLabel) && (
                                   <div className="mt-0.5 truncate font-caption text-caption leading-tight text-on-surface-variant">
                                     {e.teacherName ?? ""}

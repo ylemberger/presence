@@ -1,7 +1,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { parseIsoDate, toIsoDate } from "@/lib/dates/hebrew";
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { fetchHolidayDateSet, holidayDateSet } from "./holidays";
+import { fetchHolidayDateSet, holidayDateSet, isMissingHolidayTable } from "./holidays";
 
 export interface GenerateOccurrencesResult {
   created: number;
@@ -159,7 +159,12 @@ export async function applyHolidaysToYearOccurrences(
     .from("holiday_periods")
     .select("start_date, end_date")
     .eq("academic_year_id", academicYearId);
-  if (periodError) throw periodError;
+  if (periodError) {
+    if (isMissingHolidayTable(periodError)) {
+      return { created: gen.created, skipped: gen.skipped, removed: 0, cancelled: 0 };
+    }
+    throw periodError;
+  }
 
   const holidays = holidayDateSet(periods ?? []);
   if (holidays.size === 0) {

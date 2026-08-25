@@ -60,10 +60,10 @@ export function Combobox({
   const matches = useMemo(() => {
     const q = query.trim().toLowerCase();
     if (!q) {
-      if (options.length <= MAX_SUGGESTIONS) {
-        return { shown: options, extra: 0 };
-      }
-      return { shown: [] as typeof options, extra: 0 };
+      return {
+        shown: options.slice(0, MAX_SUGGESTIONS),
+        extra: Math.max(0, options.length - MAX_SUGGESTIONS),
+      };
     }
     const rows = options.filter((o) => o.label.toLowerCase().includes(q));
     return {

@@ -18,6 +18,12 @@ export function holidayDateSet(periods: HolidayRange[]): Set<string> {
   return set;
 }
 
+export function isMissingHolidayTable(error: { message?: string; code?: string } | null): boolean {
+  if (!error) return false;
+  const msg = `${error.message ?? ""} ${error.code ?? ""}`;
+  return /holiday_periods|schema cache|PGRST205|42P01/i.test(msg);
+}
+
 export async function fetchHolidayDateSet(
   supabase: SupabaseClient,
   academicYearIds: string[]
@@ -31,7 +37,10 @@ export async function fetchHolidayDateSet(
     .from("holiday_periods")
     .select("academic_year_id, start_date, end_date")
     .in("academic_year_id", ids);
-  if (error) throw error;
+  if (error) {
+    if (isMissingHolidayTable(error)) return map;
+    throw error;
+  }
 
   for (const row of data ?? []) {
     const set = map.get(row.academic_year_id) ?? new Set<string>();

@@ -107,7 +107,7 @@ export default async function TimetablePage({ searchParams }: Props) {
     .from("lessons")
     .select(
       `
-        id, subject, day_of_week, lesson_number, billing_type, for_psychology,
+        id, subject, day_of_week, lesson_number, period_count, billing_type, for_psychology,
         class_id, track_id, specialization_id,
         teacher_teaching_assignments(teacher_id, teachers(full_name)),
         classes(name),
@@ -208,6 +208,7 @@ export default async function TimetablePage({ searchParams }: Props) {
         teacherId,
         dayOfWeek: l.day_of_week,
         lessonNumber: l.lesson_number,
+        periodCount: l.period_count ?? 1,
         billingType: l.billing_type,
         forPsychology: l.for_psychology,
         audienceLabel,

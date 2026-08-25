@@ -38,6 +38,7 @@ import {
 } from "./EditableRows";
 import { ensureFixedGrades } from "@/lib/years/promote";
 import { filterFixedGrades, isFixedGradeName } from "@/lib/years/grades";
+import { isMissingHolidayTable } from "@/lib/lessons/holidays";
 
 /** Shared thead row for the inline editable tables — matches Stitch table headers. */
 function SettingsTableHead({ columns }: { columns: string[] }) {
@@ -306,9 +307,24 @@ export default async function SettingsPage() {
     </Section>
   );
 
+  const holidaysMissing = isMissingHolidayTable(holidays.error ?? null);
+
   const holidaysPanel = yearId ? (
     <Section icon="event_busy" title="לוח חופשות" bodyBleed>
-      <HolidayCalendar yearId={yearId} periods={holidays.data ?? []} />
+      {holidaysMissing ? (
+        <div className="space-y-3 p-6">
+          <p className="font-body-md text-body-md text-on-surface">
+            טבלת החופשות עדיין לא קיימת במסד. הריצי ב-Supabase SQL Editor את הקובץ{" "}
+            <code className="font-mono text-caption">supabase/patches/run_005_to_007.sql</code>
+            {" "}(או לפחות <code className="font-mono text-caption">005_holiday_periods.sql</code>), ואז רענני את הדף.
+          </p>
+          <p className="font-caption text-caption text-on-surface-variant">
+            אחרי ההרצה: הגדרות ← לשונית «לוח חופשות».
+          </p>
+        </div>
+      ) : (
+        <HolidayCalendar yearId={yearId} periods={holidays.data ?? []} />
+      )}
     </Section>
   ) : (
     <Section>

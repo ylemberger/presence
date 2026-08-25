@@ -11,6 +11,7 @@ import {
   todayIso,
 } from "@/lib/dates/hebrew";
 import { OCCURRENCE_STATUS_LABELS } from "@/lib/constants";
+import { formatLessonHours } from "@/lib/lessons/hours";
 import { cn } from "@/lib/cn";
 import { completeOccurrenceAction } from "../actions";
 import type { Lesson } from "@/types/database";
@@ -266,7 +267,7 @@ export function LessonsCalendar({
                 >
                   <span className="font-semibold text-on-surface">{l.subject}</span>
                   <span className="font-caption text-caption text-on-surface-variant">
-                    שיעור {l.lesson_number}
+                    {formatLessonHours(l.lesson_number, l.period_count ?? 1)}
                   </span>
                 </li>
               ))}

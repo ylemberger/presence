@@ -20,6 +20,7 @@ import { cn } from "@/lib/cn";
 import Link from "next/link";
 import { Icon } from "@/components/ui/Icon";
 import { ATTENDANCE_STATUS_LABELS, DAY_OF_WEEK_LABELS } from "@/lib/constants";
+import { formatLessonHours } from "@/lib/lessons/hours";
 
 interface Props {
   searchParams: {
@@ -58,9 +59,15 @@ function lessonOptionLabel(
   subject: string,
   teacherName: string,
   dayOfWeek: number,
-  lessonNumber: number
+  lessonNumber: number,
+  periodCount = 1
 ): string {
-  return [subject, teacherName, dayLabel(dayOfWeek), lessonNumber ? `שיעור ${lessonNumber}` : ""]
+  return [
+    subject,
+    teacherName,
+    dayLabel(dayOfWeek),
+    lessonNumber ? formatLessonHours(lessonNumber, periodCount) : "",
+  ]
     .filter(Boolean)
     .join(" · ");
 }
@@ -150,7 +157,7 @@ export default async function ReportsPage({ searchParams }: Props) {
     supabase
       .from("lessons")
       .select(
-        `id, subject, class_id, track_id, specialization_id, teacher_teaching_assignment_id, day_of_week, lesson_number,
+        `id, subject, class_id, track_id, specialization_id, teacher_teaching_assignment_id, day_of_week, lesson_number, period_count,
          teacher_teaching_assignments(teacher_id, teachers(full_name))`
       )
       .eq("academic_year_id", activeYear.id),
@@ -237,6 +244,7 @@ export default async function ReportsPage({ searchParams }: Props) {
         teacherName: teacherFullName(l.teacher_teaching_assignments),
         dayOfWeek: l.day_of_week,
         lessonNumber: l.lesson_number,
+        periodCount: l.period_count ?? 1,
       },
     ])
   );
@@ -544,7 +552,8 @@ export default async function ReportsPage({ searchParams }: Props) {
         selectedLessonMeta.subject,
         selectedLessonMeta.teacherName,
         selectedLessonMeta.dayOfWeek,
-        selectedLessonMeta.lessonNumber
+        selectedLessonMeta.lessonNumber,
+        selectedLessonMeta.periodCount
       ),
     });
   }
@@ -633,7 +642,8 @@ export default async function ReportsPage({ searchParams }: Props) {
               l.subject,
               teacherFullName(l.teacher_teaching_assignments),
               l.day_of_week,
-              l.lesson_number
+              l.lesson_number,
+              l.period_count ?? 1
             ),
           }))}
           rules={rules ?? []}

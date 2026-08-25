@@ -131,6 +131,7 @@ export interface Lesson {
   for_psychology: boolean;
   day_of_week: number;
   lesson_number: number;
+  period_count: number;
   activity_range_id: string;
   attendance_rule_id: string;
   created_at: string;
