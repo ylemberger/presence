@@ -4,7 +4,11 @@ import { Section } from "@/components/ui/Section";
 import { createClient } from "@/lib/supabase/server";
 import { getActiveAcademicYear } from "@/lib/utils";
 import { isDateInRange, formatHebrewDate, formatGregorianDate } from "@/lib/dates/hebrew";
-import { summarizeAttendance, evaluateAbsenceAgainstRule } from "@/lib/attendance/calculator";
+import {
+  summarizeAttendance,
+  evaluateAbsenceAgainstRule,
+  type EligibleOccurrence,
+} from "@/lib/attendance/calculator";
 import { ReportsFilter } from "./ReportsFilter";
 import { PrintButton } from "@/components/ui/PrintButton";
 import { ExportCsvButton } from "./ExportCsvButton";
@@ -15,7 +19,7 @@ import type { AttendanceStatus } from "@/types/database";
 import { cn } from "@/lib/cn";
 import Link from "next/link";
 import { Icon } from "@/components/ui/Icon";
-import { ATTENDANCE_STATUS_LABELS } from "@/lib/constants";
+import { ATTENDANCE_STATUS_LABELS, DAY_OF_WEEK_LABELS } from "@/lib/constants";
 
 interface Props {
   searchParams: {
@@ -26,12 +30,77 @@ interface Props {
     teacherId?: string;
     subject?: string;
     studentId?: string;
-    startDate?: string;
-    endDate?: string;
+    lessonId?: string;
+    occurrenceId?: string;
     minAbsence?: string;
     ruleId?: string;
     run?: string;
   };
+}
+
+function one<T>(v: unknown): T | null {
+  if (!v) return null;
+  return (Array.isArray(v) ? v[0] : v) as T;
+}
+
+function teacherFullName(ta: unknown): string {
+  const assignment = one<{ teachers?: unknown }>(ta);
+  const teacher = one<{ full_name?: string }>(assignment?.teachers);
+  return teacher?.full_name ?? "";
+}
+
+function dayLabel(dayOfWeek: number): string {
+  const name = DAY_OF_WEEK_LABELS[dayOfWeek];
+  return name ? `יום ${name}` : "";
+}
+
+function lessonOptionLabel(
+  subject: string,
+  teacherName: string,
+  dayOfWeek: number,
+  lessonNumber: number
+): string {
+  return [subject, teacherName, dayLabel(dayOfWeek), lessonNumber ? `שיעור ${lessonNumber}` : ""]
+    .filter(Boolean)
+    .join(" · ");
+}
+
+function statusLabel(status: AttendanceStatus | undefined): string {
+  return status ? ATTENDANCE_STATUS_LABELS[status] : "לא סומן";
+}
+
+function buildReportHref(
+  current: Props["searchParams"],
+  next: { lessonId?: string | null; occurrenceId?: string | null } = {}
+): string {
+  const p = new URLSearchParams();
+  for (const key of [
+    "gradeId",
+    "classId",
+    "trackId",
+    "specializationId",
+    "teacherId",
+    "subject",
+    "studentId",
+    "minAbsence",
+    "ruleId",
+  ] as const) {
+    const value = current[key];
+    if (value) p.set(key, value);
+  }
+  let lessonId = current.lessonId;
+  let occurrenceId = current.occurrenceId;
+  if (next.lessonId !== undefined) {
+    lessonId = next.lessonId ?? undefined;
+    occurrenceId = undefined;
+  }
+  if (next.occurrenceId !== undefined) {
+    occurrenceId = next.occurrenceId ?? undefined;
+  }
+  if (lessonId) p.set("lessonId", lessonId);
+  if (occurrenceId) p.set("occurrenceId", occurrenceId);
+  p.set("run", "1");
+  return `/reports?${p.toString()}`;
 }
 
 export default async function ReportsPage({ searchParams }: Props) {
@@ -54,8 +123,8 @@ export default async function ReportsPage({ searchParams }: Props) {
   const rangeEnds = (yearRanges ?? []).map((r) => r.end_date).sort();
   const yearStart = rangeStarts[0] ?? activeYear.created_at.split("T")[0];
   const yearEnd = rangeEnds[rangeEnds.length - 1] ?? todayIso();
-  const startDate = params.startDate || yearStart;
-  const endDate = params.endDate || (yearEnd < todayIso() ? yearEnd : todayIso());
+  const startDate = yearStart;
+  const endDate = yearEnd < todayIso() ? yearEnd : todayIso();
   const minAbsence = params.minAbsence ? parseFloat(params.minAbsence) : 0;
   const shouldRun = true;
 
@@ -80,7 +149,10 @@ export default async function ReportsPage({ searchParams }: Props) {
     supabase.from("teachers").select("id, full_name").order("full_name"),
     supabase
       .from("lessons")
-      .select("id, subject, class_id, track_id, specialization_id, teacher_teaching_assignment_id")
+      .select(
+        `id, subject, class_id, track_id, specialization_id, teacher_teaching_assignment_id, day_of_week, lesson_number,
+         teacher_teaching_assignments(teacher_id, teachers(full_name))`
+      )
       .eq("academic_year_id", activeYear.id),
     supabase.from("students").select("id, full_name").eq("is_active", true).order("full_name"),
     supabase.from("attendance_rules").select("id, name, max_allowed_absence_percent").order("name"),
@@ -112,14 +184,37 @@ export default async function ReportsPage({ searchParams }: Props) {
     ruleLevel: "ok" | "warning" | "blocked";
   }> = [];
 
-  let detailRows: Array<{
+  let lessonRows: Array<{
+    lessonId: string;
+    subject: string;
+    teacherName: string;
+    dayLabel: string;
+    totalRequired: number;
+    presentOnlyCount: number;
+    lateCount: number;
+    absentCount: number;
+    unmarkedCount: number;
+    absencePercent: number;
+    ruleLabel: string;
+    ruleLevel: "ok" | "warning" | "blocked";
+  }> = [];
+
+  let occurrenceRows: Array<{
+    occurrenceId: string;
+    date: string;
+    totalRequired: number;
+    presentOnlyCount: number;
+    lateCount: number;
+    absentCount: number;
+    unmarkedCount: number;
+    studentStatus?: string;
+  }> = [];
+
+  let occurrenceStudentRows: Array<{
     studentId: string;
     studentName: string;
     gradeName: string;
     className: string;
-    date: string;
-    subject: string;
-    teacherName: string;
     status: string;
   }> = [];
 
@@ -132,24 +227,37 @@ export default async function ReportsPage({ searchParams }: Props) {
 
   let singleStudentName: string | null = null;
 
+  type YearLesson = NonNullable<typeof yearLessons>[number];
+  const lessonCatalog = new Map(
+    (yearLessons ?? []).map((l) => [
+      l.id,
+      {
+        id: l.id,
+        subject: l.subject,
+        teacherName: teacherFullName(l.teacher_teaching_assignments),
+        dayOfWeek: l.day_of_week,
+        lessonNumber: l.lesson_number,
+      },
+    ])
+  );
+
   if (shouldRun) {
     let scopedLessonIds: string[] | null = null;
-    let lessons = yearLessons ?? [];
+    let lessons: YearLesson[] = yearLessons ?? [];
 
     if (params.teacherId) {
-      const { data: tas } = await supabase
-        .from("teacher_teaching_assignments")
-        .select("id")
-        .eq("teacher_id", params.teacherId)
-        .eq("academic_year_id", activeYear.id);
-      const taIds = new Set((tas ?? []).map((t) => t.id));
-      lessons = lessons.filter((l) => taIds.has(l.teacher_teaching_assignment_id));
+      lessons = lessons.filter((l) => {
+        const ta = one<{ teacher_id: string }>(l.teacher_teaching_assignments);
+        return ta?.teacher_id === params.teacherId;
+      });
     }
     if (params.subject) {
       lessons = lessons.filter((l) => l.subject === params.subject);
     }
-    // כיתה/מסלול/התמחות מסננים תלמידות לפי השיבוץ הנוכחי, לא מצמצמים שיעורים.
-    if (params.teacherId || params.subject) {
+    if (params.lessonId) {
+      lessons = lessons.filter((l) => l.id === params.lessonId);
+    }
+    if (params.teacherId || params.subject || params.lessonId) {
       scopedLessonIds = lessons.map((l) => l.id);
     }
 
@@ -169,16 +277,22 @@ export default async function ReportsPage({ searchParams }: Props) {
       const { data: assignments } = await q;
       studentIds = [...new Set((assignments ?? []).map((a) => a.student_id))];
 
-      if (params.teacherId || params.subject) {
+      if (params.teacherId || params.subject || params.lessonId) {
         const { data: links } = await supabase
           .from("student_lesson_assignments")
           .select("student_id, lesson_id")
-          .in("lesson_id", scopedLessonIds?.length ? scopedLessonIds : ["00000000-0000-0000-0000-000000000000"])
+          .in(
+            "lesson_id",
+            scopedLessonIds?.length ? scopedLessonIds : ["00000000-0000-0000-0000-000000000000"]
+          )
           .is("end_date", null);
         const fromLessons = new Set((links ?? []).map((l) => l.student_id));
         studentIds = studentIds.filter((id) => fromLessons.has(id));
       }
     }
+
+    const lessonItems = new Map<string, EligibleOccurrence[]>();
+    const occById = new Map<string, { date: string; items: EligibleOccurrence[] }>();
 
     if (studentIds.length > 0) {
       const [
@@ -264,6 +378,7 @@ export default async function ReportsPage({ searchParams }: Props) {
         const eligibleWithAttendance = eligible.map((o) => ({
           occurrenceId: o.id,
           occurrenceDate: o.occurrence_date,
+          lessonId: o.lesson_id,
           status: o.status,
           attendanceStatus: studentAttendance.find((a) => a.lesson_occurrence_id === o.id)
             ?.status as AttendanceStatus | undefined,
@@ -293,45 +408,37 @@ export default async function ReportsPage({ searchParams }: Props) {
           ruleLevel: evaluated.level,
         });
 
-        const lessonMeta = new Map<string, { subject: string; teacherName: string }>();
-        for (const o of eligible) {
-          const lessonJoin = o.lessons as unknown as {
-            subject?: string;
-            teacher_teaching_assignments?: { teachers?: { full_name?: string } | { full_name?: string }[] } | null;
-          };
-          const ta = lessonJoin?.teacher_teaching_assignments;
-          const teacher =
-            (Array.isArray(ta) ? ta[0]?.teachers : ta?.teachers) as
-              | { full_name?: string }
-              | { full_name?: string }[]
-              | undefined;
-          const teacherName = Array.isArray(teacher)
-            ? teacher[0]?.full_name ?? ""
-            : teacher?.full_name ?? "";
-          lessonMeta.set(o.id, {
-            subject: lessonJoin?.subject ?? "",
-            teacherName,
-          });
-        }
         for (const e of eligibleWithAttendance) {
-          const meta = lessonMeta.get(e.occurrenceId);
-          const status = e.attendanceStatus
-            ? ATTENDANCE_STATUS_LABELS[e.attendanceStatus]
-            : "לא סומן";
-          detailRows.push({
-            studentId,
-            studentName,
-            gradeName,
-            className,
-            date: e.occurrenceDate,
-            subject: meta?.subject ?? "",
-            teacherName: meta?.teacherName ?? "",
-            status,
-          });
+          const lessonList = lessonItems.get(e.lessonId) ?? ([] as EligibleOccurrence[]);
+          lessonList.push(e);
+          lessonItems.set(e.lessonId, lessonList);
+
+          if (params.lessonId && e.lessonId === params.lessonId) {
+            const occ = occById.get(e.occurrenceId) ?? {
+              date: e.occurrenceDate,
+              items: [] as EligibleOccurrence[],
+            };
+            occ.items.push(e);
+            occById.set(e.occurrenceId, occ);
+          }
+
+          if (params.occurrenceId && e.occurrenceId === params.occurrenceId) {
+            occurrenceStudentRows.push({
+              studentId,
+              studentName,
+              gradeName,
+              className,
+              status: statusLabel(e.attendanceStatus),
+            });
+          }
         }
 
         if (params.studentId && studentId === params.studentId) {
           singleStudentName = studentName;
+          for (const la of studentLessonAssignments) {
+            if (scopedLessonIds && !scopedLessonIds.includes(la.lesson_id)) continue;
+            if (!lessonItems.has(la.lesson_id)) lessonItems.set(la.lesson_id, []);
+          }
           const byMonth = new Map<string, { present: number; late: number; absent: number }>();
           for (const e of eligibleWithAttendance) {
             if (!e.attendanceStatus) continue;
@@ -354,17 +461,58 @@ export default async function ReportsPage({ searchParams }: Props) {
       }
 
       reportRows.sort((a, b) => b.absencePercent - a.absencePercent);
-      detailRows.sort((a, b) => {
-        const byName = a.studentName.localeCompare(b.studentName, "he");
-        if (byName !== 0) return byName;
-        return a.date.localeCompare(b.date) || a.subject.localeCompare(b.subject, "he");
+      occurrenceStudentRows.sort((a, b) => a.studentName.localeCompare(b.studentName, "he"));
+    }
+
+    const lessonIdsToShow = new Set(lessonItems.keys());
+    if (params.teacherId || params.subject || params.lessonId) {
+      for (const l of lessons) lessonIdsToShow.add(l.id);
+    }
+
+    for (const lessonId of lessonIdsToShow) {
+      const meta = lessonCatalog.get(lessonId);
+      if (!meta) continue;
+      const summary = summarizeAttendance(lessonItems.get(lessonId) ?? []);
+      const evaluated = evaluateAbsenceAgainstRule(summary.absencePercent, threshold);
+      lessonRows.push({
+        lessonId,
+        subject: meta.subject,
+        teacherName: meta.teacherName,
+        dayLabel: dayLabel(meta.dayOfWeek),
+        totalRequired: summary.totalRequired,
+        presentOnlyCount: summary.presentOnlyCount,
+        lateCount: summary.lateCount,
+        absentCount: summary.absentCount,
+        unmarkedCount: summary.unmarked,
+        absencePercent: summary.absencePercent,
+        ruleLabel: evaluated.label,
+        ruleLevel: evaluated.level,
       });
+    }
+    lessonRows.sort((a, b) => a.subject.localeCompare(b.subject, "he"));
+
+    if (params.lessonId) {
+      occurrenceRows = [...occById.entries()]
+        .map(([occurrenceId, { date, items }]) => {
+          const summary = summarizeAttendance(items);
+          return {
+            occurrenceId,
+            date,
+            totalRequired: summary.totalRequired,
+            presentOnlyCount: summary.presentOnlyCount,
+            lateCount: summary.lateCount,
+            absentCount: summary.absentCount,
+            unmarkedCount: summary.unmarked,
+            studentStatus: params.studentId ? statusLabel(items[0]?.attendanceStatus) : undefined,
+          };
+        })
+        .sort((a, b) => a.date.localeCompare(b.date));
     }
   }
 
   const topAbsentees = params.classId || params.gradeId ? reportRows.slice(0, 5) : [];
   const printedOn = todayIso();
-  const canPrint = shouldRun && reportRows.length > 0;
+  const canPrint = shouldRun && (reportRows.length > 0 || lessonRows.length > 0);
 
   const printFilters: Array<{ label: string; value: string }> = [
     { label: "שנה", value: activeYear.name },
@@ -377,17 +525,29 @@ export default async function ReportsPage({ searchParams }: Props) {
   )?.name;
   const filterTeacherName = (teachers ?? []).find((t) => t.id === params.teacherId)
     ?.full_name;
+  const selectedLessonMeta = params.lessonId ? lessonCatalog.get(params.lessonId) : undefined;
   const printTitle = singleStudentName
-    ? `דוח נוכחות מפורט · ${singleStudentName} · ${activeYear.name}`
+    ? `דוח נוכחות · ${singleStudentName} · ${activeYear.name}`
     : filterTeacherName
-      ? `דוח נוכחות מפורט · ${filterTeacherName} · ${activeYear.name}`
-      : `דוח נוכחות מפורט · ${activeYear.name}`;
+      ? `דוח נוכחות · ${filterTeacherName} · ${activeYear.name}`
+      : `דוח נוכחות · ${activeYear.name}`;
   if (filterGradeName) printFilters.push({ label: "שכבה נוכחית", value: filterGradeName });
   if (filterClassName) printFilters.push({ label: "כיתה נוכחית", value: filterClassName });
   if (filterTrackName) printFilters.push({ label: "מסלול", value: filterTrackName });
   if (filterSpecName) printFilters.push({ label: "התמחות", value: filterSpecName });
   if (filterTeacherName) printFilters.push({ label: "מורה", value: filterTeacherName });
   if (params.subject) printFilters.push({ label: "מקצוע", value: params.subject });
+  if (selectedLessonMeta) {
+    printFilters.push({
+      label: "שיעור",
+      value: lessonOptionLabel(
+        selectedLessonMeta.subject,
+        selectedLessonMeta.teacherName,
+        selectedLessonMeta.dayOfWeek,
+        selectedLessonMeta.lessonNumber
+      ),
+    });
+  }
   if (singleStudentName) {
     printFilters.push({ label: "תלמידה", value: singleStudentName });
   }
@@ -435,13 +595,15 @@ export default async function ReportsPage({ searchParams }: Props) {
       <div className="print:hidden">
         <PageHeader
           title="דוחות נוכחות"
-          description="דוח מפורט לפי השנה הפעילה, מורה או תלמידה (לפי השכבה הנוכחית). כולל כל השיעורים."
+          description="שיעורים ומצב כל שיעור לפי השנה הפעילה, מורה, תלמידה או שכבה נוכחית. מופעים מוצגים רק אחרי בחירת שיעור."
           size="headline"
           actions={
             <div className="flex flex-wrap gap-2">
               <ExportCsvButton
                 rows={reportRows}
-                detailRows={detailRows}
+                lessonRows={lessonRows}
+                occurrenceRows={occurrenceRows}
+                occurrenceStudentRows={occurrenceStudentRows}
                 title={printTitle}
                 filename={`attendance-${activeYear.name}.csv`}
               />
@@ -465,10 +627,17 @@ export default async function ReportsPage({ searchParams }: Props) {
           teachers={(teachers ?? []).map((t) => ({ id: t.id, name: t.full_name }))}
           students={allStudents ?? []}
           subjects={subjects}
+          lessons={(yearLessons ?? []).map((l) => ({
+            id: l.id,
+            label: lessonOptionLabel(
+              l.subject,
+              teacherFullName(l.teacher_teaching_assignments),
+              l.day_of_week,
+              l.lesson_number
+            ),
+          }))}
           rules={rules ?? []}
           defaults={{
-            startDate,
-            endDate,
             minAbsence: String(minAbsence),
             gradeId: params.gradeId,
             classId: params.classId,
@@ -477,6 +646,7 @@ export default async function ReportsPage({ searchParams }: Props) {
             teacherId: params.teacherId,
             subject: params.subject,
             studentId: params.studentId,
+            lessonId: params.lessonId,
             ruleId: params.ruleId,
           }}
         />
@@ -494,7 +664,7 @@ export default async function ReportsPage({ searchParams }: Props) {
             </p>
           </div>
         </Section>
-      ) : reportRows.length === 0 ? (
+      ) : reportRows.length === 0 && lessonRows.length === 0 ? (
         <Section className="print:hidden">
           <div className="flex flex-col items-center gap-3 py-10 text-center">
             <Icon name="check_circle" className="text-5xl text-attendance-present" />
@@ -513,8 +683,8 @@ export default async function ReportsPage({ searchParams }: Props) {
             <div className="flex flex-col gap-gutter lg:col-span-1 print:col-span-1">
               <div className="grid grid-cols-2 gap-4 print:grid-cols-4 print:gap-3">
                 <KpiCard
-                  label='סה"כ שיעורים'
-                  value={totals.lessons.toLocaleString("he-IL")}
+                  label="שיעורים"
+                  value={lessonRows.length.toLocaleString("he-IL")}
                   icon="school"
                   accent="primary"
                 />
@@ -584,7 +754,7 @@ export default async function ReportsPage({ searchParams }: Props) {
             )}
           </div>
 
-          {/* Data Table */}
+          {reportRows.length > 0 && (
           <Section
             icon="table_view"
             title={printTitle}
@@ -602,7 +772,7 @@ export default async function ReportsPage({ searchParams }: Props) {
                 "תלמידה",
                 "שכבה",
                 "כיתה",
-                "שיעורים",
+                "מופעים",
                 "נוכחת",
                 "איחור",
                 "נעדרה",
@@ -614,7 +784,9 @@ export default async function ReportsPage({ searchParams }: Props) {
               {reportRows.map((row) => (
                 <TableRow key={row.studentId}>
                   <TableCell className="font-label-md text-label-md text-primary">
-                    {row.studentName}
+                    <Link href={`/students/${row.studentId}`} className="hover:underline">
+                      {row.studentName}
+                    </Link>
                   </TableCell>
                   <TableCell className="text-on-surface-variant">
                     {row.gradeName}
@@ -664,34 +836,208 @@ export default async function ReportsPage({ searchParams }: Props) {
               ))}
             </Table>
           </Section>
+          )}
 
-          {detailRows.length > 0 && (
+          {lessonRows.length > 0 && (
             <Section
-              icon="list_alt"
-              title="פירוט כל השיעורים"
-              subtitle="כל מופע שיעור לכל תלמידה בדוח — כולל לא סומן"
+              icon="menu_book"
+              title={params.teacherId ? "השיעורים שמלמדת" : "שיעורים ומצב כל שיעור"}
+              subtitle={
+                params.lessonId
+                  ? "בחרי שיעור אחר כדי לחזור לרשימה, או לחצי על מופע למטה"
+                  : "לחצי על שיעור כדי לראות את כל המופעים שלו"
+              }
               bodyBleed
               className="print:border-0"
             >
+              {params.lessonId && (
+                <div className="mb-3 px-4 print:hidden">
+                  <Link
+                    href={buildReportHref(params, { lessonId: null })}
+                    className="font-label-md text-label-md text-primary hover:underline"
+                  >
+                    ← כל השיעורים
+                  </Link>
+                </div>
+              )}
               <Table
-                headers={["תלמידה", "שכבה", "כיתה", "תאריך", "מקצוע", "מורה", "סטטוס"]}
+                headers={[
+                  "מקצוע",
+                  "מורה",
+                  "יום",
+                  "מופעים",
+                  "נוכחת",
+                  "איחור",
+                  "נעדרה",
+                  "לא סומן",
+                  "% חיסורים",
+                  "סטטוס",
+                ]}
               >
-                {detailRows.map((row, idx) => (
-                  <TableRow key={`${row.studentId}-${row.date}-${row.subject}-${idx}`}>
+                {lessonRows.map((row) => (
+                  <TableRow
+                    key={row.lessonId}
+                    className={params.lessonId === row.lessonId ? "bg-primary/5" : undefined}
+                  >
                     <TableCell className="font-label-md text-label-md text-primary">
-                      {row.studentName}
+                      <Link
+                        href={buildReportHref(params, { lessonId: row.lessonId })}
+                        className="hover:underline"
+                      >
+                        {row.subject}
+                      </Link>
                     </TableCell>
-                    <TableCell className="text-on-surface-variant">{row.gradeName}</TableCell>
-                    <TableCell className="text-on-surface-variant">{row.className}</TableCell>
-                    <TableCell className="text-on-surface">
-                      {formatHebrewDate(row.date)}
-                    </TableCell>
-                    <TableCell className="text-on-surface">{row.subject}</TableCell>
                     <TableCell className="text-on-surface-variant">{row.teacherName}</TableCell>
-                    <TableCell className="text-on-surface">{row.status}</TableCell>
+                    <TableCell className="text-on-surface-variant">{row.dayLabel}</TableCell>
+                    <TableCell className="text-on-surface">{row.totalRequired}</TableCell>
+                    <TableCell className="text-attendance-present">{row.presentOnlyCount}</TableCell>
+                    <TableCell className="text-attendance-late">{row.lateCount}</TableCell>
+                    <TableCell className="text-attendance-absent">{row.absentCount}</TableCell>
+                    <TableCell className="text-on-surface-variant">{row.unmarkedCount}</TableCell>
+                    <TableCell
+                      className={cn(
+                        "font-semibold",
+                        row.ruleLevel === "blocked" && "text-attendance-absent",
+                        row.ruleLevel === "warning" && "text-attendance-late",
+                        row.ruleLevel === "ok" && "text-attendance-present"
+                      )}
+                    >
+                      {row.absencePercent}%
+                    </TableCell>
+                    <TableCell>
+                      <StatusPill
+                        tone={
+                          row.ruleLevel === "blocked"
+                            ? "danger"
+                            : row.ruleLevel === "warning"
+                              ? "warn"
+                              : "ok"
+                        }
+                      >
+                        {row.ruleLabel}
+                      </StatusPill>
+                    </TableCell>
                   </TableRow>
                 ))}
               </Table>
+            </Section>
+          )}
+
+          {params.lessonId && (
+            <Section
+              icon="event_repeat"
+              title={
+                selectedLessonMeta
+                  ? `מופעים · ${selectedLessonMeta.subject}`
+                  : "מופעי השיעור"
+              }
+              subtitle={
+                params.studentId
+                  ? "סטטוס התלמידה בכל מופע. לחצי על תאריך לפירוט."
+                  : "לחצי על מופע כדי לראות נוכחות של כל תלמידה"
+              }
+              bodyBleed
+              className="print:border-0"
+            >
+              {occurrenceRows.length === 0 ? (
+                <p className="px-4 py-6 text-body-md text-on-surface-variant">
+                  אין מופעים לשיעור זה בטווח השנה הפעילה.
+                </p>
+              ) : (
+                <Table
+                  headers={
+                    params.studentId
+                      ? ["תאריך", "סטטוס", "נוכחות"]
+                      : ["תאריך", "תלמידות", "נוכחת", "איחור", "נעדרה", "לא סומן", "נוכחות"]
+                  }
+                >
+                  {occurrenceRows.map((row) => (
+                    <TableRow
+                      key={row.occurrenceId}
+                      className={
+                        params.occurrenceId === row.occurrenceId ? "bg-primary/5" : undefined
+                      }
+                    >
+                      <TableCell className="font-label-md text-label-md text-primary">
+                        <Link
+                          href={buildReportHref(params, { occurrenceId: row.occurrenceId })}
+                          className="hover:underline"
+                        >
+                          {formatHebrewDate(row.date)}
+                        </Link>
+                      </TableCell>
+                      {params.studentId ? (
+                        <TableCell className="text-on-surface">
+                          {row.studentStatus ?? "לא סומן"}
+                        </TableCell>
+                      ) : (
+                        <>
+                          <TableCell className="text-on-surface">{row.totalRequired}</TableCell>
+                          <TableCell className="text-attendance-present">
+                            {row.presentOnlyCount}
+                          </TableCell>
+                          <TableCell className="text-attendance-late">{row.lateCount}</TableCell>
+                          <TableCell className="text-attendance-absent">{row.absentCount}</TableCell>
+                          <TableCell className="text-on-surface-variant">
+                            {row.unmarkedCount}
+                          </TableCell>
+                        </>
+                      )}
+                      <TableCell>
+                        <Link
+                          href={`/attendance?date=${row.date}&occurrenceId=${row.occurrenceId}`}
+                          className="font-label-md text-label-md text-primary hover:underline print:hidden"
+                        >
+                          פתיחה
+                        </Link>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </Table>
+              )}
+            </Section>
+          )}
+
+          {params.occurrenceId && (
+            <Section
+              icon="how_to_reg"
+              title="נוכחות במופע"
+              subtitle={
+                occurrenceRows.find((o) => o.occurrenceId === params.occurrenceId)
+                  ? formatHebrewDate(
+                      occurrenceRows.find((o) => o.occurrenceId === params.occurrenceId)!.date
+                    )
+                  : undefined
+              }
+              bodyBleed
+              className="print:border-0"
+            >
+              <div className="mb-3 px-4 print:hidden">
+                <Link
+                  href={buildReportHref(params, { occurrenceId: null })}
+                  className="font-label-md text-label-md text-primary hover:underline"
+                >
+                  ← כל המופעים
+                </Link>
+              </div>
+              {occurrenceStudentRows.length === 0 ? (
+                <p className="px-4 py-6 text-body-md text-on-surface-variant">
+                  אין תלמידות למופע זה לפי הסינון.
+                </p>
+              ) : (
+                <Table headers={["תלמידה", "שכבה", "כיתה", "סטטוס"]}>
+                  {occurrenceStudentRows.map((row) => (
+                    <TableRow key={row.studentId}>
+                      <TableCell className="font-label-md text-label-md text-primary">
+                        {row.studentName}
+                      </TableCell>
+                      <TableCell className="text-on-surface-variant">{row.gradeName}</TableCell>
+                      <TableCell className="text-on-surface-variant">{row.className}</TableCell>
+                      <TableCell className="text-on-surface">{row.status}</TableCell>
+                    </TableRow>
+                  ))}
+                </Table>
+              )}
             </Section>
           )}
           <ReportPrintFooter studentCount={reportRows.length} />

@@ -4,7 +4,6 @@ import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/Button";
 import { Combobox } from "@/components/ui/Combobox";
 import { Input } from "@/components/ui/Input";
-import { HebrewDateInput } from "@/components/ui/HebrewDateInput";
 import { Section } from "@/components/ui/Section";
 import { Icon } from "@/components/ui/Icon";
 
@@ -16,10 +15,9 @@ interface ReportsFilterProps {
   teachers: { id: string; name: string }[];
   students: { id: string; full_name: string }[];
   subjects: string[];
+  lessons: { id: string; label: string }[];
   rules: { id: string; name: string; max_allowed_absence_percent: number }[];
   defaults: {
-    startDate: string;
-    endDate: string;
     minAbsence: string;
     gradeId?: string;
     classId?: string;
@@ -28,6 +26,7 @@ interface ReportsFilterProps {
     teacherId?: string;
     subject?: string;
     studentId?: string;
+    lessonId?: string;
     ruleId?: string;
   };
 }
@@ -40,6 +39,7 @@ export function ReportsFilter({
   teachers,
   students,
   subjects,
+  lessons,
   rules,
   defaults,
 }: ReportsFilterProps) {
@@ -57,8 +57,7 @@ export function ReportsFilter({
       "teacherId",
       "subject",
       "studentId",
-      "startDate",
-      "endDate",
+      "lessonId",
       "minAbsence",
       "ruleId",
     ]) {
@@ -123,22 +122,15 @@ export function ReportsFilter({
             emptyLabel="כל התלמידות"
           />
           <div className="md:col-span-2">
-            <div className="grid grid-cols-2 gap-3">
-              <HebrewDateInput
-                label="מתאריך (רשות)"
-                name="startDate"
-                defaultValue={defaults.startDate}
-                allowEmpty
-              />
-              <HebrewDateInput
-                label="עד תאריך (רשות)"
-                name="endDate"
-                defaultValue={defaults.endDate}
-                allowEmpty
-              />
-            </div>
+            <Combobox
+              label="שיעור"
+              name="lessonId"
+              defaultValue={defaults.lessonId ?? ""}
+              options={lessons.map((l) => ({ value: l.id, label: l.label }))}
+              emptyLabel="כל השיעורים"
+            />
             <p className="mt-1 font-caption text-caption text-on-surface-variant">
-              אם ריק — הדוח הוא על כל השנה הפעילה, לפי השיבוץ הנוכחי.
+              בלי שיעור נבחר מוצגים השיעורים ומצב כל אחד. בחירת שיעור פותחת את המופעים שלו.
             </p>
           </div>
           <Combobox

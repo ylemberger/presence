@@ -15,19 +15,40 @@ export interface ReportCsvRow {
   ruleLabel: string;
 }
 
-export interface ReportCsvDetailRow {
+export interface ReportCsvLessonRow {
+  subject: string;
+  teacherName: string;
+  dayLabel: string;
+  totalRequired: number;
+  presentOnlyCount: number;
+  lateCount: number;
+  absentCount: number;
+  unmarkedCount: number;
+  absencePercent: number;
+}
+
+export interface ReportCsvOccurrenceRow {
+  date: string;
+  totalRequired: number;
+  presentOnlyCount: number;
+  lateCount: number;
+  absentCount: number;
+  unmarkedCount: number;
+  studentStatus?: string;
+}
+
+export interface ReportCsvOccurrenceStudentRow {
   studentName: string;
   gradeName: string;
   className: string;
-  date: string;
-  subject: string;
-  teacherName: string;
   status: string;
 }
 
 interface ExportCsvButtonProps {
   rows: ReportCsvRow[];
-  detailRows?: ReportCsvDetailRow[];
+  lessonRows?: ReportCsvLessonRow[];
+  occurrenceRows?: ReportCsvOccurrenceRow[];
+  occurrenceStudentRows?: ReportCsvOccurrenceStudentRow[];
   filename?: string;
   title?: string;
 }
@@ -40,7 +61,9 @@ function escapeCsv(value: string | number): string {
 
 export function ExportCsvButton({
   rows,
-  detailRows = [],
+  lessonRows = [],
+  occurrenceRows = [],
+  occurrenceStudentRows = [],
   filename = "attendance-report.csv",
   title = "דוח נוכחות",
 }: ExportCsvButtonProps) {
@@ -77,23 +100,61 @@ export function ExportCsvButton({
           .join(",")
       ),
     ];
-    if (detailRows.length > 0) {
+    if (lessonRows.length > 0) {
       lines.push("");
-      lines.push("פירוט שיעורים");
-      lines.push(["תלמידה", "שכבה", "כיתה", "תאריך", "מקצוע", "מורה", "סטטוס"].join(","));
-      for (const d of detailRows) {
+      lines.push("שיעורים");
+      lines.push(
+        ["מקצוע", "מורה", "יום", "מופעים", "נוכחת", "איחור", "נעדרה", "לא סומן", "אחוז היעדרות"].join(
+          ","
+        )
+      );
+      for (const d of lessonRows) {
         lines.push(
           [
-            d.studentName,
-            d.gradeName,
-            d.className,
-            d.date,
             d.subject,
             d.teacherName,
-            d.status,
+            d.dayLabel,
+            d.totalRequired,
+            d.presentOnlyCount,
+            d.lateCount,
+            d.absentCount,
+            d.unmarkedCount,
+            `${d.absencePercent}%`,
           ]
             .map(escapeCsv)
             .join(",")
+        );
+      }
+    }
+    if (occurrenceRows.length > 0) {
+      lines.push("");
+      lines.push("מופעי השיעור");
+      lines.push(
+        ["תאריך", "תלמידות", "נוכחת", "איחור", "נעדרה", "לא סומן", "סטטוס תלמידה"].join(",")
+      );
+      for (const d of occurrenceRows) {
+        lines.push(
+          [
+            d.date,
+            d.totalRequired,
+            d.presentOnlyCount,
+            d.lateCount,
+            d.absentCount,
+            d.unmarkedCount,
+            d.studentStatus ?? "",
+          ]
+            .map(escapeCsv)
+            .join(",")
+        );
+      }
+    }
+    if (occurrenceStudentRows.length > 0) {
+      lines.push("");
+      lines.push("נוכחות במופע");
+      lines.push(["תלמידה", "שכבה", "כיתה", "סטטוס"].join(","));
+      for (const d of occurrenceStudentRows) {
+        lines.push(
+          [d.studentName, d.gradeName, d.className, d.status].map(escapeCsv).join(",")
         );
       }
     }
@@ -110,7 +171,7 @@ export function ExportCsvButton({
   }
 
   return (
-    <Button type="button" variant="secondary" size="sm" onClick={download} disabled={rows.length === 0}>
+    <Button type="button" variant="secondary" size="sm" onClick={download} disabled={rows.length === 0 && lessonRows.length === 0}>
       ייצוא Excel (CSV)
     </Button>
   );
