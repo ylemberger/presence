@@ -35,7 +35,7 @@ export default async function DashboardLayout({
         userEmail={user.email}
       />
       {/* Main Content Area — offset right by the fixed sidebar width */}
-      <main className="relative mr-[17.5rem] flex min-h-screen w-[calc(100%-17.5rem)] min-w-0 flex-1 flex-col">
+      <main className="relative mr-[17.5rem] flex min-h-screen w-[calc(100%-17.5rem)] min-w-0 flex-1 flex-col print:mr-0 print:w-full">
         {/* TopAppBar */}
         <header className="print:hidden sticky top-0 z-40 flex items-center justify-between gap-4 bg-surface/95 px-container_padding py-4 shadow-tactile-sm backdrop-blur-md">
           <div className="font-headline-md text-headline-md font-bold text-primary">
@@ -69,7 +69,7 @@ export default async function DashboardLayout({
           </div>
         </header>
         {/* Canvas */}
-        <div className="mx-auto flex w-full max-w-canvas flex-1 flex-col gap-stack_lg p-container_padding">
+        <div className="mx-auto flex w-full max-w-canvas flex-1 flex-col gap-stack_lg p-container_padding print:max-w-none print:gap-4 print:p-0">
           {children}
         </div>
       </main>

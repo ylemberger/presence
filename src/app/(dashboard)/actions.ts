@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { createActionClient, createClient } from "@/lib/supabase/server";
-import { setActiveAcademicYear } from "@/lib/utils";
+import { setActiveAcademicYear, getActiveAcademicYear } from "@/lib/utils";
 import { syncTeacherSourceRecords } from "@/lib/sync/teachers";
 import { generateLessonOccurrences } from "@/lib/lessons/occurrences";
 import {
@@ -14,7 +14,13 @@ import {
   ensureFixedGrades,
   promoteStudentsToYear,
 } from "@/lib/years/promote";
-import { FIXED_GRADE_NAMES } from "@/lib/years/grades";
+import { filterFixedGrades, FIXED_GRADE_NAMES } from "@/lib/years/grades";
+import {
+  buildStudentImportTemplate,
+  MAX_STUDENT_IMPORT_BYTES,
+  parseStudentImportWorkbook,
+} from "@/lib/students/excelImport";
+import { applyStudentImportRows } from "@/lib/students/importApply";
 import type { AttendanceStatus } from "@/types/database";
 import {
   isError,
@@ -1282,3 +1288,107 @@ export async function copyPreviousAttendanceAction(occurrenceId: string) {
   revalidatePath("/attendance");
   return { success: true, copied: records.length };
 }
+
+export async function downloadStudentImportTemplateAction() {
+  const actionAuth = await createActionClient();
+  if ("error" in actionAuth) return { error: actionAuth.error };
+  const supabase = actionAuth.supabase;
+  const activeYear = await getActiveAcademicYear();
+  if (!activeYear) return { error: "יש להגדיר שנה אקדמית פעילה לפני הורדת הדוגמה." };
+
+  const [{ data: grades }, { data: classes }, { data: tracks }, { data: specializations }] =
+    await Promise.all([
+      supabase.from("grades").select("id, name").eq("academic_year_id", activeYear.id).order("name"),
+      supabase
+        .from("classes")
+        .select("id, name, grade_id")
+        .eq("academic_year_id", activeYear.id)
+        .order("name"),
+      supabase.from("tracks").select("id, name").eq("academic_year_id", activeYear.id).order("name"),
+      supabase
+        .from("specializations")
+        .select("id, name")
+        .eq("academic_year_id", activeYear.id)
+        .order("name"),
+    ]);
+
+  const bytes = buildStudentImportTemplate({
+    grades: filterFixedGrades(grades ?? []),
+    classes: classes ?? [],
+    tracks: tracks ?? [],
+    specializations: specializations ?? [],
+  });
+  return {
+    filename: `students-import-template.xlsx`,
+    base64: Buffer.from(bytes).toString("base64"),
+  };
+}
+
+export async function importStudentsFromExcelAction(formData: FormData) {
+  const actionAuth = await createActionClient();
+  if ("error" in actionAuth) return { error: actionAuth.error };
+  const supabase = actionAuth.supabase;
+  const activeYear = await getActiveAcademicYear();
+  if (!activeYear) return { error: "יש להגדיר שנה אקדמית פעילה לפני ייבוא." };
+
+  const file = formData.get("file");
+  if (!(file instanceof File) || file.size === 0) {
+    return { error: "יש לבחור קובץ אקסל או CSV." };
+  }
+  if (file.size > MAX_STUDENT_IMPORT_BYTES) {
+    return { error: "הקובץ גדול מדי. הגודל המרבי הוא 3MB." };
+  }
+  const name = file.name.toLowerCase();
+  if (!name.endsWith(".xlsx") && !name.endsWith(".xls") && !name.endsWith(".csv")) {
+    return { error: "יש להעלות קובץ בפורמט Excel (.xlsx) או CSV." };
+  }
+
+  const [{ data: grades }, { data: classes }, { data: tracks }, { data: specializations }] =
+    await Promise.all([
+      supabase.from("grades").select("id, name").eq("academic_year_id", activeYear.id).order("name"),
+      supabase
+        .from("classes")
+        .select("id, name, grade_id")
+        .eq("academic_year_id", activeYear.id)
+        .order("name"),
+      supabase.from("tracks").select("id, name").eq("academic_year_id", activeYear.id).order("name"),
+      supabase
+        .from("specializations")
+        .select("id, name")
+        .eq("academic_year_id", activeYear.id)
+        .order("name"),
+    ]);
+
+  const catalogs = {
+    grades: filterFixedGrades(grades ?? []),
+    classes: classes ?? [],
+    tracks: tracks ?? [],
+    specializations: specializations ?? [],
+  };
+  if (catalogs.grades.length === 0 || catalogs.classes.length === 0 || catalogs.tracks.length === 0) {
+    return { error: "חסרות הגדרות בשנה הפעילה. יש להוסיף שכבה, כיתה ומסלול לפני ייבוא." };
+  }
+
+  const parsed = parseStudentImportWorkbook(await file.arrayBuffer(), file.name, catalogs);
+  if (parsed.rows.length === 0) {
+    return {
+      error: parsed.errors[0]?.message ?? "לא נמצאו שורות תקינות לייבוא.",
+      errors: parsed.errors,
+      created: 0,
+      updated: 0,
+      unchanged: 0,
+    };
+  }
+
+  const applied = await applyStudentImportRows(supabase, activeYear.id, parsed.rows);
+  revalidatePath("/students");
+  revalidatePath("/attendance");
+  return {
+    success: true as const,
+    created: applied.created,
+    updated: applied.updated,
+    unchanged: applied.unchanged,
+    errors: [...parsed.errors, ...applied.errors],
+  };
+}
+

@@ -10,18 +10,18 @@ export function Table({ headers, children, className }: TableProps) {
   return (
     <div
       className={cn(
-        "overflow-hidden rounded-xl bg-surface-container-lowest shadow-tactile-md",
+        "overflow-hidden rounded-xl bg-surface-container-lowest shadow-tactile-md print:overflow-visible print:rounded-none print:shadow-none",
         className
       )}
     >
-      <div className="overflow-x-auto">
+      <div className="overflow-x-auto print:overflow-visible">
         <table className="w-full text-body-md">
           <thead>
             <tr className="border-b border-outline-variant/40 bg-surface-container-low">
               {headers.map((header) => (
                 <th
                   key={header}
-                  className="px-4 py-3 text-right text-caption font-semibold tracking-wide text-on-surface-variant"
+                  className="px-4 py-3 text-right text-caption font-semibold tracking-wide text-on-surface-variant print:bg-surface-container-low"
                 >
                   {header}
                 </th>

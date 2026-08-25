@@ -83,8 +83,46 @@ body {
 }
 
 @media print {
+  @page {
+    size: A4;
+    margin: 12mm 14mm;
+  }
+
+  html,
   body {
-    background: white;
+    background: white !important;
+    color: #181c1c;
+    print-color-adjust: exact;
+    -webkit-print-color-adjust: exact;
+  }
+
+  a {
+    color: inherit;
+    text-decoration: none;
+  }
+
+  thead {
+    display: table-header-group;
+  }
+
+  tfoot {
+    display: table-footer-group;
+  }
+
+  tr,
+  .break-inside-avoid {
+    break-inside: avoid;
+  }
+
+  .shadow-tactile-sm,
+  .shadow-tactile-md,
+  .shadow-tactile-lg,
+  .card-hover {
+    box-shadow: none !important;
+  }
+
+  .card-hover:hover {
+    transform: none;
   }
 }
 

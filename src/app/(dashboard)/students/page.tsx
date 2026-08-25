@@ -103,7 +103,7 @@ export default async function StudentsPage() {
     <div>
       <PageHeader
         title="תלמידות"
-        description="כרטסת קבועה עם מחזור. בעת יצירה ממלאים שכבה/כיתה/מסלול. שינוי נעשה בהעברה בלבד."
+        description="כרטסת קבועה עם מחזור. אפשר להוסיף אחת-אחת או לייבא מאקסל. שינוי שיבוץ באמצע השנה — בהעברה."
       />
       <StudentsDirectory students={rows} yearOptions={yearOptions} />
     </div>

@@ -9,6 +9,7 @@ import { Table, TableRow, TableCell } from "@/components/ui/Table";
 import { StatusPill } from "@/components/ui/PageHeader";
 import { Modal } from "@/components/ui/Modal";
 import { StudentsForm } from "./StudentsForm";
+import { StudentsImport } from "./StudentsImport";
 import type { Grade, Class, Track, Specialization } from "@/types/database";
 import { Icon } from "@/components/ui/Icon";
 
@@ -206,10 +207,21 @@ export function StudentsDirectory({
                 </Link>
               </p>
             )}
-            <Button type="button" onClick={openCreate} className="ms-auto">
-              <Icon name="person_add" className="text-[18px]" />
-              תלמידה חדשה
-            </Button>
+            <div className="ms-auto flex flex-wrap items-center gap-2">
+              <StudentsImport
+                disabledReason={
+                  !yearOptions
+                    ? "יש להגדיר שנה אקדמית פעילה לפני ייבוא."
+                    : !hasSettingsLists
+                      ? "יש להוסיף שכבה, כיתה ומסלול בהגדרות לפני ייבוא."
+                      : undefined
+                }
+              />
+              <Button type="button" onClick={openCreate}>
+                <Icon name="person_add" className="text-[18px]" />
+                תלמידה חדשה
+              </Button>
+            </div>
           </div>
         </div>
       </div>

@@ -7,6 +7,10 @@ const supabaseHost = process.env.NEXT_PUBLIC_SUPABASE_URL
 const nextConfig = {
   experimental: {
     optimizePackageImports: ["@hebcal/core"],
+    serverActions: {
+      bodySizeLimit: "4mb",
+    },
+    serverComponentsExternalPackages: ["xlsx"],
   },
   async headers() {
     const securityHeaders = [

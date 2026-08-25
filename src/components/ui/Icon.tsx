@@ -68,6 +68,8 @@ const ICONS: Record<string, string> = {
   playlist_add: "M4 7h12M4 12h8M4 17h8M15 14v6M12 17h6",
   post_add: "M5 4h10l4 4v12H5zM9 13h6M12 10v6",
   print: "M6 9V4h12v5M6 14H4v6h16v-6h-2M8 17h8",
+  upload: "M12 15V5M8 9l4-4 4 4M4 19h16",
+  download: "M12 5v10M8 11l4 4 4-4M4 19h16",
   report: "M12 3l9 16H3L12 3zM12 10v4M12 16v.5",
   restore: "M4 12a8 8 0 1 0 2.4-5.7L4 9M12 8v5l3 2",
   route: "M6 6h4v4H6zM14 14h4v4h-4zM10 8h4l2 6",

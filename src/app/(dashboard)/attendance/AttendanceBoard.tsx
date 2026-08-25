@@ -771,28 +771,17 @@ export function AttendanceBoard({
       {activeLesson ? (
         <div className="flex h-full min-h-[32rem] flex-col overflow-hidden rounded-xl border border-outline-variant/30 bg-surface-container-lowest shadow-tactile-md xl:h-[800px]">
           <div className="sticky top-0 z-10 border-b border-outline-variant/30 bg-surface-container-lowest p-6">
-            <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
-              <div className="min-w-0">
-                <h3 className="font-headline-md text-headline-md text-primary">
-                  {activeLesson.subject}
-                  {activeLesson.lessonNumber
-                    ? ` - שיעור ${activeLesson.lessonNumber}`
-                    : ""}
-                </h3>
-                <p className="font-body-md text-body-md text-on-surface-variant">
-                  {formatHebrewDate(selectedDate)}
-                  {activeLesson.teacherName ? ` • המורה ${activeLesson.teacherName}` : ""}
-                </p>
-              </div>
-              <Button
-                size="sm"
-                variant="secondary"
-                disabled={syncing}
-                onClick={syncStudents}
-              >
-                <Icon name="sync" className="text-[18px]" />
-                {syncing ? "מסנכרן…" : "סנכרון נתונים"}
-              </Button>
+            <div className="mb-4">
+              <h3 className="font-headline-md text-headline-md text-primary">
+                {activeLesson.subject}
+                {activeLesson.lessonNumber
+                  ? ` - שיעור ${activeLesson.lessonNumber}`
+                  : ""}
+              </h3>
+              <p className="font-body-md text-body-md text-on-surface-variant">
+                {formatHebrewDate(selectedDate)}
+                {activeLesson.teacherName ? ` • המורה ${activeLesson.teacherName}` : ""}
+              </p>
             </div>
             <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg bg-surface-container-low p-3">
               <div className="flex flex-wrap gap-2">

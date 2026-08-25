@@ -21,6 +21,7 @@ interface SectionProps {
   /** Removes the default outer padding of the body area (useful for tables). */
   bodyBleed?: boolean;
   className?: string;
+  headerClassName?: string;
   children: React.ReactNode;
 }
 
@@ -43,6 +44,7 @@ export function Section({
   accent = "none",
   bodyBleed,
   className,
+  headerClassName,
   children,
 }: SectionProps) {
   const hasHeader = Boolean(title || actions);
@@ -50,13 +52,18 @@ export function Section({
   return (
     <section
       className={cn(
-        "overflow-hidden rounded-xl border border-outline-variant/30 bg-surface-container-lowest shadow-tactile-md",
+        "overflow-hidden rounded-xl border border-outline-variant/30 bg-surface-container-lowest shadow-tactile-md print:overflow-visible print:rounded-none print:shadow-none",
         accentClass[accent],
         className
       )}
     >
       {hasHeader && (
-        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-outline-variant/30 bg-surface-container-low/60 px-6 py-4">
+        <div
+          className={cn(
+            "flex flex-wrap items-center justify-between gap-3 border-b border-outline-variant/30 bg-surface-container-low/60 px-6 py-4",
+            headerClassName
+          )}
+        >
           <div className="min-w-0">
             {title && (
               <h3 className="flex items-center gap-2 font-title-lg text-title-lg text-primary">

@@ -8,6 +8,7 @@ import { summarizeAttendance, evaluateAbsenceAgainstRule } from "@/lib/attendanc
 import { ReportsFilter } from "./ReportsFilter";
 import { PrintButton } from "@/components/ui/PrintButton";
 import { ExportCsvButton } from "./ExportCsvButton";
+import { ReportPrintFooter, ReportPrintHeader } from "./ReportPrintChrome";
 import { StudentTrendChart } from "./StudentTrendChart";
 import { todayIso } from "@/lib/dates/hebrew";
 import type { AttendanceStatus } from "@/types/database";
@@ -318,6 +319,46 @@ export default async function ReportsPage({ searchParams }: Props) {
   const printTitle = singleStudentName
     ? `דוח נוכחות עבור ${singleStudentName}`
     : `דוח נוכחות: ${formatHebrewDate(startDate)} – ${formatHebrewDate(endDate)}`;
+  const printedOn = todayIso();
+  const canPrint = shouldRun && reportRows.length > 0;
+
+  const printFilters: Array<{ label: string; value: string }> = [
+    {
+      label: "תקופה",
+      value: `${formatHebrewDate(startDate)} – ${formatHebrewDate(endDate)}`,
+    },
+    {
+      label: "לועזי",
+      value: `${formatGregorianDate(startDate)} – ${formatGregorianDate(endDate)}`,
+    },
+  ];
+  const filterClassName = (classes ?? []).find((c) => c.id === params.classId)?.name;
+  const filterTrackName = (tracks ?? []).find((t) => t.id === params.trackId)?.name;
+  const filterSpecName = (specializations ?? []).find(
+    (s) => s.id === params.specializationId
+  )?.name;
+  const filterTeacherName = (teachers ?? []).find((t) => t.id === params.teacherId)
+    ?.full_name;
+  if (filterClassName) printFilters.push({ label: "כיתה", value: filterClassName });
+  if (filterTrackName) printFilters.push({ label: "מסלול", value: filterTrackName });
+  if (filterSpecName) printFilters.push({ label: "התמחות", value: filterSpecName });
+  if (filterTeacherName) printFilters.push({ label: "מורה", value: filterTeacherName });
+  if (params.subject) printFilters.push({ label: "מקצוע", value: params.subject });
+  if (singleStudentName) {
+    printFilters.push({ label: "תלמידה", value: singleStudentName });
+  }
+  printFilters.push({
+    label: "סף חיסורים",
+    value: selectedRule
+      ? `${threshold}% (${selectedRule.name})`
+      : `${threshold}%`,
+  });
+  if (canPrint) {
+    printFilters.push({
+      label: "תלמידות",
+      value: reportRows.length.toLocaleString("he-IL"),
+    });
+  }
 
   // Aggregate KPI numbers
   const totals = reportRows.reduce(
@@ -336,22 +377,39 @@ export default async function ReportsPage({ searchParams }: Props) {
       : 0;
 
   return (
-    <div className="flex flex-col gap-stack_lg">
-      <PageHeader
-        title="דוחות נוכחות"
-        description="ניתוח וצפייה בנתוני הגעה וחיסורים · הדפסה בלי הערות פנימיות."
-        size="headline"
-        actions={
-          <div className="flex flex-wrap gap-2 print:hidden">
-            <ExportCsvButton
-              rows={reportRows}
-              title={printTitle}
-              filename={`attendance-${startDate}-${endDate}.csv`}
-            />
-            <PrintButton />
-          </div>
-        }
-      />
+    <div className="flex flex-col gap-stack_lg print:gap-4">
+      {canPrint && (
+        <ReportPrintHeader
+          title={printTitle}
+          yearName={activeYear.name}
+          printedHebrew={formatHebrewDate(printedOn)}
+          printedGregorian={formatGregorianDate(printedOn)}
+          filters={printFilters}
+        />
+      )}
+
+      <div className="print:hidden">
+        <PageHeader
+          title="דוחות נוכחות"
+          description="ניתוח וצפייה בנתוני הגעה וחיסורים · הדפסה מסודרת בלי תפריט וסינון."
+          size="headline"
+          actions={
+            <div className="flex flex-wrap gap-2">
+              <ExportCsvButton
+                rows={reportRows}
+                title={printTitle}
+                filename={`attendance-${startDate}-${endDate}.csv`}
+              />
+              <PrintButton
+                label="הדפסת דוח"
+                documentTitle={printTitle}
+                disabled={!canPrint}
+                disabledReason="יש להפיק דוח עם נתונים לפני הדפסה"
+              />
+            </div>
+          }
+        />
+      </div>
 
       <div className="print:hidden">
         <ReportsFilter
@@ -377,18 +435,8 @@ export default async function ReportsPage({ searchParams }: Props) {
         />
       </div>
 
-      {/* Print-only header */}
-      <div className="hidden text-body-md text-on-surface-variant print:block">
-        <p>
-          תקופה: {formatHebrewDate(startDate)} – {formatHebrewDate(endDate)} (
-          {formatGregorianDate(startDate)} – {formatGregorianDate(endDate)})
-        </p>
-        <p className="mt-1">תאריך הדפסה: {formatGregorianDate(todayIso())}</p>
-        <p className="mt-6">חתימת מורה / רכזת: ________________________</p>
-      </div>
-
       {!shouldRun ? (
-        <Section>
+        <Section className="print:hidden">
           <div className="flex flex-col items-center gap-3 py-10 text-center">
             <Icon name="filter_alt" className="text-5xl text-outline-variant" />
             <p className="font-title-lg text-title-lg text-primary">
@@ -400,7 +448,7 @@ export default async function ReportsPage({ searchParams }: Props) {
           </div>
         </Section>
       ) : reportRows.length === 0 ? (
-        <Section>
+        <Section className="print:hidden">
           <div className="flex flex-col items-center gap-3 py-10 text-center">
             <Icon name="check_circle" className="text-5xl text-attendance-present" />
             <p className="font-title-lg text-title-lg text-primary">
@@ -414,9 +462,9 @@ export default async function ReportsPage({ searchParams }: Props) {
       ) : (
         <>
           {/* KPI Grid + Top Absentees + Trend Chart */}
-          <div className="grid grid-cols-1 gap-gutter lg:grid-cols-3">
-            <div className="flex flex-col gap-gutter lg:col-span-1">
-              <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 gap-gutter lg:grid-cols-3 print:grid-cols-1 print:gap-4">
+            <div className="flex flex-col gap-gutter lg:col-span-1 print:col-span-1">
+              <div className="grid grid-cols-2 gap-4 print:grid-cols-4 print:gap-3">
                 <KpiCard
                   label='סה"כ שיעורים'
                   value={totals.lessons.toLocaleString("he-IL")}
@@ -499,6 +547,8 @@ export default async function ReportsPage({ searchParams }: Props) {
                 : ` ${threshold}%`
             }${selectedRule ? ` · אזהרה מ-${includeFrom}%` : ""}`}
             bodyBleed
+            className="print:border-0"
+            headerClassName="print:hidden"
           >
             <Table
               headers={[
@@ -559,6 +609,7 @@ export default async function ReportsPage({ searchParams }: Props) {
               ))}
             </Table>
           </Section>
+          <ReportPrintFooter studentCount={reportRows.length} />
         </>
       )}
     </div>
@@ -577,7 +628,7 @@ function KpiCard({
   accent: "primary" | "present" | "late" | "absent";
 }) {
   const accentBar: Record<typeof accent, string> = {
-    primary: "border-t-transparent",
+    primary: "border-t-transparent print:border-t-4 print:border-t-primary",
     present: "border-t-4 border-t-attendance-present",
     late: "border-t-4 border-t-attendance-late",
     absent: "border-t-4 border-t-attendance-absent",
@@ -591,7 +642,7 @@ function KpiCard({
   return (
     <div
       className={cn(
-        "card-hover flex flex-col justify-between rounded-xl border border-outline-variant/30 bg-surface-container-lowest p-5 shadow-tactile-sm",
+        "card-hover flex flex-col justify-between rounded-xl border border-outline-variant/30 bg-surface-container-lowest p-5 shadow-tactile-sm print:break-inside-avoid print:p-3 print:shadow-none",
         accentBar[accent]
       )}
     >
@@ -601,7 +652,7 @@ function KpiCard({
         </span>
         <div
           className={cn(
-            "flex h-8 w-8 items-center justify-center rounded-md",
+            "flex h-8 w-8 items-center justify-center rounded-md print:hidden",
             iconWrap[accent]
           )}
           aria-hidden
@@ -609,7 +660,9 @@ function KpiCard({
           <Icon name={icon} className="text-[20px]" />
         </div>
       </div>
-      <span className="font-headline-lg text-headline-lg text-primary">{value}</span>
+      <span className="font-headline-lg text-headline-lg text-primary print:text-title-lg print:leading-7">
+        {value}
+      </span>
     </div>
   );
 }
