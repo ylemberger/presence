@@ -13,7 +13,7 @@ export default async function DashboardLayout({
 }: {
   children: React.ReactNode;
 }) {
-  await requireAuthenticatedUser();
+  const { user } = await requireAuthenticatedUser();
 
   const [activeYear, years] = await Promise.all([
     getActiveAcademicYear(),
@@ -32,6 +32,7 @@ export default async function DashboardLayout({
       <Sidebar
         activeYearName={activeYear?.name}
         attendancePendingCount={pending.pendingCount}
+        userEmail={user.email}
       />
       {/* Main Content Area — offset right by the fixed sidebar width */}
       <main className="relative mr-[17.5rem] flex min-h-screen w-[calc(100%-17.5rem)] min-w-0 flex-1 flex-col">

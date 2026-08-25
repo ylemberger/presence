@@ -11,6 +11,7 @@ import { Icon } from "@/components/ui/Icon";
 interface SidebarProps {
   activeYearName?: string;
   attendancePendingCount?: number;
+  userEmail?: string | null;
 }
 
 const ICON_MAP: Record<string, string> = {
@@ -25,7 +26,11 @@ const ICON_MAP: Record<string, string> = {
   settings: "settings",
 };
 
-export function Sidebar({ activeYearName, attendancePendingCount = 0 }: SidebarProps) {
+export function Sidebar({
+  activeYearName,
+  attendancePendingCount = 0,
+  userEmail,
+}: SidebarProps) {
   const pathname = usePathname();
   const router = useRouter();
   const [pendingHref, setPendingHref] = useState<string | null>(null);
@@ -127,14 +132,25 @@ export function Sidebar({ activeYearName, attendancePendingCount = 0 }: SidebarP
       </div>
 
       <div className="border-t border-white/15 p-4">
-        <button
-          type="button"
-          onClick={handleLogout}
-          className="flex w-full items-center justify-center gap-2 rounded-xl border border-white/25 py-2.5 font-label-md text-label-md text-white transition-colors hover:bg-white/10"
-        >
-          <Icon name="logout" className="text-[20px]" />
-          התנתקות
-        </button>
+        <div className="flex items-center gap-2">
+          {userEmail && (
+            <p
+              className="min-w-0 flex-1 truncate text-right font-caption text-[11px] text-white/70"
+              dir="ltr"
+              title={userEmail}
+            >
+              {userEmail}
+            </p>
+          )}
+          <button
+            type="button"
+            onClick={handleLogout}
+            className="flex shrink-0 items-center justify-center gap-1.5 rounded-xl border border-white/25 px-3 py-2 font-label-md text-label-md text-white transition-colors hover:bg-white/10"
+          >
+            <Icon name="logout" className="text-[18px]" />
+            התנתקות
+          </button>
+        </div>
       </div>
     </nav>
   );
