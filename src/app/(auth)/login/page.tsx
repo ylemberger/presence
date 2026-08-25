@@ -1,5 +1,6 @@
 import { getLoginHintEmail } from "@/lib/auth/allowed-emails";
 import { LoginButton } from "./LoginButton";
+import { Icon } from "@/components/ui/Icon";
 
 const ERROR_MESSAGES: Record<string, string> = {
   unauthorized: "אין הרשאה למשתמש זה",
@@ -61,13 +62,7 @@ export default function LoginPage({
         {/* Login Card */}
         <div className="w-full rounded-xl border-t-4 border-secondary bg-surface p-stack_lg text-center shadow-tactile-lg">
           <div className="mx-auto mb-stack_md flex h-16 w-16 items-center justify-center rounded-full bg-primary-fixed/20">
-            <span
-              className="material-symbols-outlined text-4xl text-primary"
-              style={{ fontVariationSettings: "'FILL' 1" }}
-              aria-hidden
-            >
-              lock
-            </span>
+            <Icon name="lock" className="text-4xl text-primary" />
           </div>
 
           <h2 className="mb-stack_sm font-headline-md text-headline-md text-on-surface">
@@ -91,13 +86,7 @@ export default function LoginPage({
               className="mb-stack_md flex w-full items-center justify-center gap-2 rounded-lg border border-error/20 bg-error-container p-3 text-on-error-container"
               role="alert"
             >
-              <span
-                className="material-symbols-outlined"
-                style={{ fontVariationSettings: "'FILL' 1" }}
-                aria-hidden
-              >
-                error
-              </span>
+              <Icon name="error" />
               <span className="font-body-md text-body-md">{error}</span>
             </div>
           )}
@@ -105,9 +94,7 @@ export default function LoginPage({
           <LoginButton loginHintEmail={loginHintEmail} />
 
           <div className="mt-stack_lg flex w-full items-center justify-center gap-2 border-t border-outline-variant/30 pt-stack_md font-caption text-caption text-on-surface-variant">
-            <span className="material-symbols-outlined text-base" aria-hidden>
-              verified_user
-            </span>
+            <Icon name="verified_user" className="text-base" />
             <span>גישה מאובטחת לצוות האקדמי בלבד</span>
           </div>
         </div>

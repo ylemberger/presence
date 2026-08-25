@@ -4,6 +4,7 @@ import { useMemo, useState } from "react";
 import Link from "next/link";
 import { StatusPill } from "@/components/ui/PageHeader";
 import type { Teacher } from "@/types/database";
+import { Icon } from "@/components/ui/Icon";
 
 const PREVIEW_LIMIT = 6;
 
@@ -29,18 +30,11 @@ export function TeachersDirectory({ teachers }: { teachers: Teacher[] }) {
     <div className="flex h-full flex-col rounded-xl bg-surface-container-lowest p-stack_md shadow-tactile-md">
       <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
         <h3 className="flex items-center gap-2 font-title-lg text-title-lg text-primary">
-          <span className="material-symbols-outlined text-primary-container" aria-hidden>
-            list_alt
-          </span>
+          <Icon name="list_alt" className="text-primary-container" />
           רשימת מורות
         </h3>
         <div className="relative w-full max-w-64">
-          <span
-            className="material-symbols-outlined pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-outline-variant"
-            aria-hidden
-          >
-            search
-          </span>
+          <Icon name="search" className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-outline-variant" />
           <input
             value={query}
             onChange={(e) => setQuery(e.target.value)}
@@ -96,9 +90,7 @@ export function TeachersDirectory({ teachers }: { teachers: Teacher[] }) {
                     className="inline-flex items-center rounded p-1 text-primary-container transition-colors hover:bg-surface-variant hover:text-primary"
                     aria-label={`עריכת ${t.full_name}`}
                   >
-                    <span className="material-symbols-outlined text-[20px]" aria-hidden>
-                      edit
-                    </span>
+                    <Icon name="edit" className="text-[20px]" />
                   </Link>
                 </td>
               </tr>

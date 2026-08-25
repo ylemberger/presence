@@ -21,6 +21,7 @@ import {
 } from "../actions";
 import type { Lesson } from "@/types/database";
 import type { LessonsFormProps } from "./LessonsForm";
+import { Icon } from "@/components/ui/Icon";
 
 interface OccurrenceRow {
   id: string;
@@ -114,9 +115,7 @@ export function LessonsCalendar({
             className="rounded-full p-1 text-on-surface-variant transition-colors hover:bg-surface-container"
             aria-label="חודש הבא"
           >
-            <span className="material-symbols-outlined" aria-hidden>
-              chevron_right
-            </span>
+            <Icon name="chevron_right" />
           </button>
           <h3 className="font-title-lg text-title-lg text-primary">{month.title}</h3>
           <button
@@ -125,9 +124,7 @@ export function LessonsCalendar({
             className="rounded-full p-1 text-on-surface-variant transition-colors hover:bg-surface-container"
             aria-label="חודש קודם"
           >
-            <span className="material-symbols-outlined" aria-hidden>
-              chevron_left
-            </span>
+            <Icon name="chevron_left" />
           </button>
         </div>
         <div className="mb-2 grid grid-cols-7 gap-1 text-center font-label-md text-label-md text-on-surface-variant">
@@ -193,9 +190,7 @@ export function LessonsCalendar({
               </span>
               {selectedIso && (
                 <Button size="sm" type="button" onClick={() => setCreating((v) => !v)}>
-                  <span className="material-symbols-outlined text-[18px]" aria-hidden>
-                    {creating ? "close" : "add"}
-                  </span>
+                  <Icon name={creating ? "close" : "add"} className="text-[18px]" />
                   {creating ? "סגירה" : "יצירת שיעור"}
                 </Button>
               )}
@@ -221,12 +216,7 @@ export function LessonsCalendar({
 
           {selectedIso && selectedOccurrences.length === 0 && !creating && (
             <div className="flex flex-1 flex-col items-center justify-center rounded-xl border border-dashed border-outline-variant/50 bg-surface-container-low/60 px-4 py-8 text-center">
-              <span
-                className="material-symbols-outlined mb-2 text-[36px] text-secondary"
-                aria-hidden
-              >
-                event_available
-              </span>
+              <Icon name="event_available" className="mb-2 text-[36px] text-secondary" />
               <p className="font-body-md text-body-md text-on-surface-variant">
                 אין שיעורים ביום זה.
               </p>
@@ -294,23 +284,13 @@ export function LessonsCalendar({
                             meta.pillClass
                           )}
                         >
-                          <span
-                            className="material-symbols-outlined text-[14px]"
-                            aria-hidden
-                          >
-                            {meta.icon}
-                          </span>
+                          <Icon name={meta.icon} className="text-[14px]" />
                           {meta.label ?? label}
                         </span>
                       </h4>
                       {o.notes && (
                         <p className="mt-1 font-body-md text-body-md text-on-surface-variant">
-                          <span
-                            className="material-symbols-outlined ml-1 align-middle text-[16px]"
-                            aria-hidden
-                          >
-                            info
-                          </span>
+                          <Icon name="info" className="ml-1 align-middle text-[16px]" />
                           {o.notes}
                         </p>
                       )}
@@ -323,12 +303,7 @@ export function LessonsCalendar({
                         onClick={() => setStatus(o.id, "cancel")}
                         className="inline-flex items-center gap-1 rounded-lg border border-outline px-3 py-1.5 font-label-md text-label-md text-on-surface-variant transition-colors hover:bg-surface-container"
                       >
-                        <span
-                          className="material-symbols-outlined text-[18px]"
-                          aria-hidden
-                        >
-                          cancel
-                        </span>
+                        <Icon name="cancel" className="text-[18px]" />
                         ביטול
                       </button>
                     )}
@@ -338,12 +313,7 @@ export function LessonsCalendar({
                         onClick={() => setStatus(o.id, "complete")}
                         className="inline-flex items-center gap-1 rounded-lg bg-primary-container px-3 py-1.5 font-label-md text-label-md text-white transition-colors hover:bg-primary hover:text-white"
                       >
-                        <span
-                          className="material-symbols-outlined text-[18px]"
-                          aria-hidden
-                        >
-                          done_all
-                        </span>
+                        <Icon name="done_all" className="text-[18px]" />
                         השלמה
                       </button>
                     )}
@@ -353,12 +323,7 @@ export function LessonsCalendar({
                         onClick={() => setStatus(o.id, "restore")}
                         className="inline-flex items-center gap-1 rounded-lg border border-outline px-3 py-1.5 font-label-md text-label-md text-on-surface-variant transition-colors hover:bg-surface-container"
                       >
-                        <span
-                          className="material-symbols-outlined text-[18px]"
-                          aria-hidden
-                        >
-                          restore
-                        </span>
+                        <Icon name="restore" className="text-[18px]" />
                         שחזור
                       </button>
                     )}
@@ -371,9 +336,7 @@ export function LessonsCalendar({
 
         <section className="rounded-xl border border-outline-variant/30 bg-surface-container-lowest p-stack_md shadow-tactile-md">
           <h3 className="mb-3 flex items-center gap-2 font-title-lg text-title-lg text-primary">
-            <span className="material-symbols-outlined text-secondary" aria-hidden>
-              view_agenda
-            </span>
+            <Icon name="view_agenda" className="text-secondary" />
             תבניות שיעור קבועות
           </h3>
           {lessons.length === 0 ? (

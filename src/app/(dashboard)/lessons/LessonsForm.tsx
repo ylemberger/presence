@@ -9,6 +9,7 @@ import { createLessonAction, createLessonForDateAction } from "../actions";
 import { isoToHDate } from "@/lib/dates/hebrew";
 import { describeAudienceScope } from "@/lib/validation";
 import type { ActivityRange, AttendanceRule, Teacher } from "@/types/database";
+import { Icon } from "@/components/ui/Icon";
 
 export interface LessonsFormProps {
   yearId: string;
@@ -290,9 +291,7 @@ export function LessonsForm({
       )}
 
       <Button type="submit" disabled={loading} className="mt-1 w-full">
-        <span className="material-symbols-outlined text-[18px]" aria-hidden>
-          save
-        </span>
+        <Icon name="save" className="text-[18px]" />
         {loading ? "יוצר שיעור..." : "שמור שיעור"}
       </Button>
 

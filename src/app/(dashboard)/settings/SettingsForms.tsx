@@ -8,6 +8,7 @@ import { HebrewDateRangePicker } from "@/components/ui/HebrewDateRangePicker";
 import { RANGE_TYPE_LABELS } from "@/lib/constants";
 import { FIXED_GRADE_NAMES } from "@/lib/years/grades";
 import type { Grade } from "@/types/database";
+import { Icon } from "@/components/ui/Icon";
 
 interface SettingsFormsProps {
   type: string;
@@ -138,9 +139,7 @@ export function SettingsForms({ type, yearId, grades, createAction }: SettingsFo
 
       {(type !== "grade" || missingGrades.length > 0) && (
         <Button type="submit" disabled={loading}>
-          <span className="material-symbols-outlined text-[18px]" aria-hidden>
-            add
-          </span>
+          <Icon name="add" className="text-[18px]" />
           {loading ? "מוסיף..." : "הוספה"}
         </Button>
       )}

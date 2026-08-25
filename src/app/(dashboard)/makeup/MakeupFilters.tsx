@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/Button";
 import { Select } from "@/components/ui/Input";
 import { Section } from "@/components/ui/Section";
 import { useRouter } from "next/navigation";
+import { Icon } from "@/components/ui/Icon";
 
 export type MakeupFilterStatus = "all" | "open" | "done" | "blocked";
 
@@ -138,9 +139,7 @@ export function MakeupFilters({
 
       <div className="flex items-end sm:col-span-2 lg:col-span-4">
         <Button type="submit" className="w-full sm:w-auto">
-          <span className="material-symbols-outlined text-[18px]" aria-hidden>
-            search
-          </span>
+          <Icon name="search" className="text-[18px]" />
           הצג מבחנים
         </Button>
       </div>

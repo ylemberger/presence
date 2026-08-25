@@ -6,6 +6,7 @@ import { AttendanceReminderBanner } from "@/components/attendance/AttendanceRemi
 import { requireAuthenticatedUser } from "@/lib/supabase/server";
 import { getActiveAcademicYear, getAllAcademicYears } from "@/lib/utils";
 import { getPendingAttendanceSummary } from "@/lib/attendance/pending";
+import { Icon } from "@/components/ui/Icon";
 
 export default async function DashboardLayout({
   children,
@@ -53,14 +54,14 @@ export default async function DashboardLayout({
               className="text-on-surface-variant transition-colors hover:text-secondary"
               aria-label="התראות"
             >
-              <span className="material-symbols-outlined">notifications</span>
+              <Icon name="notifications" />
             </button>
             <button
               type="button"
               className="text-on-surface-variant transition-colors hover:text-secondary"
               aria-label="פרופיל"
             >
-              <span className="material-symbols-outlined">account_circle</span>
+              <Icon name="account_circle" />
             </button>
             <div className="mx-2 hidden h-6 w-px bg-outline-variant md:block" />
             <YearSelector years={years} activeYearId={activeYear?.id} />

@@ -2,6 +2,7 @@
 
 import { useMemo, useState } from "react";
 import Link from "next/link";
+import { Icon } from "@/components/ui/Icon";
 
 export type TeacherLessonRow = {
   id: string;
@@ -32,9 +33,7 @@ export function TeachersLessons({ rows }: { rows: TeacherLessonRow[] }) {
     <div className="rounded-xl bg-surface-container-lowest p-stack_md shadow-tactile-md">
       <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
         <h3 className="flex items-center gap-2 font-title-lg text-title-lg text-primary">
-          <span className="material-symbols-outlined text-primary" aria-hidden>
-            menu_book
-          </span>
+          <Icon name="menu_book" className="text-primary" />
           שיעורים לפי מורה
         </h3>
         <div className="relative">
@@ -43,9 +42,7 @@ export function TeachersLessons({ rows }: { rows: TeacherLessonRow[] }) {
             onClick={() => setOpen((v) => !v)}
             className="inline-flex items-center gap-2 rounded-lg border border-outline-variant bg-surface-container-lowest px-3 py-2 font-label-md text-label-md text-primary hover:bg-surface-container-low"
           >
-            <span className="material-symbols-outlined text-[18px]" aria-hidden>
-              tune
-            </span>
+            <Icon name="tune" className="text-[18px]" />
             סינון
           </button>
           {open && (

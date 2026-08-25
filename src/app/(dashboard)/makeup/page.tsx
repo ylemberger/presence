@@ -13,6 +13,7 @@ import { isDateInRange } from "@/lib/dates/hebrew";
 import type { AttendanceStatus } from "@/types/database";
 import { MakeupForms } from "./MakeupForms";
 import { MakeupFilters, type MakeupFilterStatus } from "./MakeupFilters";
+import { Icon } from "@/components/ui/Icon";
 
 interface Props {
   searchParams: {
@@ -297,12 +298,7 @@ export default async function MakeupPage({ searchParams }: Props) {
           <Section icon="event_available" title="רשימת מבחני השלמה">
             {filteredExisting.length === 0 ? (
               <div className="rounded-lg border border-dashed border-outline-variant/50 bg-surface-container-low/60 px-4 py-8 text-center">
-                <span
-                  className="material-symbols-outlined mb-2 block text-[36px] text-secondary"
-                  aria-hidden
-                >
-                  fact_check
-                </span>
+                <Icon name="fact_check" className="mb-2 block text-[36px] text-secondary" />
                 <p className="font-body-md text-body-md text-on-surface-variant">
                   עדיין אין רשומות.
                 </p>
@@ -461,12 +457,7 @@ export default async function MakeupPage({ searchParams }: Props) {
       {totalFilteredSuggestions === 0 && filteredExisting.length === 0 && (
         <Section>
           <div className="flex flex-col items-center gap-2 rounded-lg border border-dashed border-outline-variant/50 bg-surface-container-low/60 px-6 py-10 text-center">
-            <span
-              className="material-symbols-outlined text-[36px] text-attendance-present"
-              aria-hidden
-            >
-              check_circle
-            </span>
+            <Icon name="check_circle" className="text-[36px] text-attendance-present" />
             <p className="font-title-lg text-title-lg text-primary">אין מבחני השלמה פעילים</p>
             <p className="font-body-md text-body-md text-on-surface-variant">
               כל הכבוד! אין הצעות חדשות ולא רשומים מבחני השלמה.

@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/Button";
 import { Input, Select } from "@/components/ui/Input";
 import { upsertMakeupExamAction, updateMakeupExamAction } from "../actions";
+import { Icon } from "@/components/ui/Icon";
 
 interface Props {
   yearId: string;
@@ -91,9 +92,7 @@ export function MakeupForms({
           ]}
         />
         <Button type="submit" size="sm" disabled={loading}>
-          <span className="material-symbols-outlined text-[16px]" aria-hidden>
-            save
-          </span>
+          <Icon name="save" className="text-[16px]" />
           עדכון
         </Button>
         {error && (
@@ -109,9 +108,7 @@ export function MakeupForms({
     return (
       <form onSubmit={handleSubmit}>
         <Button type="submit" size="sm" disabled={loading}>
-          <span className="material-symbols-outlined text-[16px]" aria-hidden>
-            playlist_add
-          </span>
+          <Icon name="playlist_add" className="text-[16px]" />
           {loading ? "..." : "שבץ"}
         </Button>
         {error && (
@@ -150,9 +147,7 @@ export function MakeupForms({
         defaultValue={1}
       />
       <Button type="submit" disabled={loading} className="mt-1 w-full">
-        <span className="material-symbols-outlined text-[18px]" aria-hidden>
-          post_add
-        </span>
+        <Icon name="post_add" className="text-[18px]" />
         {loading ? "שומר..." : "צור מבחן"}
       </Button>
       {error && (

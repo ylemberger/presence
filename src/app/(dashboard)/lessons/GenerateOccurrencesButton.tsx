@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/Button";
 import { generateOccurrencesAction } from "../actions";
+import { Icon } from "@/components/ui/Icon";
 
 export function GenerateOccurrencesButton({ academicYearId }: { academicYearId: string }) {
   const router = useRouter();
@@ -28,9 +29,7 @@ export function GenerateOccurrencesButton({ academicYearId }: { academicYearId: 
   return (
     <div>
       <Button onClick={handleGenerate} disabled={loading}>
-        <span className="material-symbols-outlined text-[18px]" aria-hidden>
-          event_repeat
-        </span>
+        <Icon name="event_repeat" className="text-[18px]" />
         {loading ? "יוצר..." : "יצירת מופעים"}
       </Button>
       {message && (

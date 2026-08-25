@@ -9,6 +9,7 @@ import { StatusPill } from "@/components/ui/PageHeader";
 import { Modal } from "@/components/ui/Modal";
 import { StudentsForm } from "./StudentsForm";
 import type { Grade, Class, Track, Specialization } from "@/types/database";
+import { Icon } from "@/components/ui/Icon";
 
 interface StudentRow {
   id: string;
@@ -219,9 +220,7 @@ export function StudentsDirectory({
               </p>
             )}
             <Button type="button" onClick={openCreate} className="ms-auto">
-              <span className="material-symbols-outlined text-[18px]" aria-hidden>
-                person_add
-              </span>
+              <Icon name="person_add" className="text-[18px]" />
               תלמידה חדשה
             </Button>
           </div>
@@ -292,9 +291,7 @@ export function StudentsDirectory({
                 href={`/students/${s.id}`}
                 className="inline-flex items-center gap-1 text-label-md text-secondary transition-colors hover:text-primary hover:underline"
               >
-                <span className="material-symbols-outlined text-[16px]" aria-hidden>
-                  badge
-                </span>
+                <Icon name="badge" className="text-[16px]" />
                 כרטיס תלמידה
               </Link>
             </TableCell>
@@ -303,12 +300,7 @@ export function StudentsDirectory({
       </Table>
       {filtered.length === 0 && (
         <div className="flex flex-col items-center gap-2 px-5 py-12 text-center">
-          <span
-            className="material-symbols-outlined text-5xl text-outline-variant"
-            aria-hidden
-          >
-            group
-          </span>
+          <Icon name="group" className="text-5xl text-outline-variant" />
           <p className="font-title-lg text-title-lg text-primary">
             לא נמצאו תלמידות
           </p>

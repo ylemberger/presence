@@ -1,7 +1,8 @@
 import { cn } from "@/lib/cn";
+import { Icon } from "@/components/ui/Icon";
 
 interface SectionProps {
-  /** Optional icon (Material Symbols name). Rendered in secondary color next to the title. */
+  /** Optional icon name from `Icon`. Rendered in secondary color next to the title. */
   icon?: string;
   /** Section title (font-title-lg, primary color). */
   title?: string;
@@ -60,9 +61,7 @@ export function Section({
             {title && (
               <h3 className="flex items-center gap-2 font-title-lg text-title-lg text-primary">
                 {icon && (
-                  <span className="material-symbols-outlined text-secondary" aria-hidden>
-                    {icon}
-                  </span>
+                  <Icon name={icon} className="text-secondary" />
                 )}
                 {title}
               </h3>

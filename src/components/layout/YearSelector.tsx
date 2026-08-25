@@ -4,6 +4,7 @@ import { useRouter } from "next/navigation";
 import { useTransition } from "react";
 import type { AcademicYear } from "@/types/database";
 import { setActiveYearAction } from "@/app/(dashboard)/actions";
+import { Icon } from "@/components/ui/Icon";
 
 interface YearSelectorProps {
   years: AcademicYear[];
@@ -39,13 +40,9 @@ export function YearSelector({ years, activeYearId }: YearSelectorProps) {
         tabIndex={-1}
         className="pointer-events-none inline-flex items-center gap-1.5 rounded-md bg-secondary px-4 py-2 text-label-md font-semibold text-primary shadow-tactile-sm transition-colors hover:bg-secondary-fixed-dim"
       >
-        <span className="material-symbols-outlined text-[18px]" aria-hidden>
-          calendar_today
-        </span>
+        <Icon name="calendar_today" className="text-[18px]" />
         <span>{activeYear ? activeYear.name : "בחירת שנה"}</span>
-        <span className="material-symbols-outlined text-[18px] opacity-80" aria-hidden>
-          expand_more
-        </span>
+        <Icon name="expand_more" className="text-[18px] opacity-80" />
       </button>
       <select
         aria-label="בחירת שנה אקדמית"

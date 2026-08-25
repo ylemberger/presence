@@ -13,6 +13,7 @@ import { todayIso } from "@/lib/dates/hebrew";
 import type { AttendanceStatus } from "@/types/database";
 import { cn } from "@/lib/cn";
 import Link from "next/link";
+import { Icon } from "@/components/ui/Icon";
 
 interface Props {
   searchParams: {
@@ -389,12 +390,7 @@ export default async function ReportsPage({ searchParams }: Props) {
       {!shouldRun ? (
         <Section>
           <div className="flex flex-col items-center gap-3 py-10 text-center">
-            <span
-              className="material-symbols-outlined text-5xl text-outline-variant"
-              aria-hidden
-            >
-              filter_alt
-            </span>
+            <Icon name="filter_alt" className="text-5xl text-outline-variant" />
             <p className="font-title-lg text-title-lg text-primary">
               בחרי מסננים והפעילי את הסינון
             </p>
@@ -406,12 +402,7 @@ export default async function ReportsPage({ searchParams }: Props) {
       ) : reportRows.length === 0 ? (
         <Section>
           <div className="flex flex-col items-center gap-3 py-10 text-center">
-            <span
-              className="material-symbols-outlined text-5xl text-attendance-present"
-              aria-hidden
-            >
-              check_circle
-            </span>
+            <Icon name="check_circle" className="text-5xl text-attendance-present" />
             <p className="font-title-lg text-title-lg text-primary">
               אין תלמידות חורגות בטווח שנבחר
             </p>
@@ -615,7 +606,7 @@ function KpiCard({
           )}
           aria-hidden
         >
-          <span className="material-symbols-outlined text-[20px]">{icon}</span>
+          <Icon name={icon} className="text-[20px]" />
         </div>
       </div>
       <span className="font-headline-lg text-headline-lg text-primary">{value}</span>

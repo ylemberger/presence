@@ -4,6 +4,7 @@ import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/Button";
 import { Select } from "@/components/ui/Input";
 import { Section } from "@/components/ui/Section";
+import { Icon } from "@/components/ui/Icon";
 
 export interface TimetableFiltersProps {
   classes: { id: string; name: string }[];
@@ -151,9 +152,7 @@ export function TimetableFilters({
 
       <div className="flex items-end sm:col-span-2 lg:col-span-4">
         <Button type="submit" className="w-full sm:w-auto">
-          <span className="material-symbols-outlined text-[18px]" aria-hidden>
-            search
-          </span>
+          <Icon name="search" className="text-[18px]" />
           הצג מערכת שעות
         </Button>
       </div>

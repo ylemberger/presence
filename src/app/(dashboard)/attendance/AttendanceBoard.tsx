@@ -17,6 +17,7 @@ import type { AttendanceStatus } from "@/types/database";
 import { cn } from "@/lib/cn";
 import { formatGregorianDate, formatHebrewDate } from "@/lib/dates/hebrew";
 import { ABSENCE_REASONS, type AbsenceReason } from "@/lib/attendance/reasons";
+import { Icon } from "@/components/ui/Icon";
 import {
   AttendanceStatusPicker,
   type AttendancePickerPhase,
@@ -661,18 +662,16 @@ export function AttendanceBoard({
           onClick={() => setFiltersOpen((v) => !v)}
         >
           <span className="flex items-center gap-2">
-            <span className="material-symbols-outlined text-secondary" aria-hidden>
-              filter_list
-            </span>
+            <Icon name="filter_list" className="text-secondary" />
             סינון (כיתה, מורה, מקצוע…)
           </span>
-          <span
-            className="material-symbols-outlined text-on-surface-variant transition-transform"
-            style={{ transform: filtersOpen ? "rotate(180deg)" : undefined }}
-            aria-hidden
-          >
-            expand_more
-          </span>
+          <Icon
+            name="expand_more"
+            className={cn(
+              "text-on-surface-variant transition-transform",
+              filtersOpen && "rotate-180"
+            )}
+          />
         </button>
         {filtersOpen && (
           <div className="border-t border-outline-variant/30 px-4 pb-4 pt-4">{filtersPanel}</div>
@@ -682,9 +681,7 @@ export function AttendanceBoard({
       {/* mobile filter sheet trigger */}
       <div className="md:hidden">
         <Button type="button" variant="secondary" className="w-full" onClick={() => setFiltersOpen(true)}>
-          <span className="material-symbols-outlined text-[18px]" aria-hidden>
-            filter_list
-          </span>
+          <Icon name="filter_list" className="text-[18px]" />
           סינון ומצב רישום
         </Button>
         {filtersOpen && (
@@ -732,18 +729,14 @@ export function AttendanceBoard({
           </div>
           {completeDateSet.has(selectedDate) && dayOccurrences.length > 0 && (
             <span className="inline-flex items-center gap-1 rounded-full bg-attendance-present/10 px-3 py-1 text-caption font-semibold text-attendance-present ring-1 ring-attendance-present/20">
-              <span className="material-symbols-outlined text-[14px]" aria-hidden>
-                task_alt
-              </span>
+              <Icon name="task_alt" className="text-[14px]" />
               יום שהושלם — כל השיעורים נרשמו
             </span>
           )}
           {!completeDateSet.has(selectedDate) &&
             dayOccurrences.some((o) => o.studentCount > 0 && o.markedCount < o.studentCount) && (
               <span className="inline-flex items-center gap-1 rounded-full bg-attendance-late/10 px-3 py-1 text-caption font-semibold text-attendance-late ring-1 ring-attendance-late/20">
-                <span className="material-symbols-outlined text-[14px]" aria-hidden>
-                  pending_actions
-                </span>
+                <Icon name="pending_actions" className="text-[14px]" />
                 יש שיעורים שממתינים לרישום
               </span>
             )}
@@ -751,12 +744,7 @@ export function AttendanceBoard({
 
         {dayOccurrences.length === 0 ? (
           <div className="rounded-xl border border-dashed border-outline-variant/50 bg-surface-container-low/60 px-4 py-8 text-center">
-            <span
-              className="material-symbols-outlined mb-2 block text-[36px] text-secondary"
-              aria-hidden
-            >
-              event_busy
-            </span>
+            <Icon name="event_busy" className="mb-2 block text-[36px] text-secondary" />
             <p className="font-body-md text-body-md text-on-surface-variant">
               אין שיעורים ביום זה.
             </p>
@@ -764,9 +752,7 @@ export function AttendanceBoard({
               href="/lessons"
               className="mt-3 inline-flex items-center gap-1 font-label-md text-label-md text-secondary hover:underline"
             >
-              <span className="material-symbols-outlined text-[16px]" aria-hidden>
-                add
-              </span>
+              <Icon name="add" className="text-[16px]" />
               צרי שיעורים או מופעים
             </Link>
           </div>
@@ -808,9 +794,7 @@ export function AttendanceBoard({
                     </span>
                     {complete && (
                       <span className="inline-flex items-center gap-0.5 text-caption text-attendance-present">
-                        <span className="material-symbols-outlined text-[14px]" aria-hidden>
-                          check_circle
-                        </span>
+                        <Icon name="check_circle" className="text-[14px]" />
                         הושלם
                       </span>
                     )}
@@ -863,9 +847,7 @@ export function AttendanceBoard({
                   disabled={!canMark || bulkSaving}
                   onClick={() => markAll("present")}
                 >
-                  <span className="material-symbols-outlined text-[18px]" aria-hidden>
-                    done_all
-                  </span>
+                  <Icon name="done_all" className="text-[18px]" />
                   {bulkSaving ? "שומר…" : "כולן נוכחות"}
                 </Button>
                 <Button
@@ -874,9 +856,7 @@ export function AttendanceBoard({
                   disabled={!canMark || bulkSaving || unmarkedCount === 0}
                   onClick={markRestAbsent}
                 >
-                  <span className="material-symbols-outlined text-[18px]" aria-hidden>
-                    person_remove
-                  </span>
+                  <Icon name="person_remove" className="text-[18px]" />
                   השאר נעדרות
                 </Button>
                 <Button
@@ -885,9 +865,7 @@ export function AttendanceBoard({
                   disabled={!canMark || copying}
                   onClick={copyPrevious}
                 >
-                  <span className="material-symbols-outlined text-[18px]" aria-hidden>
-                    content_copy
-                  </span>
+                  <Icon name="content_copy" className="text-[18px]" />
                   {copying ? "מעתיק…" : "העתק מקודם"}
                 </Button>
               </div>
@@ -916,12 +894,7 @@ export function AttendanceBoard({
 
             {lessonStudents.length === 0 && (
               <div className="rounded-xl border border-dashed border-outline-variant/50 bg-surface-container-low/60 px-4 py-8 text-center">
-                <span
-                  className="material-symbols-outlined mb-2 block text-[36px] text-secondary"
-                  aria-hidden
-                >
-                  group_off
-                </span>
+                <Icon name="group_off" className="mb-2 block text-[36px] text-secondary" />
                 <p className="font-body-md text-body-md text-on-surface-variant">
                   אין תלמידות משויכות לשיעור זה.
                 </p>
@@ -932,9 +905,7 @@ export function AttendanceBoard({
                   disabled={syncing}
                   onClick={syncStudents}
                 >
-                  <span className="material-symbols-outlined text-[18px]" aria-hidden>
-                    group_add
-                  </span>
+                  <Icon name="group_add" className="text-[18px]" />
                   {syncing ? "משייכת…" : "שייך תלמידות אוטומטית לפי כיתה/מסלול"}
                 </Button>
               </div>
@@ -979,12 +950,7 @@ export function AttendanceBoard({
                           </span>
                           {!marked && (
                             <span className="inline-flex items-center gap-1 rounded-full bg-attendance-late/15 px-2 py-0.5 text-caption font-semibold text-attendance-late">
-                              <span
-                                className="material-symbols-outlined text-[12px]"
-                                aria-hidden
-                              >
-                                pending
-                              </span>
+                              <Icon name="pending" className="text-[12px]" />
                               ממתין
                             </span>
                           )}
@@ -1046,9 +1012,7 @@ export function AttendanceBoard({
             {noteLessonId && lessonStudents.length > 0 && (
               <div className="mt-6 rounded-xl border-l-4 border-l-primary bg-surface-container-low/60 p-stack_md">
                 <label className="mb-2 flex items-center gap-2 font-label-md text-label-md text-primary">
-                  <span className="material-symbols-outlined text-secondary" aria-hidden>
-                    edit_note
-                  </span>
+                  <Icon name="edit_note" className="text-secondary" />
                   הערות כלליות לשיעור
                 </label>
                 <div className="flex flex-col gap-2 sm:flex-row">
@@ -1060,9 +1024,7 @@ export function AttendanceBoard({
                     placeholder="הקלידי הערות מיוחדות, אירועים חריגים או בקשות הקשורות לשיעור זה…"
                   />
                   <Button type="button" size="sm" disabled={noteSaving} onClick={saveNote}>
-                    <span className="material-symbols-outlined text-[18px]" aria-hidden>
-                      save
-                    </span>
+                    <Icon name="save" className="text-[18px]" />
                     {noteSaving ? "שומר…" : "שמור הערה"}
                   </Button>
                 </div>
@@ -1074,18 +1036,14 @@ export function AttendanceBoard({
 
       {!activeLesson && dayOccurrences.length > 1 && (
         <p className="flex items-center justify-center gap-2 rounded-xl bg-attendance-late/10 px-4 py-3 text-center font-body-md text-body-md text-attendance-late">
-          <span className="material-symbols-outlined" aria-hidden>
-            touch_app
-          </span>
+          <Icon name="touch_app" />
           יש {dayOccurrences.length} שיעורים ביום זה — בחרי שיעור מהרשימה למעלה.
         </p>
       )}
 
       {undo && (
         <div className="fixed bottom-8 left-8 z-50 flex items-center gap-4 rounded-lg bg-primary px-6 py-4 font-body-md text-body-md text-on-primary shadow-tactile-lg">
-          <span className="material-symbols-outlined text-secondary-fixed" aria-hidden>
-            check_circle
-          </span>
+          <Icon name="check_circle" className="text-secondary-fixed" />
           <span>נשמר עבור {undo.label}</span>
           <button
             type="button"

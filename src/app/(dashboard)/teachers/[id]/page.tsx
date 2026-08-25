@@ -8,6 +8,7 @@ import { getActiveAcademicYear } from "@/lib/utils";
 import { WeeklyTimetableGrid, type TimetableEntry } from "@/components/timetable/WeeklyTimetableGrid";
 import { BILLING_TYPE_LABELS } from "@/lib/constants";
 import { hebrewWeekdayLabels } from "@/lib/dates/hebrew";
+import { Icon } from "@/components/ui/Icon";
 
 interface Props {
   params: { id: string };
@@ -116,9 +117,7 @@ export default async function TeacherDetailPage({ params }: Props) {
               </h2>
               <div className="flex flex-wrap items-center gap-3 font-body-md text-body-md text-on-surface-variant">
                 <span className="flex items-center gap-1">
-                  <span className="material-symbols-outlined text-[18px]" aria-hidden>
-                    badge
-                  </span>
+                  <Icon name="badge" className="text-[18px]" />
                   ת&quot;ז: {teacher.identity_number ?? "—"}
                 </span>
                 {teacher.is_local && <StatusPill tone="warn">מקומית</StatusPill>}
@@ -129,9 +128,7 @@ export default async function TeacherDetailPage({ params }: Props) {
             href={`/timetable?teacherId=${teacher.id}`}
             className="inline-flex items-center gap-2 rounded-lg bg-secondary px-6 py-2.5 font-label-md text-label-md text-on-secondary shadow-tactile-sm transition-all hover:-translate-y-0.5 hover:bg-secondary-fixed-dim"
           >
-            <span className="material-symbols-outlined text-[18px]" aria-hidden>
-              calendar_view_week
-            </span>
+            <Icon name="calendar_view_week" className="text-[18px]" />
             פתח מערכת שעות
           </Link>
         </div>
@@ -183,12 +180,7 @@ export default async function TeacherDetailPage({ params }: Props) {
       <Section icon="menu_book" title="טבלת שיעורים">
         {lessonsRows.length === 0 ? (
           <div className="rounded-lg border border-dashed border-outline-variant/50 bg-surface-container-low/60 px-4 py-8 text-center">
-            <span
-              className="material-symbols-outlined mb-2 block text-[36px] text-secondary"
-              aria-hidden
-            >
-              menu_book
-            </span>
+            <Icon name="menu_book" className="mb-2 block text-[36px] text-secondary" />
             <p className="font-body-md text-body-md text-on-surface-variant">
               עדיין אין שיעורים למורה זו.
             </p>
@@ -244,12 +236,7 @@ export default async function TeacherDetailPage({ params }: Props) {
                       href={`/timetable?teacherId=${teacher.id}&subject=${encodeURIComponent(l.subject)}`}
                       className="inline-flex items-center gap-1 font-label-md text-label-md text-secondary hover:underline"
                     >
-                      <span
-                        className="material-symbols-outlined text-[16px]"
-                        aria-hidden
-                      >
-                        filter_alt
-                      </span>
+                      <Icon name="filter_alt" className="text-[16px]" />
                       סנן
                     </Link>
                   </TableCell>

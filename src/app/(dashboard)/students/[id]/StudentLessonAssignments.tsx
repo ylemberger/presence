@@ -11,6 +11,7 @@ import {
   deleteStudentLessonAssignmentAction,
 } from "../../actions";
 import { formatDate } from "@/lib/dates/hebrew";
+import { Icon } from "@/components/ui/Icon";
 
 interface LessonOption {
   id: string;
@@ -94,9 +95,7 @@ export function StudentLessonAssignments({
           <HebrewDateInput label="עד תאריך" name="end_date" allowEmpty />
         </div>
         <Button type="submit" className="mt-2 w-full">
-          <span className="material-symbols-outlined text-[18px]" aria-hidden>
-            add
-          </span>
+          <Icon name="add" className="text-[18px]" />
           שיוך לשיעור
         </Button>
       </form>

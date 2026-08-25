@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { createTeacherAction } from "../actions";
+import { Icon } from "@/components/ui/Icon";
 
 interface TeachersFormsProps {
   yearId?: string;
@@ -69,9 +70,7 @@ export function TeachersForms({ yearId }: TeachersFormsProps) {
         disabled={loading}
         className="mt-1 flex w-full items-center justify-center gap-2 rounded-lg bg-primary py-3 font-label-md text-label-md text-on-primary transition-colors hover:bg-primary-container disabled:cursor-not-allowed disabled:opacity-60"
       >
-        <span className="material-symbols-outlined text-[20px]" aria-hidden>
-          add
-        </span>
+        <Icon name="add" className="text-[20px]" />
         {loading ? "שומר..." : "שמור מורה"}
       </button>
       {error && (

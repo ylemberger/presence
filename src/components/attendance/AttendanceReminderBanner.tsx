@@ -2,6 +2,7 @@ import Link from "next/link";
 import { formatHebrewDate } from "@/lib/dates/hebrew";
 import type { PendingAttendanceSummary } from "@/lib/attendance/pending";
 import { cn } from "@/lib/cn";
+import { Icon } from "@/components/ui/Icon";
 
 interface AttendanceReminderBannerProps {
   summary: PendingAttendanceSummary;
@@ -72,7 +73,7 @@ export function AttendanceReminderBanner({
           )}
           aria-hidden
         >
-          <span className="material-symbols-outlined">notification_important</span>
+          <Icon name="notification_important" />
         </div>
         <div>
           <p className="font-body-lg text-body-lg font-medium text-primary">
@@ -105,9 +106,7 @@ export function AttendanceReminderBanner({
         className="inline-flex shrink-0 items-center gap-1 self-end text-label-md text-secondary transition-colors hover:underline sm:self-auto"
       >
         לרישום
-        <span className="material-symbols-outlined text-[18px]" aria-hidden>
-          arrow_back
-        </span>
+        <Icon name="arrow_back" className="text-[18px]" />
       </Link>
     </div>
   );

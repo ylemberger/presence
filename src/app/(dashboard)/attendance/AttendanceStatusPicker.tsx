@@ -3,6 +3,7 @@
 import { ATTENDANCE_STATUS_LABELS } from "@/lib/constants";
 import { cn } from "@/lib/cn";
 import type { AttendanceStatus } from "@/types/database";
+import { Icon } from "@/components/ui/Icon";
 
 const STATUS_ORDER: AttendanceStatus[] = ["present", "late", "absent"];
 
@@ -77,15 +78,10 @@ export function AttendanceStatusPicker({
             aria-pressed={selected}
             aria-busy={isSaving}
           >
-            <span
-              className={cn(
-                "material-symbols-outlined",
-                compact ? "text-[18px]" : "text-[20px]"
-              )}
-              aria-hidden
-            >
-              {ICONS[option]}
-            </span>
+            <Icon
+              name={ICONS[option]}
+              className={cn(compact ? "text-[18px]" : "text-[20px]")}
+            />
             <span>{ATTENDANCE_STATUS_LABELS[option]}</span>
             {isSaving && (
               <span className="absolute -top-1 left-1/2 h-1.5 w-1.5 -translate-x-1/2 rounded-full bg-white animate-ping" />

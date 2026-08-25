@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/Button";
 import { Select } from "@/components/ui/Input";
 import { HebrewDateInput } from "@/components/ui/HebrewDateInput";
 import { transferStudentAction } from "../../actions";
+import { Icon } from "@/components/ui/Icon";
 import type {
   AcademicYear,
   Grade,
@@ -153,9 +154,7 @@ export function StudentDetailForms({ studentId, yearData }: Props) {
           פסיכולוגיה
         </label>
         <Button type="submit" className="mt-2 w-full">
-          <span className="material-symbols-outlined text-[18px]" aria-hidden>
-            move_up
-          </span>
+          <Icon name="move_up" className="text-[18px]" />
           בצע העברה
         </Button>
       </form>

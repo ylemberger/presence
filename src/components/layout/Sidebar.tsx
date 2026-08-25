@@ -6,6 +6,7 @@ import { usePathname, useRouter } from "next/navigation";
 import { NAV_ITEMS } from "@/lib/constants";
 import { cn } from "@/lib/cn";
 import { createClient } from "@/lib/supabase/client";
+import { Icon } from "@/components/ui/Icon";
 
 interface SidebarProps {
   activeYearName?: string;
@@ -104,12 +105,7 @@ export function Sidebar({ activeYearName, attendancePendingCount = 0 }: SidebarP
                 )}
                 aria-hidden
               >
-                <span
-                  className="material-symbols-outlined text-[22px]"
-                  style={isActive ? { fontVariationSettings: "'FILL' 1" } : undefined}
-                >
-                  {iconName}
-                </span>
+                <Icon name={iconName} className="text-[22px]" />
               </span>
               <span className="flex-1">{item.label}</span>
               {item.href === "/attendance" && attendancePendingCount > 0 && (
@@ -136,9 +132,7 @@ export function Sidebar({ activeYearName, attendancePendingCount = 0 }: SidebarP
           onClick={handleLogout}
           className="flex w-full items-center justify-center gap-2 rounded-xl border border-white/25 py-2.5 font-label-md text-label-md text-white transition-colors hover:bg-white/10"
         >
-          <span className="material-symbols-outlined text-[20px]" aria-hidden>
-            logout
-          </span>
+          <Icon name="logout" className="text-[20px]" />
           התנתקות
         </button>
       </div>

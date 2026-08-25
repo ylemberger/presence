@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/Button";
 import { Input, Select } from "@/components/ui/Input";
 import { HebrewDateInput } from "@/components/ui/HebrewDateInput";
 import { Section } from "@/components/ui/Section";
+import { Icon } from "@/components/ui/Icon";
 
 interface ReportsFilterProps {
   classes: { id: string; name: string }[];
@@ -159,9 +160,7 @@ export function ReportsFilter({
         </div>
         <div className="flex justify-end">
           <Button type="submit">
-            <span className="material-symbols-outlined text-[18px]" aria-hidden>
-              search
-            </span>
+            <Icon name="search" className="text-[18px]" />
             החל סינון
           </Button>
         </div>

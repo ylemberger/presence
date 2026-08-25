@@ -13,6 +13,7 @@ import { StudentDetailForms } from "./StudentDetailForms";
 import { StudentLessonAssignments } from "./StudentLessonAssignments";
 import type { AttendanceStatus } from "@/types/database";
 import { cn } from "@/lib/cn";
+import { Icon } from "@/components/ui/Icon";
 import {
   WeeklyTimetableGrid,
   type TimetableEntry,
@@ -377,15 +378,11 @@ export default async function StudentDetailPage({ params }: Props) {
               </h2>
               <div className="flex flex-wrap items-center gap-4 font-body-md text-body-md text-on-surface-variant">
                 <span className="flex items-center gap-1">
-                  <span className="material-symbols-outlined text-[18px]" aria-hidden>
-                    badge
-                  </span>
+                  <Icon name="badge" className="text-[18px]" />
                   ת&quot;ז: {student.identity_number ?? "—"}
                 </span>
                 <span className="flex items-center gap-1">
-                  <span className="material-symbols-outlined text-[18px]" aria-hidden>
-                    school
-                  </span>
+                  <Icon name="school" className="text-[18px]" />
                   מחזור: {student.cohort_number ?? "—"}
                 </span>
                 <span className="flex items-center gap-2">
@@ -412,12 +409,7 @@ export default async function StudentDetailPage({ params }: Props) {
           <Section icon="donut_large" title="אחוזי נוכחות לפי מקצוע">
             {subjectStats.length === 0 ? (
               <div className="rounded-xl border border-dashed border-outline-variant/50 bg-surface-container-low/60 px-4 py-8 text-center">
-                <span
-                  className="material-symbols-outlined mb-2 block text-[36px] text-secondary"
-                  aria-hidden
-                >
-                  insights
-                </span>
+                <Icon name="insights" className="mb-2 block text-[36px] text-secondary" />
                 <p className="font-body-md text-body-md text-on-surface-variant">
                   אין נתוני נוכחות לחישוב עדיין.
                 </p>
@@ -541,9 +533,7 @@ export default async function StudentDetailPage({ params }: Props) {
                   href={`/timetable?studentId=${id}`}
                   className="inline-flex items-center gap-1 rounded-lg bg-secondary-container px-4 py-2 font-label-md text-label-md text-primary shadow-tactile-sm transition-transform hover:-translate-y-0.5"
                 >
-                  <span className="material-symbols-outlined text-[18px]" aria-hidden>
-                    open_in_new
-                  </span>
+                  <Icon name="open_in_new" className="text-[18px]" />
                   פתח בטבלת מערכת שעות
                 </Link>
               }

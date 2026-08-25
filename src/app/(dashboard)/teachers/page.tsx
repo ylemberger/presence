@@ -5,6 +5,7 @@ import { BILLING_TYPE_LABELS } from "@/lib/constants";
 import { TeachersForms } from "./TeachersForms";
 import { TeachersDirectory } from "./TeachersDirectory";
 import { TeachersLessons, type TeacherLessonRow } from "./TeachersLessons";
+import { Icon } from "@/components/ui/Icon";
 
 type AssignmentRow = {
   id: string;
@@ -70,9 +71,7 @@ export default async function TeachersPage() {
         <div className="lg:col-span-4 lg:row-span-2">
           <section className="rounded-xl border-t-4 border-secondary bg-surface-container-lowest p-stack_md shadow-tactile-md">
             <h3 className="mb-4 flex items-center gap-2 font-title-lg text-title-lg text-primary">
-              <span className="material-symbols-outlined text-secondary" aria-hidden>
-                person_add
-              </span>
+              <Icon name="person_add" className="text-secondary" />
               הוספת מורה
             </h3>
             <TeachersForms yearId={activeYear?.id} />

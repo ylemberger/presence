@@ -7,6 +7,7 @@ import {
 } from "@/components/timetable/WeeklyTimetableGrid";
 import { TimetableFilters } from "./TimetableFilters";
 import { Section } from "@/components/ui/Section";
+import { Icon } from "@/components/ui/Icon";
 
 interface Props {
   searchParams: {
@@ -154,9 +155,7 @@ export default async function TimetablePage({ searchParams }: Props) {
           </div>
           <Section>
             <div className="flex flex-col items-center gap-2 rounded-lg border border-dashed border-outline-variant/50 bg-surface-container-low/60 px-6 py-10 text-center">
-              <span className="material-symbols-outlined text-[36px] text-secondary" aria-hidden>
-                event_busy
-              </span>
+              <Icon name="event_busy" className="text-[36px] text-secondary" />
               <p className="font-body-md text-body-md text-on-surface-variant">
                 לא נמצאו שיעורים פעילים לתלמידה שבחרת.
               </p>
@@ -253,9 +252,7 @@ export default async function TimetablePage({ searchParams }: Props) {
       {entries.length === 0 ? (
         <Section icon="calendar_view_week" title="מערכת שבועית">
           <div className="flex flex-col items-center gap-2 rounded-lg border border-dashed border-outline-variant/50 bg-surface-container-low/60 px-6 py-10 text-center">
-            <span className="material-symbols-outlined text-[36px] text-secondary" aria-hidden>
-              search_off
-            </span>
+            <Icon name="search_off" className="text-[36px] text-secondary" />
             <p className="font-body-md text-body-md text-on-surface-variant">
               לא נמצאו שיעורים לסינון שבחרת.
             </p>

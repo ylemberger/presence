@@ -10,6 +10,7 @@ import {
 import { getPendingAttendanceSummary } from "@/lib/attendance/pending";
 import { AttendanceReminderBanner } from "@/components/attendance/AttendanceReminderBanner";
 import { cn } from "@/lib/cn";
+import { Icon } from "@/components/ui/Icon";
 
 const HEBREW_LESSON_LABEL = ["א'", "ב'", "ג'", "ד'", "ה'", "ו'", "ז'", "ח'", "ט'"] as const;
 
@@ -261,9 +262,7 @@ export default async function DashboardPage() {
           href={`/attendance?date=${today}`}
           className="flex items-center gap-2 rounded-lg bg-primary px-6 py-3 text-label-md text-white shadow-tactile-sm transition-colors hover:bg-primary-container hover:text-white"
         >
-          <span className="material-symbols-outlined text-[20px]" aria-hidden>
-            fact_check
-          </span>
+          <Icon name="fact_check" className="text-[20px]" />
           סמני היום
         </Link>
       </div>
@@ -298,9 +297,7 @@ export default async function DashboardPage() {
                     href={href}
                     className="flex items-center gap-2 rounded-full border border-outline-variant bg-surface-container-lowest px-5 py-2.5 text-label-md text-primary shadow-tactile-sm transition-colors hover:bg-surface-container-low"
                   >
-                    <span className="material-symbols-outlined text-[18px]" aria-hidden>
-                      {icon}
-                    </span>
+                    <Icon name={icon} className="text-[18px]" />
                     {label}
                   </Link>
                 ))}
@@ -330,15 +327,13 @@ export default async function DashboardPage() {
                       <span className="font-headline-lg text-headline-lg text-primary">
                         {kpi.value}
                       </span>
-                      <span
+                      <Icon
+                        name={kpi.icon}
                         className={cn(
-                          "material-symbols-outlined text-3xl",
+                          "text-3xl",
                           kpi.alert ? "text-attendance-late/40" : "text-outline-variant"
                         )}
-                        aria-hidden
-                      >
-                        {kpi.icon}
-                      </span>
+                      />
                     </div>
                   </Card>
                 </Link>
@@ -407,9 +402,7 @@ export default async function DashboardPage() {
                         </div>
                         {done ? (
                           <span className="status-pill-ok flex items-center gap-1 rounded-full px-3 py-1 text-caption font-semibold">
-                            <span className="material-symbols-outlined text-[16px]">
-                              check
-                            </span>
+                            <Icon name="check" className="text-[16px]" />
                             הושלם
                           </span>
                         ) : lesson.marked > 0 ? (

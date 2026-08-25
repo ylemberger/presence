@@ -2,6 +2,7 @@
 
 import { useEffect } from "react";
 import { cn } from "@/lib/cn";
+import { Icon } from "@/components/ui/Icon";
 
 interface ModalProps {
   open: boolean;
@@ -73,7 +74,7 @@ export function Modal({
               aria-label="סגירה"
               className="rounded-full p-1 text-on-surface-variant transition-colors hover:bg-error-container/20 hover:text-error"
             >
-              <span className="material-symbols-outlined">close</span>
+              <Icon name="close" />
             </button>
           )}
         </div>
