@@ -336,7 +336,7 @@ export function LessonsCalendar({
                       <button
                         type="button"
                         onClick={() => setStatus(o.id, "complete")}
-                        className="inline-flex items-center gap-1 rounded-lg bg-primary-container px-3 py-1.5 font-label-md text-label-md text-on-primary-container transition-colors hover:bg-primary hover:text-surface"
+                        className="inline-flex items-center gap-1 rounded-lg bg-primary-container px-3 py-1.5 font-label-md text-label-md text-white transition-colors hover:bg-primary hover:text-white"
                       >
                         <span
                           className="material-symbols-outlined text-[18px]"

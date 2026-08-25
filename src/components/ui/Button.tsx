@@ -14,7 +14,7 @@ export function Button({
 }: ButtonProps) {
   const variants = {
     primary:
-      "bg-primary text-surface shadow-tactile-sm hover:bg-primary-container active:translate-y-px",
+      "bg-primary text-white shadow-tactile-sm hover:bg-primary-container hover:text-white active:translate-y-px",
     secondary:
       "bg-secondary text-primary shadow-tactile-sm hover:bg-secondary-fixed-dim active:translate-y-px",
     danger:

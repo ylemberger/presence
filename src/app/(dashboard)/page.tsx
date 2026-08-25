@@ -259,7 +259,7 @@ export default async function DashboardPage() {
         </div>
         <Link
           href={`/attendance?date=${today}`}
-          className="flex items-center gap-2 rounded-lg bg-primary px-6 py-3 text-label-md text-surface shadow-tactile-sm transition-colors hover:bg-primary-container"
+          className="flex items-center gap-2 rounded-lg bg-primary px-6 py-3 text-label-md text-white shadow-tactile-sm transition-colors hover:bg-primary-container hover:text-white"
         >
           <span className="material-symbols-outlined text-[20px]" aria-hidden>
             fact_check
@@ -388,7 +388,7 @@ export default async function DashboardPage() {
                             className={cn(
                               "flex h-12 w-12 shrink-0 items-center justify-center rounded-md font-bold",
                               done
-                                ? "bg-primary-container text-on-primary-container"
+                                ? "bg-primary-container text-white"
                                 : "bg-surface-variant text-on-surface-variant"
                             )}
                             aria-hidden
