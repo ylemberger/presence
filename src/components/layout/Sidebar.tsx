@@ -43,24 +43,24 @@ export function Sidebar({ activeYearName, attendancePendingCount = 0 }: SidebarP
 
   return (
     <nav
-      className="print:hidden fixed right-0 top-0 z-50 flex h-full w-[17.5rem] flex-col border-l border-outline-variant bg-primary-container shadow-tactile-sm"
+      className="print:hidden fixed right-0 top-0 z-50 flex h-full w-[17.5rem] flex-col bg-primary shadow-tactile-sm"
       aria-label="ניווט ראשי"
     >
       {/* Brand Header */}
-      <div className="flex flex-col gap-2 border-b border-white/10 p-6 pb-4">
-        <div className="flex items-center gap-3">
-          <div
-            className="flex h-10 w-10 items-center justify-center rounded bg-secondary text-xl font-bold text-on-secondary"
-            aria-hidden
-          >
-            ס
-          </div>
-          <div>
-            <h1 className="font-headline-md text-headline-md font-bold text-secondary-container">
-              סמינר
-            </h1>
-            <p className="text-caption text-on-primary-container">ניהול פנימי</p>
-          </div>
+      <div className="flex items-center gap-4 border-b border-white/10 p-stack_lg">
+        <div
+          className="flex h-12 w-12 items-center justify-center rounded-full bg-secondary font-headline-md text-headline-md text-on-secondary"
+          aria-hidden
+        >
+          נ
+        </div>
+        <div>
+          <h1 className="font-headline-lg text-headline-lg text-secondary">נוכחות סמינר</h1>
+          {activeYearName && (
+            <p className="font-caption text-caption text-on-primary opacity-80">
+              {activeYearName} - שנה פעילה
+            </p>
+          )}
         </div>
       </div>
 
@@ -80,12 +80,12 @@ export function Sidebar({ activeYearName, attendancePendingCount = 0 }: SidebarP
                 if (!isActive) setPendingHref(item.href);
               }}
               className={cn(
-                "flex items-center gap-3 px-4 py-3 text-label-md transition-all duration-200",
+                "mx-2 flex items-center gap-4 rounded-lg px-4 py-3 font-body-md text-body-md transition-colors",
                 isActive
-                  ? "-translate-x-[2px] border-r-4 border-secondary bg-primary text-on-primary"
+                  ? "border-r-4 border-secondary bg-primary-container text-secondary"
                   : isPending
-                    ? "bg-primary/40 text-white"
-                    : "text-on-primary-container/80 hover:bg-primary/50 hover:text-white"
+                    ? "bg-primary-container/60 text-on-primary"
+                    : "text-on-primary hover:bg-primary-container"
               )}
               aria-busy={isPending || undefined}
               aria-current={isActive ? "page" : undefined}
@@ -117,20 +117,15 @@ export function Sidebar({ activeYearName, attendancePendingCount = 0 }: SidebarP
       </div>
 
       {/* Footer Tabs & CTA */}
-      <div className="mt-auto flex flex-col gap-2 border-t border-white/10 p-4">
-        {activeYearName && (
-          <div className="flex items-center gap-3 rounded-md px-4 py-2 text-label-md text-on-primary-container/80">
-            <span className="material-symbols-outlined" aria-hidden>
-              calendar_today
-            </span>
-            <span>{activeYearName}</span>
-          </div>
-        )}
+      <div className="mt-auto border-t border-white/10 p-stack_md">
         <button
           type="button"
           onClick={handleLogout}
-          className="mt-2 w-full rounded-md border border-error/30 py-2 text-center text-label-md text-error-container transition-colors hover:bg-error/10"
+          className="flex w-full items-center gap-4 rounded-lg px-4 py-3 font-body-md text-body-md text-on-primary transition-colors hover:bg-primary-container"
         >
+          <span className="material-symbols-outlined" aria-hidden>
+            logout
+          </span>
           התנתקות
         </button>
       </div>

@@ -2,8 +2,6 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { Button } from "@/components/ui/Button";
-import { Input } from "@/components/ui/Input";
 import { createTeacherAction } from "../actions";
 
 interface TeachersFormsProps {
@@ -37,15 +35,89 @@ export function TeachersForms({ yearId }: TeachersFormsProps) {
   }
 
   return (
-    <form onSubmit={handleSubmit} className="flex flex-wrap items-end gap-3">
-      <Input label="שם מלא" name="full_name" required />
-      <Input label='ת"ז' name="identity_number" required />
-      <Input label="טלפון" name="phone" required />
-      <Input label="אימייל" name="email" type="email" required />
-      <Button type="submit" disabled={loading}>
-        {loading ? "שומר..." : "הוספה"}
-      </Button>
-      {error && <p className="w-full text-sm text-red-600">{error}</p>}
+    <form onSubmit={handleSubmit} className="flex flex-col gap-4">
+      <FloatField
+        label="שם מלא"
+        name="full_name"
+        placeholder="הכניסי שם מלא"
+        required
+      />
+      <FloatField
+        label='תעודת זהות'
+        name="identity_number"
+        placeholder="000000000"
+        dir="ltr"
+        required
+      />
+      <FloatField
+        label="טלפון"
+        name="phone"
+        placeholder="05X-XXXXXXX"
+        dir="ltr"
+        required
+      />
+      <FloatField
+        label='דוא"ל'
+        name="email"
+        type="email"
+        placeholder="email@example.com"
+        dir="ltr"
+        required
+      />
+      <button
+        type="submit"
+        disabled={loading}
+        className="mt-1 flex w-full items-center justify-center gap-2 rounded-lg bg-primary py-3 font-label-md text-label-md text-on-primary transition-colors hover:bg-primary-container disabled:cursor-not-allowed disabled:opacity-60"
+      >
+        <span className="material-symbols-outlined text-[20px]" aria-hidden>
+          add
+        </span>
+        {loading ? "שומר..." : "שמור מורה"}
+      </button>
+      {error && (
+        <p
+          className="rounded-lg border border-error/20 bg-error-container/60 px-3 py-2 text-body-md text-on-error-container"
+          role="alert"
+        >
+          {error}
+        </p>
+      )}
     </form>
+  );
+}
+
+function FloatField({
+  label,
+  name,
+  placeholder,
+  type = "text",
+  dir,
+  required,
+}: {
+  label: string;
+  name: string;
+  placeholder?: string;
+  type?: string;
+  dir?: "ltr" | "rtl";
+  required?: boolean;
+}) {
+  return (
+    <div className="rounded-lg border border-outline bg-surface-container-lowest p-1 transition-all focus-within:border-primary focus-within:shadow-[0_0_0_2px_theme(colors.secondary-container)]">
+      <label
+        htmlFor={name}
+        className="block px-2 pt-1 font-caption text-caption text-on-surface-variant"
+      >
+        {label}
+      </label>
+      <input
+        id={name}
+        name={name}
+        type={type}
+        placeholder={placeholder}
+        dir={dir}
+        required={required}
+        className="w-full border-none bg-transparent px-2 pb-1 font-body-md text-body-md text-on-surface placeholder:text-outline-variant focus:outline-none focus:ring-0"
+      />
+    </div>
   );
 }

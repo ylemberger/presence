@@ -1,7 +1,7 @@
 import { notFound } from "next/navigation";
 import Link from "next/link";
-import { Card } from "@/components/ui/Card";
-import { PageHeader } from "@/components/ui/PageHeader";
+import { PageHeader, StatusPill } from "@/components/ui/PageHeader";
+import { Section } from "@/components/ui/Section";
 import { Table, TableRow, TableCell } from "@/components/ui/Table";
 import { createClient } from "@/lib/supabase/server";
 import { getActiveAcademicYear } from "@/lib/utils";
@@ -28,6 +28,7 @@ export default async function TeacherDetailPage({ params }: Props) {
         <PageHeader
           title={teacher.full_name}
           description="יש להגדיר שנה אקדמית פעילה כדי לראות מערכת שעות."
+          size="headline"
         />
       </div>
     );
@@ -95,48 +96,113 @@ export default async function TeacherDetailPage({ params }: Props) {
     };
   });
 
+  const initial = teacher.full_name?.[0] ?? "?";
+
   return (
-    <div className="space-y-6">
-      <PageHeader
-        title={teacher.full_name}
-        description={`ת\"ז ${teacher.identity_number}${teacher.is_local ? " · מקומית" : ""}`}
-        actions={
+    <div className="flex flex-col gap-gutter">
+      {/* Teacher header card with avatar */}
+      <section className="rounded-xl border border-outline-variant/30 border-t-4 border-t-secondary bg-surface-container-lowest p-6 shadow-tactile-md">
+        <div className="flex flex-col items-start justify-between gap-4 md:flex-row md:items-center">
+          <div className="flex items-center gap-6">
+            <span
+              aria-hidden
+              className="flex h-16 w-16 shrink-0 items-center justify-center rounded-full border-2 border-outline-variant bg-secondary-container font-title-lg text-title-lg font-bold text-primary"
+            >
+              {initial}
+            </span>
+            <div>
+              <h2 className="mb-1 font-headline-lg text-headline-lg text-primary">
+                {teacher.full_name}
+              </h2>
+              <div className="flex flex-wrap items-center gap-3 font-body-md text-body-md text-on-surface-variant">
+                <span className="flex items-center gap-1">
+                  <span className="material-symbols-outlined text-[18px]" aria-hidden>
+                    badge
+                  </span>
+                  ת&quot;ז: {teacher.identity_number ?? "—"}
+                </span>
+                {teacher.is_local && <StatusPill tone="warn">מקומית</StatusPill>}
+              </div>
+            </div>
+          </div>
           <Link
             href={`/timetable?teacherId=${teacher.id}`}
-            className="inline-flex items-center rounded-xl bg-[var(--brand)] px-4 py-2.5 text-sm font-medium text-white shadow-[var(--shadow-sm)] transition-colors hover:bg-[var(--brand-soft)]"
+            className="inline-flex items-center gap-2 rounded-lg bg-secondary px-6 py-2.5 font-label-md text-label-md text-on-secondary shadow-tactile-sm transition-all hover:-translate-y-0.5 hover:bg-secondary-fixed-dim"
           >
+            <span className="material-symbols-outlined text-[18px]" aria-hidden>
+              calendar_view_week
+            </span>
             פתח מערכת שעות
           </Link>
-        }
-      />
-
-      <Card title="פרטי מורה">
-        <div className="grid gap-3 sm:grid-cols-2">
-          <div>
-            <div className="text-xs font-semibold text-slate-500">טלפון</div>
-            <div className="text-sm text-slate-800">{teacher.phone ?? "—"}</div>
-          </div>
-          <div>
-            <div className="text-xs font-semibold text-slate-500">אימייל</div>
-            <div className="text-sm text-slate-800">{teacher.email ?? "—"}</div>
-          </div>
         </div>
-      </Card>
+      </section>
 
-      <Card title="מערכת שעות אישית (לפי השנה הפעילה)">
-        {entries.length === 0 ? (
-          <p className="text-sm text-slate-600">אין שיעורים לשנה הפעילה עבור מורה זו.</p>
-        ) : (
-          <WeeklyTimetableGrid entries={entries} />
-        )}
-      </Card>
+      <div className="grid grid-cols-1 gap-gutter xl:grid-cols-3">
+        <Section icon="contact_phone" title="פרטי מורה">
+          <dl className="flex flex-col gap-3 font-body-md text-body-md">
+            <div>
+              <dt className="font-label-md text-label-md text-on-surface-variant">
+                טלפון
+              </dt>
+              <dd className="text-on-surface" dir="ltr">
+                {teacher.phone ?? "—"}
+              </dd>
+            </div>
+            <div>
+              <dt className="font-label-md text-label-md text-on-surface-variant">
+                אימייל
+              </dt>
+              <dd className="text-on-surface" dir="ltr">
+                {teacher.email ?? "—"}
+              </dd>
+            </div>
+          </dl>
+        </Section>
 
-      <Card title="טבלת שיעורים">
+        <div className="xl:col-span-2">
+          <Section
+            icon="calendar_view_week"
+            title="מערכת שעות אישית (לפי השנה הפעילה)"
+            bodyBleed
+          >
+            <div className="p-4">
+              {entries.length === 0 ? (
+                <div className="rounded-lg border border-dashed border-outline-variant/50 bg-surface-container-low/60 px-4 py-8 text-center">
+                  <p className="font-body-md text-body-md text-on-surface-variant">
+                    אין שיעורים לשנה הפעילה עבור מורה זו.
+                  </p>
+                </div>
+              ) : (
+                <WeeklyTimetableGrid entries={entries} />
+              )}
+            </div>
+          </Section>
+        </div>
+      </div>
+
+      <Section icon="menu_book" title="טבלת שיעורים">
         {lessonsRows.length === 0 ? (
-          <p className="text-sm text-slate-600">עדיין אין שיעורים למורה זו.</p>
+          <div className="rounded-lg border border-dashed border-outline-variant/50 bg-surface-container-low/60 px-4 py-8 text-center">
+            <span
+              className="material-symbols-outlined mb-2 block text-[36px] text-secondary"
+              aria-hidden
+            >
+              menu_book
+            </span>
+            <p className="font-body-md text-body-md text-on-surface-variant">
+              עדיין אין שיעורים למורה זו.
+            </p>
+          </div>
         ) : (
           <Table
-            headers={["מקצוע", "סוג", "קהל יעד", "יום×שעה", "תלמידות פעילות", "לפתיחה בטבלת מערכת שעות"]}
+            headers={[
+              "מקצוע",
+              "סוג",
+              "קהל יעד",
+              "יום×שעה",
+              "תלמידות פעילות",
+              "פעולות",
+            ]}
           >
             {lessonsRows.map((l: any) => {
               const cls = l.classes as unknown as { name: string } | null;
@@ -144,29 +210,46 @@ export default async function TeacherDetailPage({ params }: Props) {
               const spec = l.specializations as unknown as { name: string } | null;
 
               let audienceLabel = "—";
-              if (l.billing_type === "specialization") audienceLabel = spec?.name ?? "—";
+              if (l.billing_type === "specialization")
+                audienceLabel = spec?.name ?? "—";
               else audienceLabel = cls?.name ?? tr?.name ?? "—";
 
               const studentCount = studentCountByLesson.get(l.id)?.size ?? 0;
 
               return (
                 <TableRow key={l.id}>
-                  <TableCell>{l.subject}</TableCell>
-                  <TableCell>
-                    {l.for_psychology
-                      ? "פסיכולוגיה"
-                      : BILLING_TYPE_LABELS[l.billing_type as keyof typeof BILLING_TYPE_LABELS]}
+                  <TableCell className="font-semibold text-primary">
+                    {l.subject}
                   </TableCell>
-                  <TableCell>{audienceLabel}</TableCell>
                   <TableCell>
+                    <StatusPill tone={l.for_psychology ? "info" : "muted"}>
+                      {l.for_psychology
+                        ? "פסיכולוגיה"
+                        : BILLING_TYPE_LABELS[
+                            l.billing_type as keyof typeof BILLING_TYPE_LABELS
+                          ]}
+                    </StatusPill>
+                  </TableCell>
+                  <TableCell className="text-on-surface-variant">
+                    {audienceLabel}
+                  </TableCell>
+                  <TableCell className="text-on-surface-variant">
                     {days[l.day_of_week] ?? "—"} · {l.lesson_number}
                   </TableCell>
-                  <TableCell>{studentCount}</TableCell>
+                  <TableCell className="font-semibold text-primary">
+                    {studentCount}
+                  </TableCell>
                   <TableCell>
                     <Link
                       href={`/timetable?teacherId=${teacher.id}&subject=${encodeURIComponent(l.subject)}`}
-                      className="text-sm font-medium text-[var(--brand)] hover:underline"
+                      className="inline-flex items-center gap-1 font-label-md text-label-md text-secondary hover:underline"
                     >
+                      <span
+                        className="material-symbols-outlined text-[16px]"
+                        aria-hidden
+                      >
+                        filter_alt
+                      </span>
                       סנן
                     </Link>
                   </TableCell>
@@ -175,7 +258,7 @@ export default async function TeacherDetailPage({ params }: Props) {
             })}
           </Table>
         )}
-      </Card>
+      </Section>
     </div>
   );
 }

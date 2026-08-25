@@ -28,9 +28,14 @@ export function GenerateOccurrencesButton({ academicYearId }: { academicYearId: 
   return (
     <div>
       <Button onClick={handleGenerate} disabled={loading}>
-        {loading ? "יוצר..." : "יצירת מופעי שיעור"}
+        <span className="material-symbols-outlined text-[18px]" aria-hidden>
+          event_repeat
+        </span>
+        {loading ? "יוצר..." : "יצירת מופעים"}
       </Button>
-      {message && <p className="mt-1 text-sm text-gray-600">{message}</p>}
+      {message && (
+        <p className="mt-1 font-caption text-caption text-on-surface-variant">{message}</p>
+      )}
     </div>
   );
 }

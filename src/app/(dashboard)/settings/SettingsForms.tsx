@@ -64,7 +64,9 @@ export function SettingsForms({ type, yearId, grades, createAction }: SettingsFo
 
       {type === "grade" &&
         (missingGrades.length === 0 ? (
-          <p className="text-sm text-slate-500">כל השכבות א / ב / ג כבר קיימות.</p>
+          <p className="text-body-sm text-on-surface-variant">
+            כל השכבות א / ב / ג כבר קיימות.
+          </p>
         ) : (
           <Select
             label="שכבה"
@@ -136,10 +138,17 @@ export function SettingsForms({ type, yearId, grades, createAction }: SettingsFo
 
       {(type !== "grade" || missingGrades.length > 0) && (
         <Button type="submit" disabled={loading}>
+          <span className="material-symbols-outlined text-[18px]" aria-hidden>
+            add
+          </span>
           {loading ? "מוסיף..." : "הוספה"}
         </Button>
       )}
-      {error && <p className="w-full text-sm text-red-600">{error}</p>}
+      {error && (
+        <p className="w-full rounded-lg bg-error-container/60 px-3 py-2 text-body-sm text-on-error-container">
+          {error}
+        </p>
+      )}
     </form>
   );
 }

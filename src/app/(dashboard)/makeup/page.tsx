@@ -1,6 +1,7 @@
-import { Card } from "@/components/ui/Card";
-import { PageHeader } from "@/components/ui/PageHeader";
+import { PageHeader, StatusPill } from "@/components/ui/PageHeader";
+import { Section } from "@/components/ui/Section";
 import { Table, TableRow, TableCell } from "@/components/ui/Table";
+import { cn } from "@/lib/cn";
 import { getActiveAcademicYear } from "@/lib/utils";
 import { createClient } from "@/lib/supabase/server";
 import {
@@ -33,7 +34,11 @@ export default async function MakeupPage({ searchParams }: Props) {
   if (!activeYear) {
     return (
       <div>
-        <PageHeader title="מבחני השלמה" description="יש להגדיר שנה אקדמית פעילה." />
+        <PageHeader
+          title="מבחני השלמה"
+          description="יש להגדיר שנה אקדמית פעילה."
+          size="headline"
+        />
       </div>
     );
   }
@@ -259,10 +264,11 @@ export default async function MakeupPage({ searchParams }: Props) {
     filteredBlockedSuggestions.length + filteredNormalSuggestions.length;
 
   return (
-    <div className="space-y-6">
+    <div className="flex flex-col gap-stack_lg">
       <PageHeader
-        title="מבחני השלמה"
+        title="ניהול מבחני השלמה"
         description="לפי אחוזי היעדרות מול כלל השיעור: מעל 20% → 1 מבחן, מעל 40% → 2 מבחנים, מעל 60% → חסומה (אין אפשרות להשלים)."
+        size="headline"
       />
 
       <div className="print:hidden">
@@ -285,52 +291,148 @@ export default async function MakeupPage({ searchParams }: Props) {
         />
       </div>
 
-      <Card title="פתיחת מבחן השלמה">
-        <MakeupForms
-          yearId={activeYear.id}
-          students={students ?? []}
-          lessons={(lessons ?? []).map((l) => ({ id: l.id, subject: l.subject }))}
-        />
-      </Card>
-
-      <Card title="הצעות לפי אחוזי היעדרות">
-        {totalFilteredSuggestions === 0 ? (
-          <p className="text-sm text-slate-500">אין הצעות חדשות כרגע.</p>
-        ) : (
-          <div className="space-y-4">
-            {filteredBlockedSuggestions.length > 0 && (
-              <div className="rounded-xl border border-rose-100 bg-rose-50/40 p-3">
-                <p className="mb-2 text-sm font-semibold text-rose-900">
-                  חסומות (מעל 60%) — אין אפשרות להשלים
+      <div className="grid grid-cols-1 gap-gutter xl:grid-cols-3">
+        {/* Left column — larger tables (existing exams + normal suggestions) */}
+        <div className="flex flex-col gap-gutter xl:col-span-2">
+          <Section icon="event_available" title="רשימת מבחני השלמה">
+            {filteredExisting.length === 0 ? (
+              <div className="rounded-lg border border-dashed border-outline-variant/50 bg-surface-container-low/60 px-4 py-8 text-center">
+                <span
+                  className="material-symbols-outlined mb-2 block text-[36px] text-secondary"
+                  aria-hidden
+                >
+                  fact_check
+                </span>
+                <p className="font-body-md text-body-md text-on-surface-variant">
+                  עדיין אין רשומות.
                 </p>
-                <Table headers={["תלמידה", "שיעור", "היעדרות", "סף", "הערה"]}>
-                  {filteredBlockedSuggestions.slice(0, 20).map((s) => (
-                    <TableRow key={`${s.studentId}-${s.lessonId}`}>
-                      <TableCell>{s.studentName}</TableCell>
-                      <TableCell>{s.subject}</TableCell>
-                      <TableCell>{s.absencePercent}%</TableCell>
-                      <TableCell>{s.maxAllowed}%</TableCell>
-                      <TableCell>
-                        <span className="font-bold text-rose-800">{s.label}</span>
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </Table>
               </div>
-            )}
-
-            {filteredNormalSuggestions.length > 0 && (
-              <Table headers={["תלמידה", "שיעור", "היעדרות", "סף", "מומלץ", ""]}>
-                {filteredNormalSuggestions.slice(0, 40).map((s) => (
-                  <TableRow key={`${s.studentId}-${s.lessonId}`}>
-                    <TableCell>{s.studentName}</TableCell>
-                    <TableCell>{s.subject}</TableCell>
-                    <TableCell>{s.absencePercent}%</TableCell>
-                    <TableCell>{s.maxAllowed}%</TableCell>
-                    <TableCell>
-                      {s.requiredExams} מבחן/ים · {s.label}
+            ) : (
+              <Table
+                headers={["תלמידה", "שיעור", "נדרש", "הושלם", "סטטוס", "עדכון"]}
+              >
+                {filteredExisting.map((row: any) => (
+                  <TableRow key={row.id}>
+                    <TableCell className="font-semibold text-primary">
+                      {(row.students as unknown as { full_name: string } | null)
+                        ?.full_name ?? "—"}
+                    </TableCell>
+                    <TableCell className="text-on-surface-variant">
+                      {(row.lessons as unknown as { subject: string } | null)
+                        ?.subject ?? "—"}
+                    </TableCell>
+                    <TableCell className="text-on-surface-variant">
+                      {row.required_exams}
+                    </TableCell>
+                    <TableCell className="font-semibold text-attendance-present">
+                      {row.completed_exams}
                     </TableCell>
                     <TableCell>
+                      <StatusPill
+                        tone={
+                          row.status === "done"
+                            ? "ok"
+                            : row.status === "blocked"
+                              ? "danger"
+                              : "warn"
+                        }
+                      >
+                        {row.status === "open"
+                          ? "פתוח"
+                          : row.status === "done"
+                            ? "הושלם"
+                            : "חסום"}
+                      </StatusPill>
+                    </TableCell>
+                    <TableCell>
+                      <MakeupForms
+                        yearId={activeYear.id}
+                        students={[]}
+                        lessons={[]}
+                        editId={row.id}
+                        editDefaults={{
+                          required_exams: row.required_exams,
+                          completed_exams: row.completed_exams,
+                          status: row.status,
+                          notes: row.notes ?? "",
+                        }}
+                        compact
+                      />
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </Table>
+            )}
+          </Section>
+
+          {filteredBlockedSuggestions.length > 0 && (
+            <Section icon="report" title="חסומות — מעל 60% היעדרות" accent="danger">
+              <p className="mb-3 font-body-sm text-body-sm text-on-error-container">
+                אין אפשרות להשלים — יש לפעול מול הצוות החינוכי.
+              </p>
+              <Table headers={["תלמידה", "שיעור", "היעדרות", "סף", "הערה"]}>
+                {filteredBlockedSuggestions.slice(0, 20).map((s) => (
+                  <TableRow key={`${s.studentId}-${s.lessonId}`}>
+                    <TableCell className="font-semibold text-primary">
+                      {s.studentName}
+                    </TableCell>
+                    <TableCell className="text-on-surface-variant">
+                      {s.subject}
+                    </TableCell>
+                    <TableCell className="font-bold text-attendance-absent">
+                      {s.absencePercent}%
+                    </TableCell>
+                    <TableCell className="text-on-surface-variant">
+                      {s.maxAllowed}%
+                    </TableCell>
+                    <TableCell>
+                      <StatusPill tone="danger">{s.label}</StatusPill>
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </Table>
+            </Section>
+          )}
+        </div>
+
+        {/* Right column — forms & suggestions */}
+        <div className="flex flex-col gap-gutter">
+          <Section icon="post_add" title="פתיחת מבחן השלמה" accent="featured">
+            <MakeupForms
+              yearId={activeYear.id}
+              students={students ?? []}
+              lessons={(lessons ?? []).map((l) => ({ id: l.id, subject: l.subject }))}
+            />
+          </Section>
+
+          <Section icon="warning" title="חריגות סף (הצעות)">
+            {filteredNormalSuggestions.length === 0 ? (
+              <p className="font-body-md text-body-md text-on-surface-variant">
+                אין הצעות חדשות כרגע.
+              </p>
+            ) : (
+              <ul className="flex flex-col gap-3">
+                {filteredNormalSuggestions.slice(0, 8).map((s) => {
+                  const highRisk = s.absencePercent >= 40;
+                  return (
+                    <li
+                      key={`${s.studentId}-${s.lessonId}`}
+                      className={cn(
+                        "flex items-center justify-between gap-3 rounded-lg border p-3",
+                        highRisk
+                          ? "border-attendance-absent/20 bg-attendance-absent/5"
+                          : "border-attendance-late/20 bg-attendance-late/5"
+                      )}
+                    >
+                      <div className="min-w-0">
+                        <p className="font-label-md text-label-md text-on-surface">
+                          {s.studentName}
+                        </p>
+                        <p className="font-caption text-caption text-on-surface-variant">
+                          {s.absencePercent}% חיסורים ב{s.subject} · {s.requiredExams}{" "}
+                          מבחן/ים
+                        </p>
+                      </div>
                       <MakeupForms
                         yearId={activeYear.id}
                         students={[{ id: s.studentId, full_name: s.studentName }]}
@@ -342,57 +444,36 @@ export default async function MakeupPage({ searchParams }: Props) {
                         }}
                         compact
                       />
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </Table>
+                    </li>
+                  );
+                })}
+                {filteredNormalSuggestions.length > 8 && (
+                  <li className="text-center font-caption text-caption text-on-surface-variant">
+                    ועוד {filteredNormalSuggestions.length - 8} הצעות…
+                  </li>
+                )}
+              </ul>
             )}
-          </div>
-        )}
-      </Card>
+          </Section>
+        </div>
+      </div>
 
-      <Card title="רשימת מבחני השלמה">
-        {filteredExisting.length === 0 ? (
-          <p className="text-sm text-slate-500">עדיין אין רשומות.</p>
-        ) : (
-          <Table headers={["תלמידה", "שיעור", "נדרש", "הושלם", "סטטוס", "עדכון"]}>
-            {filteredExisting.map((row: any) => (
-              <TableRow key={row.id}>
-                <TableCell>
-                  {(row.students as unknown as { full_name: string } | null)?.full_name ?? "—"}
-                </TableCell>
-                <TableCell>
-                  {(row.lessons as unknown as { subject: string } | null)?.subject ?? "—"}
-                </TableCell>
-                <TableCell>{row.required_exams}</TableCell>
-                <TableCell>{row.completed_exams}</TableCell>
-                <TableCell>
-                  {row.status === "open"
-                    ? "פתוח"
-                    : row.status === "done"
-                      ? "הושלם"
-                      : "חסום"}
-                </TableCell>
-                <TableCell>
-                  <MakeupForms
-                    yearId={activeYear.id}
-                    students={[]}
-                    lessons={[]}
-                    editId={row.id}
-                    editDefaults={{
-                      required_exams: row.required_exams,
-                      completed_exams: row.completed_exams,
-                      status: row.status,
-                      notes: row.notes ?? "",
-                    }}
-                    compact
-                  />
-                </TableCell>
-              </TableRow>
-            ))}
-          </Table>
-        )}
-      </Card>
+      {totalFilteredSuggestions === 0 && filteredExisting.length === 0 && (
+        <Section>
+          <div className="flex flex-col items-center gap-2 rounded-lg border border-dashed border-outline-variant/50 bg-surface-container-low/60 px-6 py-10 text-center">
+            <span
+              className="material-symbols-outlined text-[36px] text-attendance-present"
+              aria-hidden
+            >
+              check_circle
+            </span>
+            <p className="font-title-lg text-title-lg text-primary">אין מבחני השלמה פעילים</p>
+            <p className="font-body-md text-body-md text-on-surface-variant">
+              כל הכבוד! אין הצעות חדשות ולא רשומים מבחני השלמה.
+            </p>
+          </div>
+        </Section>
+      )}
     </div>
   );
 }

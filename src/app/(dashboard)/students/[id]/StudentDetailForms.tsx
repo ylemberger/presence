@@ -77,78 +77,93 @@ export function StudentDetailForms({ studentId, yearData }: Props) {
 
   return (
     <div>
-      <p className="mb-3 text-sm text-slate-600">
+      <p className="mb-3 font-caption text-caption text-on-surface-variant">
         שינוי כיתה/מסלול/התמחות/פסיכולוגיה נעשה רק בהעברה. השיבוץ הקודם נסגר ונשמר בהיסטוריה.
       </p>
-      <form onSubmit={handleTransfer} className="flex flex-wrap items-end gap-3">
+      <form onSubmit={handleTransfer} className="flex flex-col gap-3">
         <HebrewDateInput label="בתוקף מתאריך" name="transfer_date" required />
-        <Select
-          label="שכבה"
-          name="grade_id"
-          required
-          value={gradeId}
-          onChange={(e) => {
-            setGradeId(e.target.value);
-            setClassId("");
-          }}
-          options={[
-            { value: "", label: "בחרי" },
-            ...yearData.grades.map((g) => ({ value: g.id, label: g.name })),
-          ]}
-        />
-        <Select
-          label="כיתה"
-          name="class_id"
-          required
-          value={classId}
-          onChange={(e) => {
-            const next = e.target.value;
-            setClassId(next);
-            const selected = yearData.classes.find((c) => c.id === next);
-            if (selected && selected.grade_id !== gradeId) {
-              setGradeId(selected.grade_id);
-            }
-          }}
-          options={[
-            {
-              value: "",
-              label: classOptions.length ? "בחרי" : "אין כיתות בהגדרות",
-            },
-            ...classOptions,
-          ]}
-        />
-        <Select
-          label="מסלול"
-          name="track_id"
-          required
-          options={[
-            { value: "", label: "בחרי" },
-            ...yearData.tracks.map((t) => ({ value: t.id, label: t.name })),
-          ]}
-        />
-        <Select
-          label="התמחות"
-          name="specialization_id"
-          options={[
-            { value: "", label: "ללא" },
-            ...yearData.specializations.map((s) => ({ value: s.id, label: s.name })),
-          ]}
-        />
-        <Select
-          label="התמחות נוספת"
-          name="secondary_specialization_id"
-          options={[
-            { value: "", label: "ללא" },
-            ...yearData.specializations.map((s) => ({ value: s.id, label: s.name })),
-          ]}
-        />
-        <label className="flex items-center gap-2 pb-2 text-sm text-slate-700">
-          <input type="checkbox" name="is_psychology" className="rounded border-stone-300" />
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+          <Select
+            label="שכבה"
+            name="grade_id"
+            required
+            value={gradeId}
+            onChange={(e) => {
+              setGradeId(e.target.value);
+              setClassId("");
+            }}
+            options={[
+              { value: "", label: "בחרי" },
+              ...yearData.grades.map((g) => ({ value: g.id, label: g.name })),
+            ]}
+          />
+          <Select
+            label="כיתה"
+            name="class_id"
+            required
+            value={classId}
+            onChange={(e) => {
+              const next = e.target.value;
+              setClassId(next);
+              const selected = yearData.classes.find((c) => c.id === next);
+              if (selected && selected.grade_id !== gradeId) {
+                setGradeId(selected.grade_id);
+              }
+            }}
+            options={[
+              {
+                value: "",
+                label: classOptions.length ? "בחרי" : "אין כיתות בהגדרות",
+              },
+              ...classOptions,
+            ]}
+          />
+          <Select
+            label="מסלול"
+            name="track_id"
+            required
+            options={[
+              { value: "", label: "בחרי" },
+              ...yearData.tracks.map((t) => ({ value: t.id, label: t.name })),
+            ]}
+          />
+          <Select
+            label="התמחות"
+            name="specialization_id"
+            options={[
+              { value: "", label: "ללא" },
+              ...yearData.specializations.map((s) => ({ value: s.id, label: s.name })),
+            ]}
+          />
+          <Select
+            label="התמחות נוספת"
+            name="secondary_specialization_id"
+            options={[
+              { value: "", label: "ללא" },
+              ...yearData.specializations.map((s) => ({ value: s.id, label: s.name })),
+            ]}
+          />
+        </div>
+        <label className="flex items-center gap-2 font-label-md text-label-md text-on-surface">
+          <input
+            type="checkbox"
+            name="is_psychology"
+            className="rounded border-outline-variant"
+          />
           פסיכולוגיה
         </label>
-        <Button type="submit">בצע העברה</Button>
+        <Button type="submit" className="mt-2 w-full">
+          <span className="material-symbols-outlined text-[18px]" aria-hidden>
+            move_up
+          </span>
+          בצע העברה
+        </Button>
       </form>
-      {error && <p className="mt-2 text-sm text-red-600">{error}</p>}
+      {error && (
+        <p className="mt-3 rounded-lg bg-error-container/60 px-3 py-2 font-body-sm text-body-sm text-on-error-container">
+          {error}
+        </p>
+      )}
     </div>
   );
 }

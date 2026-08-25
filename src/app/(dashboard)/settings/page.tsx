@@ -1,5 +1,5 @@
-import { Card } from "@/components/ui/Card";
 import { PageHeader } from "@/components/ui/PageHeader";
+import { Section } from "@/components/ui/Section";
 import { Tabs } from "@/components/ui/Tabs";
 import { getActiveAcademicYear, getAllAcademicYears } from "@/lib/utils";
 import { createClient } from "@/lib/supabase/server";
@@ -38,6 +38,24 @@ import {
 import { ensureFixedGrades } from "@/lib/years/promote";
 import { filterFixedGrades, isFixedGradeName } from "@/lib/years/grades";
 
+/** Shared thead row for the inline editable tables — matches Stitch table headers. */
+function SettingsTableHead({ columns }: { columns: string[] }) {
+  return (
+    <thead className="border-b border-outline-variant/30 bg-surface-container-low">
+      <tr>
+        {columns.map((col) => (
+          <th
+            key={col}
+            className="px-4 py-3 text-right font-label-md text-label-md text-on-surface-variant"
+          >
+            {col}
+          </th>
+        ))}
+      </tr>
+    </thead>
+  );
+}
+
 export default async function SettingsPage() {
   const activeYear = await getActiveAcademicYear();
   const years = await getAllAcademicYears();
@@ -51,10 +69,22 @@ export default async function SettingsPage() {
   const [grades, classes, tracks, specializations, ranges, rules] = yearId
     ? await Promise.all([
         supabase.from("grades").select("*").eq("academic_year_id", yearId).order("name"),
-        supabase.from("classes").select("*, grades(name)").eq("academic_year_id", yearId).order("name"),
+        supabase
+          .from("classes")
+          .select("*, grades(name)")
+          .eq("academic_year_id", yearId)
+          .order("name"),
         supabase.from("tracks").select("*").eq("academic_year_id", yearId).order("name"),
-        supabase.from("specializations").select("*").eq("academic_year_id", yearId).order("name"),
-        supabase.from("activity_ranges").select("*").eq("academic_year_id", yearId).order("start_date"),
+        supabase
+          .from("specializations")
+          .select("*")
+          .eq("academic_year_id", yearId)
+          .order("name"),
+        supabase
+          .from("activity_ranges")
+          .select("*")
+          .eq("academic_year_id", yearId)
+          .order("start_date"),
         supabase.from("attendance_rules").select("*").order("name"),
       ])
     : [
@@ -71,40 +101,46 @@ export default async function SettingsPage() {
   const invalidGrades = allGrades.filter((g) => !isFixedGradeName(g.name));
 
   const yearPanel = (
-    <Card title="שנים אקדמיות">
-      <SettingsForms type="academic_year" yearId={yearId} createAction={createAcademicYearAction} />
-      <div className="mt-4 overflow-x-auto">
-        <table className="w-full text-sm">
-          <thead>
-            <tr className="border-b border-stone-200 bg-stone-50/90">
-              <th className="px-4 py-3 text-right text-xs font-semibold text-slate-500">שם</th>
-              <th className="px-4 py-3 text-right text-xs font-semibold text-slate-500">סטטוס</th>
-              <th className="px-4 py-3 text-right text-xs font-semibold text-slate-500">פעולות</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-gray-100">
-            {years.map((y) => (
-              <EditableYearRow
-                key={y.id}
-                id={y.id}
-                name={y.name}
-                isActive={y.is_active}
-                updateAction={updateAcademicYearAction}
-                deleteAction={deleteAcademicYearAction}
-              />
-            ))}
-          </tbody>
-        </table>
+    <div className="grid grid-cols-1 gap-gutter lg:grid-cols-12">
+      <div className="lg:col-span-4">
+        <Section icon="add_circle" title="הוספת שנה חדשה" accent="featured">
+          <SettingsForms
+            type="academic_year"
+            yearId={yearId}
+            createAction={createAcademicYearAction}
+          />
+        </Section>
       </div>
-    </Card>
+      <div className="lg:col-span-8">
+        <Section icon="calendar_today" title="רשימת שנים אקדמיות" bodyBleed>
+          <div className="overflow-x-auto">
+            <table className="w-full text-body-md">
+              <SettingsTableHead columns={["שם", "סטטוס", "פעולות"]} />
+              <tbody className="divide-y divide-outline-variant/25">
+                {years.map((y) => (
+                  <EditableYearRow
+                    key={y.id}
+                    id={y.id}
+                    name={y.name}
+                    isActive={y.is_active}
+                    updateAction={updateAcademicYearAction}
+                    deleteAction={deleteAcademicYearAction}
+                  />
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </Section>
+      </div>
+    </div>
   );
 
   const structurePanel = yearId ? (
-    <div className="grid gap-6 lg:grid-cols-2">
-      <Card title="שכבות">
-        <p className="mb-2 text-xs text-slate-500">
-          מותרות רק שלוש שכבות: <strong>א</strong>, <strong>ב</strong>, <strong>ג</strong>.
-          לא &quot;שנה א&quot; ולא שמות חופשיים. כיתה חייבת להיות משויכת לאחת מהן.
+    <div className="grid grid-cols-1 gap-gutter lg:grid-cols-2">
+      <Section icon="stairs" title="שכבות">
+        <p className="mb-3 font-caption text-caption text-on-surface-variant">
+          מותרות רק שלוש שכבות: <strong>א</strong>, <strong>ב</strong>,{" "}
+          <strong>ג</strong>. כיתה חייבת להיות משויכת לאחת מהן.
         </p>
         <SettingsForms
           type="grade"
@@ -113,14 +149,9 @@ export default async function SettingsPage() {
           createAction={createGradeAction}
         />
         <div className="mt-4 overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="border-b border-stone-200 bg-stone-50/90">
-                <th className="px-4 py-3 text-right text-xs font-semibold text-slate-500">שם</th>
-                <th className="px-4 py-3 text-right text-xs font-semibold text-slate-500">פעולות</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-gray-100">
+          <table className="w-full text-body-md">
+            <SettingsTableHead columns={["שם", "פעולות"]} />
+            <tbody className="divide-y divide-outline-variant/25">
               {fixedGrades.map((g) => (
                 <EditableGradeRow
                   key={g.id}
@@ -142,9 +173,9 @@ export default async function SettingsPage() {
             </tbody>
           </table>
         </div>
-      </Card>
-      <Card title="כיתות">
-        <p className="mb-2 text-xs text-slate-500">
+      </Section>
+      <Section icon="meeting_room" title="כיתות">
+        <p className="mb-3 font-caption text-caption text-on-surface-variant">
           שם הכיתה חופשי (למשל 1), אבל השכבה חייבת להיות א / ב / ג בלבד.
         </p>
         <SettingsForms
@@ -154,22 +185,18 @@ export default async function SettingsPage() {
           createAction={createClassAction}
         />
         <div className="mt-4 overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="border-b border-stone-200 bg-stone-50/90">
-                <th className="px-4 py-3 text-right text-xs font-semibold text-slate-500">שם</th>
-                <th className="px-4 py-3 text-right text-xs font-semibold text-slate-500">שכבה</th>
-                <th className="px-4 py-3 text-right text-xs font-semibold text-slate-500">פעולות</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-gray-100">
+          <table className="w-full text-body-md">
+            <SettingsTableHead columns={["שם", "שכבה", "פעולות"]} />
+            <tbody className="divide-y divide-outline-variant/25">
               {(classes.data ?? []).map((c) => (
                 <EditableClassRow
                   key={c.id}
                   id={c.id}
                   name={c.name}
                   gradeId={c.grade_id}
-                  gradeName={(c.grades as unknown as { name: string } | null)?.name ?? ""}
+                  gradeName={
+                    (c.grades as unknown as { name: string } | null)?.name ?? ""
+                  }
                   grades={fixedGrades}
                   updateAction={updateClassAction}
                   deleteAction={deleteClassAction}
@@ -178,18 +205,13 @@ export default async function SettingsPage() {
             </tbody>
           </table>
         </div>
-      </Card>
-      <Card title="מסלולים">
+      </Section>
+      <Section icon="route" title="מסלולים">
         <SettingsForms type="track" yearId={yearId} createAction={createTrackAction} />
         <div className="mt-4 overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="border-b border-stone-200 bg-stone-50/90">
-                <th className="px-4 py-3 text-right text-xs font-semibold text-slate-500">שם</th>
-                <th className="px-4 py-3 text-right text-xs font-semibold text-slate-500">פעולות</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-gray-100">
+          <table className="w-full text-body-md">
+            <SettingsTableHead columns={["שם", "פעולות"]} />
+            <tbody className="divide-y divide-outline-variant/25">
               {(tracks.data ?? []).map((t) => (
                 <EditableNameRow
                   key={t.id}
@@ -202,18 +224,17 @@ export default async function SettingsPage() {
             </tbody>
           </table>
         </div>
-      </Card>
-      <Card title="התמחויות">
-        <SettingsForms type="specialization" yearId={yearId} createAction={createSpecializationAction} />
+      </Section>
+      <Section icon="workspace_premium" title="התמחויות">
+        <SettingsForms
+          type="specialization"
+          yearId={yearId}
+          createAction={createSpecializationAction}
+        />
         <div className="mt-4 overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="border-b border-stone-200 bg-stone-50/90">
-                <th className="px-4 py-3 text-right text-xs font-semibold text-slate-500">שם</th>
-                <th className="px-4 py-3 text-right text-xs font-semibold text-slate-500">פעולות</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-gray-100">
+          <table className="w-full text-body-md">
+            <SettingsTableHead columns={["שם", "פעולות"]} />
+            <tbody className="divide-y divide-outline-variant/25">
               {(specializations.data ?? []).map((s) => (
                 <EditableNameRow
                   key={s.id}
@@ -226,29 +247,31 @@ export default async function SettingsPage() {
             </tbody>
           </table>
         </div>
-      </Card>
+      </Section>
     </div>
   ) : (
-    <Card>
-      <p className="text-slate-600">צרי שנה אקדמית פעילה כדי להגדיר שכבות, כיתות ומסלולים.</p>
-    </Card>
+    <Section>
+      <p className="text-body-md text-on-surface-variant">
+        צרי שנה אקדמית פעילה כדי להגדיר שכבות, כיתות ומסלולים.
+      </p>
+    </Section>
   );
 
   const rangesPanel = yearId ? (
-    <Card title="טווחי פעילות">
-      <SettingsForms type="activity_range" yearId={yearId} createAction={createActivityRangeAction} />
-      <div className="mt-4 overflow-x-auto">
-        <table className="w-full text-sm">
-          <thead>
-            <tr className="border-b border-stone-200 bg-stone-50/90">
-              <th className="px-4 py-3 text-right text-xs font-semibold text-slate-500">שם</th>
-              <th className="px-4 py-3 text-right text-xs font-semibold text-slate-500">סוג</th>
-              <th className="px-4 py-3 text-right text-xs font-semibold text-slate-500">מתאריך</th>
-              <th className="px-4 py-3 text-right text-xs font-semibold text-slate-500">עד תאריך</th>
-              <th className="px-4 py-3 text-right text-xs font-semibold text-slate-500">פעולות</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-gray-100">
+    <Section icon="date_range" title="טווחי פעילות" bodyBleed>
+      <div className="p-6">
+        <SettingsForms
+          type="activity_range"
+          yearId={yearId}
+          createAction={createActivityRangeAction}
+        />
+      </div>
+      <div className="overflow-x-auto border-t border-outline-variant/30">
+        <table className="w-full text-body-md">
+          <SettingsTableHead
+            columns={["שם", "סוג", "מתאריך", "עד תאריך", "פעולות"]}
+          />
+          <tbody className="divide-y divide-outline-variant/25">
             {(ranges.data ?? []).map((r) => (
               <EditableActivityRangeRow
                 key={r.id}
@@ -264,30 +287,26 @@ export default async function SettingsPage() {
           </tbody>
         </table>
       </div>
-    </Card>
+    </Section>
   ) : (
-    <Card>
-      <p className="text-slate-600">צרי שנה אקדמית פעילה תחילה.</p>
-    </Card>
+    <Section>
+      <p className="text-body-md text-on-surface-variant">צרי שנה אקדמית פעילה תחילה.</p>
+    </Section>
   );
 
   const rulesPanel = (
-    <Card title="כללי נוכחות">
-      <p className="mb-3 text-xs text-slate-500">
-        לכל שיעור משויך כלל עם סף היעדרות מקסימלי (למשל 1% לעזרה ראשונה, 10% לבטיחות, 20% רגיל).
-        איחור נספר כנוכחות; חריגה מהסף מסומנת בכרטיס תלמידה ובדוחות.
-      </p>
-      <SettingsForms type="attendance_rule" createAction={createAttendanceRuleAction} />
-      <div className="mt-4 overflow-x-auto">
-        <table className="w-full text-sm">
-          <thead>
-            <tr className="border-b border-stone-200 bg-stone-50/90">
-              <th className="px-4 py-3 text-right text-xs font-semibold text-slate-500">שם</th>
-              <th className="px-4 py-3 text-right text-xs font-semibold text-slate-500">סף היעדרות</th>
-              <th className="px-4 py-3 text-right text-xs font-semibold text-slate-500">פעולות</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-gray-100">
+    <Section icon="rule" title="כללי נוכחות" bodyBleed>
+      <div className="p-6">
+        <p className="mb-4 font-caption text-caption text-on-surface-variant">
+          לכל שיעור משויך כלל עם סף היעדרות מקסימלי (למשל 1% לעזרה ראשונה, 10% לבטיחות,
+          20% רגיל). איחור נספר כנוכחות; חריגה מהסף מסומנת בכרטיס תלמידה ובדוחות.
+        </p>
+        <SettingsForms type="attendance_rule" createAction={createAttendanceRuleAction} />
+      </div>
+      <div className="overflow-x-auto border-t border-outline-variant/30">
+        <table className="w-full text-body-md">
+          <SettingsTableHead columns={["שם", "סף היעדרות", "פעולות"]} />
+          <tbody className="divide-y divide-outline-variant/25">
             {(rules.data ?? []).map((r) => (
               <EditableAttendanceRuleRow
                 key={r.id}
@@ -301,18 +320,20 @@ export default async function SettingsPage() {
           </tbody>
         </table>
       </div>
-    </Card>
+    </Section>
   );
 
   return (
-    <div>
+    <div className="flex flex-col gap-stack_lg">
       <PageHeader
         title="הגדרות מוסד"
-        description="שנה, שכבות, כיתות, מסלולים, טווחי פעילות וכללי היעדרות. ניתן להוסיף ולערוך."
+        description="ניהול תצורת המערכת, שנות לימוד, שכבות, מסלולים, טווחי פעילות וכללי נוכחות."
+        size="headline"
       />
       <Tabs
+        variant="underline"
         tabs={[
-          { id: "year", label: "שנים", content: yearPanel },
+          { id: "year", label: "שנים אקדמיות", content: yearPanel },
           { id: "structure", label: "שכבות וכיתות", content: structurePanel },
           { id: "ranges", label: "טווחי פעילות", content: rangesPanel },
           { id: "rules", label: "כללי נוכחות", content: rulesPanel },

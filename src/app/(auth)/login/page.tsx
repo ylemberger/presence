@@ -18,39 +18,63 @@ export default function LoginPage({
     : null;
 
   return (
-    <div
-      className="flex min-h-screen items-center justify-center px-gutter"
-      style={{
-        background: "linear-gradient(135deg, #163a40 0%, #775a20 100%)",
-      }}
-    >
-      <main className="w-full max-w-md">
-        <div
-          className="relative flex flex-col items-center overflow-hidden rounded-xl p-8 text-center"
-          style={{
-            background: "rgba(255,255,255,0.95)",
-            backdropFilter: "blur(16px)",
-            WebkitBackdropFilter: "blur(16px)",
-            border: "1px solid rgba(255,255,255,0.2)",
-            boxShadow: "0 24px 48px rgba(22,58,64,0.2)",
-          }}
-        >
-          <div className="absolute left-0 top-0 h-2 w-full bg-secondary" aria-hidden />
+    <div className="relative flex min-h-screen items-center justify-center overflow-hidden bg-background px-gutter">
+      {/* Decorative gradient background — matches Stitch login mockup */}
+      <div
+        className="pointer-events-none absolute inset-0 -z-10 opacity-70"
+        style={{
+          background:
+            "linear-gradient(135deg, rgba(196,233,240,0.4) 0%, #f6faf9 45%, rgba(255,222,167,0.35) 100%)",
+        }}
+        aria-hidden
+      />
+      <div
+        className="pointer-events-none absolute -left-40 top-0 -z-10 h-[40rem] w-[40rem] rounded-full opacity-50 blur-3xl"
+        style={{ background: "rgba(168, 205, 212, 0.35)", animation: "blob 9s infinite" }}
+        aria-hidden
+      />
+      <div
+        className="pointer-events-none absolute -right-40 top-1/3 -z-10 h-[40rem] w-[40rem] rounded-full opacity-50 blur-3xl"
+        style={{ background: "rgba(232, 193, 124, 0.35)", animation: "blob 11s infinite 2s" }}
+        aria-hidden
+      />
+      <div
+        className="pointer-events-none absolute -bottom-40 left-1/4 -z-10 h-[40rem] w-[40rem] rounded-full opacity-50 blur-3xl"
+        style={{ background: "rgba(188, 234, 244, 0.3)", animation: "blob 13s infinite 4s" }}
+        aria-hidden
+      />
 
-          <div className="mb-stack_lg h-32 w-32 overflow-hidden rounded-full border-4 border-surface-container-lowest/50 shadow-lg">
-            <img
-              src="/logo.png"
-              alt=""
-              className="h-full w-full object-cover"
-            />
+      <main className="relative z-10 flex w-full max-w-md flex-col items-center">
+        {/* Branding Header */}
+        <div className="mb-stack_lg flex flex-col items-center">
+          <div className="mb-stack_md flex h-24 w-24 items-center justify-center rounded-full bg-primary shadow-tactile-lg transition-transform duration-300 hover:scale-105">
+            <span className="font-display-lg text-display-lg leading-none text-secondary">
+              נ
+            </span>
+          </div>
+          <h1 className="font-display-lg text-display-lg text-primary">נוכחות סמינר</h1>
+          <p className="mt-stack_sm font-body-lg text-body-lg text-on-surface-variant">
+            ניהול אקדמי מתקדם
+          </p>
+        </div>
+
+        {/* Login Card */}
+        <div className="w-full rounded-xl border-t-4 border-secondary bg-surface p-stack_lg text-center shadow-tactile-lg">
+          <div className="mx-auto mb-stack_md flex h-16 w-16 items-center justify-center rounded-full bg-primary-fixed/20">
+            <span
+              className="material-symbols-outlined text-4xl text-primary"
+              style={{ fontVariationSettings: "'FILL' 1" }}
+              aria-hidden
+            >
+              lock
+            </span>
           </div>
 
-          <h1 className="mb-stack_sm font-display-lg text-display-lg text-primary">
-            נוכחות סמינר
-          </h1>
-
+          <h2 className="mb-stack_sm font-headline-md text-headline-md text-on-surface">
+            כניסה למערכת
+          </h2>
           <p className="mb-stack_lg font-body-md text-body-md text-on-surface-variant">
-            יש להתחבר עם חשבון Google מורשה כדי לגשת למערכת
+            יש להתחבר עם חשבון Google מורשה בכדי לגשת למערכת ניהול הנוכחות.
           </p>
 
           {loginHintEmail && (
@@ -64,12 +88,13 @@ export default function LoginPage({
 
           {error && (
             <div
-              className="mb-stack_md flex w-full items-center justify-center gap-2 rounded border border-error/20 bg-error-container p-3 text-on-error-container"
+              className="mb-stack_md flex w-full items-center justify-center gap-2 rounded-lg border border-error/20 bg-error-container p-3 text-on-error-container"
               role="alert"
             >
               <span
                 className="material-symbols-outlined"
                 style={{ fontVariationSettings: "'FILL' 1" }}
+                aria-hidden
               >
                 error
               </span>
@@ -78,9 +103,16 @@ export default function LoginPage({
           )}
 
           <LoginButton loginHintEmail={loginHintEmail} />
+
+          <div className="mt-stack_lg flex w-full items-center justify-center gap-2 border-t border-outline-variant/30 pt-stack_md font-caption text-caption text-on-surface-variant">
+            <span className="material-symbols-outlined text-base" aria-hidden>
+              verified_user
+            </span>
+            <span>גישה מאובטחת לצוות האקדמי בלבד</span>
+          </div>
         </div>
 
-        <p className="mt-stack_lg text-center font-caption text-caption text-white/80">
+        <p className="mt-stack_lg text-center font-caption text-caption text-on-surface-variant/80">
           © {new Date().getFullYear()} סמינר. כל הזכויות שמורות.
         </p>
       </main>

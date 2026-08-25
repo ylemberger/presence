@@ -1,7 +1,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { getActiveAcademicYear } from "@/lib/utils";
 import { PageHeader } from "@/components/ui/PageHeader";
-import { Card } from "@/components/ui/Card";
+import { Section } from "@/components/ui/Section";
 import { GenerateOccurrencesButton } from "./GenerateOccurrencesButton";
 import { LessonsCalendar } from "./LessonsCalendar";
 import { LessonsForm } from "./LessonsForm";
@@ -23,7 +23,10 @@ export default async function LessonsPage({ searchParams }: Props) {
   if (!activeYear) {
     return (
       <div>
-        <PageHeader title="שיעורים" description="יש להגדיר שנה אקדמית פעילה תחילה." />
+        <PageHeader
+          title="יומן שיעורים עברי"
+          description="יש להגדיר שנה אקדמית פעילה תחילה."
+        />
       </div>
     );
   }
@@ -85,33 +88,38 @@ export default async function LessonsPage({ searchParams }: Props) {
   };
 
   return (
-    <div className="space-y-6">
+    <div className="flex flex-col gap-stack_lg">
       <PageHeader
         title="יומן שיעורים עברי"
-        description="יצירת שיעור חדש — מורה, קהל יעד, לוח זמנים וכל המופעים בטווח — הכל בטופס אחד."
+        description="ניהול מערכת השעות, מופעים חריגים ומעקב נוכחות מורות."
         actions={<GenerateOccurrencesButton academicYearId={activeYear.id} />}
       />
 
-      <Card title="יצירת שיעור חדש">
-        {(formProps.teachers.length === 0 && (
-          <p className="mb-3 text-sm text-amber-700">
-            אין מורות במערכת.{" "}
-            <a href="/teachers" className="font-medium underline">
-              הוסיפי מורה
-            </a>{" "}
-            לפני יצירת שיעור.
-          </p>
-        )) ||
-          null}
-        <LessonsForm {...formProps} />
-      </Card>
+      <div className="grid grid-cols-1 gap-gutter xl:grid-cols-12">
+        <div className="flex flex-col gap-gutter xl:col-span-4">
+          <Section icon="edit_note" title="יצירת שיעור חדש" accent="featured">
+            {formProps.teachers.length === 0 && (
+              <p className="mb-3 rounded-lg bg-attendance-late/10 px-3 py-2 font-body-sm text-body-sm text-attendance-late">
+                אין מורות במערכת.{" "}
+                <a href="/teachers" className="font-semibold underline">
+                  הוסיפי מורה
+                </a>{" "}
+                לפני יצירת שיעור.
+              </p>
+            )}
+            <LessonsForm {...formProps} />
+          </Section>
+        </div>
 
-      <LessonsCalendar
-        initialMonthIso={from}
-        occurrences={occurrenceRows}
-        lessons={lessons.data ?? []}
-        formProps={formProps}
-      />
+        <div className="xl:col-span-8">
+          <LessonsCalendar
+            initialMonthIso={from}
+            occurrences={occurrenceRows}
+            lessons={lessons.data ?? []}
+            formProps={formProps}
+          />
+        </div>
+      </div>
     </div>
   );
 }

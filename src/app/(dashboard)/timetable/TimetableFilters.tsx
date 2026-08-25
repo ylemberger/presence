@@ -3,6 +3,7 @@
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/Button";
 import { Select } from "@/components/ui/Input";
+import { Section } from "@/components/ui/Section";
 
 export interface TimetableFiltersProps {
   classes: { id: string; name: string }[];
@@ -62,7 +63,11 @@ export function TimetableFilters({
   }
 
   return (
-    <form onSubmit={handleSubmit} className="flex flex-wrap items-end gap-3">
+    <Section icon="filter_list" title="סינון מערכת שעות">
+      <form
+        onSubmit={handleSubmit}
+        className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4"
+      >
       <Select
         label="שכבה/כיתה"
         name="classId"
@@ -144,10 +149,16 @@ export function TimetableFilters({
         ]}
       />
 
-      <div className="flex items-end">
-        <Button type="submit">הצג מערכת שעות</Button>
+      <div className="flex items-end sm:col-span-2 lg:col-span-4">
+        <Button type="submit" className="w-full sm:w-auto">
+          <span className="material-symbols-outlined text-[18px]" aria-hidden>
+            search
+          </span>
+          הצג מערכת שעות
+        </Button>
       </div>
-    </form>
+      </form>
+    </Section>
   );
 }
 

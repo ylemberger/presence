@@ -1,9 +1,12 @@
 import { PageHeader } from "@/components/ui/PageHeader";
 import { createClient } from "@/lib/supabase/server";
 import { getActiveAcademicYear } from "@/lib/utils";
-import { WeeklyTimetableGrid, type TimetableEntry } from "@/components/timetable/WeeklyTimetableGrid";
+import {
+  WeeklyTimetableGrid,
+  type TimetableEntry,
+} from "@/components/timetable/WeeklyTimetableGrid";
 import { TimetableFilters } from "./TimetableFilters";
-import { Card } from "@/components/ui/Card";
+import { Section } from "@/components/ui/Section";
 
 interface Props {
   searchParams: {
@@ -26,7 +29,11 @@ export default async function TimetablePage({ searchParams }: Props) {
   if (!activeYear) {
     return (
       <div>
-        <PageHeader title="מערכת שעות" description="יש להגדיר שנה אקדמית פעילה." />
+        <PageHeader
+          title="מערכת שעות"
+          description="יש להגדיר שנה אקדמית פעילה."
+          size="headline"
+        />
       </div>
     );
   }
@@ -113,8 +120,12 @@ export default async function TimetablePage({ searchParams }: Props) {
   if (lessonIdFilter) {
     if (lessonIdFilter.length === 0) {
       return (
-        <div className="space-y-6">
-          <PageHeader title="מערכת שעות" description="סינון לפי תלמידה, לא נמצאו שיעורים פעילים." />
+        <div className="flex flex-col gap-stack_lg">
+          <PageHeader
+            title="מערכת שעות"
+            description="סינון לפי תלמידה, לא נמצאו שיעורים פעילים."
+            size="headline"
+          />
           <div className="print:hidden">
             <TimetableFilters
               classes={(classes ?? []).map((c: any) => ({ id: c.id, name: c.name }))}
@@ -141,9 +152,16 @@ export default async function TimetablePage({ searchParams }: Props) {
               }}
             />
           </div>
-          <Card>
-            <p className="text-sm text-slate-600">לא נמצאו שיעורים פעילים לתלמידה שבחרת.</p>
-          </Card>
+          <Section>
+            <div className="flex flex-col items-center gap-2 rounded-lg border border-dashed border-outline-variant/50 bg-surface-container-low/60 px-6 py-10 text-center">
+              <span className="material-symbols-outlined text-[36px] text-secondary" aria-hidden>
+                event_busy
+              </span>
+              <p className="font-body-md text-body-md text-on-surface-variant">
+                לא נמצאו שיעורים פעילים לתלמידה שבחרת.
+              </p>
+            </div>
+          </Section>
         </div>
       );
     }
@@ -198,10 +216,11 @@ export default async function TimetablePage({ searchParams }: Props) {
     });
 
   return (
-    <div className="space-y-6">
+    <div className="flex flex-col gap-stack_lg">
       <PageHeader
         title="מערכת שעות"
         description="סינון לפי כיתה/מסלול/התמחות/מורה/מקצוע/תלמידה, כולל פסיכולוגיה."
+        size="headline"
       />
 
       <div className="print:hidden">
@@ -232,11 +251,22 @@ export default async function TimetablePage({ searchParams }: Props) {
       </div>
 
       {entries.length === 0 ? (
-        <Card>
-          <p className="text-sm text-slate-600">לא נמצאו שיעורים לסינון שבחרת.</p>
-        </Card>
+        <Section icon="calendar_view_week" title="מערכת שבועית">
+          <div className="flex flex-col items-center gap-2 rounded-lg border border-dashed border-outline-variant/50 bg-surface-container-low/60 px-6 py-10 text-center">
+            <span className="material-symbols-outlined text-[36px] text-secondary" aria-hidden>
+              search_off
+            </span>
+            <p className="font-body-md text-body-md text-on-surface-variant">
+              לא נמצאו שיעורים לסינון שבחרת.
+            </p>
+          </div>
+        </Section>
       ) : (
-        <WeeklyTimetableGrid entries={entries} />
+        <Section icon="calendar_view_week" title="מערכת שבועית" bodyBleed>
+          <div className="p-4">
+            <WeeklyTimetableGrid entries={entries} />
+          </div>
+        </Section>
       )}
     </div>
   );

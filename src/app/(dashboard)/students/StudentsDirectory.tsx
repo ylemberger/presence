@@ -137,8 +137,8 @@ export function StudentsDirectory({
   );
 
   return (
-    <div className="overflow-hidden rounded-2xl border border-[var(--border)] bg-white shadow-[var(--shadow-md)]">
-      <div className="grid gap-3 border-b border-[var(--border)] bg-[var(--surface-muted)]/50 px-5 py-4 md:grid-cols-2 xl:grid-cols-7">
+    <div className="overflow-hidden rounded-xl border border-outline-variant/30 bg-surface-container-lowest shadow-tactile-md">
+      <div className="grid gap-3 border-b border-outline-variant/30 bg-surface-container-low/60 px-5 py-4 md:grid-cols-2 xl:grid-cols-7">
         <div className="xl:col-span-2">
           <Input
             label="חיפוש"
@@ -211,7 +211,7 @@ export function StudentsDirectory({
         <div className="flex items-end xl:col-span-7">
           <div className="flex w-full flex-wrap items-center justify-between gap-3">
             {!hasSettingsLists && yearOptions && (
-              <p className="text-sm text-amber-800">
+              <p className="text-body-md text-secondary">
                 אין עדיין שכבות/כיתות בהגדרות —{" "}
                 <Link href="/settings" className="font-medium underline">
                   מעבר להגדרות
@@ -219,6 +219,9 @@ export function StudentsDirectory({
               </p>
             )}
             <Button type="button" onClick={openCreate} className="ms-auto">
+              <span className="material-symbols-outlined text-[18px]" aria-hidden>
+                person_add
+              </span>
               תלמידה חדשה
             </Button>
           </div>
@@ -226,7 +229,9 @@ export function StudentsDirectory({
       </div>
 
       {yearError && (
-        <p className="border-b border-stone-100 px-5 py-3 text-sm text-rose-600">{yearError}</p>
+        <p className="border-b border-outline-variant/30 bg-error-container/40 px-5 py-3 text-body-md text-on-error-container">
+          {yearError}
+        </p>
       )}
 
       <Table
@@ -246,18 +251,25 @@ export function StudentsDirectory({
           <TableRow key={s.id}>
             <TableCell>
               <div className="flex items-center gap-3">
-                <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-[var(--accent-soft)] text-sm font-semibold text-[var(--brand)]">
+                <span
+                  className="flex h-9 w-9 items-center justify-center rounded-full bg-primary text-caption font-bold text-surface"
+                  aria-hidden
+                >
                   {s.full_name.slice(0, 1)}
                 </span>
                 <div>
-                  <span className="font-medium text-slate-800">{s.full_name}</span>
+                  <span className="font-label-md text-label-md text-primary">
+                    {s.full_name}
+                  </span>
                   {s.isPsychology && (
-                    <span className="mr-2 text-xs text-slate-400">· פסיכולוגיה</span>
+                    <span className="mr-2 text-caption text-on-surface-variant">
+                      · פסיכולוגיה
+                    </span>
                   )}
                 </div>
               </div>
             </TableCell>
-            <TableCell className="font-mono text-slate-500" dir="ltr">
+            <TableCell className="font-mono text-on-surface-variant" dir="ltr">
               {s.identity_number}
             </TableCell>
             <TableCell>{s.cohort_number}</TableCell>
@@ -278,8 +290,11 @@ export function StudentsDirectory({
             <TableCell>
               <Link
                 href={`/students/${s.id}`}
-                className="text-sm font-medium text-[var(--brand)] hover:underline"
+                className="inline-flex items-center gap-1 text-label-md text-secondary transition-colors hover:text-primary hover:underline"
               >
+                <span className="material-symbols-outlined text-[16px]" aria-hidden>
+                  badge
+                </span>
                 כרטיס תלמידה
               </Link>
             </TableCell>
@@ -287,7 +302,20 @@ export function StudentsDirectory({
         ))}
       </Table>
       {filtered.length === 0 && (
-        <p className="px-5 py-8 text-center text-sm text-slate-500">לא נמצאו תלמידות לפי הסינון.</p>
+        <div className="flex flex-col items-center gap-2 px-5 py-12 text-center">
+          <span
+            className="material-symbols-outlined text-5xl text-outline-variant"
+            aria-hidden
+          >
+            group
+          </span>
+          <p className="font-title-lg text-title-lg text-primary">
+            לא נמצאו תלמידות
+          </p>
+          <p className="text-body-md text-on-surface-variant">
+            נסי לשנות סינון או להוסיף תלמידה חדשה.
+          </p>
+        </div>
       )}
 
       {yearOptions && (

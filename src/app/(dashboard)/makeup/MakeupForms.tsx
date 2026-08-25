@@ -91,9 +91,16 @@ export function MakeupForms({
           ]}
         />
         <Button type="submit" size="sm" disabled={loading}>
+          <span className="material-symbols-outlined text-[16px]" aria-hidden>
+            save
+          </span>
           עדכון
         </Button>
-        {error && <p className="w-full text-xs text-rose-600">{error}</p>}
+        {error && (
+          <p className="w-full rounded-lg bg-error-container/60 px-2 py-1 font-caption text-caption text-on-error-container">
+            {error}
+          </p>
+        )}
       </form>
     );
   }
@@ -102,21 +109,26 @@ export function MakeupForms({
     return (
       <form onSubmit={handleSubmit}>
         <Button type="submit" size="sm" disabled={loading}>
-          {loading ? "..." : "פתחי"}
+          <span className="material-symbols-outlined text-[16px]" aria-hidden>
+            playlist_add
+          </span>
+          {loading ? "..." : "שבץ"}
         </Button>
-        {error && <p className="mt-1 text-xs text-rose-600">{error}</p>}
+        {error && (
+          <p className="mt-1 font-caption text-caption text-error">{error}</p>
+        )}
       </form>
     );
   }
 
   return (
-    <form onSubmit={handleSubmit} className="flex flex-wrap items-end gap-3">
+    <form onSubmit={handleSubmit} className="flex flex-col gap-3">
       <Select
         label="תלמידה"
         name="student_id"
         required
         options={[
-          { value: "", label: "בחרי" },
+          { value: "", label: "בחרי תלמידה" },
           ...students.map((s) => ({ value: s.id, label: s.full_name })),
         ]}
       />
@@ -125,15 +137,29 @@ export function MakeupForms({
         name="lesson_id"
         required
         options={[
-          { value: "", label: "בחרי" },
+          { value: "", label: "בחרי שיעור" },
           ...lessons.map((l) => ({ value: l.id, label: l.subject })),
         ]}
       />
-      <Input label="מספר מבחנים" name="required_exams" type="number" min={1} max={4} defaultValue={1} />
-      <Button type="submit" disabled={loading}>
-        {loading ? "שומר..." : "הוספה"}
+      <Input
+        label="מספר מבחנים"
+        name="required_exams"
+        type="number"
+        min={1}
+        max={4}
+        defaultValue={1}
+      />
+      <Button type="submit" disabled={loading} className="mt-1 w-full">
+        <span className="material-symbols-outlined text-[18px]" aria-hidden>
+          post_add
+        </span>
+        {loading ? "שומר..." : "צור מבחן"}
       </Button>
-      {error && <p className="w-full text-sm text-rose-600">{error}</p>}
+      {error && (
+        <p className="rounded-lg bg-error-container/60 px-3 py-2 font-body-sm text-body-sm text-on-error-container">
+          {error}
+        </p>
+      )}
     </form>
   );
 }

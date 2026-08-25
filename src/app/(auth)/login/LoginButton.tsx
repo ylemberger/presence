@@ -2,10 +2,19 @@
 
 import { useState } from "react";
 import { createClient } from "@/lib/supabase/client";
+import {
+  forceLocalCallbackInOAuthUrl,
+  getOAuthCallbackUrl,
+  isLocalDevHost,
+  oauthUrlPointsAtVercel,
+} from "@/lib/auth/oauth-redirect";
 
 type LoginButtonProps = {
   loginHintEmail?: string | null;
 };
+
+const LOCALHOST_SETUP_ERROR =
+  "Supabase מפנה ל-Vercel במקום ל-localhost. ב-Supabase → Authentication → URL Configuration, תחת Redirect URLs, הוסיפי בדיוק: http://localhost:3000/auth/callback";
 
 export function LoginButton({ loginHintEmail }: LoginButtonProps) {
   const [error, setError] = useState<string | null>(null);
@@ -15,29 +24,49 @@ export function LoginButton({ loginHintEmail }: LoginButtonProps) {
     setLoading(true);
     setError(null);
 
-    const supabase = createClient();
-    const { data, error: oauthError } = await supabase.auth.signInWithOAuth({
-      provider: "google",
-      options: {
-        redirectTo: `${window.location.origin}/auth/callback`,
-        skipBrowserRedirect: true,
-        queryParams: {
-          ...(loginHintEmail ? { login_hint: loginHintEmail } : {}),
-          prompt: "select_account",
+    try {
+      const callbackUrl = getOAuthCallbackUrl();
+      const supabase = createClient();
+      const { data, error: oauthError } = await supabase.auth.signInWithOAuth({
+        provider: "google",
+        options: {
+          redirectTo: callbackUrl,
+          skipBrowserRedirect: true,
+          queryParams: {
+            ...(loginHintEmail ? { login_hint: loginHintEmail } : {}),
+            prompt: "select_account",
+          },
         },
-      },
-    });
+      });
 
-    if (oauthError || !data.url) {
+      if (oauthError || !data.url) {
+        setError(
+          oauthError?.message ||
+            "Google לא מופעל ב-Supabase. הדביקי Client ID ו-Secret ב-Authentication → Providers → Google."
+        );
+        setLoading(false);
+        return;
+      }
+
+      const authorizeUrl = isLocalDevHost()
+        ? forceLocalCallbackInOAuthUrl(data.url, callbackUrl)
+        : data.url;
+
+      if (isLocalDevHost() && oauthUrlPointsAtVercel(authorizeUrl)) {
+        setError(LOCALHOST_SETUP_ERROR);
+        setLoading(false);
+        return;
+      }
+
+      window.location.assign(authorizeUrl);
+    } catch (err) {
       setError(
-        oauthError?.message ??
-          "Google לא מופעל ב-Supabase. הדביקי Client ID ו-Secret ב-Authentication → Providers → Google."
+        err instanceof Error
+          ? err.message
+          : "ההתחברות נכשלה. בדקי חיבור לאינטרנט ונסי שוב."
       );
       setLoading(false);
-      return;
     }
-
-    window.location.assign(data.url);
   }
 
   return (
@@ -54,7 +83,7 @@ export function LoginButton({ loginHintEmail }: LoginButtonProps) {
         type="button"
         disabled={loading}
         onClick={handleGoogleLogin}
-        className="flex w-full items-center justify-center gap-3 rounded bg-primary px-6 py-4 font-label-md text-label-md text-on-primary shadow-md transition-all duration-200 hover:-translate-y-0.5 hover:shadow-lg disabled:cursor-not-allowed disabled:opacity-60"
+        className="relative z-20 flex w-full cursor-pointer items-center justify-center gap-3 rounded-lg bg-primary px-6 py-4 font-label-md text-label-md text-on-primary shadow-tactile-md transition-all duration-300 hover:-translate-y-0.5 hover:bg-primary-container hover:shadow-tactile-lg disabled:cursor-not-allowed disabled:opacity-60"
       >
         <GoogleIcon />
         {loading ? "מעבירה ל־Google..." : "התחברות עם Google"}

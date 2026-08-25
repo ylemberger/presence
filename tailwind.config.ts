@@ -62,6 +62,7 @@ const config: Config = {
         "title-lg": ["20px", { lineHeight: "28px", fontWeight: "500" }],
         "body-lg": ["18px", { lineHeight: "28px", fontWeight: "400" }],
         "body-md": ["16px", { lineHeight: "24px", fontWeight: "400" }],
+        "body-sm": ["14px", { lineHeight: "20px", fontWeight: "400" }],
         "label-md": ["14px", { lineHeight: "20px", letterSpacing: "0.01em", fontWeight: "600" }],
         caption: ["12px", { lineHeight: "16px", fontWeight: "400" }],
       },

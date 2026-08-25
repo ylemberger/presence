@@ -119,10 +119,10 @@ export function LessonsForm({
   }
 
   return (
-    <form onSubmit={handleSubmit} className="space-y-5">
+    <form onSubmit={handleSubmit} className="flex flex-col gap-5">
       <div>
-        <p className="mb-2 text-sm font-semibold text-slate-700">מורה ומקצוע</p>
-        <div className="flex flex-wrap items-end gap-3">
+        <p className="mb-2 font-label-md text-label-md text-primary">מורה ומקצוע</p>
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
           <Select
             label="מורה"
             name="teacher_id"
@@ -137,8 +137,8 @@ export function LessonsForm({
       </div>
 
       <div>
-        <p className="mb-2 text-sm font-semibold text-slate-700">קהל יעד</p>
-        <div className="flex flex-wrap items-end gap-3">
+        <p className="mb-2 font-label-md text-label-md text-primary">קהל יעד</p>
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
           <Select
             label="שכבה"
             name="grade_id"
@@ -178,7 +178,7 @@ export function LessonsForm({
             />
           ) : (
             <>
-              <label className="flex items-center gap-2 pb-2 text-sm text-slate-700">
+              <label className="flex items-center gap-2 font-label-md text-label-md text-on-surface sm:col-span-2">
                 <input
                   type="checkbox"
                   checked={forPsychology}
@@ -189,7 +189,7 @@ export function LessonsForm({
                       setTrackId("");
                     }
                   }}
-                  className="rounded border-stone-300"
+                  className="rounded border-outline-variant"
                 />
                 מיועד לפסיכולוגיה
               </label>
@@ -220,7 +220,7 @@ export function LessonsForm({
             </>
           )}
         </div>
-        <p className="mt-2 rounded-xl bg-stone-50 px-3 py-2 text-xs text-slate-600">
+        <p className="mt-2 rounded-lg bg-surface-container-low px-3 py-2 font-caption text-caption text-on-surface-variant">
           {forPsychology
             ? "ישויכו רק תלמידות המסומנות כפסיכולוגיה בשכבה זו."
             : billingType === "specialization"
@@ -236,8 +236,8 @@ export function LessonsForm({
       </div>
 
       <div>
-        <p className="mb-2 text-sm font-semibold text-slate-700">לוח זמנים ונוכחות</p>
-        <div className="flex flex-wrap items-end gap-3">
+        <p className="mb-2 font-label-md text-label-md text-primary">לוח זמנים ונוכחות</p>
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
           <Select
             label="יום בשבוע"
             name="day_of_week"
@@ -275,7 +275,7 @@ export function LessonsForm({
             ]}
           />
         </div>
-        <p className="mt-2 text-xs text-slate-500">
+        <p className="mt-2 font-caption text-caption text-on-surface-variant">
           {occurrenceDate
             ? "ייווצרו כל מופעי השיעור בטווח הפעילות לפי היום שנבחר."
             : "ייווצרו אוטומטית כל מופעי השיעור בטווח הפעילות."}
@@ -283,17 +283,24 @@ export function LessonsForm({
       </div>
 
       {gradeId && (
-        <div className="rounded-xl border border-teal-100 bg-teal-50/70 px-3 py-2 text-xs text-teal-950">
-          <div className="font-semibold text-teal-900">סיכום</div>
-          <div className="mt-1 text-teal-800/90">קהל: {audienceSummary}</div>
+        <div className="rounded-lg border border-secondary/20 bg-secondary-container/40 px-3 py-2 font-body-sm text-body-sm text-primary">
+          <div className="font-semibold">סיכום</div>
+          <div className="mt-1 text-on-surface-variant">קהל: {audienceSummary}</div>
         </div>
       )}
 
-      <Button type="submit" disabled={loading}>
-        {loading ? "יוצר שיעור..." : "יצירת שיעור"}
+      <Button type="submit" disabled={loading} className="mt-1 w-full">
+        <span className="material-symbols-outlined text-[18px]" aria-hidden>
+          save
+        </span>
+        {loading ? "יוצר שיעור..." : "שמור שיעור"}
       </Button>
 
-      {error && <p className="text-sm text-red-600">{error}</p>}
+      {error && (
+        <p className="rounded-lg bg-error-container/60 px-3 py-2 font-body-sm text-body-sm text-on-error-container">
+          {error}
+        </p>
+      )}
     </form>
   );
 }

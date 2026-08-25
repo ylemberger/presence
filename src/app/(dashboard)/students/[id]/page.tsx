@@ -1,7 +1,8 @@
 import { notFound } from "next/navigation";
-import { Card } from "@/components/ui/Card";
+import Link from "next/link";
 import { Table, TableRow, TableCell } from "@/components/ui/Table";
-import { PageHeader } from "@/components/ui/PageHeader";
+import { StatusPill } from "@/components/ui/PageHeader";
+import { Section } from "@/components/ui/Section";
 import { PrintButton } from "@/components/ui/PrintButton";
 import { createClient } from "@/lib/supabase/server";
 import { getActiveAcademicYear } from "@/lib/utils";
@@ -12,7 +13,10 @@ import { StudentDetailForms } from "./StudentDetailForms";
 import { StudentLessonAssignments } from "./StudentLessonAssignments";
 import type { AttendanceStatus } from "@/types/database";
 import { cn } from "@/lib/cn";
-import { WeeklyTimetableGrid, type TimetableEntry } from "@/components/timetable/WeeklyTimetableGrid";
+import {
+  WeeklyTimetableGrid,
+  type TimetableEntry,
+} from "@/components/timetable/WeeklyTimetableGrid";
 
 interface Props {
   params: { id: string };
@@ -353,130 +357,277 @@ export default async function StudentDetailPage({ params }: Props) {
     }
   }
 
+  const initial = student.full_name?.[0] ?? "?";
+
   return (
-    <div className="space-y-6">
-      <PageHeader
-        title={student.full_name}
-        description={`ת"ז ${student.identity_number} · מחזור ${student.cohort_number ?? "—"} · ${student.is_active ? "פעילה" : "לא פעילה"}`}
-        actions={<PrintButton />}
-      />
-
-      {yearData && (
-        <Card title="העברה" className="print:hidden">
-          <StudentDetailForms studentId={id} yearData={yearData} />
-        </Card>
-      )}
-
-      <Card title="היסטוריית העברות">
-        <Table headers={["שנה", "שכבה", "כיתה", "מסלול", "התמחות", "מתאריך", "עד תאריך"]}>
-          {assignments.map((a) => (
-            <TableRow key={a.id}>
-              <TableCell>{a.yearName}</TableCell>
-              <TableCell>{a.gradeName}</TableCell>
-              <TableCell>{a.className}</TableCell>
-              <TableCell>{a.trackName}</TableCell>
-              <TableCell>
-                {a.specializationName}
-                {a.secondarySpecializationName !== "—"
-                  ? ` + ${a.secondarySpecializationName}`
-                  : ""}
-              </TableCell>
-              <TableCell>{formatDate(a.start_date)}</TableCell>
-              <TableCell>{a.end_date ? formatDate(a.end_date) : "נוכחי"}</TableCell>
-            </TableRow>
-          ))}
-        </Table>
-      </Card>
-
-      {activeYear && (
-        <Card title="שיוך לשיעורים">
-          <StudentLessonAssignments
-            studentId={id}
-            lessons={lessons}
-            assignments={lessonAssignments}
-          />
-        </Card>
-      )}
-
-      {activeYear && (
-        <Card title="מערכת שעות שבועית" className="print:hidden">
-          <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
-            <p className="text-xs text-slate-500">
-              מוצג לפי השיוך הפעיל של התלמידה לשיעורים.
-            </p>
-            <a
-              href={`/timetable?studentId=${id}`}
-              className="inline-flex items-center rounded-xl bg-[var(--brand)] px-4 py-2 text-xs font-medium text-white shadow-[var(--shadow-sm)] transition-colors hover:bg-[var(--brand-soft)]"
+    <div className="flex flex-col gap-gutter">
+      {/* Student Header Profile Card — bento hero with top accent */}
+      <section className="rounded-xl border border-outline-variant/30 border-t-4 border-t-secondary bg-surface-container-lowest p-6 shadow-tactile-md">
+        <div className="flex flex-col items-start justify-between gap-4 md:flex-row md:items-center">
+          <div className="flex items-center gap-6">
+            <span
+              aria-hidden
+              className="flex h-20 w-20 shrink-0 items-center justify-center rounded-full border-2 border-outline-variant bg-secondary-container font-headline-lg text-headline-lg font-bold text-primary"
             >
-              פתח בטבלת מערכת שעות
-            </a>
+              {initial}
+            </span>
+            <div>
+              <h2 className="mb-1 font-headline-lg text-headline-lg text-primary">
+                {student.full_name}
+              </h2>
+              <div className="flex flex-wrap items-center gap-4 font-body-md text-body-md text-on-surface-variant">
+                <span className="flex items-center gap-1">
+                  <span className="material-symbols-outlined text-[18px]" aria-hidden>
+                    badge
+                  </span>
+                  ת&quot;ז: {student.identity_number ?? "—"}
+                </span>
+                <span className="flex items-center gap-1">
+                  <span className="material-symbols-outlined text-[18px]" aria-hidden>
+                    school
+                  </span>
+                  מחזור: {student.cohort_number ?? "—"}
+                </span>
+                <span className="flex items-center gap-2">
+                  <span
+                    className={cn(
+                      "inline-block h-2 w-2 rounded-full",
+                      student.is_active ? "bg-attendance-present" : "bg-outline"
+                    )}
+                    aria-hidden
+                  />
+                  סטטוס: {student.is_active ? "פעילה" : "לא פעילה"}
+                </span>
+              </div>
+            </div>
           </div>
+          <PrintButton />
+        </div>
+      </section>
 
-          {weeklyTimetableEntries.length === 0 ? (
-            <p className="text-sm text-slate-600">אין שיעורים פעילים לתלמידה בשנה הפעילה.</p>
-          ) : (
-            <WeeklyTimetableGrid entries={weeklyTimetableEntries} />
+      {/* Bento Grid */}
+      <div className="grid grid-cols-1 gap-gutter xl:grid-cols-3">
+        {/* Left column — wider tables */}
+        <div className="flex flex-col gap-gutter xl:col-span-2">
+          <Section icon="donut_large" title="אחוזי נוכחות לפי מקצוע">
+            {subjectStats.length === 0 ? (
+              <div className="rounded-xl border border-dashed border-outline-variant/50 bg-surface-container-low/60 px-4 py-8 text-center">
+                <span
+                  className="material-symbols-outlined mb-2 block text-[36px] text-secondary"
+                  aria-hidden
+                >
+                  insights
+                </span>
+                <p className="font-body-md text-body-md text-on-surface-variant">
+                  אין נתוני נוכחות לחישוב עדיין.
+                </p>
+              </div>
+            ) : (
+              <Table
+                headers={[
+                  "מקצוע",
+                  "שיעורים",
+                  "נוכחת",
+                  "איחור",
+                  "נעדרה",
+                  "אחוז היעדרות",
+                  "סטטוס לפי כלל",
+                ]}
+              >
+                {subjectStats.map((row) => (
+                  <TableRow key={row.subject}>
+                    <TableCell className="font-semibold text-primary">
+                      {row.subject}
+                    </TableCell>
+                    <TableCell className="text-on-surface-variant">
+                      {row.totalRequired}
+                    </TableCell>
+                    <TableCell className="text-attendance-present">
+                      {row.presentOnlyCount}
+                    </TableCell>
+                    <TableCell className="text-attendance-late">
+                      {row.lateCount}
+                    </TableCell>
+                    <TableCell className="text-attendance-absent">
+                      {row.absentCount}
+                    </TableCell>
+                    <TableCell
+                      className={cn(
+                        "font-bold",
+                        row.ruleLevel === "blocked" && "text-attendance-absent",
+                        row.ruleLevel === "warning" && "text-attendance-late",
+                        row.ruleLevel === "ok" && "text-attendance-present"
+                      )}
+                    >
+                      {row.absencePercent}%
+                      {row.maxAllowed != null ? ` / ${row.maxAllowed}%` : ""}
+                    </TableCell>
+                    <TableCell>
+                      <StatusPill
+                        tone={
+                          row.ruleLevel === "blocked"
+                            ? "danger"
+                            : row.ruleLevel === "warning"
+                              ? "warn"
+                              : "ok"
+                        }
+                      >
+                        {row.ruleLabel}
+                        {row.ruleName ? ` · ${row.ruleName}` : ""}
+                      </StatusPill>
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </Table>
+            )}
+          </Section>
+
+          <Section icon="history" title="היסטוריית העברות" accent="none">
+            <Table
+              headers={[
+                "שנה",
+                "שכבה",
+                "כיתה",
+                "מסלול",
+                "התמחות",
+                "מתאריך",
+                "עד תאריך",
+              ]}
+            >
+              {assignments.map((a) => (
+                <TableRow key={a.id}>
+                  <TableCell className="font-semibold text-primary">
+                    {a.yearName}
+                  </TableCell>
+                  <TableCell className="text-on-surface-variant">
+                    {a.gradeName}
+                  </TableCell>
+                  <TableCell className="text-on-surface-variant">
+                    {a.className}
+                  </TableCell>
+                  <TableCell className="text-on-surface-variant">
+                    {a.trackName}
+                  </TableCell>
+                  <TableCell className="text-on-surface-variant">
+                    {a.specializationName}
+                    {a.secondarySpecializationName !== "—"
+                      ? ` + ${a.secondarySpecializationName}`
+                      : ""}
+                  </TableCell>
+                  <TableCell className="text-on-surface-variant">
+                    {formatDate(a.start_date)}
+                  </TableCell>
+                  <TableCell>
+                    {a.end_date ? (
+                      <span className="text-on-surface-variant">
+                        {formatDate(a.end_date)}
+                      </span>
+                    ) : (
+                      <StatusPill tone="ok">נוכחי</StatusPill>
+                    )}
+                  </TableCell>
+                </TableRow>
+              ))}
+            </Table>
+          </Section>
+
+          {activeYear && weeklyTimetableEntries.length > 0 && (
+            <Section
+              icon="calendar_view_week"
+              title="מערכת שעות שבועית"
+              className="print:hidden"
+              actions={
+                <Link
+                  href={`/timetable?studentId=${id}`}
+                  className="inline-flex items-center gap-1 rounded-lg bg-secondary-container px-4 py-2 font-label-md text-label-md text-primary shadow-tactile-sm transition-transform hover:-translate-y-0.5"
+                >
+                  <span className="material-symbols-outlined text-[18px]" aria-hidden>
+                    open_in_new
+                  </span>
+                  פתח בטבלת מערכת שעות
+                </Link>
+              }
+              subtitle="מוצג לפי השיוך הפעיל של התלמידה לשיעורים."
+            >
+              <WeeklyTimetableGrid entries={weeklyTimetableEntries} />
+            </Section>
           )}
-        </Card>
-      )}
 
-      <Card title="אחוזי נוכחות לפי מקצוע">
-        {subjectStats.length === 0 ? (
-          <p className="text-sm text-slate-500">אין נתוני נוכחות לחישוב עדיין.</p>
-        ) : (
-          <Table headers={["מקצוע", "שיעורים", "נוכחת", "איחור", "נעדרה", "אחוז היעדרות", "סטטוס לפי כלל"]}>
-            {subjectStats.map((row) => (
-              <TableRow key={row.subject}>
-                <TableCell>{row.subject}</TableCell>
-                <TableCell>{row.totalRequired}</TableCell>
-                <TableCell>{row.presentOnlyCount}</TableCell>
-                <TableCell>{row.lateCount}</TableCell>
-                <TableCell>{row.absentCount}</TableCell>
-                <TableCell
-                  className={cn(
-                    row.ruleLevel === "blocked" && "font-bold text-rose-600",
-                    row.ruleLevel === "warning" && "font-semibold text-amber-700"
-                  )}
-                >
-                  {row.absencePercent}%
-                  {row.maxAllowed != null ? ` / ${row.maxAllowed}%` : ""}
-                </TableCell>
-                <TableCell
-                  className={cn(
-                    "text-sm",
-                    row.ruleLevel === "blocked" && "font-bold text-rose-700",
-                    row.ruleLevel === "warning" && "text-amber-700",
-                    row.ruleLevel === "ok" && "text-emerald-700"
-                  )}
-                >
-                  {row.ruleLabel}
-                  {row.ruleName ? ` · ${row.ruleName}` : ""}
-                </TableCell>
-              </TableRow>
-            ))}
-          </Table>
-        )}
-      </Card>
+          {activeYear && weeklyTimetableEntries.length === 0 && (
+            <Section
+              icon="calendar_view_week"
+              title="מערכת שעות שבועית"
+              className="print:hidden"
+            >
+              <p className="font-body-md text-body-md text-on-surface-variant">
+                אין שיעורים פעילים לתלמידה בשנה הפעילה.
+              </p>
+            </Section>
+          )}
+        </div>
 
-      <Card title="יומן שינויי נוכחות">
-        {changeLog.length === 0 ? (
-          <p className="text-sm text-slate-500">אין שינויים רשומים.</p>
-        ) : (
-          <Table headers={["תאריך שינוי", "שיעור", "יום שיעור", "מ", "אל"]}>
-            {changeLog.map((log) => (
-              <TableRow key={log.id}>
-                <TableCell>{formatDate(log.changed_at.slice(0, 10))}</TableCell>
-                <TableCell>{log.subject}</TableCell>
-                <TableCell>
-                  {log.occurrence_date ? formatDate(log.occurrence_date) : "—"}
-                </TableCell>
-                <TableCell>{log.old_status ?? "—"}</TableCell>
-                <TableCell>{log.new_status ?? "—"}</TableCell>
-              </TableRow>
-            ))}
-          </Table>
-        )}
-      </Card>
+        {/* Right column — forms & smaller cards */}
+        <div className="flex flex-col gap-gutter">
+          {yearData && (
+            <Section
+              icon="move_up"
+              title="ביצוע העברה"
+              accent="featured"
+              className="print:hidden"
+            >
+              <StudentDetailForms studentId={id} yearData={yearData} />
+            </Section>
+          )}
+
+          {activeYear && (
+            <Section icon="menu_book" title="שיוך לשיעורים">
+              <StudentLessonAssignments
+                studentId={id}
+                lessons={lessons}
+                assignments={lessonAssignments}
+              />
+            </Section>
+          )}
+
+          <Section icon="manage_history" title="יומן שינויי נוכחות">
+            {changeLog.length === 0 ? (
+              <p className="font-body-md text-body-md text-on-surface-variant">
+                אין שינויים רשומים.
+              </p>
+            ) : (
+              <ol className="relative flex flex-col gap-4 border-r-2 border-outline-variant/40 pr-4">
+                {changeLog.slice(0, 8).map((log) => (
+                  <li key={log.id} className="relative">
+                    <span
+                      className="absolute -right-[21px] top-1 h-3 w-3 rounded-full bg-secondary ring-4 ring-surface-container-lowest"
+                      aria-hidden
+                    />
+                    <p className="font-label-md text-label-md text-primary">
+                      {log.subject || "שיעור"} ·{" "}
+                      {log.occurrence_date ? formatDate(log.occurrence_date) : "—"}
+                    </p>
+                    <p className="font-caption text-caption text-on-surface-variant">
+                      {formatDate(log.changed_at.slice(0, 10))} · {log.old_status ?? "—"} ←{" "}
+                      {log.new_status ?? "—"}
+                    </p>
+                  </li>
+                ))}
+                {changeLog.length > 8 && (
+                  <li className="relative">
+                    <span
+                      className="absolute -right-[21px] top-1 h-3 w-3 rounded-full bg-outline ring-4 ring-surface-container-lowest"
+                      aria-hidden
+                    />
+                    <p className="font-caption text-caption text-on-surface-variant">
+                      ועוד {changeLog.length - 8} שינויים…
+                    </p>
+                  </li>
+                )}
+              </ol>
+            )}
+          </Section>
+        </div>
+      </div>
     </div>
   );
 }

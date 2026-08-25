@@ -41,28 +41,32 @@ export function WeeklyTimetableGrid({
   }, [entries, maxLessonNumber]);
 
   function cellClasses(e?: TimetableEntry) {
-    if (!e) return "bg-white";
+    if (!e) return "bg-surface-container-lowest";
     const base =
       e.billingType === "specialization"
-        ? "bg-[var(--accent-soft)]"
-        : "bg-stone-50";
+        ? "bg-secondary-container/40"
+        : "bg-surface-container-low";
 
-    const psych = e.forPsychology ? "ring-2 ring-indigo-200" : "";
-    return cn(base, "rounded-lg border border-stone-200/70 px-2 py-1", psych);
+    const psych = e.forPsychology ? "ring-2 ring-primary-fixed-dim" : "";
+    return cn(
+      base,
+      "rounded-lg border border-outline-variant/40 px-2 py-1.5 transition-colors",
+      psych
+    );
   }
 
   return (
-    <div className="overflow-x-auto rounded-2xl border border-stone-200/80 bg-white shadow-sm">
-      <table className="w-full table-fixed border-collapse text-xs sm:text-sm">
+    <div className="overflow-x-auto rounded-xl border border-outline-variant/30 bg-surface-container-lowest">
+      <table className="w-full table-fixed border-collapse font-body-md text-body-md">
         <thead>
-          <tr className="bg-stone-50">
-            <th className="w-[4.5rem] border-b border-stone-200/80 px-2 py-3 text-center text-xs font-semibold text-slate-600">
+          <tr className="bg-surface-container-low">
+            <th className="w-[4.5rem] border-b border-outline-variant/30 px-2 py-3 text-center font-label-md text-label-md text-on-surface-variant">
               שעה
             </th>
             {days.map((d) => (
               <th
                 key={d}
-                className="border-b border-stone-200/80 px-2 py-3 text-center text-xs font-semibold text-slate-600"
+                className="border-b border-outline-variant/30 px-2 py-3 text-center font-label-md text-label-md text-on-surface-variant"
               >
                 {d}
               </th>
@@ -71,21 +75,25 @@ export function WeeklyTimetableGrid({
         </thead>
         <tbody>
           {Array.from({ length: maxLessonNumber }, (_, i) => i + 1).map((lessonNo) => (
-            <tr key={lessonNo} className="odd:bg-white even:bg-stone-50/20">
-              <td className="w-[4.5rem] border-b border-stone-200/70 px-2 py-2 text-center font-semibold text-slate-600">
+            <tr
+              key={lessonNo}
+              className="odd:bg-surface-container-lowest even:bg-surface-container-low/30"
+            >
+              <td className="w-[4.5rem] border-b border-outline-variant/25 px-2 py-2 text-center font-label-md text-label-md text-primary">
                 {lessonNo}
               </td>
               {days.map((_, dayIdx) => {
                 const slotKey = `${dayIdx}::${lessonNo}`;
                 const slotEntries = bySlot.get(slotKey) ?? [];
-                const first = slotEntries[0];
                 return (
                   <td
                     key={slotKey}
-                    className="border-b border-stone-200/70 px-2 py-2 align-top text-right"
+                    className="border-b border-outline-variant/25 px-2 py-2 align-top text-right"
                   >
                     {slotEntries.length === 0 ? (
-                      <div className="text-xs text-slate-300">—</div>
+                      <div className="font-caption text-caption text-outline-variant">
+                        —
+                      </div>
                     ) : (
                       <div className="flex max-h-[9.5rem] flex-col gap-1 overflow-auto">
                         {slotEntries.map((e, idx) => {
@@ -98,17 +106,20 @@ export function WeeklyTimetableGrid({
                               onClick={() => onCellClick?.(e)}
                               className={cn(
                                 "text-right",
-                                isClickable ? "hover:brightness-95" : "cursor-default"
+                                isClickable
+                                  ? "hover:brightness-95"
+                                  : "cursor-default"
                               )}
                               title={e.audienceLabel ?? e.subject}
                             >
                               <div className={cellClasses(e)}>
-                                <div className="truncate font-semibold leading-tight text-slate-800">
+                                <div className="truncate font-label-md text-label-md leading-tight text-primary">
                                   {e.subject}
                                 </div>
                                 {(e.teacherName || e.audienceLabel) && (
-                                  <div className="mt-0.5 truncate text-[10px] leading-tight text-slate-600">
-                                    {e.teacherName ?? ""}{e.teacherName && e.audienceLabel ? " · " : ""}
+                                  <div className="mt-0.5 truncate font-caption text-caption leading-tight text-on-surface-variant">
+                                    {e.teacherName ?? ""}
+                                    {e.teacherName && e.audienceLabel ? " · " : ""}
                                     {e.audienceLabel ?? ""}
                                   </div>
                                 )}

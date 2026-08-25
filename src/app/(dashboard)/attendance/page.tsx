@@ -42,7 +42,11 @@ export default async function AttendancePage({ searchParams }: Props) {
   if (!activeYear) {
     return (
       <div>
-        <PageHeader title="נוכחות" description="יש להגדיר שנה אקדמית פעילה." />
+        <PageHeader
+          title="נוכחות"
+          description="יש להגדיר שנה אקדמית פעילה."
+          size="headline"
+        />
       </div>
     );
   }
@@ -307,10 +311,11 @@ export default async function AttendancePage({ searchParams }: Props) {
   const pendingSummary = await getPendingAttendanceSummary(activeYear.id);
 
   return (
-    <div>
+    <div className="flex flex-col gap-stack_lg">
       <PageHeader
-        title="נוכחות"
+        title="רישום נוכחות"
         description="שלב 1: תאריך → שלב 2: שיעור → שלב 3: סימון (מקלדת: נ/ע/ן · שמירה מיידית)"
+        size="headline"
       />
 
       <AttendanceReminderBanner summary={pendingSummary} />

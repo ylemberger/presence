@@ -1,7 +1,8 @@
 "use client";
 
 import { Button } from "@/components/ui/Button";
-import { Input, Select } from "@/components/ui/Input";
+import { Select } from "@/components/ui/Input";
+import { Section } from "@/components/ui/Section";
 import { useRouter } from "next/navigation";
 
 export type MakeupFilterStatus = "all" | "open" | "done" | "blocked";
@@ -58,7 +59,11 @@ export function MakeupFilters({
   }
 
   return (
-    <form onSubmit={handleSubmit} className="flex flex-wrap items-end gap-3">
+    <Section icon="filter_list" title="סינון מבחני השלמה">
+      <form
+        onSubmit={handleSubmit}
+        className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4"
+      >
       <Select
         label="כיתה"
         name="classId"
@@ -131,10 +136,16 @@ export function MakeupFilters({
         ]}
       />
 
-      <div className="flex items-end">
-        <Button type="submit">הצג מבחנים</Button>
+      <div className="flex items-end sm:col-span-2 lg:col-span-4">
+        <Button type="submit" className="w-full sm:w-auto">
+          <span className="material-symbols-outlined text-[18px]" aria-hidden>
+            search
+          </span>
+          הצג מבחנים
+        </Button>
       </div>
-    </form>
+      </form>
+    </Section>
   );
 }
 

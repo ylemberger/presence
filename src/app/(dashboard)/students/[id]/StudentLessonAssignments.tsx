@@ -75,11 +75,11 @@ export function StudentLessonAssignments({
   }
 
   return (
-    <div className="space-y-4">
-      <p className="text-sm text-slate-600">
+    <div className="flex flex-col gap-4">
+      <p className="font-caption text-caption text-on-surface-variant">
         שיוך אוטומטי נוצר כשפותחים שיעור לקבוצה של התלמידה. כאן אפשר להוסיף שיוך ידני חריג.
       </p>
-      <form onSubmit={handleSubmit} className="flex flex-wrap items-end gap-3">
+      <form onSubmit={handleSubmit} className="flex flex-col gap-3">
         <Select
           label="שיעור"
           name="lesson_id"
@@ -89,13 +89,24 @@ export function StudentLessonAssignments({
             ...lessons.map((l) => ({ value: l.id, label: l.subject })),
           ]}
         />
-        <HebrewDateInput label="מתאריך" name="start_date" required />
-        <HebrewDateInput label="עד תאריך" name="end_date" allowEmpty />
-        <Button type="submit">שיוך לשיעור</Button>
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+          <HebrewDateInput label="מתאריך" name="start_date" required />
+          <HebrewDateInput label="עד תאריך" name="end_date" allowEmpty />
+        </div>
+        <Button type="submit" className="mt-2 w-full">
+          <span className="material-symbols-outlined text-[18px]" aria-hidden>
+            add
+          </span>
+          שיוך לשיעור
+        </Button>
       </form>
-      {error && <p className="text-sm text-rose-600">{error}</p>}
+      {error && (
+        <p className="rounded-lg bg-error-container/60 px-3 py-2 font-body-sm text-body-sm text-on-error-container">
+          {error}
+        </p>
+      )}
       {mismatchWarning && pendingForm && (
-        <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+        <div className="rounded-xl border border-attendance-late/30 bg-attendance-late/10 px-4 py-3 font-body-sm text-body-sm text-attendance-late">
           <p className="mb-2">{mismatchWarning}</p>
           <Button
             type="button"
@@ -107,41 +118,34 @@ export function StudentLessonAssignments({
           </Button>
         </div>
       )}
-      <div className="overflow-x-auto">
-        <table className="w-full text-sm">
-          <thead>
-            <tr className="border-b border-stone-200 bg-stone-50/90">
-              <th className="px-4 py-3 text-right text-xs font-semibold text-slate-500">מקצוע</th>
-              <th className="px-4 py-3 text-right text-xs font-semibold text-slate-500">סוג</th>
-              <th className="px-4 py-3 text-right text-xs font-semibold text-slate-500">מתאריך</th>
-              <th className="px-4 py-3 text-right text-xs font-semibold text-slate-500">עד תאריך</th>
-              <th className="px-4 py-3 text-right text-xs font-semibold text-slate-500"></th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-gray-100">
-            {assignments.map((a) => (
-              <tr key={a.id} className="hover:bg-stone-50/80">
-                <td className="px-4 py-3 text-right">{a.subject}</td>
-                <td className="px-4 py-3 text-right">
-                  {a.assignment_type === "manual" ? "ידני" : "אוטומטי"}
-                </td>
-                <td className="px-4 py-3 text-right">{formatDate(a.start_date)}</td>
-                <td className="px-4 py-3 text-right">
+      {assignments.length === 0 ? (
+        <div className="rounded-lg border border-dashed border-outline-variant/50 bg-surface-container-low/60 px-4 py-6 text-center font-body-md text-body-md text-on-surface-variant">
+          אין שיוכים לשיעורים עדיין.
+        </div>
+      ) : (
+        <ul className="flex flex-col gap-2 font-body-md text-body-md">
+          {assignments.map((a) => (
+            <li
+              key={a.id}
+              className="group flex items-center justify-between gap-3 rounded-lg border border-outline-variant/30 bg-surface-container-low p-3 transition-colors hover:border-secondary/50"
+            >
+              <div className="min-w-0">
+                <div className="font-semibold text-on-surface">{a.subject}</div>
+                <div className="font-caption text-caption text-on-surface-variant">
+                  {a.assignment_type === "manual" ? "ידני" : "אוטומטי"} ·{" "}
+                  {formatDate(a.start_date)} →{" "}
                   {a.end_date ? formatDate(a.end_date) : "פתוח"}
-                </td>
-                <td className="px-4 py-3 text-right">
-                  <DeleteButton
-                    onDelete={() => deleteStudentLessonAssignmentAction(a.id, studentId)}
-                  />
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-        {assignments.length === 0 && (
-          <p className="px-4 py-6 text-sm text-slate-500">אין שיוכים לשיעורים עדיין.</p>
-        )}
-      </div>
+                </div>
+              </div>
+              <div className="opacity-0 transition-opacity group-hover:opacity-100">
+                <DeleteButton
+                  onDelete={() => deleteStudentLessonAssignmentAction(a.id, studentId)}
+                />
+              </div>
+            </li>
+          ))}
+        </ul>
+      )}
     </div>
   );
 }

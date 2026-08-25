@@ -1,6 +1,6 @@
-import { Card } from "@/components/ui/Card";
 import { Table, TableRow, TableCell } from "@/components/ui/Table";
-import { PageHeader } from "@/components/ui/PageHeader";
+import { PageHeader, StatusPill } from "@/components/ui/PageHeader";
+import { Section } from "@/components/ui/Section";
 import { createClient } from "@/lib/supabase/server";
 import { getActiveAcademicYear } from "@/lib/utils";
 import { isDateInRange, formatHebrewDate, formatGregorianDate } from "@/lib/dates/hebrew";
@@ -318,11 +318,28 @@ export default async function ReportsPage({ searchParams }: Props) {
     ? `דוח נוכחות עבור ${singleStudentName}`
     : `דוח נוכחות: ${formatHebrewDate(startDate)} – ${formatHebrewDate(endDate)}`;
 
+  // Aggregate KPI numbers
+  const totals = reportRows.reduce(
+    (acc, r) => {
+      acc.lessons += r.totalRequired;
+      acc.present += r.presentOnlyCount;
+      acc.late += r.lateCount;
+      acc.absent += r.absentCount;
+      return acc;
+    },
+    { lessons: 0, present: 0, late: 0, absent: 0 }
+  );
+  const attendancePct =
+    totals.lessons > 0
+      ? Math.round(((totals.present + totals.late) / totals.lessons) * 100)
+      : 0;
+
   return (
-    <div>
+    <div className="flex flex-col gap-stack_lg">
       <PageHeader
         title="דוחות נוכחות"
-        description="סינון לפי כיתה / מסלול / התמחות / מורה / מקצוע. הדפסה בלי הערות פנימיות."
+        description="ניתוח וצפייה בנתוני הגעה וחיסורים · הדפסה בלי הערות פנימיות."
+        size="headline"
         actions={
           <div className="flex flex-wrap gap-2 print:hidden">
             <ExportCsvButton
@@ -335,7 +352,7 @@ export default async function ReportsPage({ searchParams }: Props) {
         }
       />
 
-      <div className="print:hidden mb-6">
+      <div className="print:hidden">
         <ReportsFilter
           classes={classes ?? []}
           tracks={tracks ?? []}
@@ -359,75 +376,139 @@ export default async function ReportsPage({ searchParams }: Props) {
         />
       </div>
 
-      <Card title={printTitle}>
-        <div className="mb-4 hidden print:block text-sm text-slate-600">
-          <p>
-            תקופה: {formatHebrewDate(startDate)} – {formatHebrewDate(endDate)} (
-            {formatGregorianDate(startDate)} – {formatGregorianDate(endDate)})
-          </p>
-          <p className="mt-1">תאריך הדפסה: {formatGregorianDate(todayIso())}</p>
-          <p className="mt-6">חתימת מורה / רכזת: ________________________</p>
-        </div>
-
-        <p className="mb-3 text-xs text-slate-400 print:hidden">
-          לועזי: {formatGregorianDate(startDate)} – {formatGregorianDate(endDate)}
+      {/* Print-only header */}
+      <div className="hidden text-body-md text-on-surface-variant print:block">
+        <p>
+          תקופה: {formatHebrewDate(startDate)} – {formatHebrewDate(endDate)} (
+          {formatGregorianDate(startDate)} – {formatGregorianDate(endDate)})
         </p>
+        <p className="mt-1">תאריך הדפסה: {formatGregorianDate(todayIso())}</p>
+        <p className="mt-6">חתימת מורה / רכזת: ________________________</p>
+      </div>
 
-        {!shouldRun ? (
-          <p className="text-slate-600">בחרי מסננים ולחצי «הצג דוח».</p>
-        ) : reportRows.length === 0 ? (
-          <p className="text-slate-600">לא נמצאו תוצאות לטווח ולסף שנבחרו.</p>
-        ) : (
-          <>
-            {trendMonths.length > 0 && (
-              <div className="print:hidden">
-                <StudentTrendChart months={trendMonths} />
+      {!shouldRun ? (
+        <Section>
+          <div className="flex flex-col items-center gap-3 py-10 text-center">
+            <span
+              className="material-symbols-outlined text-5xl text-outline-variant"
+              aria-hidden
+            >
+              filter_alt
+            </span>
+            <p className="font-title-lg text-title-lg text-primary">
+              בחרי מסננים והפעילי את הסינון
+            </p>
+            <p className="max-w-md text-body-md text-on-surface-variant">
+              הדוח יציג רק תלמידות שעומדות בסף החיסורים שנבחר, לפי הכיתות / מסלולים / מורים שאת בוחרת.
+            </p>
+          </div>
+        </Section>
+      ) : reportRows.length === 0 ? (
+        <Section>
+          <div className="flex flex-col items-center gap-3 py-10 text-center">
+            <span
+              className="material-symbols-outlined text-5xl text-attendance-present"
+              aria-hidden
+            >
+              check_circle
+            </span>
+            <p className="font-title-lg text-title-lg text-primary">
+              אין תלמידות חורגות בטווח שנבחר
+            </p>
+            <p className="text-body-md text-on-surface-variant">
+              נסי להרחיב את הטווח או להוריד את הסף כדי לראות תלמידות במעקב.
+            </p>
+          </div>
+        </Section>
+      ) : (
+        <>
+          {/* KPI Grid + Top Absentees + Trend Chart */}
+          <div className="grid grid-cols-1 gap-gutter lg:grid-cols-3">
+            <div className="flex flex-col gap-gutter lg:col-span-1">
+              <div className="grid grid-cols-2 gap-4">
+                <KpiCard
+                  label='סה"כ שיעורים'
+                  value={totals.lessons.toLocaleString("he-IL")}
+                  icon="school"
+                  accent="primary"
+                />
+                <KpiCard
+                  label="% נוכחות"
+                  value={`${attendancePct}%`}
+                  icon="check_circle"
+                  accent="present"
+                />
+                <KpiCard
+                  label="איחורים"
+                  value={totals.late.toLocaleString("he-IL")}
+                  icon="schedule"
+                  accent="late"
+                />
+                <KpiCard
+                  label="חיסורים"
+                  value={totals.absent.toLocaleString("he-IL")}
+                  icon="person_off"
+                  accent="absent"
+                />
               </div>
-            )}
 
-            {topAbsentees.length > 0 && (
-              <div className="mb-4 rounded-xl border border-rose-100 bg-rose-50/40 p-3 print:hidden">
-                <p className="mb-2 text-sm font-semibold text-rose-900">
-                  מובילות בהיעדרות (כיתה)
-                </p>
-                <ol className="space-y-1 text-sm">
-                  {topAbsentees.map((r, i) => (
-                    <li key={r.studentId} className="flex justify-between gap-2">
-                      <Link
-                        href={`/students/${r.studentId}`}
-                        className="font-medium text-slate-800 hover:underline"
+              {topAbsentees.length > 0 && (
+                <Section
+                  icon="warning"
+                  title="חריגות בולטות"
+                  className="print:hidden"
+                >
+                  <ul className="flex flex-col divide-y divide-outline-variant/25">
+                    {topAbsentees.map((r, i) => (
+                      <li
+                        key={r.studentId}
+                        className="flex items-center justify-between gap-2 py-2 first:pt-0 last:pb-0"
                       >
-                        {i + 1}. {r.studentName}
-                      </Link>
-                      <span
-                        className={cn(
-                          "font-semibold",
-                          r.ruleLevel === "blocked" ? "text-rose-700" : "text-amber-700"
-                        )}
-                      >
-                        {r.absencePercent}%
-                      </span>
-                    </li>
-                  ))}
-                </ol>
-              </div>
-            )}
-
-            <div className="mb-4 grid gap-2 text-sm text-slate-700 sm:grid-cols-2 lg:grid-cols-5 print:grid-cols-5">
-              <div>שיעורים: {reportRows.reduce((s, r) => s + r.totalRequired, 0)}</div>
-              <div>נוכחות: {reportRows.reduce((s, r) => s + r.presentOnlyCount, 0)}</div>
-              <div>איחורים: {reportRows.reduce((s, r) => s + r.lateCount, 0)}</div>
-              <div>היעדרויות: {reportRows.reduce((s, r) => s + r.absentCount, 0)}</div>
-              <div>
-                סף:{" "}
-                {selectedRule
-                  ? `${selectedRule.max_allowed_absence_percent}% (${selectedRule.name})`
-                  : `${threshold}%`}
-                {selectedRule && (
-                  <span className="mr-1 text-xs text-slate-400">· אזהרה מ-{includeFrom}%</span>
-                )}
-              </div>
+                        <Link
+                          href={`/students/${r.studentId}`}
+                          className="flex min-w-0 items-center gap-2 text-label-md text-primary hover:underline"
+                        >
+                          <span className="w-4 text-caption text-on-surface-variant">
+                            {i + 1}.
+                          </span>
+                          <span className="truncate">{r.studentName}</span>
+                        </Link>
+                        <StatusPill
+                          tone={r.ruleLevel === "blocked" ? "danger" : "warn"}
+                        >
+                          {r.absencePercent}% חיסורים
+                        </StatusPill>
+                      </li>
+                    ))}
+                  </ul>
+                </Section>
+              )}
             </div>
+
+            {trendMonths.length > 0 && (
+              <div className="lg:col-span-2 print:hidden">
+                <Section
+                  icon="trending_up"
+                  title="מגמת נוכחות חודשית"
+                  subtitle="ממוצע לפי סטטוס לאורך התקופה שנבחרה"
+                >
+                  <StudentTrendChart months={trendMonths} />
+                </Section>
+              </div>
+            )}
+          </div>
+
+          {/* Data Table */}
+          <Section
+            icon="table_view"
+            title={printTitle}
+            subtitle={`טווח לועזי: ${formatGregorianDate(startDate)} – ${formatGregorianDate(endDate)} · סף${
+              selectedRule
+                ? ` ${selectedRule.max_allowed_absence_percent}% (${selectedRule.name})`
+                : ` ${threshold}%`
+            }${selectedRule ? ` · אזהרה מ-${includeFrom}%` : ""}`}
+            bodyBleed
+          >
             <Table
               headers={[
                 "תלמידה",
@@ -436,42 +517,108 @@ export default async function ReportsPage({ searchParams }: Props) {
                 "נוכחת",
                 "איחור",
                 "נעדרה",
-                "אחוז היעדרות",
+                "% חיסורים",
                 "סטטוס",
               ]}
             >
               {reportRows.map((row) => (
                 <TableRow key={row.studentId}>
-                  <TableCell>{row.studentName}</TableCell>
-                  <TableCell>{row.className}</TableCell>
-                  <TableCell>{row.totalRequired}</TableCell>
-                  <TableCell>{row.presentOnlyCount}</TableCell>
-                  <TableCell>{row.lateCount}</TableCell>
-                  <TableCell>{row.absentCount}</TableCell>
+                  <TableCell className="font-label-md text-label-md text-primary">
+                    {row.studentName}
+                  </TableCell>
+                  <TableCell className="text-on-surface-variant">
+                    {row.className}
+                  </TableCell>
+                  <TableCell className="text-on-surface">
+                    {row.totalRequired}
+                  </TableCell>
+                  <TableCell className="text-attendance-present">
+                    {row.presentOnlyCount}
+                  </TableCell>
+                  <TableCell className="text-attendance-late">
+                    {row.lateCount}
+                  </TableCell>
+                  <TableCell className="text-attendance-absent">
+                    {row.absentCount}
+                  </TableCell>
                   <TableCell
                     className={cn(
-                      row.ruleLevel === "blocked" && "font-bold text-rose-600",
-                      row.ruleLevel === "warning" && "font-semibold text-amber-700"
+                      "font-semibold",
+                      row.ruleLevel === "blocked" && "text-attendance-absent",
+                      row.ruleLevel === "warning" && "text-attendance-late",
+                      row.ruleLevel === "ok" && "text-attendance-present"
                     )}
                   >
                     {row.absencePercent}%
                   </TableCell>
-                  <TableCell
-                    className={cn(
-                      "text-sm",
-                      row.ruleLevel === "blocked" && "font-bold text-rose-700",
-                      row.ruleLevel === "warning" && "text-amber-700",
-                      row.ruleLevel === "ok" && "text-emerald-700"
-                    )}
-                  >
-                    {row.ruleLabel}
+                  <TableCell>
+                    <StatusPill
+                      tone={
+                        row.ruleLevel === "blocked"
+                          ? "danger"
+                          : row.ruleLevel === "warning"
+                            ? "warn"
+                            : "ok"
+                      }
+                    >
+                      {row.ruleLabel}
+                    </StatusPill>
                   </TableCell>
                 </TableRow>
               ))}
             </Table>
-          </>
-        )}
-      </Card>
+          </Section>
+        </>
+      )}
+    </div>
+  );
+}
+
+function KpiCard({
+  label,
+  value,
+  icon,
+  accent,
+}: {
+  label: string;
+  value: string;
+  icon: string;
+  accent: "primary" | "present" | "late" | "absent";
+}) {
+  const accentBar: Record<typeof accent, string> = {
+    primary: "border-t-transparent",
+    present: "border-t-4 border-t-attendance-present",
+    late: "border-t-4 border-t-attendance-late",
+    absent: "border-t-4 border-t-attendance-absent",
+  };
+  const iconWrap: Record<typeof accent, string> = {
+    primary: "bg-primary/10 text-primary",
+    present: "bg-attendance-present/10 text-attendance-present",
+    late: "bg-attendance-late/10 text-attendance-late",
+    absent: "bg-attendance-absent/10 text-attendance-absent",
+  };
+  return (
+    <div
+      className={cn(
+        "card-hover flex flex-col justify-between rounded-xl border border-outline-variant/30 bg-surface-container-lowest p-5 shadow-tactile-sm",
+        accentBar[accent]
+      )}
+    >
+      <div className="mb-2 flex items-start justify-between gap-2">
+        <span className="font-label-md text-label-md text-on-surface-variant">
+          {label}
+        </span>
+        <div
+          className={cn(
+            "flex h-8 w-8 items-center justify-center rounded-md",
+            iconWrap[accent]
+          )}
+          aria-hidden
+        >
+          <span className="material-symbols-outlined text-[20px]">{icon}</span>
+        </div>
+      </div>
+      <span className="font-headline-lg text-headline-lg text-primary">{value}</span>
     </div>
   );
 }
