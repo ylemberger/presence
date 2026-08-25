@@ -939,7 +939,7 @@ export function AttendanceBoard({
                     <div className="flex min-w-[10rem] flex-1 items-center gap-3">
                       <span
                         aria-hidden
-                        className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-primary font-caption text-caption font-bold text-surface"
+                        className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-primary font-caption text-caption font-bold text-white"
                       >
                         {initial}
                       </span>

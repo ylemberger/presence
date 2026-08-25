@@ -251,7 +251,7 @@ export function StudentsDirectory({
             <TableCell>
               <div className="flex items-center gap-3">
                 <span
-                  className="flex h-9 w-9 items-center justify-center rounded-full bg-primary text-caption font-bold text-surface"
+                  className="flex h-9 w-9 items-center justify-center rounded-full bg-primary text-caption font-bold text-white"
                   aria-hidden
                 >
                   {s.full_name.slice(0, 1)}

@@ -152,7 +152,7 @@ export function LessonsCalendar({
                 className={cn(
                   "relative flex aspect-square items-center justify-center rounded-full p-2 transition-colors",
                   selected
-                    ? "bg-primary-container font-bold text-primary shadow-tactile-sm"
+                    ? "bg-primary-container font-bold text-white shadow-tactile-sm"
                     : isToday
                       ? "ring-1 ring-inset ring-secondary text-primary"
                       : "text-on-surface hover:bg-surface-container"
@@ -165,7 +165,7 @@ export function LessonsCalendar({
                     aria-hidden
                     className={cn(
                       "absolute bottom-1 left-1/2 h-1 w-1 -translate-x-1/2 rounded-full",
-                      selected ? "bg-primary" : "bg-secondary"
+                      selected ? "bg-white" : "bg-secondary"
                     )}
                   />
                 )}

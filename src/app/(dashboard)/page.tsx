@@ -455,7 +455,7 @@ export default async function DashboardPage() {
                         className="flex items-center gap-3 hover:underline"
                       >
                         <div
-                          className="flex h-8 w-8 items-center justify-center rounded-full bg-primary text-sm font-bold text-surface"
+                          className="flex h-8 w-8 items-center justify-center rounded-full bg-primary text-sm font-bold text-white"
                           aria-hidden
                         >
                           {s.name.charAt(0)}
