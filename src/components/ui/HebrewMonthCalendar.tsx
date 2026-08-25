@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { Button } from "@/components/ui/Button";
+import { Icon } from "@/components/ui/Icon";
 import { cn } from "@/lib/cn";
 import {
   buildHebrewMonth,
@@ -23,6 +24,8 @@ export interface HebrewMonthCalendarProps {
   partialDates?: string[];
   onSelectDate: (iso: string) => void;
   onMonthRangeChange?: (rangeStart: string, rangeEnd: string) => void;
+  /** Compact month grid used on the attendance screen. */
+  compact?: boolean;
 }
 
 export function HebrewMonthCalendar({
@@ -33,6 +36,7 @@ export function HebrewMonthCalendar({
   partialDates = [],
   onSelectDate,
   onMonthRangeChange,
+  compact = false,
 }: HebrewMonthCalendarProps) {
   const seed = hebrewMonthFromIso(initialMonthIso || selectedDate || todayIso());
   const [cursor, setCursor] = useState(seed);
@@ -54,6 +58,86 @@ export function HebrewMonthCalendar({
     setCursor(next);
     const grid = buildHebrewMonth(next.year, next.month);
     onMonthRangeChange?.(grid.rangeStart, grid.rangeEnd);
+  }
+
+  if (compact) {
+    return (
+      <section className="rounded-xl border border-outline-variant/30 bg-surface-container-lowest p-6 shadow-tactile-md">
+        <div className="mb-4 flex items-center justify-between">
+          <h3 className="font-title-lg text-title-lg text-primary">{month.title}</h3>
+          <div className="flex gap-1">
+            <button
+              type="button"
+              onClick={() => navigate(1)}
+              className="rounded-md p-1 text-on-surface-variant transition-colors hover:bg-surface-container"
+              aria-label="חודש הבא"
+            >
+              <Icon name="chevron_right" />
+            </button>
+            <button
+              type="button"
+              onClick={() => navigate(-1)}
+              className="rounded-md p-1 text-on-surface-variant transition-colors hover:bg-surface-container"
+              aria-label="חודש קודם"
+            >
+              <Icon name="chevron_left" />
+            </button>
+          </div>
+        </div>
+        <div className="mb-2 grid grid-cols-7 text-center font-label-md text-label-md text-on-surface-variant">
+          {hebrewWeekdayLabels().map((d) => (
+            <div key={d}>{d}</div>
+          ))}
+        </div>
+        <div className="grid grid-cols-7 text-center font-body-md text-body-md">
+          {month.days.map((day, idx) => {
+            if (!day.inMonth) {
+              return <div key={`empty-${idx}`} className="p-2 text-outline-variant/50" />;
+            }
+            const count = countsByDate[day.iso] ?? 0;
+            const selected = selectedDate === day.iso;
+            const complete = completeDates.includes(day.iso);
+            const partial = !complete && partialDates.includes(day.iso);
+            return (
+              <button
+                key={day.iso}
+                type="button"
+                onClick={() => onSelectDate(day.iso)}
+                className={cn(
+                  "relative rounded-lg p-2 transition-colors",
+                  selected
+                    ? "bg-primary-container font-bold text-white shadow-tactile-sm"
+                    : "text-on-surface hover:bg-surface-container"
+                )}
+              >
+                {day.label}
+                {!selected && complete && (
+                  <span className="absolute bottom-1 left-1/2 h-1.5 w-1.5 -translate-x-1/2 rounded-full bg-attendance-present" />
+                )}
+                {!selected && partial && (
+                  <span className="absolute bottom-1 left-1/2 h-1.5 w-1.5 -translate-x-1/2 rounded-full bg-attendance-late" />
+                )}
+                {selected && count > 0 && (
+                  <span className="absolute bottom-0.5 left-1/2 -translate-x-1/2 text-[10px] text-white/80">
+                    {count} ש'
+                  </span>
+                )}
+              </button>
+            );
+          })}
+        </div>
+        <div className="mt-4 flex flex-wrap gap-4 font-caption text-caption text-on-surface-variant">
+          <span className="inline-flex items-center gap-1.5">
+            <span className="h-2.5 w-2.5 rounded-sm bg-attendance-present" />
+            הושלם
+          </span>
+          <span className="inline-flex items-center gap-1.5">
+            <span className="h-2.5 w-2.5 rounded-sm bg-attendance-late" />
+            חלקי
+          </span>
+        </div>
+      </section>
+    );
   }
 
   return (

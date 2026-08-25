@@ -39,6 +39,7 @@ export interface DayLessonRow {
   subject: string;
   teacherName: string;
   lessonId: string;
+  lessonNumber?: number;
   studentCount: number;
   markedCount: number;
 }
@@ -103,44 +104,6 @@ function keyOf(studentId: string, occurrenceId: string): DraftKey {
   return `${studentId}::${occurrenceId}`;
 }
 
-function StepBadge({
-  n,
-  label,
-  active,
-  done,
-}: {
-  n: number;
-  label: string;
-  active: boolean;
-  done: boolean;
-}) {
-  return (
-    <div
-      className={cn(
-        "flex items-center gap-2 rounded-xl px-3 py-2 text-label-md font-label-md transition-colors",
-        active && "bg-secondary-container/50 ring-1 ring-secondary/40",
-        done && !active && "text-attendance-present"
-      )}
-    >
-      <span
-        className={cn(
-          "flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-caption font-bold",
-          active
-            ? "bg-primary text-on-primary"
-            : done
-              ? "bg-attendance-present/15 text-attendance-present"
-              : "bg-surface-container-low text-on-surface-variant"
-        )}
-      >
-        {done && !active ? "✓" : n}
-      </span>
-      <span className={cn(active ? "text-primary" : "text-on-surface-variant")}>
-        {label}
-      </span>
-    </div>
-  );
-}
-
 export function AttendanceBoard({
   yearId,
   monthFrom,
@@ -183,7 +146,7 @@ export function AttendanceBoard({
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [focusedIdx, setFocusedIdx] = useState(0);
   const [undo, setUndo] = useState<UndoItem | null>(null);
-  const rowRefs = useRef<(HTMLLIElement | null)[]>([]);
+  const rowRefs = useRef<(HTMLDivElement | null)[]>([]);
   const touchStartX = useRef<number | null>(null);
   const undoTimer = useRef<number | null>(null);
 
@@ -197,7 +160,6 @@ export function AttendanceBoard({
       : undefined;
 
   const activeLesson = dayOccurrences.find((o) => o.id === activeOccurrenceId);
-  const step = activeOccurrenceId ? 3 : 2;
 
   useEffect(() => {
     setNote(noteBody);
@@ -563,8 +525,6 @@ export function AttendanceBoard({
       ).length
     : 0;
   const unmarkedCount = Math.max(0, lessonStudents.length - markedInLesson);
-  const progressPct =
-    lessonStudents.length > 0 ? Math.round((markedInLesson / lessonStudents.length) * 100) : 0;
 
   const filtersPanel = (
     <div className="space-y-3">
@@ -642,16 +602,17 @@ export function AttendanceBoard({
   );
 
   return (
-    <div className="space-y-5" onTouchStart={onTouchStart} onTouchEnd={onTouchEnd}>
-      <div className="flex flex-wrap gap-2">
-        <StepBadge n={1} label="בחרי תאריך" active={step === 2 && !activeOccurrenceId} done />
-        <StepBadge
-          n={2}
-          label="בחרי שיעור"
-          active={step === 2 && !activeOccurrenceId}
-          done={Boolean(activeOccurrenceId)}
-        />
-        <StepBadge n={3} label="סמני נוכחות" active={step === 3} done={false} />
+    <div className="flex flex-col gap-stack_lg" onTouchStart={onTouchStart} onTouchEnd={onTouchEnd}>
+      <div className="flex flex-wrap items-center gap-2 font-body-md text-body-md text-on-surface-variant">
+        <span className={cn(!activeOccurrenceId && "font-bold text-primary")}>
+          שלב 1: בחירת תאריך
+        </span>
+        <Icon name="arrow_back" className="text-[16px]" />
+        <span className={cn(!activeOccurrenceId && "font-bold text-primary")}>
+          שלב 2: בחירת שיעור
+        </span>
+        <Icon name="arrow_back" className="text-[16px]" />
+        <span className={cn(activeOccurrenceId && "font-bold text-primary")}>שלב 3: רישום</span>
       </div>
 
       {/* desktop filters */}
@@ -705,7 +666,10 @@ export function AttendanceBoard({
         )}
       </div>
 
+      <div className="grid grid-cols-1 items-start gap-gutter xl:grid-cols-12">
+        <div className="flex flex-col gap-stack_lg xl:col-span-5">
       <HebrewMonthCalendar
+        compact
         initialMonthIso={monthFrom}
         selectedDate={selectedDate}
         countsByDate={countsByDate}
@@ -717,162 +681,155 @@ export function AttendanceBoard({
         }}
       />
 
-      <div className="overflow-hidden rounded-xl border border-outline-variant/30 bg-surface-container-lowest p-stack_md shadow-tactile-md">
-        <div className="mb-4 flex flex-wrap items-end justify-between gap-2">
-          <div>
-            <h3 className="font-title-lg text-title-lg text-primary">
-              {formatHebrewDate(selectedDate)}
-            </h3>
-            <p className="font-caption text-caption text-on-surface-variant">
-              {formatGregorianDate(selectedDate)}
-            </p>
-          </div>
-          {completeDateSet.has(selectedDate) && dayOccurrences.length > 0 && (
-            <span className="inline-flex items-center gap-1 rounded-full bg-attendance-present/10 px-3 py-1 text-caption font-semibold text-attendance-present ring-1 ring-attendance-present/20">
-              <Icon name="task_alt" className="text-[14px]" />
-              יום שהושלם — כל השיעורים נרשמו
-            </span>
-          )}
-          {!completeDateSet.has(selectedDate) &&
-            dayOccurrences.some((o) => o.studentCount > 0 && o.markedCount < o.studentCount) && (
-              <span className="inline-flex items-center gap-1 rounded-full bg-attendance-late/10 px-3 py-1 text-caption font-semibold text-attendance-late ring-1 ring-attendance-late/20">
-                <Icon name="pending_actions" className="text-[14px]" />
-                יש שיעורים שממתינים לרישום
-              </span>
-            )}
-        </div>
+          <section className="rounded-xl border border-outline-variant/30 bg-surface-container-lowest p-6 shadow-tactile-md">
+            <div className="mb-4 border-b border-outline-variant/30 pb-4">
+              <h3 className="flex flex-wrap items-center gap-2 font-title-lg text-title-lg text-primary">
+                <Icon name="today" className="text-secondary" />
+                {formatHebrewDate(selectedDate)}
+                <span className="font-caption text-caption font-semibold text-on-surface-variant">
+                  ({formatGregorianDate(selectedDate)})
+                </span>
+              </h3>
+              {completeDateSet.has(selectedDate) && dayOccurrences.length > 0 && (
+                <span className="mt-2 inline-flex items-center gap-1 rounded-full bg-attendance-present/10 px-3 py-1 text-caption font-semibold text-attendance-present">
+                  <Icon name="task_alt" className="text-[14px]" />
+                  הושלם
+                </span>
+              )}
+            </div>
 
-        {dayOccurrences.length === 0 ? (
-          <div className="rounded-xl border border-dashed border-outline-variant/50 bg-surface-container-low/60 px-4 py-8 text-center">
-            <Icon name="event_busy" className="mb-2 block text-[36px] text-secondary" />
-            <p className="font-body-md text-body-md text-on-surface-variant">
-              אין שיעורים ביום זה.
-            </p>
-            <Link
-              href="/lessons"
-              className="mt-3 inline-flex items-center gap-1 font-label-md text-label-md text-secondary hover:underline"
-            >
-              <Icon name="add" className="text-[16px]" />
-              צרי שיעורים או מופעים
-            </Link>
-          </div>
-        ) : (
-          <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
-            {dayOccurrences.map((o) => {
-              const selected = o.id === activeOccurrenceId;
-              const complete = o.studentCount > 0 && o.markedCount >= o.studentCount;
-              const partial = o.markedCount > 0 && !complete;
-              return (
-                <button
-                  key={o.id}
-                  type="button"
-                  onClick={() => selectLesson(o.id)}
-                  className={cn(
-                    "rounded-xl border px-4 py-3 text-right transition-all",
-                    selected
-                      ? "border-secondary bg-secondary-container/40 ring-2 ring-secondary/30 shadow-tactile-sm"
-                      : "border-outline-variant/40 bg-surface-container-low/60 hover:border-outline-variant hover:bg-surface-container-lowest",
-                    complete && !selected && "border-attendance-present/30 bg-attendance-present/5"
-                  )}
+            {dayOccurrences.length === 0 ? (
+              <div className="px-2 py-6 text-center">
+                <Icon name="event_busy" className="mb-2 inline-block text-[36px] text-secondary" />
+                <p className="font-body-md text-body-md text-on-surface-variant">
+                  אין שיעורים ביום זה.
+                </p>
+                <Link
+                  href="/lessons"
+                  className="mt-3 inline-flex items-center gap-1 font-label-md text-label-md text-secondary hover:underline"
                 >
-                  <div className="font-label-md text-label-md text-primary">{o.subject}</div>
-                  <div className="font-caption text-caption text-on-surface-variant">
-                    {o.teacherName || "ללא מורה"}
-                  </div>
-                  <div className="mt-2 flex items-center justify-between gap-2">
-                    <span
+                  <Icon name="add" className="text-[16px]" />
+                  צרי שיעורים או מופעים
+                </Link>
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                {dayOccurrences.map((o) => {
+                  const selected = o.id === activeOccurrenceId;
+                  const complete = o.studentCount > 0 && o.markedCount >= o.studentCount;
+                  const pct =
+                    o.studentCount > 0 ? Math.round((o.markedCount / o.studentCount) * 100) : 0;
+                  return (
+                    <button
+                      key={o.id}
+                      type="button"
+                      onClick={() => selectLesson(o.id)}
                       className={cn(
-                        "font-caption text-caption font-semibold",
-                        complete
-                          ? "text-attendance-present"
-                          : partial
-                            ? "text-attendance-late"
-                            : "text-on-surface-variant"
+                        "relative flex flex-col gap-2 overflow-hidden rounded-lg border bg-surface-container-lowest p-4 text-right transition-transform hover:-translate-y-0.5",
+                        selected
+                          ? "border-2 border-secondary shadow-tactile-sm"
+                          : "border-outline-variant hover:shadow-tactile-md"
                       )}
                     >
-                      {o.markedCount}/{o.studentCount} נרשמו
-                    </span>
-                    {complete && (
-                      <span className="inline-flex items-center gap-0.5 text-caption text-attendance-present">
-                        <Icon name="check_circle" className="text-[14px]" />
-                        הושלם
+                      {selected && (
+                        <span className="absolute left-0 top-0 h-1 w-full bg-secondary" />
+                      )}
+                      <span
+                        className={cn(
+                          "self-start rounded-md px-2 py-0.5 font-label-md text-label-md",
+                          selected
+                            ? "bg-secondary-container text-secondary"
+                            : "bg-surface-variant text-on-surface-variant"
+                        )}
+                      >
+                        שיעור {o.lessonNumber || "—"}
                       </span>
-                    )}
-                    {partial && (
-                      <span className="text-caption text-attendance-late">בתהליך</span>
-                    )}
-                  </div>
-                </button>
-              );
-            })}
-          </div>
-        )}
-      </div>
+                      <h4 className="mt-1 font-title-lg text-title-lg text-primary">{o.subject}</h4>
+                      <p className="flex items-center gap-1 font-body-md text-body-md text-on-surface-variant">
+                        <Icon name="person" className="text-[16px]" />
+                        {o.teacherName ? `המורה ${o.teacherName}` : "ללא מורה"}
+                      </p>
+                      <div className="mt-2 h-1.5 w-full rounded-full bg-surface-variant">
+                        <div
+                          className={cn(
+                            "h-1.5 rounded-full",
+                            complete ? "bg-attendance-present" : "bg-secondary"
+                          )}
+                          style={{ width: `${pct}%` }}
+                        />
+                      </div>
+                      <span className="font-caption text-caption text-on-surface-variant">
+                        {o.markedCount}/{o.studentCount} רשומים
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+          </section>
+        </div>
 
-      {activeLesson && (
-        <div className="overflow-hidden rounded-xl border border-outline-variant/30 border-t-4 border-t-secondary bg-surface-container-lowest shadow-tactile-md">
-          <div className="sticky top-0 z-10 border-b border-outline-variant/30 bg-surface-container-lowest/95 p-stack_md backdrop-blur lg:p-6">
-            <div className="flex flex-wrap items-start justify-between gap-3">
-              <div className="min-w-0 flex-1">
-                <p className="font-caption text-caption font-semibold uppercase tracking-wide text-secondary">
-                  שלב 3
-                </p>
-                <h3 className="font-title-lg text-title-lg text-primary">
+        <div className="xl:col-span-7">
+      {activeLesson ? (
+        <div className="flex h-full min-h-[32rem] flex-col overflow-hidden rounded-xl border border-outline-variant/30 bg-surface-container-lowest shadow-tactile-md xl:h-[800px]">
+          <div className="sticky top-0 z-10 border-b border-outline-variant/30 bg-surface-container-lowest p-6">
+            <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
+              <div className="min-w-0">
+                <h3 className="font-headline-md text-headline-md text-primary">
                   {activeLesson.subject}
+                  {activeLesson.lessonNumber
+                    ? ` - שיעור ${activeLesson.lessonNumber}`
+                    : ""}
                 </h3>
                 <p className="font-body-md text-body-md text-on-surface-variant">
-                  {activeLesson.teacherName}
+                  {formatHebrewDate(selectedDate)}
+                  {activeLesson.teacherName ? ` • המורה ${activeLesson.teacherName}` : ""}
                 </p>
-                <p className="mt-2 font-caption text-caption text-on-surface-variant">
-                  {markedInLesson}/{lessonStudents.length} סומנו
-                  {unmarkedCount > 0 && (
-                    <span className="mr-2 font-semibold text-attendance-late">
-                      · {unmarkedCount} חסרות סימון
-                    </span>
-                  )}
-                </p>
-                <div className="mt-2 h-2 max-w-xs overflow-hidden rounded-full bg-surface-variant">
-                  <div
-                    className={cn(
-                      "h-full rounded-full transition-all",
-                      progressPct >= 100 ? "bg-attendance-present" : "bg-secondary"
-                    )}
-                    style={{ width: `${progressPct}%` }}
-                  />
-                </div>
               </div>
+              <Button
+                size="sm"
+                variant="secondary"
+                disabled={syncing}
+                onClick={syncStudents}
+              >
+                <Icon name="sync" className="text-[18px]" />
+                {syncing ? "מסנכרן…" : "סנכרון נתונים"}
+              </Button>
+            </div>
+            <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg bg-surface-container-low p-3">
               <div className="flex flex-wrap gap-2">
-                <Button
-                  size="sm"
+                <button
+                  type="button"
                   disabled={!canMark || bulkSaving}
                   onClick={() => markAll("present")}
+                  className="rounded-md border border-outline px-3 py-1.5 font-label-md text-label-md text-primary transition-colors hover:bg-surface-container disabled:opacity-50"
                 >
-                  <Icon name="done_all" className="text-[18px]" />
-                  {bulkSaving ? "שומר…" : "כולן נוכחות"}
-                </Button>
-                <Button
-                  size="sm"
-                  variant="secondary"
+                  {bulkSaving ? "שומר…" : "סמן הכל נוכח"}
+                </button>
+                <button
+                  type="button"
                   disabled={!canMark || bulkSaving || unmarkedCount === 0}
                   onClick={markRestAbsent}
+                  className="rounded-md border border-outline px-3 py-1.5 font-label-md text-label-md text-primary transition-colors hover:bg-surface-container disabled:opacity-50"
                 >
-                  <Icon name="person_remove" className="text-[18px]" />
-                  השאר נעדרות
-                </Button>
-                <Button
-                  size="sm"
-                  variant="secondary"
+                  סמן שאר חסר
+                </button>
+                <button
+                  type="button"
                   disabled={!canMark || copying}
                   onClick={copyPrevious}
+                  className="rounded-md border border-outline px-3 py-1.5 font-label-md text-label-md text-primary transition-colors hover:bg-surface-container disabled:opacity-50"
                 >
-                  <Icon name="content_copy" className="text-[18px]" />
                   {copying ? "מעתיק…" : "העתק מקודם"}
-                </Button>
+                </button>
               </div>
+              <p className="font-caption text-caption text-on-surface-variant">
+                קיצורי מקלדת: נוכחת (N) • נעדרה (X) • איחור (A)
+              </p>
             </div>
           </div>
 
-          <div className="p-stack_md lg:p-6">
+          <div className="flex-1 space-y-3 overflow-y-auto p-6">
             {message && (
               <p
                 className={cn(
@@ -911,16 +868,17 @@ export function AttendanceBoard({
               </div>
             )}
 
-            <ul className="divide-y divide-outline-variant/30">
+            <div className="space-y-3">
               {lessonStudents.map((student, idx) => {
                 const k = keyOf(student.id, activeOccurrenceId!);
                 const marked = draft[k] != null;
                 const insight = insightsByStudent[student.id];
                 const focused = focusedIdx === idx;
+                const absent = draft[k] === "absent";
 
                 const initial = student.full_name?.[0] ?? "?";
                 return (
-                  <li
+                  <div
                     key={student.id}
                     ref={(el) => {
                       rowRefs.current[idx] = el;
@@ -929,10 +887,11 @@ export function AttendanceBoard({
                     onKeyDown={(e) => onRowKeyDown(e, idx)}
                     onFocus={() => setFocusedIdx(idx)}
                     className={cn(
-                      "flex flex-col gap-3 py-3 outline-none transition-colors sm:flex-row sm:items-center sm:justify-between",
-                      idx === 0 && "pt-0",
-                      !marked &&
-                        "rounded-xl border-r-4 border-r-attendance-late bg-attendance-late/5 px-3",
+                      "flex flex-col gap-3 rounded-lg border p-4 outline-none transition-all sm:flex-row sm:items-center sm:justify-between",
+                      absent
+                        ? "border-y border-r border-outline-variant/50 border-l-4 border-l-attendance-absent bg-error-container/10"
+                        : "border-outline-variant/50 bg-surface-container-lowest hover:border-secondary/50 hover:shadow-tactile-sm",
+                      !marked && !absent && "opacity-90",
                       focused && "ring-2 ring-secondary/40"
                     )}
                   >
@@ -944,37 +903,27 @@ export function AttendanceBoard({
                         {initial}
                       </span>
                       <div className="min-w-0 flex flex-col gap-1">
-                        <div className="flex flex-wrap items-center gap-2">
                           <span className="font-title-lg text-title-lg text-primary">
                             {student.full_name}
                           </span>
-                          {!marked && (
-                            <span className="inline-flex items-center gap-1 rounded-full bg-attendance-late/15 px-2 py-0.5 text-caption font-semibold text-attendance-late">
-                              <Icon name="pending" className="text-[12px]" />
-                              ממתין
-                            </span>
-                          )}
-                        </div>
-                        <div className="flex flex-wrap gap-1.5">
-                          {insight && insight.ruleLevel !== "ok" && (
+                        <p className="font-caption text-caption text-on-surface-variant">
+                          {insight && insight.ruleLevel !== "ok" ? (
                             <span
                               className={cn(
-                                "rounded-full px-2 py-0.5 font-caption text-caption font-semibold",
+                                "inline-flex items-center gap-1",
                                 insight.ruleLevel === "blocked"
-                                  ? "bg-attendance-absent/10 text-attendance-absent"
-                                  : "bg-attendance-late/10 text-attendance-late"
+                                  ? "text-attendance-absent"
+                                  : "text-attendance-late"
                               )}
                             >
-                              {insight.absencePercent}%
-                              {insight.ruleLevel === "blocked" ? " · חריגה" : " · קרוב לסף"}
+                              <Icon name="warning" className="text-[14px]" />
+                              {insight.absencePercent}% היעדרויות
+                              {insight.ruleLevel === "blocked" ? " · חריגה" : ""}
                             </span>
+                          ) : (
+                            "נוכחות תקינה"
                           )}
-                          {insight && insight.presentStreak >= 2 && (
-                            <span className="rounded-full bg-attendance-present/10 px-2 py-0.5 font-caption text-caption font-semibold text-attendance-present">
-                              {insight.presentStreak} ברצף
-                            </span>
-                          )}
-                        </div>
+                        </p>
                       </div>
                     </div>
                     <div className="flex w-full max-w-md flex-col gap-2">
@@ -1004,10 +953,10 @@ export function AttendanceBoard({
                         </select>
                       )}
                     </div>
-                  </li>
+                  </div>
                 );
               })}
-            </ul>
+            </div>
 
             {noteLessonId && lessonStudents.length > 0 && (
               <div className="mt-6 rounded-xl border-l-4 border-l-primary bg-surface-container-low/60 p-stack_md">
@@ -1031,15 +980,30 @@ export function AttendanceBoard({
               </div>
             )}
           </div>
+          <div className="mt-auto flex justify-end gap-3 border-t border-outline-variant/30 bg-surface-container-lowest p-6">
+            <button
+              type="button"
+              onClick={() => navigate(buildParams({ occurrenceId: undefined }))}
+              className="rounded-lg border border-outline px-6 py-2 font-label-md text-label-md text-primary transition-colors hover:bg-surface-container"
+            >
+              ביטול
+            </button>
+            <span className="rounded-lg bg-primary px-6 py-2 font-label-md text-label-md text-white shadow-tactile-sm">
+              {markedInLesson}/{lessonStudents.length} נשמרו
+            </span>
+          </div>
+        </div>
+      ) : (
+        <div className="flex min-h-[20rem] flex-col items-center justify-center rounded-xl border border-dashed border-outline-variant/50 bg-surface-container-lowest px-6 py-10 text-center shadow-tactile-md">
+          <Icon name="touch_app" className="mb-3 text-[36px] text-secondary" />
+          <p className="font-title-lg text-title-lg text-primary">בחרי שיעור לרישום</p>
+          <p className="mt-1 max-w-sm font-body-md text-body-md text-on-surface-variant">
+            שלב 1 ו־2: בחרי תאריך ואז שיעור, והרשימה תופיע כאן.
+          </p>
         </div>
       )}
-
-      {!activeLesson && dayOccurrences.length > 1 && (
-        <p className="flex items-center justify-center gap-2 rounded-xl bg-attendance-late/10 px-4 py-3 text-center font-body-md text-body-md text-attendance-late">
-          <Icon name="touch_app" />
-          יש {dayOccurrences.length} שיעורים ביום זה — בחרי שיעור מהרשימה למעלה.
-        </p>
-      )}
+        </div>
+      </div>
 
       {undo && (
         <div className="fixed bottom-8 left-8 z-50 flex items-center gap-4 rounded-lg bg-primary px-6 py-4 font-body-md text-body-md text-on-primary shadow-tactile-lg">

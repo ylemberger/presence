@@ -71,7 +71,7 @@ export default async function AttendancePage({ searchParams }: Props) {
       .select(
         `id, occurrence_date, lesson_id,
          lessons!inner(
-           id, subject, class_id, track_id, specialization_id, academic_year_id, attendance_rule_id,
+           id, subject, lesson_number, class_id, track_id, specialization_id, academic_year_id, attendance_rule_id,
            teacher_teaching_assignments(teacher_id, teachers(full_name))
          )`
       )
@@ -85,6 +85,7 @@ export default async function AttendancePage({ searchParams }: Props) {
   type LessonJoin = {
     id: string;
     subject: string;
+    lesson_number: number | null;
     class_id: string | null;
     track_id: string | null;
     specialization_id: string | null;
@@ -102,6 +103,7 @@ export default async function AttendancePage({ searchParams }: Props) {
       id: o.id,
       date: o.occurrence_date,
       subject: lesson.subject,
+      lessonNumber: lesson.lesson_number ?? 0,
       teacherName: teacher?.full_name ?? "",
       teacherId: lesson.teacher_teaching_assignments?.teacher_id ?? "",
       lessonId: lesson.id,
@@ -312,11 +314,7 @@ export default async function AttendancePage({ searchParams }: Props) {
 
   return (
     <div className="flex flex-col gap-stack_lg">
-      <PageHeader
-        title="רישום נוכחות"
-        description="שלב 1: תאריך → שלב 2: שיעור → שלב 3: סימון (מקלדת: נ/ע/ן · שמירה מיידית)"
-        size="headline"
-      />
+      <PageHeader title="נוכחות" size="headline" />
 
       <AttendanceReminderBanner summary={pendingSummary} />
 
