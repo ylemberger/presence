@@ -16,6 +16,11 @@ import { DAY_OF_WEEK_LABELS } from "@/lib/constants";
 import { Icon } from "@/components/ui/Icon";
 import type { Lesson } from "@/types/database";
 import { holidayDateSet } from "@/lib/lessons/holidays";
+import {
+  audienceForLesson,
+  audienceMapFromRows,
+  lessonMatchesAudienceFilter,
+} from "@/lib/lessons/autoAssign";
 
 interface Props {
   searchParams: {
@@ -55,7 +60,7 @@ export default async function LessonsPage({ searchParams }: Props) {
   const to = searchParams.to || month.rangeEnd;
   const today = todayIso();
 
-  const [lessonsRes, teachers, grades, classes, tracks, specializations, ranges, rules, holidays] =
+  const [lessonsRes, teachers, grades, classes, tracks, specializations, ranges, rules, holidays, audienceRes] =
     await Promise.all([
       supabase
         .from("lessons")
@@ -89,6 +94,7 @@ export default async function LessonsPage({ searchParams }: Props) {
         .from("holiday_periods")
         .select("start_date, end_date")
         .eq("academic_year_id", activeYear.id),
+      supabase.from("lesson_audience").select("lesson_id, class_id, track_id, specialization_id"),
     ]);
 
   type LessonRow = Lesson & {
@@ -99,10 +105,15 @@ export default async function LessonsPage({ searchParams }: Props) {
   };
 
   const allLessons = (lessonsRes.data ?? []) as LessonRow[];
+  const audienceByLesson = audienceMapFromRows(audienceRes.data ?? []);
   const filteredLessons = allLessons.filter((l) => {
-    if (searchParams.classId && l.class_id !== searchParams.classId) return false;
-    if (searchParams.trackId && l.track_id !== searchParams.trackId) return false;
-    if (searchParams.specializationId && l.specialization_id !== searchParams.specializationId) {
+    if (
+      !lessonMatchesAudienceFilter(audienceForLesson(l, audienceByLesson), {
+        classId: searchParams.classId,
+        trackId: searchParams.trackId,
+        specializationId: searchParams.specializationId,
+      })
+    ) {
       return false;
     }
     if (searchParams.subject && l.subject !== searchParams.subject) return false;

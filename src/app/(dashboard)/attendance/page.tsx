@@ -12,6 +12,11 @@ import {
 } from "@/lib/attendance/calculator";
 import { getPendingAttendanceSummary } from "@/lib/attendance/pending";
 import { holidayDateSet } from "@/lib/lessons/holidays";
+import {
+  audienceForLesson,
+  audienceMapFromRows,
+  lessonMatchesAudienceFilter,
+} from "@/lib/lessons/autoAssign";
 import { AttendanceReminderBanner } from "@/components/attendance/AttendanceReminderBanner";
 import {
   AttendanceBoard,
@@ -61,7 +66,7 @@ export default async function AttendancePage({ searchParams }: Props) {
 
   const catalog = await getYearCatalog(activeYear.id);
 
-  const [{ data: yearStudents }, { data: monthOccurrencesRaw }, { data: holidayRows }] =
+  const [{ data: yearStudents }, { data: monthOccurrencesRaw }, { data: holidayRows }, { data: audienceRows }] =
     await Promise.all([
     supabase
       .from("student_assignments")
@@ -86,6 +91,7 @@ export default async function AttendancePage({ searchParams }: Props) {
       .from("holiday_periods")
       .select("start_date, end_date")
       .eq("academic_year_id", activeYear.id),
+    supabase.from("lesson_audience").select("lesson_id, class_id, track_id, specialization_id"),
   ]);
 
   type LessonJoin = {
@@ -120,13 +126,27 @@ export default async function AttendancePage({ searchParams }: Props) {
     };
   }
 
+  const audienceByLesson = audienceMapFromRows(audienceRows ?? []);
   let monthOccurrences = (monthOccurrencesRaw ?? []).map(mapOccurrence);
 
-  if (params.classId) monthOccurrences = monthOccurrences.filter((o) => o.classId === params.classId);
-  if (params.trackId) monthOccurrences = monthOccurrences.filter((o) => o.trackId === params.trackId);
-  if (params.specializationId) {
-    monthOccurrences = monthOccurrences.filter((o) => o.specializationId === params.specializationId);
-  }
+  monthOccurrences = monthOccurrences.filter((o) =>
+    lessonMatchesAudienceFilter(
+      audienceForLesson(
+        {
+          id: o.lessonId,
+          class_id: o.classId,
+          track_id: o.trackId,
+          specialization_id: o.specializationId,
+        },
+        audienceByLesson
+      ),
+      {
+        classId: params.classId,
+        trackId: params.trackId,
+        specializationId: params.specializationId,
+      }
+    )
+  );
   if (params.teacherId) monthOccurrences = monthOccurrences.filter((o) => o.teacherId === params.teacherId);
   if (params.subject) monthOccurrences = monthOccurrences.filter((o) => o.subject === params.subject);
 

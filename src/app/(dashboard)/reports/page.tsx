@@ -148,24 +148,8 @@ export default async function ReportsPage({ searchParams }: Props) {
     if (params.subject) {
       lessons = lessons.filter((l) => l.subject === params.subject);
     }
-    if (params.classId) {
-      lessons = lessons.filter((l) => !l.class_id || l.class_id === params.classId);
-    }
-    if (params.trackId) {
-      lessons = lessons.filter((l) => !l.track_id || l.track_id === params.trackId);
-    }
-    if (params.specializationId) {
-      lessons = lessons.filter(
-        (l) => !l.specialization_id || l.specialization_id === params.specializationId
-      );
-    }
-    if (
-      params.teacherId ||
-      params.subject ||
-      (params.classId && lessons.some((l) => l.class_id)) ||
-      params.trackId ||
-      params.specializationId
-    ) {
+    // כיתה/מסלול/התמחות מסננים תלמידות לפי השיבוץ הנוכחי, לא מצמצמים שיעורים.
+    if (params.teacherId || params.subject) {
       scopedLessonIds = lessons.map((l) => l.id);
     }
 

@@ -98,9 +98,73 @@ function placementFromRow(p: {
   };
 }
 
+export type AudienceRow = {
+  lesson_id: string;
+  class_id: string | null;
+  track_id: string | null;
+  specialization_id: string | null;
+};
+
+export function audienceMapFromRows(rows: AudienceRow[]): Map<string, LessonAudienceIds> {
+  const map = new Map<string, LessonAudienceIds>();
+  for (const r of rows) {
+    const cur = map.get(r.lesson_id) ?? {
+      class_ids: [],
+      track_ids: [],
+      specialization_ids: [],
+    };
+    if (r.class_id) cur.class_ids.push(r.class_id);
+    if (r.track_id) cur.track_ids.push(r.track_id);
+    if (r.specialization_id) cur.specialization_ids.push(r.specialization_id);
+    map.set(r.lesson_id, cur);
+  }
+  return map;
+}
+
+export function audienceForLesson(
+  lesson: { id: string; class_id: string | null; track_id: string | null; specialization_id: string | null },
+  map: Map<string, LessonAudienceIds>
+): LessonAudienceIds {
+  const fromMap = map.get(lesson.id);
+  if (
+    fromMap &&
+    (fromMap.class_ids.length > 0 ||
+      fromMap.track_ids.length > 0 ||
+      fromMap.specialization_ids.length > 0)
+  ) {
+    return fromMap;
+  }
+  return {
+    class_ids: lesson.class_id ? [lesson.class_id] : [],
+    track_ids: lesson.track_id ? [lesson.track_id] : [],
+    specialization_ids: lesson.specialization_id ? [lesson.specialization_id] : [],
+  };
+}
+
+/** Filter: empty audience on a dimension means "no restriction" (whole grade / other groups). */
+export function lessonMatchesAudienceFilter(
+  audience: LessonAudienceIds,
+  filter: { classId?: string; trackId?: string; specializationId?: string }
+): boolean {
+  if (filter.classId && audience.class_ids.length > 0 && !audience.class_ids.includes(filter.classId)) {
+    return false;
+  }
+  if (filter.trackId && audience.track_ids.length > 0 && !audience.track_ids.includes(filter.trackId)) {
+    return false;
+  }
+  if (
+    filter.specializationId &&
+    audience.specialization_ids.length > 0 &&
+    !audience.specialization_ids.includes(filter.specializationId)
+  ) {
+    return false;
+  }
+  return true;
+}
+
 function withAudience(
   lesson: Omit<LessonScope, "audience"> & { id: string },
-  rows: { lesson_id: string; class_id: string | null; track_id: string | null; specialization_id: string | null }[]
+  rows: AudienceRow[]
 ): LessonScope {
   const mine = rows.filter((r) => r.lesson_id === lesson.id);
   return {
