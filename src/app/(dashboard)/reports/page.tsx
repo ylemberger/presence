@@ -19,7 +19,7 @@ import type { AttendanceStatus } from "@/types/database";
 import { cn } from "@/lib/cn";
 import Link from "next/link";
 import { Icon } from "@/components/ui/Icon";
-import { ATTENDANCE_STATUS_LABELS, DAY_OF_WEEK_LABELS } from "@/lib/constants";
+import { ATTENDANCE_STATUS_LABELS, BILLING_TYPE_LABELS, DAY_OF_WEEK_LABELS } from "@/lib/constants";
 import { formatLessonHours } from "@/lib/lessons/hours";
 
 interface Props {
@@ -157,7 +157,7 @@ export default async function ReportsPage({ searchParams }: Props) {
     supabase
       .from("lessons")
       .select(
-        `id, subject, class_id, track_id, specialization_id, teacher_teaching_assignment_id, day_of_week, lesson_number, period_count,
+        `id, subject, class_id, track_id, specialization_id, teacher_teaching_assignment_id, day_of_week, lesson_number, period_count, billing_type,
          teacher_teaching_assignments(teacher_id, teachers(full_name))`
       )
       .eq("academic_year_id", activeYear.id),
@@ -181,6 +181,9 @@ export default async function ReportsPage({ searchParams }: Props) {
     studentName: string;
     gradeName: string;
     className: string;
+    trackName: string;
+    specName: string;
+    studies: string;
     totalRequired: number;
     presentOnlyCount: number;
     lateCount: number;
@@ -196,6 +199,7 @@ export default async function ReportsPage({ searchParams }: Props) {
     subject: string;
     teacherName: string;
     dayLabel: string;
+    billingLabel: string;
     totalRequired: number;
     presentOnlyCount: number;
     lateCount: number;
@@ -245,9 +249,12 @@ export default async function ReportsPage({ searchParams }: Props) {
         dayOfWeek: l.day_of_week,
         lessonNumber: l.lesson_number,
         periodCount: l.period_count ?? 1,
+        billingType: l.billing_type as keyof typeof BILLING_TYPE_LABELS | string,
       },
     ])
   );
+  const trackById = new Map((tracks ?? []).map((t) => [t.id, t.name]));
+  const specById = new Map((specializations ?? []).map((s) => [s.id, s.name]));
 
   if (shouldRun) {
     let scopedLessonIds: string[] | null = null;
@@ -373,13 +380,11 @@ export default async function ReportsPage({ searchParams }: Props) {
           const inAssignment = studentAssignments.some((a) =>
             isDateInRange(date, a.start_date, a.end_date)
           );
-          const inLesson =
-            studentLessonAssignments.length === 0 ||
-            studentLessonAssignments.some(
-              (la) =>
-                la.lesson_id === o.lesson_id &&
-                isDateInRange(date, la.start_date, la.end_date)
-            );
+          const inLesson = studentLessonAssignments.some(
+            (la) =>
+              la.lesson_id === o.lesson_id &&
+              isDateInRange(date, la.start_date, la.end_date)
+          );
           return inAssignment && inLesson;
         });
 
@@ -399,6 +404,26 @@ export default async function ReportsPage({ searchParams }: Props) {
           (currentAssignment?.classes as unknown as { name: string } | null)?.name ?? "-";
         const gradeName =
           (currentAssignment?.grades as unknown as { name: string } | null)?.name ?? "-";
+        const trackName = currentAssignment?.track_id
+          ? trackById.get(currentAssignment.track_id) ?? "-"
+          : "-";
+        const specName = currentAssignment?.specialization_id
+          ? specById.get(currentAssignment.specialization_id) ?? "-"
+          : "-";
+        const studies = studentLessonAssignments
+          .filter((la) => !la.end_date)
+          .map((la) => {
+            const meta = lessonCatalog.get(la.lesson_id);
+            if (!meta) return null;
+            const billing =
+              meta.billingType && meta.billingType in BILLING_TYPE_LABELS
+                ? BILLING_TYPE_LABELS[meta.billingType as keyof typeof BILLING_TYPE_LABELS]
+                : "";
+            const extra = la.assignment_type === "manual" ? "חריג" : "";
+            return [meta.subject, billing, extra].filter(Boolean).join(" · ");
+          })
+          .filter((v): v is string => Boolean(v))
+          .join(" | ");
         const evaluated = evaluateAbsenceAgainstRule(summary.absencePercent, threshold);
 
         reportRows.push({
@@ -406,6 +431,9 @@ export default async function ReportsPage({ searchParams }: Props) {
           studentName,
           gradeName,
           className,
+          trackName,
+          specName,
+          studies,
           totalRequired: summary.totalRequired,
           presentOnlyCount: summary.presentOnlyCount,
           lateCount: summary.lateCount,
@@ -487,6 +515,10 @@ export default async function ReportsPage({ searchParams }: Props) {
         subject: meta.subject,
         teacherName: meta.teacherName,
         dayLabel: dayLabel(meta.dayOfWeek),
+        billingLabel:
+          meta.billingType && meta.billingType in BILLING_TYPE_LABELS
+            ? BILLING_TYPE_LABELS[meta.billingType as keyof typeof BILLING_TYPE_LABELS]
+            : "",
         totalRequired: summary.totalRequired,
         presentOnlyCount: summary.presentOnlyCount,
         lateCount: summary.lateCount,
@@ -545,6 +577,9 @@ export default async function ReportsPage({ searchParams }: Props) {
   if (filterSpecName) printFilters.push({ label: "התמחות", value: filterSpecName });
   if (filterTeacherName) printFilters.push({ label: "מורה", value: filterTeacherName });
   if (params.subject) printFilters.push({ label: "מקצוע", value: params.subject });
+  if (params.studentId && reportRows[0]?.studies) {
+    printFilters.push({ label: "לומדת", value: reportRows[0].studies });
+  }
   if (selectedLessonMeta) {
     printFilters.push({
       label: "שיעור",
@@ -782,6 +817,9 @@ export default async function ReportsPage({ searchParams }: Props) {
                 "תלמידה",
                 "שכבה",
                 "כיתה",
+                "מסלול",
+                "התמחות",
+                "לומדת",
                 "מופעים",
                 "נוכחת",
                 "איחור",
@@ -803,6 +841,15 @@ export default async function ReportsPage({ searchParams }: Props) {
                   </TableCell>
                   <TableCell className="text-on-surface-variant">
                     {row.className}
+                  </TableCell>
+                  <TableCell className="text-on-surface-variant">
+                    {row.trackName}
+                  </TableCell>
+                  <TableCell className="text-on-surface-variant">
+                    {row.specName}
+                  </TableCell>
+                  <TableCell className="max-w-[18rem] text-on-surface-variant">
+                    {row.studies || "—"}
                   </TableCell>
                   <TableCell className="text-on-surface">
                     {row.totalRequired}
@@ -873,6 +920,7 @@ export default async function ReportsPage({ searchParams }: Props) {
               <Table
                 headers={[
                   "מקצוע",
+                  "סוג",
                   "מורה",
                   "יום",
                   "מופעים",
@@ -897,6 +945,7 @@ export default async function ReportsPage({ searchParams }: Props) {
                         {row.subject}
                       </Link>
                     </TableCell>
+                    <TableCell className="text-on-surface-variant">{row.billingLabel || "—"}</TableCell>
                     <TableCell className="text-on-surface-variant">{row.teacherName}</TableCell>
                     <TableCell className="text-on-surface-variant">{row.dayLabel}</TableCell>
                     <TableCell className="text-on-surface">{row.totalRequired}</TableCell>

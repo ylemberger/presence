@@ -1,3 +1,5 @@
+import { BILLING_TYPE_LABELS, DAY_OF_WEEK_LABELS } from "@/lib/constants";
+
 export function occupiedLessonNumbers(start: number, count = 1): number[] {
   const n = Math.max(1, count);
   return Array.from({ length: n }, (_, i) => start + i);
@@ -7,6 +9,27 @@ export function formatLessonHours(start: number, count = 1): string {
   if (!start) return "";
   if (count <= 1) return `שיעור ${start}`;
   return `שיעורים ${start}–${start + count - 1}`;
+}
+
+export function formatLessonOptionLabel(lesson: {
+  subject: string;
+  day_of_week?: number | null;
+  lesson_number?: number | null;
+  period_count?: number | null;
+  billing_type?: string | null;
+}): string {
+  const parts = [lesson.subject];
+  if (lesson.day_of_week != null) {
+    const day = DAY_OF_WEEK_LABELS[lesson.day_of_week];
+    if (day) parts.push(`יום ${day}`);
+  }
+  if (lesson.lesson_number) {
+    parts.push(formatLessonHours(lesson.lesson_number, lesson.period_count ?? 1));
+  }
+  if (lesson.billing_type && lesson.billing_type in BILLING_TYPE_LABELS) {
+    parts.push(BILLING_TYPE_LABELS[lesson.billing_type as keyof typeof BILLING_TYPE_LABELS]);
+  }
+  return parts.join(" · ");
 }
 
 export function lessonHoursOverlap(

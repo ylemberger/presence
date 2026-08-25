@@ -11,11 +11,16 @@ import {
   deleteStudentLessonAssignmentAction,
 } from "../../actions";
 import { formatDate } from "@/lib/dates/hebrew";
+import { formatLessonOptionLabel } from "@/lib/lessons/hours";
 import { Icon } from "@/components/ui/Icon";
 
 interface LessonOption {
   id: string;
   subject: string;
+  day_of_week?: number;
+  lesson_number?: number;
+  period_count?: number;
+  billing_type?: string;
 }
 
 interface AssignmentRow {
@@ -78,14 +83,15 @@ export function StudentLessonAssignments({
   return (
     <div className="flex flex-col gap-4">
       <p className="font-caption text-caption text-on-surface-variant">
-        שיוך אוטומטי נוצר כשפותחים שיעור לקבוצה של התלמידה. כאן אפשר להוסיף שיוך ידני חריג.
+        שיוך אוטומטי נוצר כשפותחים שיעור לקבוצה של התלמידה. כאן אפשר להוסיף שיוך ידני גם לשיעור
+        שאינו בכיתה/מסלול שלה — תופיע אזהרה, והשיעור ייספר כחיוב שלה בדוח.
       </p>
       <form onSubmit={handleSubmit} className="flex flex-col gap-3">
         <Combobox
           label="שיעור"
           name="lesson_id"
           required
-          options={lessons.map((l) => ({ value: l.id, label: l.subject }))}
+          options={lessons.map((l) => ({ value: l.id, label: formatLessonOptionLabel(l) }))}
           emptyLabel="בחרי שיעור"
         />
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">

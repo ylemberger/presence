@@ -23,8 +23,10 @@ import {
   startOfWeekSunday,
   todayIso,
 } from "@/lib/dates/hebrew";
+import { formatLessonOptionLabel } from "@/lib/lessons/hours";
 import { ABSENCE_REASONS, type AbsenceReason } from "@/lib/attendance/reasons";
 import { Icon } from "@/components/ui/Icon";
+import { AssignStudentToLesson } from "../lessons/AssignStudentToLesson";
 import {
   AttendanceStatusPicker,
   type AttendancePickerPhase,
@@ -75,11 +77,19 @@ interface Props {
   teacherId?: string;
   subject?: string;
   studentId?: string;
+  lessonId?: string;
   classes: Option[];
   tracks: Option[];
   specializations: Option[];
   teachers: Option[];
   subjects: string[];
+  lessons?: Array<{
+    id: string;
+    subject: string;
+    day_of_week?: number;
+    lesson_number?: number;
+    period_count?: number;
+  }>;
   allStudents: AttendanceStudent[];
   monthOccurrences: Array<{ id: string; date: string }>;
   dayOccurrences: DayLessonRow[];
@@ -125,10 +135,13 @@ export function AttendanceBoard({
   teacherId,
   subject,
   studentId,
+  lessonId,
   classes,
   tracks,
+  specializations,
   teachers,
   subjects,
+  lessons = [],
   allStudents,
   monthOccurrences,
   dayOccurrences: dayOccurrencesProp,
@@ -152,7 +165,9 @@ export function AttendanceBoard({
   const [message, setMessage] = useState<string | null>(null);
   const [note, setNote] = useState(noteBody);
   const [noteSaving, setNoteSaving] = useState(false);
-  const [filtersOpen, setFiltersOpen] = useState(false);
+  const [filtersOpen, setFiltersOpen] = useState(
+    Boolean(classId || trackId || specializationId || teacherId || subject || studentId || lessonId)
+  );
   const [focusedIdx, setFocusedIdx] = useState(0);
   const [undo, setUndo] = useState<UndoItem | null>(null);
   const rowRefs = useRef<(HTMLDivElement | null)[]>([]);
@@ -268,6 +283,7 @@ export function AttendanceBoard({
       teacherId: patch.teacherId !== undefined ? patch.teacherId : teacherId,
       subject: patch.subject !== undefined ? patch.subject : subject,
       studentId: patch.studentId !== undefined ? patch.studentId : studentId,
+      lessonId: patch.lessonId !== undefined ? patch.lessonId : lessonId,
       occurrenceId: patch.occurrenceId,
     };
     for (const [k, v] of Object.entries(filters)) {
@@ -470,10 +486,20 @@ export function AttendanceBoard({
     if (result && "error" in result && result.error) {
       setMessage(result.error);
     } else if (result && "success" in result) {
-      const n = result.assigned ?? 0;
-      setMessage(
-        n > 0 ? `שויכו ${n} תלמידות לשיעור` : "לא נמצאו תלמידות חדשות לשיוך — בדקי כיתה/מסלול"
-      );
+      const n = typeof result.assigned === "number" ? result.assigned : 0;
+      const backfilled = typeof result.backfilled === "number" ? result.backfilled : 0;
+      if (n > 0 || backfilled > 0) {
+        setMessage(
+          [
+            n > 0 ? `שויכו ${n} תלמידות לשיעור` : null,
+            backfilled > 0 ? `עודכן תוקף ל־${backfilled} שיוכים קיימים` : null,
+          ]
+            .filter(Boolean)
+            .join(" · ")
+        );
+      } else {
+        setMessage("לא נמצאו תלמידות לפי כיתה/מסלול. אפשר לשייך תלמידה ידנית למטה.");
+      }
       router.refresh();
     }
     setSyncing(false);
@@ -575,7 +601,6 @@ export function AttendanceBoard({
               navigate(
                 buildParams({
                   mode: value,
-                  studentId: value === "group" ? undefined : studentId,
                   occurrenceId: undefined,
                 })
               )
@@ -591,16 +616,24 @@ export function AttendanceBoard({
           </button>
         ))}
       </div>
-      <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
-        {mode === "single" && (
-          <Combobox
-            label="תלמידה"
-            value={studentId ?? ""}
-            onChange={(v) => updateFilter("studentId", v || undefined)}
-            options={allStudents.map((s) => ({ value: s.id, label: s.full_name }))}
-            emptyLabel="בחרי תלמידה"
-          />
-        )}
+      <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+        <Combobox
+          label="תלמידה"
+          value={studentId ?? ""}
+          onChange={(v) => updateFilter("studentId", v || undefined)}
+          options={allStudents.map((s) => ({ value: s.id, label: s.full_name }))}
+          emptyLabel="כל התלמידות"
+        />
+        <Combobox
+          label="שיעור"
+          value={lessonId ?? ""}
+          onChange={(v) => updateFilter("lessonId", v || undefined)}
+          options={lessons.map((l) => ({
+            value: l.id,
+            label: formatLessonOptionLabel(l),
+          }))}
+          emptyLabel="כל השיעורים"
+        />
         <Combobox
           label="כיתה"
           value={classId ?? ""}
@@ -612,6 +645,12 @@ export function AttendanceBoard({
           value={trackId ?? ""}
           onChange={(v) => updateFilter("trackId", v || undefined)}
           options={tracks.map((t) => ({ value: t.id, label: t.name }))}
+        />
+        <Combobox
+          label="התמחות"
+          value={specializationId ?? ""}
+          onChange={(v) => updateFilter("specializationId", v || undefined)}
+          options={specializations.map((s) => ({ value: s.id, label: s.name }))}
         />
         <Combobox
           label="מורה"
@@ -626,6 +665,9 @@ export function AttendanceBoard({
           options={subjects.map((s) => ({ value: s, label: s }))}
         />
       </div>
+      <p className="font-caption text-caption text-on-surface-variant">
+        הסינון מצמצם את היומן לימים ולשיעורים שתואמים לחיפוש — כולל שיוכים של תלמידה ספציפית.
+      </p>
       <p className="font-caption text-caption text-on-surface-variant/70">
         מקלדת: נ/N נוכחת · ע/A איחור · ן/X נעדרה · ↑↓ מעבר
       </p>
@@ -646,6 +688,35 @@ export function AttendanceBoard({
         <span className={cn(activeOccurrenceId && "font-bold text-primary")}>שלב 3: רישום</span>
       </div>
 
+      {(classId || trackId || specializationId || teacherId || subject || studentId || lessonId) && (
+        <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-primary/20 bg-primary/5 px-4 py-2.5">
+          <p className="font-body-sm text-body-sm text-primary">
+            היומן מציג רק שיעורים ושיוכים לפי הסינון הפעיל.
+          </p>
+          <Button
+            type="button"
+            size="sm"
+            variant="secondary"
+            onClick={() =>
+              navigate(
+                buildParams({
+                  classId: undefined,
+                  trackId: undefined,
+                  specializationId: undefined,
+                  teacherId: undefined,
+                  subject: undefined,
+                  studentId: undefined,
+                  lessonId: undefined,
+                  occurrenceId: undefined,
+                })
+              )
+            }
+          >
+            נקה סינון
+          </Button>
+        </div>
+      )}
+
       {/* desktop filters */}
       <div className="hidden overflow-hidden rounded-xl border border-outline-variant/30 bg-surface-container-lowest shadow-tactile-md md:block">
         <button
@@ -655,7 +726,7 @@ export function AttendanceBoard({
         >
           <span className="flex items-center gap-2">
             <Icon name="filter_list" className="text-secondary" />
-            סינון (כיתה, מורה, מקצוע…)
+            סינון — היומן מציג רק את מה שתואם
           </span>
           <Icon
             name="expand_more"
@@ -901,6 +972,15 @@ export function AttendanceBoard({
                   <Icon name="group_add" className="text-[18px]" />
                   {syncing ? "משייכת…" : "שייך תלמידות אוטומטית לפי כיתה/מסלול"}
                 </Button>
+                {activeLesson && (
+                  <div className="mx-auto mt-4 max-w-md text-right">
+                    <AssignStudentToLesson
+                      lessonId={activeLesson.lessonId}
+                      students={allStudents}
+                      defaultStartDate={selectedDate}
+                    />
+                  </div>
+                )}
               </div>
             )}
 
@@ -993,6 +1073,16 @@ export function AttendanceBoard({
                 );
               })}
             </div>
+
+            {activeLesson && lessonStudents.length > 0 && (
+              <div className="mt-4">
+                <AssignStudentToLesson
+                  lessonId={activeLesson.lessonId}
+                  students={allStudents}
+                  defaultStartDate={selectedDate}
+                />
+              </div>
+            )}
 
             {noteLessonId && lessonStudents.length > 0 && (
               <div className="mt-6 rounded-xl border-l-4 border-l-primary bg-surface-container-low/60 p-stack_md">

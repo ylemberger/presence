@@ -75,9 +75,9 @@ export function studentMatchesLesson(placement: Placement, lesson: LessonScope):
 export function lessonMismatchMessage(placement: Placement, lesson: LessonScope): string | null {
   if (studentMatchesLesson(placement, lesson)) return null;
   if (lesson.for_psychology) {
-    return "השיעור מיועד לפסיכולוגיה והתלמידה אינה מסומנת כפסיכולוגיה.";
+    return "השיעור מיועד לפסיכולוגיה והתלמידה אינה מסומנת כפסיכולוגיה. אם תאשרי, השיעור ייספר כחיוב נוכחות שלה בדוחות.";
   }
-  return "התלמידה לא אמורה להיות בשיעור הזה לפי השכבה/כיתה/מסלול/התמחות שלה.";
+  return "התלמידה לא שייכת לכיתה/מסלול/התמחות של השיעור. אם תאשרי, השיעור ייספר כחיוב נוכחות שלה בדוחות.";
 }
 
 function placementFromRow(p: {
@@ -185,14 +185,13 @@ export async function autoAssignStudentsToLesson(
   startDate?: string
 ) {
   const supabase = await createClient();
-  const effectiveFrom = startDate || todayIso();
 
   const [{ data: lesson }, { data: placements }, { data: existingLinks }, { data: audience }] =
     await Promise.all([
       supabase
         .from("lessons")
         .select(
-          "id, class_id, track_id, specialization_id, billing_type, grade_id, for_psychology"
+          "id, class_id, track_id, specialization_id, billing_type, grade_id, for_psychology, activity_ranges(start_date)"
         )
         .eq("id", lessonId)
         .single(),
@@ -205,7 +204,7 @@ export async function autoAssignStudentsToLesson(
         .is("end_date", null),
       supabase
         .from("student_lesson_assignments")
-        .select("student_id")
+        .select("id, student_id, start_date, assignment_type")
         .eq("lesson_id", lessonId)
         .is("end_date", null),
       supabase
@@ -215,6 +214,13 @@ export async function autoAssignStudentsToLesson(
     ]);
 
   if (!lesson) return { assigned: 0 };
+
+  const rawRange = lesson.activity_ranges as unknown;
+  const range = (Array.isArray(rawRange) ? rawRange[0] : rawRange) as {
+    start_date: string;
+  } | null;
+  const effectiveFrom = startDate || range?.start_date || todayIso();
+
   const scoped = withAudience(lesson, audience ?? []);
 
   const already = new Set((existingLinks ?? []).map((r) => r.student_id));
@@ -229,11 +235,26 @@ export async function autoAssignStudentsToLesson(
       end_date: null,
     }));
 
-  if (rows.length === 0) return { assigned: 0 };
+  if (rows.length > 0) {
+    const { error } = await supabase.from("student_lesson_assignments").insert(rows);
+    if (error) throw new Error(error.message);
+  }
 
-  const { error } = await supabase.from("student_lesson_assignments").insert(rows);
-  if (error) throw new Error(error.message);
-  return { assigned: rows.length };
+  const toBackfill = (existingLinks ?? []).filter(
+    (r) => r.assignment_type === "automatic" && r.start_date > effectiveFrom
+  );
+  if (toBackfill.length > 0) {
+    const { error } = await supabase
+      .from("student_lesson_assignments")
+      .update({ start_date: effectiveFrom })
+      .in(
+        "id",
+        toBackfill.map((r) => r.id)
+      );
+    if (error) throw new Error(error.message);
+  }
+
+  return { assigned: rows.length, backfilled: toBackfill.length };
 }
 
 export async function refreshAutomaticLessonAssignmentsForStudent(

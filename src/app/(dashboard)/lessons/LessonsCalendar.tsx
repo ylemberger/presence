@@ -12,12 +12,21 @@ import {
   shiftHebrewMonth,
   todayIso,
 } from "@/lib/dates/hebrew";
-import { OCCURRENCE_STATUS_LABELS } from "@/lib/constants";
+import { BILLING_TYPE_LABELS, DAY_OF_WEEK_LABELS, OCCURRENCE_STATUS_LABELS } from "@/lib/constants";
 import { formatLessonHours } from "@/lib/lessons/hours";
 import { cn } from "@/lib/cn";
 import { completeOccurrenceAction } from "../actions";
 import type { Lesson } from "@/types/database";
 import { Icon } from "@/components/ui/Icon";
+import { AssignStudentToLesson } from "./AssignStudentToLesson";
+
+export type LessonTemplateCard = Lesson & {
+  teacherName: string;
+  gradeName: string;
+  audienceLabel: string;
+  rangeName: string;
+  studentCount: number;
+};
 
 interface OccurrenceRow {
   id: string;
@@ -26,14 +35,17 @@ interface OccurrenceRow {
   notes: string | null;
   lesson_id: string;
   subject: string;
+  teacherName?: string;
+  hoursLabel?: string;
 }
 
 interface LessonsCalendarProps {
   initialMonthIso?: string;
   occurrences: OccurrenceRow[];
-  lessons: Lesson[];
+  lessons: LessonTemplateCard[];
   monthQuery: string;
   holidayDates?: string[];
+  students?: { id: string; full_name: string }[];
 }
 
 const STATUS_META: Record<string, { pillClass: string; icon: string; label: string }> = {
@@ -55,6 +67,7 @@ export function LessonsCalendar({
   lessons,
   monthQuery,
   holidayDates = [],
+  students = [],
 }: LessonsCalendarProps) {
   const router = useRouter();
   const seed = hebrewMonthFromIso(initialMonthIso || todayIso());
@@ -291,6 +304,9 @@ export function LessonsCalendar({
                           {meta.label ?? label}
                         </span>
                       </h4>
+                      <p className="mt-1 font-caption text-caption text-on-surface-variant">
+                        {[o.teacherName, o.hoursLabel].filter(Boolean).join(" · ")}
+                      </p>
                       {o.notes && (
                         <p className="mt-1 font-body-md text-body-md text-on-surface-variant">
                           <Icon name="info" className="ml-1 align-middle text-[16px]" />
@@ -326,17 +342,52 @@ export function LessonsCalendar({
             </p>
           ) : (
             <ul className="flex flex-col gap-2 font-body-md text-body-md">
-              {lessons.map((l) => (
-                <li
-                  key={l.id}
-                  className="flex items-center justify-between gap-2 rounded-lg border border-outline-variant/30 bg-surface-container-low px-3 py-2 transition-colors hover:border-secondary/40"
-                >
-                  <span className="font-semibold text-on-surface">{l.subject}</span>
-                  <span className="font-caption text-caption text-on-surface-variant">
-                    {formatLessonHours(l.lesson_number, l.period_count ?? 1)}
-                  </span>
-                </li>
-              ))}
+              {lessons.map((l) => {
+                const day = DAY_OF_WEEK_LABELS[l.day_of_week] ?? "";
+                const billing =
+                  BILLING_TYPE_LABELS[l.billing_type as keyof typeof BILLING_TYPE_LABELS] ??
+                  l.billing_type;
+                const monthOccCount = occurrences.filter((o) => o.lesson_id === l.id).length;
+                return (
+                  <li
+                    key={l.id}
+                    className="rounded-lg border border-outline-variant/30 bg-surface-container-low px-3 py-3 transition-colors hover:border-secondary/40"
+                  >
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="min-w-0">
+                        <div className="font-semibold text-on-surface">{l.subject}</div>
+                        <p className="mt-0.5 font-caption text-caption text-on-surface-variant">
+                          {[
+                            day ? `יום ${day}` : "",
+                            formatLessonHours(l.lesson_number, l.period_count ?? 1),
+                            billing,
+                            l.for_psychology ? "פסיכולוגיה" : "",
+                          ]
+                            .filter(Boolean)
+                            .join(" · ")}
+                        </p>
+                        <p className="mt-0.5 font-caption text-caption text-on-surface-variant">
+                          {[l.teacherName, l.audienceLabel, l.rangeName].filter(Boolean).join(" · ")}
+                        </p>
+                        <p className="mt-0.5 font-caption text-caption text-on-surface-variant">
+                          {l.studentCount === 0
+                            ? "אין תלמידות משויכות"
+                            : `${l.studentCount} תלמידות משויכות`}
+                          {" · "}
+                          {monthOccCount === 0
+                            ? "אין מופעים בחודש זה"
+                            : `${monthOccCount} מופעים בחודש`}
+                        </p>
+                      </div>
+                    </div>
+                    {students.length > 0 && (
+                      <div className="mt-2">
+                        <AssignStudentToLesson lessonId={l.id} students={students} />
+                      </div>
+                    )}
+                  </li>
+                );
+              })}
             </ul>
           )}
         </section>

@@ -21,6 +21,9 @@ import {
   audienceMapFromRows,
   lessonMatchesAudienceFilter,
 } from "@/lib/lessons/autoAssign";
+import { describeAudienceScope } from "@/lib/validation";
+import { formatLessonHours } from "@/lib/lessons/hours";
+import type { LessonTemplateCard } from "./LessonsCalendar";
 
 interface Props {
   searchParams: {
@@ -60,7 +63,7 @@ export default async function LessonsPage({ searchParams }: Props) {
   const to = searchParams.to || month.rangeEnd;
   const today = todayIso();
 
-  const [lessonsRes, teachers, grades, classes, tracks, specializations, ranges, rules, holidays, audienceRes] =
+  const [lessonsRes, teachers, grades, classes, tracks, specializations, ranges, rules, holidays, audienceRes, yearStudentsRes] =
     await Promise.all([
       supabase
         .from("lessons")
@@ -95,6 +98,11 @@ export default async function LessonsPage({ searchParams }: Props) {
         .select("start_date, end_date")
         .eq("academic_year_id", activeYear.id),
       supabase.from("lesson_audience").select("lesson_id, class_id, track_id, specialization_id"),
+      supabase
+        .from("student_assignments")
+        .select("student_id, students(id, full_name, is_active)")
+        .eq("academic_year_id", activeYear.id)
+        .is("end_date", null),
     ]);
 
   type LessonRow = Lesson & {
@@ -129,6 +137,63 @@ export default async function LessonsPage({ searchParams }: Props) {
     a.localeCompare(b, "he")
   );
 
+  const { data: slaRows } =
+    filteredIds.length === 0
+      ? { data: [] as { lesson_id: string }[] }
+      : await supabase
+          .from("student_lesson_assignments")
+          .select("lesson_id")
+          .in("lesson_id", filteredIds)
+          .is("end_date", null);
+
+  const studentCountByLesson = new Map<string, number>();
+  for (const row of slaRows ?? []) {
+    studentCountByLesson.set(row.lesson_id, (studentCountByLesson.get(row.lesson_id) ?? 0) + 1);
+  }
+
+  const gradeById = new Map((grades.data ?? []).map((g) => [g.id, g.name]));
+  const classById = new Map((classes.data ?? []).map((c) => [c.id, c.name]));
+  const trackById = new Map((tracks.data ?? []).map((t) => [t.id, t.name]));
+  const specById = new Map((specializations.data ?? []).map((s) => [s.id, s.name]));
+  const rangeById = new Map((ranges.data ?? []).map((r) => [r.id, r.name]));
+
+  const yearStudents = [...new Map(
+    (yearStudentsRes.data ?? [])
+      .map((row) => {
+        const s = row.students as unknown as { id: string; full_name: string; is_active: boolean } | null;
+        return s?.is_active ? ([s.id, { id: s.id, full_name: s.full_name }] as const) : null;
+      })
+      .filter((v): v is readonly [string, { id: string; full_name: string }] => Boolean(v))
+  ).values()].sort((a, b) => a.full_name.localeCompare(b.full_name, "he"));
+
+  const lessonCards: LessonTemplateCard[] = filteredLessons.map((l) => {
+    const assignment = one<{ teacher_id: string; teachers?: unknown }>(l.teacher_teaching_assignments);
+    const teacherName = one<{ full_name: string }>(assignment?.teachers)?.full_name ?? "";
+    const audience = audienceForLesson(l, audienceByLesson);
+    const audienceLabel = describeAudienceScope({
+      billing_type: l.billing_type,
+      gradeName: gradeById.get(l.grade_id) ?? null,
+      classNames: audience.class_ids.map((id) => classById.get(id)).filter((n): n is string => Boolean(n)),
+      trackNames: audience.track_ids.map((id) => trackById.get(id)).filter((n): n is string => Boolean(n)),
+      specializationNames: audience.specialization_ids
+        .map((id) => specById.get(id))
+        .filter((n): n is string => Boolean(n)),
+      forPsychology: l.for_psychology,
+      wholeGrade:
+        audience.class_ids.length === 0 &&
+        audience.track_ids.length === 0 &&
+        audience.specialization_ids.length === 0,
+    });
+    return {
+      ...l,
+      teacherName,
+      gradeName: gradeById.get(l.grade_id) ?? "",
+      audienceLabel,
+      rangeName: rangeById.get(l.activity_range_id) ?? "",
+      studentCount: studentCountByLesson.get(l.id) ?? 0,
+    };
+  });
+
   const occurrenceSelect =
     "id, occurrence_date, status, notes, lesson_id, lessons!inner(subject, academic_year_id)";
 
@@ -155,6 +220,7 @@ export default async function LessonsPage({ searchParams }: Props) {
             .order("occurrence_date"),
         ]);
 
+  const lessonById = new Map(filteredLessons.map((l) => [l.id, l]));
   const mapOcc = (
     rows: {
       id: string;
@@ -165,19 +231,26 @@ export default async function LessonsPage({ searchParams }: Props) {
       lessons?: unknown;
     }[]
   ) =>
-    rows.map((o) => ({
-      id: o.id,
-      occurrence_date: o.occurrence_date,
-      status: o.status,
-      notes: o.notes,
-      lesson_id: o.lesson_id,
-      subject: one<{ subject: string }>(o.lessons)?.subject ?? "",
-    }));
+    rows.map((o) => {
+      const lesson = lessonById.get(o.lesson_id);
+      const assignment = one<{ teachers?: unknown }>(lesson?.teacher_teaching_assignments);
+      return {
+        id: o.id,
+        occurrence_date: o.occurrence_date,
+        status: o.status,
+        notes: o.notes,
+        lesson_id: o.lesson_id,
+        subject: one<{ subject: string }>(o.lessons)?.subject ?? lesson?.subject ?? "",
+        teacherName: one<{ full_name: string }>(assignment?.teachers)?.full_name ?? "",
+        hoursLabel: lesson
+          ? formatLessonHours(lesson.lesson_number, lesson.period_count ?? 1)
+          : "",
+      };
+    });
 
   const occurrenceRows = mapOcc(monthOcc.data ?? []);
   const todayRows = mapOcc(todayOcc.data ?? []);
 
-  const lessonById = new Map(filteredLessons.map((l) => [l.id, l]));
   const todayItems = todayRows
     .map((o) => {
       const lesson = lessonById.get(o.lesson_id);
@@ -301,9 +374,10 @@ export default async function LessonsPage({ searchParams }: Props) {
           <LessonsCalendar
             initialMonthIso={from}
             occurrences={occurrenceRows}
-            lessons={filteredLessons}
+            lessons={lessonCards}
             monthQuery={filterQuery.toString()}
             holidayDates={[...holidayDateSet(holidays.data ?? [])]}
+            students={yearStudents}
           />
         </div>
       </div>

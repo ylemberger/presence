@@ -36,6 +36,7 @@ interface Props {
     teacherId?: string;
     subject?: string;
     studentId?: string;
+    lessonId?: string;
     mode?: string;
   };
 }
@@ -66,7 +67,7 @@ export default async function AttendancePage({ searchParams }: Props) {
 
   const catalog = await getYearCatalog(activeYear.id);
 
-  const [{ data: yearStudents }, { data: monthOccurrencesRaw }, { data: holidayRows }, { data: audienceRows }] =
+  const [{ data: yearStudents }, { data: monthOccurrencesRaw }, { data: holidayRows }, { data: audienceRows }, { data: yearLessonRows }, { data: studentLinks }] =
     await Promise.all([
     supabase
       .from("student_assignments")
@@ -92,6 +93,17 @@ export default async function AttendancePage({ searchParams }: Props) {
       .select("start_date, end_date")
       .eq("academic_year_id", activeYear.id),
     supabase.from("lesson_audience").select("lesson_id, class_id, track_id, specialization_id"),
+    supabase
+      .from("lessons")
+      .select("id, subject, day_of_week, lesson_number, period_count")
+      .eq("academic_year_id", activeYear.id)
+      .order("subject"),
+    params.studentId
+      ? supabase
+          .from("student_lesson_assignments")
+          .select("lesson_id, start_date, end_date")
+          .eq("student_id", params.studentId)
+      : Promise.resolve({ data: [] as { lesson_id: string; start_date: string; end_date: string | null }[] }),
   ]);
 
   type LessonJoin = {
@@ -149,6 +161,18 @@ export default async function AttendancePage({ searchParams }: Props) {
   );
   if (params.teacherId) monthOccurrences = monthOccurrences.filter((o) => o.teacherId === params.teacherId);
   if (params.subject) monthOccurrences = monthOccurrences.filter((o) => o.subject === params.subject);
+  if (params.lessonId) monthOccurrences = monthOccurrences.filter((o) => o.lessonId === params.lessonId);
+  if (params.studentId) {
+    const links = studentLinks ?? [];
+    monthOccurrences = monthOccurrences.filter((o) =>
+      links.some(
+        (la) =>
+          la.lesson_id === o.lessonId &&
+          la.start_date <= o.date &&
+          (la.end_date === null || la.end_date >= o.date)
+      )
+    );
+  }
 
   const dayOccurrences = monthOccurrences.filter((o) => o.date === selectedDate);
 
@@ -200,7 +224,7 @@ export default async function AttendancePage({ searchParams }: Props) {
     }
     lessonStudents = [...map.values()].sort((a, b) => a.full_name.localeCompare(b.full_name, "he"));
 
-    if (mode === "single" && params.studentId) {
+    if (params.studentId) {
       lessonStudents = lessonStudents.filter((s) => s.id === params.studentId);
     }
   }
@@ -259,6 +283,16 @@ export default async function AttendancePage({ searchParams }: Props) {
       occsByDate.set(o.date, list);
     }
     for (const [date, occs] of occsByDate) {
+      if (params.studentId) {
+        const allDone = occs.every((o) =>
+          (monthAttendance ?? []).some(
+            (a) => a.lesson_occurrence_id === o.id && a.student_id === params.studentId
+          )
+        );
+        if (allDone) completeDates.push(date);
+        else partialDates.push(date);
+        continue;
+      }
       const withStudents = occs.filter((o) => (monthStudentCounts.get(o.id) ?? 0) > 0);
       if (withStudents.length === 0) continue;
       const allDone = withStudents.every((o) => {
@@ -332,9 +366,16 @@ export default async function AttendancePage({ searchParams }: Props) {
     noteBody = note?.body ?? "";
   }
 
-  const subjects = [...new Set(monthOccurrences.map((o) => o.subject))].sort((a, b) =>
+  const subjects = [...new Set((yearLessonRows ?? []).map((l) => l.subject))].sort((a, b) =>
     a.localeCompare(b, "he")
   );
+  const lessonOptions = (yearLessonRows ?? []).map((l) => ({
+    id: l.id,
+    subject: l.subject,
+    day_of_week: l.day_of_week,
+    lesson_number: l.lesson_number,
+    period_count: l.period_count,
+  }));
 
   const pendingSummary = await getPendingAttendanceSummary(activeYear.id);
 
@@ -357,11 +398,13 @@ export default async function AttendancePage({ searchParams }: Props) {
         teacherId={params.teacherId}
         subject={params.subject}
         studentId={params.studentId}
+        lessonId={params.lessonId}
         classes={catalog.classes}
         tracks={catalog.tracks}
         specializations={catalog.specializations}
         teachers={catalog.teachers}
         subjects={subjects}
+        lessons={lessonOptions}
         allStudents={allStudents}
         monthOccurrences={monthOccurrences}
         dayOccurrences={dayOccurrences.map((o) => ({

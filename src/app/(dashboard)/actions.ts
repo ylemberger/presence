@@ -6,6 +6,8 @@ import { setActiveAcademicYear, getActiveAcademicYear } from "@/lib/utils";
 import { syncTeacherSourceRecords } from "@/lib/sync/teachers";
 import { generateLessonOccurrences, applyHolidaysToYearOccurrences } from "@/lib/lessons/occurrences";
 import {
+  audienceForLesson,
+  audienceMapFromRows,
   autoAssignStudentsToLesson,
   lessonMismatchMessage,
   refreshAutomaticLessonAssignmentsForStudent,
@@ -645,7 +647,7 @@ export async function createStudentLessonAssignmentAction(formData: FormData) {
   if (isError(startDate)) return startDate;
   const force = formData.get("force_mismatch") === "1";
 
-  const [{ data: lesson }, { data: placement }] = await Promise.all([
+  const [{ data: lesson }, { data: placement }, { data: audience }] = await Promise.all([
     supabase
       .from("lessons")
       .select(
@@ -661,12 +663,20 @@ export async function createStudentLessonAssignmentAction(formData: FormData) {
       .eq("student_id", studentId)
       .is("end_date", null)
       .maybeSingle(),
+    supabase
+      .from("lesson_audience")
+      .select("lesson_id, class_id, track_id, specialization_id")
+      .eq("lesson_id", lessonId),
   ]);
 
   if (!lesson) return { error: "השיעור לא נמצא" };
   if (!placement) return { error: "לתלמידה אין שיבוץ פעיל בשנה הנוכחית" };
 
-  const mismatch = lessonMismatchMessage(placement, lesson);
+  const scoped = {
+    ...lesson,
+    audience: audienceForLesson(lesson, audienceMapFromRows(audience ?? [])),
+  };
+  const mismatch = lessonMismatchMessage(placement, scoped);
   if (mismatch && !force) {
     return { error: mismatch, code: "mismatch" as const };
   }
@@ -680,6 +690,9 @@ export async function createStudentLessonAssignmentAction(formData: FormData) {
   });
   if (error) return { error: error.message };
   revalidatePath(`/students/${studentId}`);
+  revalidatePath("/attendance");
+  revalidatePath("/reports");
+  revalidatePath("/lessons");
   return { success: true };
 }
 
@@ -690,6 +703,9 @@ export async function deleteStudentLessonAssignmentAction(id: string, studentId:
   const { error } = await supabase.from("student_lesson_assignments").delete().eq("id", id);
   if (error) return { error: error.message };
   revalidatePath(`/students/${studentId}`);
+  revalidatePath("/attendance");
+  revalidatePath("/reports");
+  revalidatePath("/lessons");
   return { success: true };
 }
 
@@ -1313,7 +1329,9 @@ export async function syncLessonStudentsAction(lessonId: string, academicYearId:
     const result = await autoAssignStudentsToLesson(lessonId, academicYearId);
     revalidatePath("/attendance");
     revalidatePath("/students");
-    return { success: true, assigned: result.assigned };
+    revalidatePath("/lessons");
+    revalidatePath("/reports");
+    return { success: true, assigned: result.assigned, backfilled: result.backfilled };
   } catch (e) {
     return { error: (e as Error).message };
   }

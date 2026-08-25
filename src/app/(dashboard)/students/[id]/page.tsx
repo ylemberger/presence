@@ -104,7 +104,14 @@ export default async function StudentDetailPage({ params }: Props) {
   }));
 
   let yearData = null;
-  let lessons: Array<{ id: string; subject: string }> = [];
+  let lessons: Array<{
+    id: string;
+    subject: string;
+    day_of_week?: number;
+    lesson_number?: number;
+    period_count?: number;
+    billing_type?: string;
+  }> = [];
   let weeklyTimetableEntries: TimetableEntry[] = [];
   let lessonAssignments: Array<{
     id: string;
@@ -145,7 +152,7 @@ export default async function StudentDetailPage({ params }: Props) {
       supabase.from("specializations").select("*").eq("academic_year_id", activeYear.id),
       supabase
         .from("lessons")
-        .select("id, subject")
+        .select("id, subject, day_of_week, lesson_number, period_count, billing_type")
         .eq("academic_year_id", activeYear.id)
         .order("subject"),
       supabase
