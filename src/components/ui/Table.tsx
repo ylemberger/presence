@@ -21,7 +21,7 @@ export function Table({ headers, children, className }: TableProps) {
               {headers.map((header) => (
                 <th
                   key={header}
-                  className="px-4 py-3 text-right text-caption font-semibold uppercase tracking-wide text-on-surface-variant"
+                  className="px-4 py-3 text-right text-caption font-semibold tracking-wide text-on-surface-variant"
                 >
                   {header}
                 </th>

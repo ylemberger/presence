@@ -14,7 +14,7 @@ type LoginButtonProps = {
 };
 
 const LOCALHOST_SETUP_ERROR =
-  "Supabase מפנה ל-Vercel במקום ל-localhost. ב-Supabase → Authentication → URL Configuration, תחת Redirect URLs, הוסיפי בדיוק: http://localhost:3000/auth/callback";
+  "ההתחברות המקומית לא הושלמה. פני למנהלת המערכת כדי לאפשר חזרה לכתובת המחשב אחרי התחברות.";
 
 export function LoginButton({ loginHintEmail }: LoginButtonProps) {
   const [error, setError] = useState<string | null>(null);
@@ -41,8 +41,9 @@ export function LoginButton({ loginHintEmail }: LoginButtonProps) {
 
       if (oauthError || !data.url) {
         setError(
-          oauthError?.message ||
-            "Google לא מופעל ב-Supabase. הדביקי Client ID ו-Secret ב-Authentication → Providers → Google."
+          oauthError?.message && /[א-ת]/.test(oauthError.message)
+            ? oauthError.message
+            : "ההתחברות נכשלה. נסי שוב, או פני למנהלת המערכת."
         );
         setLoading(false);
         return;
@@ -60,11 +61,7 @@ export function LoginButton({ loginHintEmail }: LoginButtonProps) {
 
       window.location.assign(authorizeUrl);
     } catch (err) {
-      setError(
-        err instanceof Error
-          ? err.message
-          : "ההתחברות נכשלה. בדקי חיבור לאינטרנט ונסי שוב."
-      );
+      setError("ההתחברות נכשלה. בדקי חיבור לאינטרנט ונסי שוב.");
       setLoading(false);
     }
   }
@@ -86,7 +83,7 @@ export function LoginButton({ loginHintEmail }: LoginButtonProps) {
         className="relative z-20 flex w-full cursor-pointer items-center justify-center gap-3 rounded-lg bg-primary px-6 py-4 font-label-md text-label-md text-on-primary shadow-tactile-md transition-all duration-300 hover:-translate-y-0.5 hover:bg-primary-container hover:shadow-tactile-lg disabled:cursor-not-allowed disabled:opacity-60"
       >
         <GoogleIcon />
-        {loading ? "מעבירה ל־Google..." : "התחברות עם Google"}
+        {loading ? "מעבירה להתחברות..." : "התחברות עם חשבון מורשה"}
       </button>
     </div>
   );

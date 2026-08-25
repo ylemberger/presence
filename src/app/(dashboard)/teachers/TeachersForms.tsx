@@ -52,7 +52,7 @@ export function TeachersForms({ yearId }: TeachersFormsProps) {
       <FloatField
         label="טלפון"
         name="phone"
-        placeholder="05X-XXXXXXX"
+        placeholder="050-0000000"
         dir="ltr"
         required
       />
@@ -60,7 +60,7 @@ export function TeachersForms({ yearId }: TeachersFormsProps) {
         label='דוא"ל'
         name="email"
         type="email"
-        placeholder="email@example.com"
+        placeholder="כתובת דואר"
         dir="ltr"
         required
       />

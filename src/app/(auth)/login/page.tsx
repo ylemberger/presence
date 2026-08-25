@@ -74,7 +74,7 @@ export default function LoginPage({
             כניסה למערכת
           </h2>
           <p className="mb-stack_lg font-body-md text-body-md text-on-surface-variant">
-            יש להתחבר עם חשבון Google מורשה בכדי לגשת למערכת ניהול הנוכחות.
+            יש להתחבר עם חשבון מורשה כדי לגשת למערכת ניהול הנוכחות.
           </p>
 
           {loginHintEmail && (
