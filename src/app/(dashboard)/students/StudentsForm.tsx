@@ -3,7 +3,8 @@
 import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/Button";
-import { Input, Select } from "@/components/ui/Input";
+import { Combobox } from "@/components/ui/Combobox";
+import { Input } from "@/components/ui/Input";
 import { HebrewDateInput } from "@/components/ui/HebrewDateInput";
 import { createStudentAction } from "../actions";
 import type { Grade, Class, Track, Specialization } from "@/types/database";
@@ -111,72 +112,59 @@ export function StudentsForm({
         )}
 
         <div className="grid gap-3 sm:grid-cols-2">
-          <Select
+          <Combobox
             label="שכבה"
             name="grade_id"
             required
             value={gradeId}
-            onChange={(e) => {
-              setGradeId(e.target.value);
+            onChange={(v) => {
+              setGradeId(v);
               setClassId("");
             }}
-            options={[
-              { value: "", label: grades.length ? "בחרי שכבה" : "אין שכבות בהגדרות" },
-              ...grades.map((g) => ({ value: g.id, label: g.name })),
-            ]}
+            options={grades.map((g) => ({ value: g.id, label: g.name }))}
+            emptyLabel={grades.length ? "בחרי שכבה" : "אין שכבות בהגדרות"}
           />
-          <Select
+          <Combobox
             label="כיתה"
             name="class_id"
             required
             value={classId}
-            onChange={(e) => {
-              const next = e.target.value;
-              setClassId(next);
-              const selected = classes.find((c) => c.id === next);
+            onChange={(v) => {
+              setClassId(v);
+              const selected = classes.find((c) => c.id === v);
               if (selected && selected.grade_id !== gradeId) {
                 setGradeId(selected.grade_id);
               }
             }}
-            disabled={classOptions.length === 0}
-            options={[
-              {
-                value: "",
-                label: classOptions.length
-                  ? gradeId
-                    ? "בחרי כיתה"
-                    : "בחרי כיתה (מכל השכבות)"
-                  : gradeId
-                    ? "אין כיתות לשכבה זו בהגדרות"
-                    : "אין כיתות בהגדרות",
-              },
-              ...classOptions,
-            ]}
+            options={classOptions}
+            emptyLabel={
+              classOptions.length
+                ? gradeId
+                  ? "בחרי כיתה"
+                  : "בחרי כיתה (מכל השכבות)"
+                : gradeId
+                  ? "אין כיתות לשכבה זו בהגדרות"
+                  : "אין כיתות בהגדרות"
+            }
           />
-          <Select
+          <Combobox
             label="מסלול"
             name="track_id"
             required
-            options={[
-              { value: "", label: tracks.length ? "בחרי מסלול" : "אין מסלולים בהגדרות" },
-              ...tracks.map((t) => ({ value: t.id, label: t.name })),
-            ]}
+            options={tracks.map((t) => ({ value: t.id, label: t.name }))}
+            emptyLabel={tracks.length ? "בחרי מסלול" : "אין מסלולים בהגדרות"}
           />
-          <Select
+          <Combobox
             label="התמחות"
             name="specialization_id"
-            options={[
-              { value: "", label: "ללא התמחות" },
-              ...specializations.map((s) => ({ value: s.id, label: s.name })),
-            ]}
+            options={specializations.map((s) => ({ value: s.id, label: s.name }))}
+            emptyLabel="ללא התמחות"
           />
-          <Select
+          <Combobox
             label="התמחות נוספת"
             name="secondary_specialization_id"
-            options={[
-              { value: "", label: "ללא" },
-              ...specializations.map((s) => ({ value: s.id, label: s.name })),
-            ]}
+            options={specializations.map((s) => ({ value: s.id, label: s.name }))}
+            emptyLabel="ללא"
           />
           <label className="flex items-center gap-2 self-end pb-2 text-sm text-slate-700">
             <input type="checkbox" name="is_psychology" className="rounded border-stone-300" />

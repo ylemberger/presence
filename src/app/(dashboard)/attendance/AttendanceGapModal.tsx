@@ -5,10 +5,7 @@ import { useRouter } from "next/navigation";
 import { Modal } from "@/components/ui/Modal";
 import { Button } from "@/components/ui/Button";
 import { formatGregorianDate, formatHebrewDate } from "@/lib/dates/hebrew";
-import {
-  cancelOccurrenceAction,
-  setOccurrenceGapHandlingAction,
-} from "../actions";
+import { setOccurrenceGapHandlingAction } from "../actions";
 
 export type GapItem = {
   lessonId: string;
@@ -30,14 +27,11 @@ export function AttendanceGapModal({ gap, soft, onResolved, onMarkAttendance }: 
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  async function run(action: "cancel" | "in_treatment" | "continued") {
+  async function run(action: "in_treatment" | "continued") {
     setBusy(true);
     setError(null);
     try {
-      const result =
-        action === "cancel"
-          ? await cancelOccurrenceAction(gap.occurrenceId)
-          : await setOccurrenceGapHandlingAction(gap.occurrenceId, action);
+      const result = await setOccurrenceGapHandlingAction(gap.occurrenceId, action);
       if (result && "error" in result && result.error) {
         setError(result.error);
         return;
@@ -78,15 +72,6 @@ export function AttendanceGapModal({ gap, soft, onResolved, onMarkAttendance }: 
         <div className="grid gap-2 sm:grid-cols-2">
           <Button
             type="button"
-            variant="secondary"
-            disabled={busy}
-            onClick={() => run("cancel")}
-            className="justify-center py-3"
-          >
-            ביטול חד־פעמי
-          </Button>
-          <Button
-            type="button"
             disabled={busy}
             onClick={() => onMarkAttendance(gap)}
             className="justify-center py-3"
@@ -107,7 +92,7 @@ export function AttendanceGapModal({ gap, soft, onResolved, onMarkAttendance }: 
             variant="secondary"
             disabled={busy}
             onClick={() => run("continued")}
-            className="justify-center py-3"
+            className="justify-center py-3 sm:col-span-2"
           >
             המשך בכל זאת
           </Button>

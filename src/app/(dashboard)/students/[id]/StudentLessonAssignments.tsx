@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/Button";
-import { Select } from "@/components/ui/Input";
+import { Combobox } from "@/components/ui/Combobox";
 import { HebrewDateInput } from "@/components/ui/HebrewDateInput";
 import { DeleteButton } from "@/components/ui/DeleteButton";
 import {
@@ -81,14 +81,12 @@ export function StudentLessonAssignments({
         שיוך אוטומטי נוצר כשפותחים שיעור לקבוצה של התלמידה. כאן אפשר להוסיף שיוך ידני חריג.
       </p>
       <form onSubmit={handleSubmit} className="flex flex-col gap-3">
-        <Select
+        <Combobox
           label="שיעור"
           name="lesson_id"
           required
-          options={[
-            { value: "", label: "בחרי שיעור" },
-            ...lessons.map((l) => ({ value: l.id, label: l.subject })),
-          ]}
+          options={lessons.map((l) => ({ value: l.id, label: l.subject }))}
+          emptyLabel="בחרי שיעור"
         />
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
           <HebrewDateInput label="מתאריך" name="start_date" required />

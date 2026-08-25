@@ -2,6 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/Button";
+import { Combobox } from "@/components/ui/Combobox";
 import { Select } from "@/components/ui/Input";
 import { Section } from "@/components/ui/Section";
 import { Icon } from "@/components/ui/Icon";
@@ -69,74 +70,53 @@ export function TimetableFilters({
         onSubmit={handleSubmit}
         className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4"
       >
-      <Select
+      <Combobox
         label="שכבה/כיתה"
         name="classId"
         defaultValue={defaults.classId ?? ""}
-        options={[
-          { value: "", label: "הכל" },
-          ...classes.map((c) => ({ value: c.id, label: c.name })),
-        ]}
+        options={classes.map((c) => ({ value: c.id, label: c.name }))}
       />
 
-      <Select
+      <Combobox
         label="מסלול"
         name="trackId"
         defaultValue={defaults.trackId ?? ""}
-        options={[
-          { value: "", label: "הכל" },
-          ...tracks.map((t) => ({ value: t.id, label: t.name })),
-        ]}
+        options={tracks.map((t) => ({ value: t.id, label: t.name }))}
       />
 
-      <Select
+      <Combobox
         label="התמחות"
         name="specializationId"
         defaultValue={defaults.specializationId ?? ""}
-        options={[
-          { value: "", label: "הכל" },
-          ...specializations.map((s) => ({ value: s.id, label: s.name })),
-        ]}
+        options={specializations.map((s) => ({ value: s.id, label: s.name }))}
       />
 
-      <Select
+      <Combobox
         label="מורה"
         name="teacherId"
         defaultValue={defaults.teacherId ?? ""}
-        options={[
-          { value: "", label: "הכל" },
-          ...teachers.map((t) => ({ value: t.id, label: t.name })),
-        ]}
+        options={teachers.map((t) => ({ value: t.id, label: t.name }))}
       />
 
-      <Select
+      <Combobox
         label="מקצוע"
         name="subject"
         defaultValue={defaults.subject ?? ""}
-        options={[
-          { value: "", label: "הכל" },
-          ...subjects.map((s) => ({ value: s, label: s })),
-        ]}
+        options={subjects.map((s) => ({ value: s, label: s }))}
       />
 
-      <Select
+      <Combobox
         label="תלמידה"
         name="studentId"
         defaultValue={defaults.studentId ?? ""}
-        options={[
-          { value: "", label: "הכל" },
-          ...students.map((s) => ({ value: s.id, label: s.full_name })),
-        ]}
+        options={students.map((s) => ({ value: s.id, label: s.full_name }))}
       />
 
-      <Select
+      <Combobox
         label="טווח פעילות"
         name="activityRangeId"
         defaultValue={defaults.activityRangeId ?? ""}
-        options={[
-          { value: "", label: "הכל" },
-          ...activityRanges.map((r) => ({ value: r.id, label: r.name })),
-        ]}
+        options={activityRanges.map((r) => ({ value: r.id, label: r.name }))}
       />
 
       <Select

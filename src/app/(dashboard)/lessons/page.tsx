@@ -2,18 +2,35 @@ import { createClient } from "@/lib/supabase/server";
 import { getActiveAcademicYear } from "@/lib/utils";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { Section } from "@/components/ui/Section";
-import { GenerateOccurrencesButton } from "./GenerateOccurrencesButton";
 import { LessonsCalendar } from "./LessonsCalendar";
 import { LessonsForm } from "./LessonsForm";
+import { LessonsFilters } from "./LessonsFilters";
 import { filterFixedGrades } from "@/lib/years/grades";
 import {
   buildHebrewMonth,
+  formatHebrewDate,
   hebrewMonthFromIso,
   todayIso,
 } from "@/lib/dates/hebrew";
+import { DAY_OF_WEEK_LABELS } from "@/lib/constants";
+import { Icon } from "@/components/ui/Icon";
+import type { Lesson } from "@/types/database";
 
 interface Props {
-  searchParams: { from?: string; to?: string };
+  searchParams: {
+    from?: string;
+    to?: string;
+    classId?: string;
+    trackId?: string;
+    specializationId?: string;
+    teacherId?: string;
+    subject?: string;
+  };
+}
+
+function one<T>(v: unknown): T | null {
+  if (!v) return null;
+  return (Array.isArray(v) ? v[0] : v) as T;
 }
 
 export default async function LessonsPage({ searchParams }: Props) {
@@ -35,12 +52,21 @@ export default async function LessonsPage({ searchParams }: Props) {
   const month = buildHebrewMonth(monthSeed.year, monthSeed.month);
   const from = searchParams.from || month.rangeStart;
   const to = searchParams.to || month.rangeEnd;
+  const today = todayIso();
 
-  const [lessons, teachers, grades, classes, tracks, specializations, ranges, rules, occurrences] =
+  const [lessonsRes, teachers, grades, classes, tracks, specializations, ranges, rules] =
     await Promise.all([
       supabase
         .from("lessons")
-        .select("*")
+        .select(
+          `
+          *,
+          teacher_teaching_assignments(teacher_id, teachers(full_name)),
+          classes(name),
+          tracks(name),
+          specializations(name)
+        `
+        )
         .eq("academic_year_id", activeYear.id)
         .order("day_of_week"),
       supabase.from("teachers").select("id, full_name").order("full_name"),
@@ -58,23 +84,104 @@ export default async function LessonsPage({ searchParams }: Props) {
         .order("name"),
       supabase.from("activity_ranges").select("*").eq("academic_year_id", activeYear.id),
       supabase.from("attendance_rules").select("*"),
-      supabase
-        .from("lesson_occurrences")
-        .select("id, occurrence_date, status, notes, lesson_id, lessons!inner(subject, academic_year_id)")
-        .eq("lessons.academic_year_id", activeYear.id)
-        .gte("occurrence_date", from)
-        .lte("occurrence_date", to)
-        .order("occurrence_date"),
     ]);
 
-  const occurrenceRows = (occurrences.data ?? []).map((o) => ({
-    id: o.id,
-    occurrence_date: o.occurrence_date,
-    status: o.status,
-    notes: o.notes,
-    lesson_id: o.lesson_id,
-    subject: (o.lessons as unknown as { subject: string } | null)?.subject ?? "",
-  }));
+  type LessonRow = Lesson & {
+    teacher_teaching_assignments?: unknown;
+    classes?: unknown;
+    tracks?: unknown;
+    specializations?: unknown;
+  };
+
+  const allLessons = (lessonsRes.data ?? []) as LessonRow[];
+  const filteredLessons = allLessons.filter((l) => {
+    if (searchParams.classId && l.class_id !== searchParams.classId) return false;
+    if (searchParams.trackId && l.track_id !== searchParams.trackId) return false;
+    if (searchParams.specializationId && l.specialization_id !== searchParams.specializationId) {
+      return false;
+    }
+    if (searchParams.subject && l.subject !== searchParams.subject) return false;
+    if (searchParams.teacherId) {
+      const assignment = one<{ teacher_id: string }>(l.teacher_teaching_assignments);
+      if (assignment?.teacher_id !== searchParams.teacherId) return false;
+    }
+    return true;
+  });
+
+  const filteredIds = filteredLessons.map((l) => l.id);
+  const subjects = [...new Set(allLessons.map((l) => l.subject))].sort((a, b) =>
+    a.localeCompare(b, "he")
+  );
+
+  const occurrenceSelect =
+    "id, occurrence_date, status, notes, lesson_id, lessons!inner(subject, academic_year_id)";
+
+  const [monthOcc, todayOcc] =
+    filteredIds.length === 0
+      ? [{ data: [] }, { data: [] }]
+      : await Promise.all([
+          supabase
+            .from("lesson_occurrences")
+            .select(occurrenceSelect)
+            .eq("lessons.academic_year_id", activeYear.id)
+            .in("lesson_id", filteredIds)
+            .neq("status", "cancelled")
+            .gte("occurrence_date", from)
+            .lte("occurrence_date", to)
+            .order("occurrence_date"),
+          supabase
+            .from("lesson_occurrences")
+            .select(occurrenceSelect)
+            .eq("lessons.academic_year_id", activeYear.id)
+            .in("lesson_id", filteredIds)
+            .neq("status", "cancelled")
+            .eq("occurrence_date", today)
+            .order("occurrence_date"),
+        ]);
+
+  const mapOcc = (
+    rows: {
+      id: string;
+      occurrence_date: string;
+      status: string;
+      notes: string | null;
+      lesson_id: string;
+      lessons?: unknown;
+    }[]
+  ) =>
+    rows.map((o) => ({
+      id: o.id,
+      occurrence_date: o.occurrence_date,
+      status: o.status,
+      notes: o.notes,
+      lesson_id: o.lesson_id,
+      subject: one<{ subject: string }>(o.lessons)?.subject ?? "",
+    }));
+
+  const occurrenceRows = mapOcc(monthOcc.data ?? []);
+  const todayRows = mapOcc(todayOcc.data ?? []);
+
+  const lessonById = new Map(filteredLessons.map((l) => [l.id, l]));
+  const todayItems = todayRows
+    .map((o) => {
+      const lesson = lessonById.get(o.lesson_id);
+      const assignment = one<{
+        teacher_id: string;
+        teachers?: unknown;
+      }>(lesson?.teacher_teaching_assignments);
+      const teacherName = one<{ full_name: string }>(assignment?.teachers)?.full_name ?? "";
+      const cls = one<{ name: string }>(lesson?.classes)?.name;
+      const track = one<{ name: string }>(lesson?.tracks)?.name;
+      const spec = one<{ name: string }>(lesson?.specializations)?.name;
+      const audience = spec ?? cls ?? track ?? "";
+      return {
+        ...o,
+        lessonNumber: lesson?.lesson_number ?? 0,
+        teacherName,
+        audience,
+      };
+    })
+    .sort((a, b) => a.lessonNumber - b.lessonNumber);
 
   const formProps = {
     yearId: activeYear.id,
@@ -87,16 +194,79 @@ export default async function LessonsPage({ searchParams }: Props) {
     rules: rules.data ?? [],
   };
 
+  const filterQuery = new URLSearchParams();
+  if (searchParams.classId) filterQuery.set("classId", searchParams.classId);
+  if (searchParams.trackId) filterQuery.set("trackId", searchParams.trackId);
+  if (searchParams.specializationId) {
+    filterQuery.set("specializationId", searchParams.specializationId);
+  }
+  if (searchParams.teacherId) filterQuery.set("teacherId", searchParams.teacherId);
+  if (searchParams.subject) filterQuery.set("subject", searchParams.subject);
+
+  const weekday = DAY_OF_WEEK_LABELS[new Date(`${today}T12:00:00`).getDay()] ?? "";
+
   return (
     <div className="flex flex-col gap-stack_lg">
       <PageHeader
         title="יומן שיעורים עברי"
-        description="ניהול מערכת השעות, מופעים חריגים ומעקב נוכחות מורות."
-        actions={<GenerateOccurrencesButton academicYearId={activeYear.id} />}
+        description="יצירת שיעור פותחת אוטומטית את כל המופעים בטווח הפעילות שנבחר."
+      />
+
+      <LessonsFilters
+        classes={(classes.data ?? []).map((c) => ({ id: c.id, name: c.name }))}
+        tracks={(tracks.data ?? []).map((t) => ({ id: t.id, name: t.name }))}
+        specializations={(specializations.data ?? []).map((s) => ({ id: s.id, name: s.name }))}
+        teachers={(teachers.data ?? []).map((t) => ({ id: t.id, name: t.full_name }))}
+        subjects={subjects}
+        monthFrom={from}
+        monthTo={to}
+        defaults={{
+          classId: searchParams.classId,
+          trackId: searchParams.trackId,
+          specializationId: searchParams.specializationId,
+          teacherId: searchParams.teacherId,
+          subject: searchParams.subject,
+        }}
       />
 
       <div className="grid grid-cols-1 gap-gutter xl:grid-cols-12">
         <div className="flex flex-col gap-gutter xl:col-span-4">
+          <Section
+            icon="today"
+            title="שיעורי היום"
+            subtitle={`${formatHebrewDate(today)}${weekday ? ` · יום ${weekday}` : ""}`}
+          >
+            {todayItems.length === 0 ? (
+              <div className="flex flex-col items-center gap-2 rounded-lg border border-dashed border-outline-variant/50 bg-surface-container-low/60 px-4 py-8 text-center">
+                <Icon name="event_available" className="text-[32px] text-secondary" />
+                <p className="font-body-md text-body-md text-on-surface-variant">
+                  אין שיעורים היום{filterQuery.toString() ? " לפי הסינון" : ""}.
+                </p>
+              </div>
+            ) : (
+              <ul className="flex flex-col gap-2">
+                {todayItems.map((item) => (
+                  <li
+                    key={item.id}
+                    className="rounded-lg border border-outline-variant/40 bg-surface-container-low/50 px-3 py-2.5"
+                  >
+                    <div className="flex items-baseline justify-between gap-2">
+                      <span className="font-title-lg text-title-lg text-on-surface">
+                        {item.subject}
+                      </span>
+                      <span className="font-caption text-caption text-on-surface-variant">
+                        שיעור {item.lessonNumber}
+                      </span>
+                    </div>
+                    <p className="mt-0.5 font-caption text-caption text-on-surface-variant">
+                      {[item.teacherName, item.audience].filter(Boolean).join(" · ")}
+                    </p>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </Section>
+
           <Section icon="edit_note" title="יצירת שיעור חדש" accent="featured">
             {formProps.teachers.length === 0 && (
               <p className="mb-3 rounded-lg bg-attendance-late/10 px-3 py-2 font-body-sm text-body-sm text-attendance-late">
@@ -115,8 +285,8 @@ export default async function LessonsPage({ searchParams }: Props) {
           <LessonsCalendar
             initialMonthIso={from}
             occurrences={occurrenceRows}
-            lessons={lessons.data ?? []}
-            formProps={formProps}
+            lessons={filteredLessons}
+            monthQuery={filterQuery.toString()}
           />
         </div>
       </div>

@@ -2,8 +2,6 @@
 
 import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Button } from "@/components/ui/Button";
-import { LessonsForm } from "./LessonsForm";
 import {
   buildHebrewMonth,
   formatHebrewDate,
@@ -14,13 +12,8 @@ import {
 } from "@/lib/dates/hebrew";
 import { OCCURRENCE_STATUS_LABELS } from "@/lib/constants";
 import { cn } from "@/lib/cn";
-import {
-  cancelOccurrenceAction,
-  completeOccurrenceAction,
-  restoreOccurrenceAction,
-} from "../actions";
+import { completeOccurrenceAction } from "../actions";
 import type { Lesson } from "@/types/database";
-import type { LessonsFormProps } from "./LessonsForm";
 import { Icon } from "@/components/ui/Icon";
 
 interface OccurrenceRow {
@@ -36,13 +29,10 @@ interface LessonsCalendarProps {
   initialMonthIso?: string;
   occurrences: OccurrenceRow[];
   lessons: Lesson[];
-  formProps: Omit<LessonsFormProps, "onCreated" | "occurrenceDate">;
+  monthQuery: string;
 }
 
-const STATUS_META: Record<
-  string,
-  { pillClass: string; icon: string; label: string }
-> = {
+const STATUS_META: Record<string, { pillClass: string; icon: string; label: string }> = {
   completed: {
     pillClass: "bg-attendance-present/10 text-attendance-present",
     icon: "check_circle",
@@ -53,24 +43,18 @@ const STATUS_META: Record<
     icon: "schedule",
     label: "מתוכנן",
   },
-  cancelled: {
-    pillClass: "bg-attendance-absent/10 text-attendance-absent",
-    icon: "block",
-    label: "בוטל",
-  },
 };
 
 export function LessonsCalendar({
   initialMonthIso,
   occurrences,
   lessons,
-  formProps,
+  monthQuery,
 }: LessonsCalendarProps) {
   const router = useRouter();
   const seed = hebrewMonthFromIso(initialMonthIso || todayIso());
   const [cursor, setCursor] = useState(seed);
   const [selectedIso, setSelectedIso] = useState<string | null>(todayIso());
-  const [creating, setCreating] = useState(false);
 
   const month = useMemo(
     () => buildHebrewMonth(cursor.year, cursor.month),
@@ -94,19 +78,19 @@ export function LessonsCalendar({
     const next = shiftHebrewMonth(cursor.year, cursor.month, delta);
     setCursor(next);
     const grid = buildHebrewMonth(next.year, next.month);
-    router.push(`/lessons?from=${grid.rangeStart}&to=${grid.rangeEnd}`);
+    const params = new URLSearchParams(monthQuery);
+    params.set("from", grid.rangeStart);
+    params.set("to", grid.rangeEnd);
+    router.push(`/lessons?${params.toString()}`);
   }
 
-  async function setStatus(id: string, action: "cancel" | "complete" | "restore") {
-    if (action === "cancel") await cancelOccurrenceAction(id);
-    if (action === "complete") await completeOccurrenceAction(id);
-    if (action === "restore") await restoreOccurrenceAction(id);
+  async function markComplete(id: string) {
+    await completeOccurrenceAction(id);
     router.refresh();
   }
 
   return (
     <div className="flex flex-col gap-gutter lg:flex-row">
-      {/* Calendar Widget */}
       <section className="w-full rounded-xl border border-outline-variant/30 bg-surface-container-lowest p-stack_md shadow-tactile-md lg:w-2/5">
         <div className="mb-stack_md flex items-center justify-between">
           <button
@@ -145,10 +129,7 @@ export function LessonsCalendar({
               <button
                 key={day.iso}
                 type="button"
-                onClick={() => {
-                  setSelectedIso(day.iso);
-                  setCreating(false);
-                }}
+                onClick={() => setSelectedIso(day.iso)}
                 className={cn(
                   "relative flex aspect-square items-center justify-center rounded-full p-2 transition-colors",
                   selected
@@ -175,53 +156,22 @@ export function LessonsCalendar({
         </div>
       </section>
 
-      {/* Daily Events List + Templates */}
       <div className="flex w-full flex-col gap-gutter lg:w-3/5">
         <section className="flex min-h-[500px] flex-col rounded-xl border border-outline-variant/30 bg-surface-container-lowest p-stack_md shadow-tactile-md">
           <div className="mb-stack_md flex items-center justify-between gap-3 border-b border-outline-variant/30 pb-3">
-            <div className="min-w-0">
-              <h3 className="font-title-lg text-title-lg text-primary">
-                {selectedIso ? formatHebrewDate(selectedIso) : "בחרי יום"}
-              </h3>
-            </div>
-            <div className="flex items-center gap-2">
-              <span className="rounded-full bg-surface-container-high px-3 py-1 font-label-md text-label-md text-on-surface-variant">
-                {selectedOccurrences.length} שיעורים
-              </span>
-              {selectedIso && (
-                <Button size="sm" type="button" onClick={() => setCreating((v) => !v)}>
-                  <Icon name={creating ? "close" : "add"} className="text-[18px]" />
-                  {creating ? "סגירה" : "יצירת שיעור"}
-                </Button>
-              )}
-            </div>
+            <h3 className="font-title-lg text-title-lg text-primary">
+              {selectedIso ? formatHebrewDate(selectedIso) : "בחרי יום"}
+            </h3>
+            <span className="rounded-full bg-surface-container-high px-3 py-1 font-label-md text-label-md text-on-surface-variant">
+              {selectedOccurrences.length} שיעורים
+            </span>
           </div>
 
-          {creating && selectedIso && (
-            <div className="mb-4 rounded-xl border border-outline-variant/30 bg-surface-container-low/60 p-4">
-              <p className="mb-3 font-caption text-caption text-on-surface-variant">
-                השיעור ייווצר לתבנית השבועית, ויווצר גם מופע ליום{" "}
-                {formatHebrewDate(selectedIso)}.
-              </p>
-              <LessonsForm
-                {...formProps}
-                occurrenceDate={selectedIso}
-                onCreated={() => {
-                  setCreating(false);
-                  router.refresh();
-                }}
-              />
-            </div>
-          )}
-
-          {selectedIso && selectedOccurrences.length === 0 && !creating && (
+          {selectedIso && selectedOccurrences.length === 0 && (
             <div className="flex flex-1 flex-col items-center justify-center rounded-xl border border-dashed border-outline-variant/50 bg-surface-container-low/60 px-4 py-8 text-center">
               <Icon name="event_available" className="mb-2 text-[36px] text-secondary" />
               <p className="font-body-md text-body-md text-on-surface-variant">
                 אין שיעורים ביום זה.
-              </p>
-              <p className="mt-1 font-caption text-caption text-on-surface-variant">
-                לחצי על &quot;יצירת שיעור&quot; כדי להוסיף.
               </p>
             </div>
           )}
@@ -230,57 +180,32 @@ export function LessonsCalendar({
             {selectedOccurrences.map((o, idx) => {
               const meta = STATUS_META[o.status] ?? STATUS_META.scheduled;
               const label =
-                OCCURRENCE_STATUS_LABELS[
-                  o.status as keyof typeof OCCURRENCE_STATUS_LABELS
-                ] ?? o.status;
-              const cancelled = o.status === "cancelled";
+                OCCURRENCE_STATUS_LABELS[o.status as keyof typeof OCCURRENCE_STATUS_LABELS] ??
+                o.status;
 
               return (
                 <div
                   key={o.id}
                   className={cn(
                     "group flex flex-col gap-4 rounded-lg border border-outline-variant p-4 transition-colors sm:flex-row sm:items-center sm:justify-between",
-                    cancelled
-                      ? "border-error-container bg-surface-container-low opacity-75 grayscale-[0.4]"
-                      : o.status === "scheduled"
-                        ? "border-l-4 border-l-secondary bg-surface-container-lowest shadow-tactile-sm hover:border-primary-fixed-dim"
-                        : "bg-surface-container-lowest hover:border-primary-fixed-dim"
+                    o.status === "scheduled"
+                      ? "border-l-4 border-l-secondary bg-surface-container-lowest shadow-tactile-sm hover:border-primary-fixed-dim"
+                      : "bg-surface-container-lowest hover:border-primary-fixed-dim"
                   )}
                 >
                   <div className="flex items-start gap-4 sm:items-center">
                     <div className="flex h-12 w-12 shrink-0 flex-col items-center justify-center rounded-lg border border-outline-variant bg-surface-container-high">
-                      <span
-                        className={cn(
-                          "font-label-md text-label-md",
-                          cancelled ? "text-on-surface line-through" : "text-on-surface"
-                        )}
-                      >
-                        שיעור
-                      </span>
-                      <span
-                        className={cn(
-                          "font-headline-md text-headline-md leading-none",
-                          cancelled
-                            ? "text-on-surface-variant line-through"
-                            : "text-primary"
-                        )}
-                      >
+                      <span className="font-label-md text-label-md text-on-surface">שיעור</span>
+                      <span className="font-headline-md text-headline-md leading-none text-primary">
                         {idx + 1}
                       </span>
                     </div>
                     <div className="min-w-0">
-                      <h4
-                        className={cn(
-                          "flex flex-wrap items-center gap-2 font-title-lg text-title-lg",
-                          cancelled
-                            ? "text-on-surface-variant line-through"
-                            : "text-on-surface"
-                        )}
-                      >
+                      <h4 className="flex flex-wrap items-center gap-2 font-title-lg text-title-lg text-on-surface">
                         {o.subject || "ללא שם"}
                         <span
                           className={cn(
-                            "inline-flex items-center gap-1 rounded-full px-2 py-0.5 font-caption text-caption no-underline",
+                            "inline-flex items-center gap-1 rounded-full px-2 py-0.5 font-caption text-caption",
                             meta.pillClass
                           )}
                         >
@@ -296,38 +221,16 @@ export function LessonsCalendar({
                       )}
                     </div>
                   </div>
-                  <div className="flex flex-wrap justify-end gap-2">
-                    {o.status !== "cancelled" && (
-                      <button
-                        type="button"
-                        onClick={() => setStatus(o.id, "cancel")}
-                        className="inline-flex items-center gap-1 rounded-lg border border-outline px-3 py-1.5 font-label-md text-label-md text-on-surface-variant transition-colors hover:bg-surface-container"
-                      >
-                        <Icon name="cancel" className="text-[18px]" />
-                        ביטול
-                      </button>
-                    )}
-                    {o.status === "scheduled" && (
-                      <button
-                        type="button"
-                        onClick={() => setStatus(o.id, "complete")}
-                        className="inline-flex items-center gap-1 rounded-lg bg-primary-container px-3 py-1.5 font-label-md text-label-md text-white transition-colors hover:bg-primary hover:text-white"
-                      >
-                        <Icon name="done_all" className="text-[18px]" />
-                        השלמה
-                      </button>
-                    )}
-                    {o.status === "cancelled" && (
-                      <button
-                        type="button"
-                        onClick={() => setStatus(o.id, "restore")}
-                        className="inline-flex items-center gap-1 rounded-lg border border-outline px-3 py-1.5 font-label-md text-label-md text-on-surface-variant transition-colors hover:bg-surface-container"
-                      >
-                        <Icon name="restore" className="text-[18px]" />
-                        שחזור
-                      </button>
-                    )}
-                  </div>
+                  {o.status === "scheduled" && (
+                    <button
+                      type="button"
+                      onClick={() => markComplete(o.id)}
+                      className="inline-flex items-center gap-1 rounded-lg bg-primary-container px-3 py-1.5 font-label-md text-label-md text-white transition-colors hover:bg-primary hover:text-white"
+                    >
+                      <Icon name="done_all" className="text-[18px]" />
+                      השלמה
+                    </button>
+                  )}
                 </div>
               );
             })}
@@ -337,11 +240,11 @@ export function LessonsCalendar({
         <section className="rounded-xl border border-outline-variant/30 bg-surface-container-lowest p-stack_md shadow-tactile-md">
           <h3 className="mb-3 flex items-center gap-2 font-title-lg text-title-lg text-primary">
             <Icon name="view_agenda" className="text-secondary" />
-            תבניות שיעור קבועות
+            תבניות שיעור
           </h3>
           {lessons.length === 0 ? (
             <p className="font-body-md text-body-md text-on-surface-variant">
-              אין תבניות עדיין. הוסיפי שיעור חדש בטופס.
+              אין תבניות לפי הסינון. הוסיפי שיעור חדש בטופס.
             </p>
           ) : (
             <ul className="flex flex-col gap-2 font-body-md text-body-md">

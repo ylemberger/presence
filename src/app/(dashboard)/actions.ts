@@ -924,52 +924,6 @@ export async function createLessonAction(formData: FormData) {
   return { success: true };
 }
 
-export async function createLessonForDateAction(formData: FormData) {
-  const occurrenceDate = requireText(formData.get("occurrence_date"), "׳×׳׳¨׳™׳");
-  if (isError(occurrenceDate)) return occurrenceDate;
-
-  const payload = await buildLessonPayload(formData);
-  if ("error" in payload) return payload;
-
-  const isNewAssignment = !String(formData.get("teacher_teaching_assignment_id") ?? "").trim();
-  const assignmentId = payload.teacher_teaching_assignment_id;
-
-  const actionAuth = await createActionClient();
-  if ("error" in actionAuth) return { error: actionAuth.error };
-  const supabase = actionAuth.supabase;
-  const { data: lesson, error } = await supabase
-    .from("lessons")
-    .insert(payload)
-    .select("id")
-    .single();
-
-  if (error || !lesson) {
-    await rollbackFailedLessonCreate(supabase, {
-      assignmentId,
-      removeAssignment: isNewAssignment,
-    });
-    return { error: error?.message ?? "׳™׳¦׳™׳¨׳× ׳©׳™׳¢׳•׳¨ ׳ ׳›׳©׳׳”" };
-  }
-
-  try {
-    await generateLessonOccurrences(lesson.id);
-  } catch (e) {
-    await rollbackFailedLessonCreate(supabase, {
-      lessonId: lesson.id,
-      assignmentId,
-      removeAssignment: isNewAssignment,
-    });
-    return { error: (e as Error).message };
-  }
-
-  await autoAssignStudentsToLesson(lesson.id, payload.academic_year_id);
-
-  revalidatePath("/lessons");
-  revalidatePath("/attendance");
-  revalidatePath("/teachers");
-  return { success: true };
-}
-
 export async function generateOccurrencesAction(academicYearId: string) {
   const actionAuth = await createActionClient();
   if ("error" in actionAuth) return { error: actionAuth.error };

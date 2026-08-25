@@ -3,7 +3,7 @@
 import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/Button";
-import { Select } from "@/components/ui/Input";
+import { Combobox } from "@/components/ui/Combobox";
 import { HebrewDateInput } from "@/components/ui/HebrewDateInput";
 import { transferStudentAction } from "../../actions";
 import { Icon } from "@/components/ui/Icon";
@@ -84,65 +84,51 @@ export function StudentDetailForms({ studentId, yearData }: Props) {
       <form onSubmit={handleTransfer} className="flex flex-col gap-3">
         <HebrewDateInput label="בתוקף מתאריך" name="transfer_date" required />
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-          <Select
+          <Combobox
             label="שכבה"
             name="grade_id"
             required
             value={gradeId}
-            onChange={(e) => {
-              setGradeId(e.target.value);
+            onChange={(v) => {
+              setGradeId(v);
               setClassId("");
             }}
-            options={[
-              { value: "", label: "בחרי" },
-              ...yearData.grades.map((g) => ({ value: g.id, label: g.name })),
-            ]}
+            options={yearData.grades.map((g) => ({ value: g.id, label: g.name }))}
+            emptyLabel="בחרי"
           />
-          <Select
+          <Combobox
             label="כיתה"
             name="class_id"
             required
             value={classId}
-            onChange={(e) => {
-              const next = e.target.value;
-              setClassId(next);
-              const selected = yearData.classes.find((c) => c.id === next);
+            onChange={(v) => {
+              setClassId(v);
+              const selected = yearData.classes.find((c) => c.id === v);
               if (selected && selected.grade_id !== gradeId) {
                 setGradeId(selected.grade_id);
               }
             }}
-            options={[
-              {
-                value: "",
-                label: classOptions.length ? "בחרי" : "אין כיתות בהגדרות",
-              },
-              ...classOptions,
-            ]}
+            options={classOptions}
+            emptyLabel={classOptions.length ? "בחרי" : "אין כיתות בהגדרות"}
           />
-          <Select
+          <Combobox
             label="מסלול"
             name="track_id"
             required
-            options={[
-              { value: "", label: "בחרי" },
-              ...yearData.tracks.map((t) => ({ value: t.id, label: t.name })),
-            ]}
+            options={yearData.tracks.map((t) => ({ value: t.id, label: t.name }))}
+            emptyLabel="בחרי"
           />
-          <Select
+          <Combobox
             label="התמחות"
             name="specialization_id"
-            options={[
-              { value: "", label: "ללא" },
-              ...yearData.specializations.map((s) => ({ value: s.id, label: s.name })),
-            ]}
+            options={yearData.specializations.map((s) => ({ value: s.id, label: s.name }))}
+            emptyLabel="ללא"
           />
-          <Select
+          <Combobox
             label="התמחות נוספת"
             name="secondary_specialization_id"
-            options={[
-              { value: "", label: "ללא" },
-              ...yearData.specializations.map((s) => ({ value: s.id, label: s.name })),
-            ]}
+            options={yearData.specializations.map((s) => ({ value: s.id, label: s.name }))}
+            emptyLabel="ללא"
           />
         </div>
         <label className="flex items-center gap-2 font-label-md text-label-md text-on-surface">

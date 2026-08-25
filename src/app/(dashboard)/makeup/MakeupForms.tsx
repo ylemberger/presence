@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/Button";
+import { Combobox } from "@/components/ui/Combobox";
 import { Input, Select } from "@/components/ui/Input";
 import { upsertMakeupExamAction, updateMakeupExamAction } from "../actions";
 import { Icon } from "@/components/ui/Icon";
@@ -120,23 +121,19 @@ export function MakeupForms({
 
   return (
     <form onSubmit={handleSubmit} className="flex flex-col gap-3">
-      <Select
+      <Combobox
         label="תלמידה"
         name="student_id"
         required
-        options={[
-          { value: "", label: "בחרי תלמידה" },
-          ...students.map((s) => ({ value: s.id, label: s.full_name })),
-        ]}
+        options={students.map((s) => ({ value: s.id, label: s.full_name }))}
+        emptyLabel="בחרי תלמידה"
       />
-      <Select
+      <Combobox
         label="שיעור"
         name="lesson_id"
         required
-        options={[
-          { value: "", label: "בחרי שיעור" },
-          ...lessons.map((l) => ({ value: l.id, label: l.subject })),
-        ]}
+        options={lessons.map((l) => ({ value: l.id, label: l.subject }))}
+        emptyLabel="בחרי שיעור"
       />
       <Input
         label="מספר מבחנים"

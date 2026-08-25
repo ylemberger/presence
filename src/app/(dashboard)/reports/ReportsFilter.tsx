@@ -2,7 +2,8 @@
 
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/Button";
-import { Input, Select } from "@/components/ui/Input";
+import { Combobox } from "@/components/ui/Combobox";
+import { Input } from "@/components/ui/Input";
 import { HebrewDateInput } from "@/components/ui/HebrewDateInput";
 import { Section } from "@/components/ui/Section";
 import { Icon } from "@/components/ui/Icon";
@@ -68,59 +69,47 @@ export function ReportsFilter({
     <Section icon="filter_list" title="סינון נתונים">
       <form onSubmit={handleSubmit} className="flex flex-col gap-6">
         <div className="grid grid-cols-1 gap-4 md:grid-cols-3 lg:grid-cols-4">
-          <Select
+          <Combobox
             label="שכבה / כיתה"
             name="classId"
             defaultValue={defaults.classId ?? ""}
-            options={[
-              { value: "", label: "כל הכיתות" },
-              ...classes.map((c) => ({ value: c.id, label: c.name })),
-            ]}
+            options={classes.map((c) => ({ value: c.id, label: c.name }))}
+            emptyLabel="כל הכיתות"
           />
-          <Select
+          <Combobox
             label="מסלול"
             name="trackId"
             defaultValue={defaults.trackId ?? ""}
-            options={[
-              { value: "", label: "כל המסלולים" },
-              ...tracks.map((t) => ({ value: t.id, label: t.name })),
-            ]}
+            options={tracks.map((t) => ({ value: t.id, label: t.name }))}
+            emptyLabel="כל המסלולים"
           />
-          <Select
+          <Combobox
             label="התמחות"
             name="specializationId"
             defaultValue={defaults.specializationId ?? ""}
-            options={[
-              { value: "", label: "כל ההתמחויות" },
-              ...specializations.map((s) => ({ value: s.id, label: s.name })),
-            ]}
+            options={specializations.map((s) => ({ value: s.id, label: s.name }))}
+            emptyLabel="כל ההתמחויות"
           />
-          <Select
+          <Combobox
             label="מורה"
             name="teacherId"
             defaultValue={defaults.teacherId ?? ""}
-            options={[
-              { value: "", label: "כל המורות" },
-              ...teachers.map((t) => ({ value: t.id, label: t.name })),
-            ]}
+            options={teachers.map((t) => ({ value: t.id, label: t.name }))}
+            emptyLabel="כל המורות"
           />
-          <Select
+          <Combobox
             label="מקצוע"
             name="subject"
             defaultValue={defaults.subject ?? ""}
-            options={[
-              { value: "", label: "כל המקצועות" },
-              ...subjects.map((s) => ({ value: s, label: s })),
-            ]}
+            options={subjects.map((s) => ({ value: s, label: s }))}
+            emptyLabel="כל המקצועות"
           />
-          <Select
+          <Combobox
             label="תלמידה"
             name="studentId"
             defaultValue={defaults.studentId ?? ""}
-            options={[
-              { value: "", label: "כל התלמידות" },
-              ...students.map((s) => ({ value: s.id, label: s.full_name })),
-            ]}
+            options={students.map((s) => ({ value: s.id, label: s.full_name }))}
+            emptyLabel="כל התלמידות"
           />
           <div className="md:col-span-2">
             <div className="grid grid-cols-2 gap-3">
@@ -138,17 +127,15 @@ export function ReportsFilter({
               />
             </div>
           </div>
-          <Select
+          <Combobox
             label="כלל נוכחות"
             name="ruleId"
             defaultValue={defaults.ruleId ?? ""}
-            options={[
-              { value: "", label: "ללא סף מכלל" },
-              ...rules.map((r) => ({
-                value: r.id,
-                label: `${r.name} (${r.max_allowed_absence_percent}%)`,
-              })),
-            ]}
+            options={rules.map((r) => ({
+              value: r.id,
+              label: `${r.name} (${r.max_allowed_absence_percent}%)`,
+            }))}
+            emptyLabel="ללא סף מכלל"
           />
           <Input
             label="סף חיסורים (%)"

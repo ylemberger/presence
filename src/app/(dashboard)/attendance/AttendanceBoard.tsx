@@ -4,7 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/Button";
-import { Select } from "@/components/ui/Input";
+import { Combobox } from "@/components/ui/Combobox";
 import { HebrewMonthCalendar } from "@/components/ui/HebrewMonthCalendar";
 import {
   bulkAttendanceAction,
@@ -560,39 +560,37 @@ export function AttendanceBoard({
       </div>
       <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
         {mode === "single" && (
-          <Select
+          <Combobox
             label="תלמידה"
             value={studentId ?? ""}
-            onChange={(e) => updateFilter("studentId", e.target.value || undefined)}
-            options={[
-              { value: "", label: "בחרי תלמידה" },
-              ...allStudents.map((s) => ({ value: s.id, label: s.full_name })),
-            ]}
+            onChange={(v) => updateFilter("studentId", v || undefined)}
+            options={allStudents.map((s) => ({ value: s.id, label: s.full_name }))}
+            emptyLabel="בחרי תלמידה"
           />
         )}
-        <Select
+        <Combobox
           label="כיתה"
           value={classId ?? ""}
-          onChange={(e) => updateFilter("classId", e.target.value || undefined)}
-          options={[{ value: "", label: "הכל" }, ...classes.map((c) => ({ value: c.id, label: c.name }))]}
+          onChange={(v) => updateFilter("classId", v || undefined)}
+          options={classes.map((c) => ({ value: c.id, label: c.name }))}
         />
-        <Select
+        <Combobox
           label="מסלול"
           value={trackId ?? ""}
-          onChange={(e) => updateFilter("trackId", e.target.value || undefined)}
-          options={[{ value: "", label: "הכל" }, ...tracks.map((t) => ({ value: t.id, label: t.name }))]}
+          onChange={(v) => updateFilter("trackId", v || undefined)}
+          options={tracks.map((t) => ({ value: t.id, label: t.name }))}
         />
-        <Select
+        <Combobox
           label="מורה"
           value={teacherId ?? ""}
-          onChange={(e) => updateFilter("teacherId", e.target.value || undefined)}
-          options={[{ value: "", label: "הכל" }, ...teachers.map((t) => ({ value: t.id, label: t.name }))]}
+          onChange={(v) => updateFilter("teacherId", v || undefined)}
+          options={teachers.map((t) => ({ value: t.id, label: t.name }))}
         />
-        <Select
+        <Combobox
           label="מקצוע"
           value={subject ?? ""}
-          onChange={(e) => updateFilter("subject", e.target.value || undefined)}
-          options={[{ value: "", label: "הכל" }, ...subjects.map((s) => ({ value: s, label: s }))]}
+          onChange={(v) => updateFilter("subject", v || undefined)}
+          options={subjects.map((s) => ({ value: s, label: s }))}
         />
       </div>
       <p className="font-caption text-caption text-on-surface-variant/70">

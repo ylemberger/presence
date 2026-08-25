@@ -3,6 +3,7 @@
 import { useMemo, useState } from "react";
 import Link from "next/link";
 import { Button } from "@/components/ui/Button";
+import { Combobox } from "@/components/ui/Combobox";
 import { Input, Select } from "@/components/ui/Input";
 import { Table, TableRow, TableCell } from "@/components/ui/Table";
 import { StatusPill } from "@/components/ui/PageHeader";
@@ -148,56 +149,42 @@ export function StudentsDirectory({
             onChange={(e) => setQuery(e.target.value)}
           />
         </div>
-        <Select
+        <Combobox
           label="שכבה"
           value={gradeId}
-          onChange={(e) => {
-            setGradeId(e.target.value);
+          onChange={(v) => {
+            setGradeId(v);
             setClassId("");
           }}
-          options={[
-            { value: "", label: "הכל" },
-            ...(yearOptions?.grades ?? []).map((g) => ({
-              value: g.id,
-              label: g.name,
-            })),
-          ]}
+          options={(yearOptions?.grades ?? []).map((g) => ({
+            value: g.id,
+            label: g.name,
+          }))}
         />
-        <Select
+        <Combobox
           label="כיתה"
           value={classId}
-          onChange={(e) => setClassId(e.target.value)}
-          options={[
-            {
-              value: "",
-              label: classFilterOptions.length ? "הכל" : "אין כיתות בהגדרות",
-            },
-            ...classFilterOptions,
-          ]}
+          onChange={setClassId}
+          options={classFilterOptions}
+          emptyLabel={classFilterOptions.length ? "הכל" : "אין כיתות בהגדרות"}
         />
-        <Select
+        <Combobox
           label="מסלול"
           value={trackId}
-          onChange={(e) => setTrackId(e.target.value)}
-          options={[
-            { value: "", label: "הכל" },
-            ...(yearOptions?.tracks ?? []).map((t) => ({
-              value: t.id,
-              label: t.name,
-            })),
-          ]}
+          onChange={setTrackId}
+          options={(yearOptions?.tracks ?? []).map((t) => ({
+            value: t.id,
+            label: t.name,
+          }))}
         />
-        <Select
+        <Combobox
           label="התמחות"
           value={specId}
-          onChange={(e) => setSpecId(e.target.value)}
-          options={[
-            { value: "", label: "הכל" },
-            ...(yearOptions?.specializations ?? []).map((s) => ({
-              value: s.id,
-              label: s.name,
-            })),
-          ]}
+          onChange={setSpecId}
+          options={(yearOptions?.specializations ?? []).map((s) => ({
+            value: s.id,
+            label: s.name,
+          }))}
         />
         <Select
           label="סטטוס"

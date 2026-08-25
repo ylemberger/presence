@@ -3,17 +3,16 @@
 import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/Button";
+import { Combobox } from "@/components/ui/Combobox";
 import { Input, Select } from "@/components/ui/Input";
 import { DAY_OF_WEEK_LABELS, BILLING_TYPE_LABELS } from "@/lib/constants";
-import { createLessonAction, createLessonForDateAction } from "../actions";
-import { isoToHDate } from "@/lib/dates/hebrew";
+import { createLessonAction } from "../actions";
 import { describeAudienceScope } from "@/lib/validation";
 import type { ActivityRange, AttendanceRule, Teacher } from "@/types/database";
 import { Icon } from "@/components/ui/Icon";
 
 export interface LessonsFormProps {
   yearId: string;
-  occurrenceDate?: string;
   teachers: Pick<Teacher, "id" | "full_name">[];
   grades: { id: string; name: string }[];
   classes: { id: string; name: string; grade_id: string }[];
@@ -26,7 +25,6 @@ export interface LessonsFormProps {
 
 export function LessonsForm({
   yearId,
-  occurrenceDate,
   teachers,
   grades,
   classes,
@@ -39,15 +37,13 @@ export function LessonsForm({
   const router = useRouter();
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const [formEpoch, setFormEpoch] = useState(0);
   const [billingType, setBillingType] = useState<"mandatory" | "specialization">("mandatory");
   const [forPsychology, setForPsychology] = useState(false);
   const [gradeId, setGradeId] = useState("");
   const [classId, setClassId] = useState("");
   const [trackId, setTrackId] = useState("");
   const [specializationId, setSpecializationId] = useState("");
-
-  const defaultDay =
-    occurrenceDate != null ? String(isoToHDate(occurrenceDate).getDay()) : undefined;
 
   const filteredClasses = useMemo(
     () => classes.filter((c) => !gradeId || c.grade_id === gradeId),
@@ -92,11 +88,8 @@ export function LessonsForm({
         fd.set("class_id", classId);
         fd.set("track_id", trackId);
       }
-      if (occurrenceDate) fd.set("occurrence_date", occurrenceDate);
 
-      const result = occurrenceDate
-        ? await createLessonForDateAction(fd)
-        : await createLessonAction(fd);
+      const result = await createLessonAction(fd);
 
       if (result && "error" in result && result.error) {
         setError(result.error);
@@ -110,6 +103,7 @@ export function LessonsForm({
       setClassId("");
       setTrackId("");
       setSpecializationId("");
+      setFormEpoch((n) => n + 1);
       onCreated?.();
       router.refresh();
     } catch (err) {
@@ -120,18 +114,16 @@ export function LessonsForm({
   }
 
   return (
-    <form onSubmit={handleSubmit} className="flex flex-col gap-5">
+    <form key={formEpoch} onSubmit={handleSubmit} className="flex flex-col gap-5">
       <div>
         <p className="mb-2 font-label-md text-label-md text-primary">מורה ומקצוע</p>
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-          <Select
+          <Combobox
             label="מורה"
             name="teacher_id"
             required
-            options={[
-              { value: "", label: "בחרי מורה" },
-              ...teachers.map((t) => ({ value: t.id, label: t.full_name })),
-            ]}
+            options={teachers.map((t) => ({ value: t.id, label: t.full_name }))}
+            emptyLabel="בחרי מורה"
           />
           <Input label="מקצוע" name="subject" required />
         </div>
@@ -140,19 +132,17 @@ export function LessonsForm({
       <div>
         <p className="mb-2 font-label-md text-label-md text-primary">קהל יעד</p>
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-          <Select
+          <Combobox
             label="שכבה"
             name="grade_id"
             required
             value={gradeId}
-            onChange={(e) => {
-              setGradeId(e.target.value);
+            onChange={(v) => {
+              setGradeId(v);
               setClassId("");
             }}
-            options={[
-              { value: "", label: "בחרי שכבה" },
-              ...grades.map((g) => ({ value: g.id, label: g.name })),
-            ]}
+            options={grades.map((g) => ({ value: g.id, label: g.name }))}
+            emptyLabel="בחרי שכבה"
           />
           <Select
             label="סוג שיעור"
@@ -166,16 +156,14 @@ export function LessonsForm({
             }))}
           />
           {billingType === "specialization" ? (
-            <Select
+            <Combobox
               label="התמחות"
               name="specialization_id"
               required
               value={specializationId}
-              onChange={(e) => setSpecializationId(e.target.value)}
-              options={[
-                { value: "", label: "בחרי התמחות" },
-                ...specializations.map((s) => ({ value: s.id, label: s.name })),
-              ]}
+              onChange={setSpecializationId}
+              options={specializations.map((s) => ({ value: s.id, label: s.name }))}
+              emptyLabel="בחרי התמחות"
             />
           ) : (
             <>
@@ -196,25 +184,21 @@ export function LessonsForm({
               </label>
               {!forPsychology && (
                 <>
-                  <Select
+                  <Combobox
                     label="כיתה"
                     name="class_id"
                     value={classId}
-                    onChange={(e) => setClassId(e.target.value)}
-                    options={[
-                      { value: "", label: "ללא (כל הכיתות בשכבה)" },
-                      ...filteredClasses.map((c) => ({ value: c.id, label: c.name })),
-                    ]}
+                    onChange={setClassId}
+                    options={filteredClasses.map((c) => ({ value: c.id, label: c.name }))}
+                    emptyLabel="ללא (כל הכיתות בשכבה)"
                   />
-                  <Select
+                  <Combobox
                     label="מסלול"
                     name="track_id"
                     value={trackId}
-                    onChange={(e) => setTrackId(e.target.value)}
-                    options={[
-                      { value: "", label: "ללא (כל המסלולים)" },
-                      ...tracks.map((t) => ({ value: t.id, label: t.name })),
-                    ]}
+                    onChange={setTrackId}
+                    options={tracks.map((t) => ({ value: t.id, label: t.name }))}
+                    emptyLabel="ללא (כל המסלולים)"
                   />
                 </>
               )}
@@ -243,7 +227,6 @@ export function LessonsForm({
             label="יום בשבוע"
             name="day_of_week"
             required
-            defaultValue={defaultDay}
             options={DAY_OF_WEEK_LABELS.map((l, i) => ({ value: String(i), label: l }))}
           />
           <Input
@@ -254,32 +237,26 @@ export function LessonsForm({
             max={9}
             required
           />
-          <Select
+          <Combobox
             label="טווח פעילות"
             name="activity_range_id"
             required
-            options={[
-              { value: "", label: "בחרי טווח" },
-              ...ranges.map((r) => ({ value: r.id, label: r.name })),
-            ]}
+            options={ranges.map((r) => ({ value: r.id, label: r.name }))}
+            emptyLabel="בחרי טווח"
           />
-          <Select
+          <Combobox
             label="כלל נוכחות"
             name="attendance_rule_id"
             required
-            options={[
-              { value: "", label: "בחרי" },
-              ...rules.map((r) => ({
-                value: r.id,
-                label: `${r.name} (${r.max_allowed_absence_percent}%)`,
-              })),
-            ]}
+            options={rules.map((r) => ({
+              value: r.id,
+              label: `${r.name} (${r.max_allowed_absence_percent}%)`,
+            }))}
+            emptyLabel="בחרי כלל"
           />
         </div>
         <p className="mt-2 font-caption text-caption text-on-surface-variant">
-          {occurrenceDate
-            ? "ייווצרו כל מופעי השיעור בטווח הפעילות לפי היום שנבחר."
-            : "ייווצרו אוטומטית כל מופעי השיעור בטווח הפעילות."}
+          בשמירה ייווצרו אוטומטית כל מופעי השיעור בטווח הפעילות שנבחר.
         </p>
       </div>
 
@@ -292,7 +269,7 @@ export function LessonsForm({
 
       <Button type="submit" disabled={loading} className="mt-1 w-full">
         <Icon name="save" className="text-[18px]" />
-        {loading ? "יוצר שיעור..." : "שמור שיעור"}
+        {loading ? "יוצר שיעור ומופעים..." : "שמור שיעור"}
       </Button>
 
       {error && (
