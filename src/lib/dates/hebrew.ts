@@ -208,6 +208,132 @@ export function hebrewYearOptions(centerIso: string, span = 20): Array<{
   return options;
 }
 
+const HEBREW_LETTER_VALUES: Record<string, number> = {
+  א: 1,
+  ב: 2,
+  ג: 3,
+  ד: 4,
+  ה: 5,
+  ו: 6,
+  ז: 7,
+  ח: 8,
+  ט: 9,
+  י: 10,
+  כ: 20,
+  ל: 30,
+  מ: 40,
+  נ: 50,
+  ס: 60,
+  ע: 70,
+  פ: 80,
+  צ: 90,
+  ק: 100,
+  ר: 200,
+  ש: 300,
+  ת: 400,
+  ך: 20,
+  ם: 40,
+  ן: 50,
+  ף: 80,
+  ץ: 90,
+};
+
+export function hebrewGematria(text: string): number {
+  return [...text.replace(/[״"׳'\s]/g, "")].reduce(
+    (sum, ch) => sum + (HEBREW_LETTER_VALUES[ch] ?? 0),
+    0
+  );
+}
+
+function parseDayToken(token: string): number | null {
+  const t = token.replace(/[״"׳']/g, "").trim();
+  if (/^\d{1,2}$/.test(t)) {
+    const n = Number(t);
+    return n >= 1 && n <= 30 ? n : null;
+  }
+  const g = hebrewGematria(t);
+  return g >= 1 && g <= 30 ? g : null;
+}
+
+function parseYearToken(token: string, fallbackYear: number): number {
+  const t = token.replace(/[״"׳']/g, "").trim();
+  if (/^\d{4}$/.test(t)) return Number(t);
+  const g = hebrewGematria(t);
+  if (g >= 5000 && g <= 6000) return g;
+  if (g >= 1 && g < 1000) return 5000 + g;
+  return fallbackYear;
+}
+
+function findHebrewMonthNumber(year: number, token: string): number | null {
+  const aliases: Record<string, string> = {
+    חשוון: "חשון",
+    מרחשון: "חשון",
+    מרחשוון: "חשון",
+    סיוון: "סיון",
+  };
+  const needle = aliases[token.replace(/[״"׳'\s]/g, "")] ?? token.replace(/[״"׳'\s]/g, "");
+  if (!needle) return null;
+  const options = hebrewMonthOptionsForYear(year);
+  const exact = options.find((opt) => opt.label.replace(/[״"׳'\s]/g, "") === needle);
+  if (exact) return exact.month;
+  const partial = options.find((opt) => {
+    const label = opt.label.replace(/[״"׳'\s]/g, "");
+    return label.includes(needle) || needle.includes(label);
+  });
+  return partial?.month ?? null;
+}
+
+/**
+ * Accepts ISO, Gregorian (15.8.2026 / 15/8/2026), a day in the current Hebrew
+ * month (15 / ט״ו), or a Hebrew date like "ט״ו אלול תשפ״ו".
+ */
+export function parseFlexibleDate(raw: string, contextIso = todayIso()): string | null {
+  const text = raw.trim();
+  if (!text) return null;
+
+  if (/^\d{4}-\d{2}-\d{2}$/.test(text)) {
+    try {
+      isoToHDate(text);
+      return text;
+    } catch {
+      return null;
+    }
+  }
+
+  const greg = text.match(/^(\d{1,2})[./-](\d{1,2})[./-](\d{2,4})$/);
+  if (greg) {
+    let year = Number(greg[3]);
+    if (year < 100) year += 2000;
+    const month = Number(greg[2]);
+    const day = Number(greg[1]);
+    const dt = new Date(year, month - 1, day, 12, 0, 0);
+    if (dt.getFullYear() === year && dt.getMonth() === month - 1 && dt.getDate() === day) {
+      return toIsoDate(dt);
+    }
+    return null;
+  }
+
+  const ctx = hebrewMonthFromIso(contextIso);
+  const tokens = text.split(/\s+/).filter(Boolean);
+
+  if (tokens.length === 1) {
+    const day = parseDayToken(tokens[0]);
+    if (!day) return null;
+    const max = daysInHebrewMonth(ctx.year, ctx.month);
+    if (day > max) return null;
+    return hDateToIso(new HDate(day, ctx.month, ctx.year));
+  }
+
+  const day = parseDayToken(tokens[0]);
+  if (!day) return null;
+  const year = tokens.length >= 3 ? parseYearToken(tokens[tokens.length - 1], ctx.year) : ctx.year;
+  const monthToken = tokens.slice(1, tokens.length >= 3 ? -1 : undefined).join(" ");
+  const month = findHebrewMonthNumber(year, monthToken) ?? ctx.month;
+  const max = daysInHebrewMonth(year, month);
+  if (day > max) return null;
+  return hDateToIso(new HDate(day, month, year));
+}
+
 export function isIsoInRange(iso: string, start: string, end: string): boolean {
   if (!start) return false;
   const bound = end || start;

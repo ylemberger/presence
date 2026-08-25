@@ -6,7 +6,9 @@ import {
   buildHebrewMonth,
   formatHebrewDate,
   hebrewMonthFromIso,
+  hebrewMonthOptionsForYear,
   hebrewWeekdayLabels,
+  hebrewYearOptions,
   shiftHebrewMonth,
   todayIso,
 } from "@/lib/dates/hebrew";
@@ -78,14 +80,25 @@ export function LessonsCalendar({
   const todayStr = todayIso();
   const holidaySet = useMemo(() => new Set(holidayDates), [holidayDates]);
 
-  function navigate(delta: number) {
-    const next = shiftHebrewMonth(cursor.year, cursor.month, delta);
+  const yearOptions = useMemo(() => hebrewYearOptions(todayStr, 25), [todayStr]);
+  const monthOptions = useMemo(
+    () => hebrewMonthOptionsForYear(cursor.year),
+    [cursor.year]
+  );
+
+  function goTo(year: number, monthNum: number) {
+    const next = { year, month: monthNum };
     setCursor(next);
-    const grid = buildHebrewMonth(next.year, next.month);
+    const grid = buildHebrewMonth(year, monthNum);
     const params = new URLSearchParams(monthQuery);
     params.set("from", grid.rangeStart);
     params.set("to", grid.rangeEnd);
     router.push(`/lessons?${params.toString()}`);
+  }
+
+  function navigate(delta: number) {
+    const next = shiftHebrewMonth(cursor.year, cursor.month, delta);
+    goTo(next.year, next.month);
   }
 
   async function markComplete(id: string) {
@@ -96,7 +109,7 @@ export function LessonsCalendar({
   return (
     <div className="flex flex-col gap-gutter lg:flex-row">
       <section className="w-full rounded-xl border border-outline-variant/30 bg-surface-container-lowest p-stack_md shadow-tactile-md lg:w-2/5">
-        <div className="mb-stack_md flex items-center justify-between">
+        <div className="mb-stack_md flex flex-wrap items-center justify-between gap-2">
           <button
             type="button"
             onClick={() => navigate(1)}
@@ -105,7 +118,39 @@ export function LessonsCalendar({
           >
             <Icon name="chevron_right" />
           </button>
-          <h3 className="font-title-lg text-title-lg text-primary">{month.title}</h3>
+          <div className="flex flex-wrap items-center justify-center gap-2">
+            <select
+              className="rounded-lg border border-outline-variant bg-surface-container-lowest px-2 py-1.5 font-label-md text-label-md text-on-surface focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
+              aria-label="חודש עברי"
+              value={cursor.month}
+              onChange={(e) => goTo(cursor.year, Number(e.target.value))}
+            >
+              {monthOptions.map((opt) => (
+                <option key={opt.month} value={opt.month}>
+                  {opt.label}
+                </option>
+              ))}
+            </select>
+            <select
+              className="rounded-lg border border-outline-variant bg-surface-container-lowest px-2 py-1.5 font-label-md text-label-md text-on-surface focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
+              aria-label="שנה עברית"
+              value={cursor.year}
+              onChange={(e) => {
+                const year = Number(e.target.value);
+                const months = hebrewMonthOptionsForYear(year);
+                const nextMonth = months.some((m) => m.month === cursor.month)
+                  ? cursor.month
+                  : (months[0]?.month ?? 1);
+                goTo(year, nextMonth);
+              }}
+            >
+              {yearOptions.map((opt) => (
+                <option key={opt.year} value={opt.year}>
+                  {opt.label}
+                </option>
+              ))}
+            </select>
+          </div>
           <button
             type="button"
             onClick={() => navigate(-1)}
@@ -136,30 +181,51 @@ export function LessonsCalendar({
                 type="button"
                 onClick={() => setSelectedIso(day.iso)}
                 className={cn(
-                  "relative flex aspect-square items-center justify-center rounded-full p-2 transition-colors",
+                  "relative flex aspect-square flex-col items-center justify-center rounded-xl p-1 transition-colors",
                   selected
                     ? "bg-primary-container font-bold text-white shadow-tactile-sm"
                     : holiday
                       ? "bg-secondary-container/70 text-on-secondary-container"
-                      : isToday
-                        ? "ring-1 ring-inset ring-secondary text-primary"
-                        : "text-on-surface hover:bg-surface-container"
+                      : hasEvents
+                        ? "bg-primary/10 text-primary hover:bg-primary/15"
+                        : isToday
+                          ? "ring-1 ring-inset ring-secondary text-primary"
+                          : "text-on-surface hover:bg-surface-container"
                 )}
-                aria-label={holiday ? `${day.iso} חופשה` : day.iso}
+                aria-label={
+                  holiday
+                    ? `${day.iso} חופשה`
+                    : hasEvents
+                      ? `${day.iso}, ${dayOcc.length} שיעורים`
+                      : day.iso
+                }
               >
                 <span>{day.label}</span>
                 {hasEvents && (
                   <span
-                    aria-hidden
                     className={cn(
-                      "absolute bottom-1 left-1/2 h-1 w-1 -translate-x-1/2 rounded-full",
-                      selected ? "bg-white" : "bg-secondary"
+                      "text-[9px] leading-none",
+                      selected ? "text-white/90" : "text-primary"
                     )}
-                  />
+                  >
+                    {dayOcc.length} ש׳
+                  </span>
                 )}
               </button>
             );
           })}
+        </div>
+        <div className="mt-3 flex flex-wrap gap-3 font-caption text-caption text-on-surface-variant">
+          <span className="inline-flex items-center gap-1.5">
+            <span className="h-2.5 w-2.5 rounded-sm bg-primary/40" />
+            יש שיעורים
+          </span>
+          {holidayDates.length > 0 && (
+            <span className="inline-flex items-center gap-1.5">
+              <span className="h-2.5 w-2.5 rounded-sm bg-secondary-container" />
+              חופשה
+            </span>
+          )}
         </div>
       </section>
 
