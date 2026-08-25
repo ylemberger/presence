@@ -16,6 +16,7 @@
    4. ב-Supabase: Authentication → URL Configuration הוסיפי `http://localhost:3000/auth/callback` (וגם את כתובת הייצור)
 4. **משתני סביבה:** העתיקי `.env.local.example` ל-`.env.local` ומלאי את הערכים מ-Project Settings → API
 5. **מיילים מורשים:** הגדירי `ALLOWED_LOGIN_EMAILS` ב-`.env.local` (מופרדים בפסיק) — ראי `.env.local.example`
+6. **מערכת שכר (קריאה בלבד):** `SALARY_SUPABASE_URL` ו-`SALARY_SUPABASE_ANON_KEY` — פרויקט ה-Supabase של מערכת השכר. הסנכרון שולף רק שורות מאושרות מ-`salary_records` ולא כותב לשם.
 
 ```bash
 npm install

@@ -3,6 +3,10 @@
     {
       "path": "/api/cron/generate-occurrences",
       "schedule": "0 2 * * 0"
+    },
+    {
+      "path": "/api/cron/sync-teachers",
+      "schedule": "0 3 * * *"
     }
   ]
 }

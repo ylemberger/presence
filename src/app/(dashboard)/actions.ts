@@ -800,57 +800,63 @@ export async function transferStudentAction(formData: FormData) {
 }
 
 // --- Teachers ---
-export async function createTeacherAction(formData: FormData) {
+export async function createTeacherAction(_formData: FormData) {
+  return { error: "אי אפשר להוסיף מורה ידנית. מורות נכנסות ממערכת השכר אחרי אישור." };
+}
+
+export async function createSourceRecordAction(_formData: FormData) {
+  return { error: "אי אפשר להוסיף רשומת מקור ידנית. מורות נכנסות ממערכת השכר אחרי אישור." };
+}
+
+export async function updateTeacherAction(formData: FormData) {
+  const actionAuth = await createActionClient();
+  if ("error" in actionAuth) return { error: actionAuth.error };
+  const supabase = actionAuth.supabase;
+  const id = requireId(formData.get("teacher_id"), "מורה");
+  if (isError(id)) return id;
   const fullName = requireText(formData.get("full_name"), "שם מלא");
   if (isError(fullName)) return fullName;
-  const identity = validateIsraeliId(String(formData.get("identity_number") ?? ""));
-  if (isError(identity)) return identity;
-  const phone = validatePhone(String(formData.get("phone") ?? ""));
-  if (isError(phone)) return phone;
-  const email = validateEmail(String(formData.get("email") ?? ""));
-  if (isError(email)) return email;
 
-  const actionAuth = await createActionClient();
-  if ("error" in actionAuth) return { error: actionAuth.error };
-  const supabase = actionAuth.supabase;
-  const { error } = await supabase.from("teachers").insert({
-    full_name: fullName,
-    identity_number: identity,
-    phone,
-    email,
-    is_local: true,
-  });
-  if (error) {
-    if (error.code === "23505") return { error: 'מספר תעודת זהות כבר קיים במערכת' };
-    return { error: error.message };
+  const phoneRaw = String(formData.get("phone") ?? "").trim();
+  let phone: string | null = null;
+  if (phoneRaw) {
+    const parsed = validatePhone(phoneRaw);
+    if (isError(parsed)) return parsed;
+    phone = parsed;
   }
-  revalidatePath("/teachers");
-  return { success: true };
-}
 
-export async function createSourceRecordAction(formData: FormData) {
-  const actionAuth = await createActionClient();
-  if ("error" in actionAuth) return { error: actionAuth.error };
-  const supabase = actionAuth.supabase;
-  const { error } = await supabase.from("teacher_source_records").insert({
-    external_id: formData.get("external_id") as string,
-    teacher_identity_number: formData.get("teacher_identity_number") as string,
-    full_name: formData.get("full_name") as string,
-    subject: formData.get("subject") as string,
-    source_year: formData.get("source_year") as string,
-  });
+  const emailRaw = String(formData.get("email") ?? "").trim();
+  let email: string | null = null;
+  if (emailRaw) {
+    const parsed = validateEmail(emailRaw);
+    if (isError(parsed)) return parsed;
+    email = parsed;
+  }
+
+  const { error } = await supabase
+    .from("teachers")
+    .update({
+      full_name: fullName,
+      phone,
+      email,
+      is_local: true,
+    })
+    .eq("id", id);
   if (error) return { error: error.message };
   revalidatePath("/teachers");
+  revalidatePath(`/teachers/${id}`);
   return { success: true };
 }
 
-export async function syncTeachersAction(academicYearId: string) {
+export async function syncTeachersAction() {
+  const actionAuth = await createActionClient();
+  if ("error" in actionAuth) return { error: actionAuth.error };
   try {
-    const result = await syncTeacherSourceRecords(academicYearId);
+    const result = await syncTeacherSourceRecords(actionAuth.supabase);
     revalidatePath("/teachers");
     return { success: true, result };
   } catch (e) {
-    return { error: (e as Error).message };
+    return { error: e instanceof Error ? e.message : "סנכרון המורות נכשל" };
   }
 }
 

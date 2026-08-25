@@ -97,6 +97,12 @@ create table teacher_source_records (
   full_name text not null,
   subject text not null,
   source_year text not null,
+  teacher_id uuid references teachers(id) on delete restrict,
+  salary_subject text,
+  salary_track text,
+  salary_grade_year text,
+  salary_semester text,
+  salary_meetings integer,
   payload jsonb,
   synced_at timestamptz default now()
 );
@@ -314,6 +320,9 @@ create index if not exists idx_teacher_source_records_year
 
 create index if not exists idx_teacher_source_records_identity
   on teacher_source_records (teacher_identity_number);
+
+create index if not exists idx_teacher_source_records_teacher
+  on teacher_source_records (teacher_id);
 
 create index if not exists idx_student_assignments_current_class
   on student_assignments (academic_year_id, class_id, student_id)

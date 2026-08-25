@@ -87,8 +87,8 @@ export interface Teacher {
   id: string;
   full_name: string;
   identity_number: string;
-  phone: string;
-  email: string;
+  phone: string | null;
+  email: string | null;
   is_local: boolean;
   created_at: string;
 }
@@ -100,6 +100,12 @@ export interface TeacherSourceRecord {
   full_name: string;
   subject: string;
   source_year: string;
+  teacher_id: string | null;
+  salary_subject: string | null;
+  salary_track: string | null;
+  salary_grade_year: string | null;
+  salary_semester: string | null;
+  salary_meetings: number | null;
   payload: Record<string, unknown> | null;
   synced_at: string;
 }

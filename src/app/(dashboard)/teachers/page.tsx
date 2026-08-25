@@ -59,7 +59,7 @@ export default async function TeachersPage() {
     <div className="flex flex-col gap-stack_lg">
       <PageHeader
         title="מורות"
-        description="הוספה, עריכה וצפייה בשיבוצי מורות במערכת."
+        description="מורות מגיעות ממערכת השכר אחרי אישור. אפשר לערוך פרטים מקומית."
         size="display"
       />
 
@@ -71,10 +71,10 @@ export default async function TeachersPage() {
         <div className="lg:col-span-4 lg:row-span-2">
           <section className="rounded-xl border-t-4 border-secondary bg-surface-container-lowest p-stack_md shadow-tactile-md">
             <h3 className="mb-4 flex items-center gap-2 font-title-lg text-title-lg text-primary">
-              <Icon name="person_add" className="text-secondary" />
-              הוספת מורה
+              <Icon name="sync" className="text-secondary" />
+              סנכרון מורות
             </h3>
-            <TeachersForms yearId={activeYear?.id} />
+            <TeachersForms />
           </section>
         </div>
 

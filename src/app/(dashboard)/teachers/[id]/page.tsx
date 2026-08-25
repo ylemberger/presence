@@ -1,6 +1,6 @@
 import { notFound } from "next/navigation";
 import Link from "next/link";
-import { PageHeader, StatusPill } from "@/components/ui/PageHeader";
+import { StatusPill } from "@/components/ui/PageHeader";
 import { Section } from "@/components/ui/Section";
 import { Table, TableRow, TableCell } from "@/components/ui/Table";
 import { createClient } from "@/lib/supabase/server";
@@ -9,6 +9,7 @@ import { WeeklyTimetableGrid, type TimetableEntry } from "@/components/timetable
 import { BILLING_TYPE_LABELS } from "@/lib/constants";
 import { hebrewWeekdayLabels } from "@/lib/dates/hebrew";
 import { Icon } from "@/components/ui/Icon";
+import { TeacherEditForm } from "../TeacherEditForm";
 
 interface Props {
   params: { id: string };
@@ -23,27 +24,25 @@ export default async function TeacherDetailPage({ params }: Props) {
   const { data: teacher } = await supabase.from("teachers").select("*").eq("id", id).single();
   if (!teacher) notFound();
 
-  if (!activeYear) {
-    return (
-      <div>
-        <PageHeader
-          title={teacher.full_name}
-          description="יש להגדיר שנה אקדמית פעילה כדי לראות מערכת שעות."
-          size="headline"
-        />
-      </div>
-    );
-  }
+  const { data: sourceRows } = await supabase
+    .from("teacher_source_records")
+    .select(
+      "id, salary_subject, salary_track, salary_grade_year, salary_semester, salary_meetings, subject, synced_at"
+    )
+    .eq("teacher_identity_number", teacher.identity_number)
+    .order("synced_at", { ascending: false });
 
-  const { data: taIdsRaw } = await supabase
-    .from("teacher_teaching_assignments")
-    .select("id")
-    .eq("teacher_id", id)
-    .eq("academic_year_id", activeYear.id);
-  const taIds = (taIdsRaw ?? []).map((r: any) => r.id);
+  const { data: taIdsRaw } = activeYear
+    ? await supabase
+        .from("teacher_teaching_assignments")
+        .select("id")
+        .eq("teacher_id", id)
+        .eq("academic_year_id", activeYear.id)
+    : { data: [] as { id: string }[] };
+  const taIds = (taIdsRaw ?? []).map((r: { id: string }) => r.id);
 
   let lessonsRows: any[] = [];
-  if (taIds.length > 0) {
+  if (activeYear && taIds.length > 0) {
     const { data } = await supabase
       .from("lessons")
       .select(
@@ -124,36 +123,56 @@ export default async function TeacherDetailPage({ params }: Props) {
               </div>
             </div>
           </div>
-          <Link
-            href={`/timetable?teacherId=${teacher.id}`}
-            className="inline-flex items-center gap-2 rounded-lg bg-secondary px-6 py-2.5 font-label-md text-label-md text-on-secondary shadow-tactile-sm transition-all hover:-translate-y-0.5 hover:bg-secondary-fixed-dim"
-          >
-            <Icon name="calendar_view_week" className="text-[18px]" />
-            פתח מערכת שעות
-          </Link>
+          {activeYear && (
+            <Link
+              href={`/timetable?teacherId=${teacher.id}`}
+              className="inline-flex items-center gap-2 rounded-lg bg-secondary px-6 py-2.5 font-label-md text-label-md text-on-secondary shadow-tactile-sm transition-all hover:-translate-y-0.5 hover:bg-secondary-fixed-dim"
+            >
+              <Icon name="calendar_view_week" className="text-[18px]" />
+              פתח מערכת שעות
+            </Link>
+          )}
         </div>
       </section>
 
+      <Section icon="list_alt" title="שיבוצי שכר מיובאים">
+        {(sourceRows ?? []).length === 0 ? (
+          <p className="font-body-md text-body-md text-on-surface-variant">
+            אין שיבוצי שכר מיובאים למורה זו.
+          </p>
+        ) : (
+          <Table headers={["מקצוע", "מסלול", "שכבה", "סמסטר", "מפגשים"]}>
+            {(sourceRows ?? []).map((row) => (
+              <TableRow key={row.id}>
+                <TableCell className="font-semibold text-primary">
+                  {row.salary_subject || row.subject || "—"}
+                </TableCell>
+                <TableCell className="text-on-surface-variant">
+                  {row.salary_track || "—"}
+                </TableCell>
+                <TableCell className="text-on-surface-variant">
+                  {row.salary_grade_year || "—"}
+                </TableCell>
+                <TableCell className="text-on-surface-variant">
+                  {row.salary_semester || "—"}
+                </TableCell>
+                <TableCell className="text-on-surface-variant">
+                  {row.salary_meetings ?? "—"}
+                </TableCell>
+              </TableRow>
+            ))}
+          </Table>
+        )}
+      </Section>
+
       <div className="grid grid-cols-1 gap-gutter xl:grid-cols-3">
         <Section icon="contact_phone" title="פרטי מורה">
-          <dl className="flex flex-col gap-3 font-body-md text-body-md">
-            <div>
-              <dt className="font-label-md text-label-md text-on-surface-variant">
-                טלפון
-              </dt>
-              <dd className="text-on-surface" dir="ltr">
-                {teacher.phone ?? "—"}
-              </dd>
-            </div>
-            <div>
-              <dt className="font-label-md text-label-md text-on-surface-variant">
-                אימייל
-              </dt>
-              <dd className="text-on-surface" dir="ltr">
-                {teacher.email ?? "—"}
-              </dd>
-            </div>
-          </dl>
+          <TeacherEditForm
+            teacherId={teacher.id}
+            fullName={teacher.full_name}
+            phone={teacher.phone}
+            email={teacher.email}
+          />
         </Section>
 
         <div className="xl:col-span-2">
