@@ -52,6 +52,27 @@ export function formatDatePair(date: string | Date | null | undefined): {
   };
 }
 
+/** Small Gregorian day+month for calendar cells, e.g. 21.08 */
+export function formatGregorianDayMonth(date: string | Date | null | undefined): string {
+  const full = formatGregorianDate(date);
+  const parts = full.split(".");
+  if (parts.length < 2) return full;
+  return `${parts[0]}.${parts[1]}`;
+}
+
+/** Small Gregorian range for a Hebrew month header. */
+export function formatGregorianRange(start: string, end: string): string {
+  const a = formatGregorianDate(start);
+  const b = formatGregorianDate(end);
+  if (!a || !b) return a || b;
+  if (a === b) return a;
+  const [ad, am, ay] = a.split(".");
+  const [bd, bm, by] = b.split(".");
+  if (ay === by && am === bm) return `${ad}–${bd}.${am}.${ay}`;
+  if (ay === by) return `${ad}.${am}–${bd}.${bm}.${ay}`;
+  return `${a} – ${b}`;
+}
+
 export function todayIso(): string {
   return toIsoDate(new Date());
 }

@@ -4,6 +4,32 @@ import { getActiveAcademicYear } from "@/lib/utils";
 import { filterFixedGrades } from "@/lib/years/grades";
 import { StudentsDirectory } from "./StudentsDirectory";
 
+type YearAssignment = {
+  student_id: string;
+  grade_id: string;
+  class_id: string;
+  track_id: string;
+  specialization_id: string | null;
+  secondary_specialization_id: string | null;
+  is_psychology: boolean;
+  start_date: string;
+  end_date: string | null;
+};
+
+/** Prefer open placement; otherwise the latest assignment in that year (archive). */
+function pickPlacementForYear(rows: YearAssignment[]): Map<string, YearAssignment> {
+  const byStudent = new Map<string, YearAssignment>();
+  const sorted = [...rows].sort((a, b) => {
+    if (a.end_date === null && b.end_date !== null) return -1;
+    if (a.end_date !== null && b.end_date === null) return 1;
+    return b.start_date.localeCompare(a.start_date);
+  });
+  for (const row of sorted) {
+    if (!byStudent.has(row.student_id)) byStudent.set(row.student_id, row);
+  }
+  return byStudent;
+}
+
 export default async function StudentsPage() {
   const activeYear = await getActiveAcademicYear();
   const supabase = await createClient();
@@ -26,10 +52,11 @@ export default async function StudentsPage() {
   > = {};
 
   let yearOptions = null;
+  const placedStudentIds = new Set<string>();
 
   if (activeYear) {
     const [
-      { data: currentAssignments, error: assignmentsError },
+      { data: yearAssignments, error: assignmentsError },
       { data: grades },
       { data: classes },
       { data: tracks },
@@ -38,10 +65,9 @@ export default async function StudentsPage() {
       supabase
         .from("student_assignments")
         .select(
-          "student_id, grade_id, class_id, track_id, specialization_id, secondary_specialization_id, is_psychology"
+          "student_id, grade_id, class_id, track_id, specialization_id, secondary_specialization_id, is_psychology, start_date, end_date"
         )
-        .eq("academic_year_id", activeYear.id)
-        .is("end_date", null),
+        .eq("academic_year_id", activeYear.id),
       supabase.from("grades").select("*").eq("academic_year_id", activeYear.id).order("name"),
       supabase.from("classes").select("*").eq("academic_year_id", activeYear.id).order("name"),
       supabase.from("tracks").select("*").eq("academic_year_id", activeYear.id).order("name"),
@@ -61,8 +87,10 @@ export default async function StudentsPage() {
     const trackNameById = new Map((tracks ?? []).map((t) => [t.id, t.name]));
     const specNameById = new Map((specializations ?? []).map((s) => [s.id, s.name]));
 
-    for (const a of currentAssignments ?? []) {
-      assignments[a.student_id] = {
+    const picked = pickPlacementForYear((yearAssignments ?? []) as YearAssignment[]);
+    for (const [studentId, a] of picked) {
+      placedStudentIds.add(studentId);
+      assignments[studentId] = {
         className: classNameById.get(a.class_id) ?? "לא משובצת",
         gradeName: gradeNameById.get(a.grade_id) ?? "—",
         trackName: trackNameById.get(a.track_id) ?? "—",
@@ -85,25 +113,27 @@ export default async function StudentsPage() {
     };
   }
 
-  const rows = (students ?? []).map((s) => ({
-    id: s.id,
-    full_name: s.full_name,
-    identity_number: s.identity_number,
-    cohort_number: s.cohort_number ?? 1,
-    is_active: s.is_active,
-    className: assignments[s.id]?.className ?? "לא משובצת",
-    gradeName: assignments[s.id]?.gradeName ?? "—",
-    trackName: assignments[s.id]?.trackName ?? "—",
-    specializationName: assignments[s.id]?.specializationName ?? "—",
-    secondarySpecializationName: assignments[s.id]?.secondarySpecializationName ?? "—",
-    isPsychology: assignments[s.id]?.isPsychology ?? false,
-  }));
+  const rows = (students ?? [])
+    .filter((s) => placedStudentIds.has(s.id) || s.is_active)
+    .map((s) => ({
+      id: s.id,
+      full_name: s.full_name,
+      identity_number: s.identity_number,
+      cohort_number: s.cohort_number ?? 1,
+      is_active: s.is_active,
+      className: assignments[s.id]?.className ?? "לא משובצת",
+      gradeName: assignments[s.id]?.gradeName ?? "—",
+      trackName: assignments[s.id]?.trackName ?? "—",
+      specializationName: assignments[s.id]?.specializationName ?? "—",
+      secondarySpecializationName: assignments[s.id]?.secondarySpecializationName ?? "—",
+      isPsychology: assignments[s.id]?.isPsychology ?? false,
+    }));
 
   return (
     <div>
       <PageHeader
         title="תלמידות"
-        description="כרטסת קבועה עם מחזור. אפשר להוסיף אחת-אחת או לייבא מאקסל. שינוי שיבוץ באמצע השנה — בהעברה."
+        description="כרטסת קבועה עם מחזור. שיבוץ (שכבה/כיתה/מסלול) לפי השנה שנבחרה למעלה. בארכיון רואים את מה שהיה באותה שנה."
       />
       <StudentsDirectory students={rows} yearOptions={yearOptions} />
     </div>

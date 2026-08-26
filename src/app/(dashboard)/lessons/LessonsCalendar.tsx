@@ -4,6 +4,8 @@ import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
   buildHebrewMonth,
+  formatGregorianDayMonth,
+  formatGregorianRange,
   formatHebrewDate,
   hebrewMonthFromIso,
   hebrewMonthOptionsForYear,
@@ -19,6 +21,7 @@ import { completeOccurrenceAction } from "../actions";
 import type { Lesson } from "@/types/database";
 import { Icon } from "@/components/ui/Icon";
 import { AssignStudentToLesson } from "./AssignStudentToLesson";
+import { AddOccurrenceDate } from "../attendance/AddOccurrenceDate";
 
 export type LessonTemplateCard = Lesson & {
   teacherName: string;
@@ -45,6 +48,7 @@ interface LessonsCalendarProps {
   lessons: LessonTemplateCard[];
   monthQuery: string;
   holidayDates?: string[];
+  cancelledDates?: string[];
   students?: { id: string; full_name: string }[];
 }
 
@@ -67,6 +71,7 @@ export function LessonsCalendar({
   lessons,
   monthQuery,
   holidayDates = [],
+  cancelledDates = [],
   students = [],
 }: LessonsCalendarProps) {
   const router = useRouter();
@@ -92,6 +97,7 @@ export function LessonsCalendar({
   const selectedOccurrences = selectedIso ? byDate.get(selectedIso) ?? [] : [];
   const todayStr = todayIso();
   const holidaySet = useMemo(() => new Set(holidayDates), [holidayDates]);
+  const cancelledSet = useMemo(() => new Set(cancelledDates), [cancelledDates]);
 
   const yearOptions = useMemo(() => hebrewYearOptions(todayStr, 25), [todayStr]);
   const monthOptions = useMemo(
@@ -131,7 +137,11 @@ export function LessonsCalendar({
           >
             <Icon name="chevron_right" />
           </button>
-          <div className="flex flex-wrap items-center justify-center gap-2">
+          <div className="flex min-w-0 flex-col items-center justify-center gap-1">
+            <p className="font-caption text-caption text-on-surface-variant">
+              {formatGregorianRange(month.rangeStart, month.rangeEnd)}
+            </p>
+            <div className="flex flex-wrap items-center justify-center gap-2">
             <select
               className="rounded-lg border border-outline-variant bg-surface-container-lowest px-2 py-1.5 font-label-md text-label-md text-on-surface focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
               aria-label="חודש עברי"
@@ -163,6 +173,7 @@ export function LessonsCalendar({
                 </option>
               ))}
             </select>
+            </div>
           </div>
           <button
             type="button"
@@ -188,6 +199,7 @@ export function LessonsCalendar({
             const isToday = day.iso === todayStr;
             const hasEvents = dayOcc.length > 0;
             const holiday = holidaySet.has(day.iso);
+            const cancelled = cancelledSet.has(day.iso);
             return (
               <button
                 key={day.iso}
@@ -197,8 +209,10 @@ export function LessonsCalendar({
                   "relative flex aspect-square flex-col items-center justify-center rounded-xl p-1 transition-colors",
                   selected
                     ? "bg-primary-container font-bold text-white shadow-tactile-sm"
-                    : holiday
-                      ? "bg-secondary-container/70 text-on-secondary-container"
+                    : cancelled
+                      ? "bg-holiday-cancelled/80 text-primary"
+                      : holiday
+                      ? "bg-holiday-vacation/80 text-on-secondary-container"
                       : hasEvents
                         ? "bg-primary/10 text-primary hover:bg-primary/15"
                         : isToday
@@ -206,13 +220,18 @@ export function LessonsCalendar({
                           : "text-on-surface hover:bg-surface-container"
                 )}
                 aria-label={
-                  holiday
+                  cancelled
+                    ? `${day.iso} ביטול לימודים`
+                    : holiday
                     ? `${day.iso} חופשה`
                     : hasEvents
                       ? `${day.iso}, ${dayOcc.length} שיעורים`
                       : day.iso
                 }
               >
+                <span className="text-[9px] leading-none text-on-surface-variant">
+                  {formatGregorianDayMonth(day.iso)}
+                </span>
                 <span>{day.label}</span>
                 {hasEvents && (
                   <span
@@ -235,8 +254,14 @@ export function LessonsCalendar({
           </span>
           {holidayDates.length > 0 && (
             <span className="inline-flex items-center gap-1.5">
-              <span className="h-2.5 w-2.5 rounded-sm bg-secondary-container" />
+              <span className="h-2.5 w-2.5 rounded-sm bg-holiday-vacation" />
               חופשה
+            </span>
+          )}
+          {cancelledDates.length > 0 && (
+            <span className="inline-flex items-center gap-1.5">
+              <span className="h-2.5 w-2.5 rounded-sm bg-holiday-cancelled" />
+              ביטול לימודים
             </span>
           )}
         </div>
@@ -261,8 +286,12 @@ export function LessonsCalendar({
               />
               <p className="font-body-md text-body-md text-on-surface-variant">
                 {holidaySet.has(selectedIso)
-                  ? "יום חופשה — אין לימודים ולא נספרת נוכחות."
-                  : "אין שיעורים ביום זה."}
+                  ? cancelledSet.has(selectedIso)
+                    ? "ביטול לימודים — אין שיעורים אוטומטיים."
+                    : "יום חופשה — אין לימודים ולא נספרת נוכחות."
+                  : cancelledSet.has(selectedIso)
+                    ? "ביטול לימודים — אין שיעורים אוטומטיים."
+                    : "אין שיעורים ביום זה."}
               </p>
             </div>
           )}
@@ -385,6 +414,9 @@ export function LessonsCalendar({
                         <AssignStudentToLesson lessonId={l.id} students={students} />
                       </div>
                     )}
+                    <div className="mt-2">
+                      <AddOccurrenceDate lessonId={l.id} />
+                    </div>
                   </li>
                 );
               })}

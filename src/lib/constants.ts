@@ -12,6 +12,11 @@ export const OCCURRENCE_STATUS_LABELS: Record<OccurrenceStatus, string> = {
   cancelled: "בוטל",
 };
 
+export const HOLIDAY_KIND_LABELS = {
+  vacation: "חופשה",
+  cancelled_studies: "ביטול לימודים",
+} as const;
+
 export const RANGE_TYPE_LABELS: Record<RangeType, string> = {
   annual: "שנתי",
   semester_a: "מחצית א'",

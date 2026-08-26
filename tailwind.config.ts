@@ -47,6 +47,8 @@ const config: Config = {
         "attendance-present": "#10b981",
         "attendance-late": "#f59e0b",
         "attendance-absent": "#f43f5e",
+        "holiday-vacation": "#fdd48e",
+        "holiday-cancelled": "#9bb6e8",
         "brand-soft": "rgba(0, 36, 42, 0.05)",
         "accent-soft": "rgba(119, 90, 32, 0.05)",
       },

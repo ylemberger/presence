@@ -25,6 +25,7 @@
 | [`patches/006_lesson_audience.sql`](patches/006_lesson_audience.sql) | קהל מרובה לשיעור (`lesson_audience`) |
 | [`patches/007_lesson_period_count.sql`](patches/007_lesson_period_count.sql) | שיעור של כמה שעות רצופות (`period_count`) |
 | [`patches/008_salary_teacher_source.sql`](patches/008_salary_teacher_source.sql) | שדות שכר ב-`teacher_source_records` + `teacher_id` |
+| [`patches/009_holiday_kinds_and_student_notes.sql`](patches/009_holiday_kinds_and_student_notes.sql) | סוג חופשה/ביטול לימודים + הערה אישית לתלמידה |
 | [`patches/run_005_to_007.sql`](patches/run_005_to_007.sql) | **הרצה אחת** — 005+006+007 למסד קיים |
 
 ## טבלאות עיקריות

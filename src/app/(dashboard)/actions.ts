@@ -1,10 +1,11 @@
-﻿"use server";
+"use server";
 
 import { revalidatePath } from "next/cache";
 import { createActionClient, createClient } from "@/lib/supabase/server";
 import { setActiveAcademicYear, getActiveAcademicYear } from "@/lib/utils";
 import { syncTeacherSourceRecords } from "@/lib/sync/teachers";
 import { generateLessonOccurrences, applyHolidaysToYearOccurrences } from "@/lib/lessons/occurrences";
+import { toggleHolidayDate, isMissingHolidayKind } from "@/lib/lessons/holidays";
 import {
   audienceForLesson,
   audienceMapFromRows,
@@ -23,7 +24,7 @@ import {
   parseStudentImportWorkbook,
 } from "@/lib/students/excelImport";
 import { applyStudentImportRows } from "@/lib/students/importApply";
-import type { AttendanceStatus } from "@/types/database";
+import type { AttendanceStatus, HolidayKind } from "@/types/database";
 import {
   isError,
   parseLessonBilling,
@@ -187,11 +188,19 @@ function revalidateLessonCalendarPaths() {
   revalidatePath("/timetable");
 }
 
+function parseHolidayKind(raw: unknown): HolidayKind | { error: string } {
+  const kind = String(raw ?? "vacation").trim();
+  if (kind === "vacation" || kind === "cancelled_studies") return kind;
+  return { error: "יש לבחור סוג: חופשה או ביטול לימודים" };
+}
+
 function parseHolidayPeriodForm(formData: FormData) {
   const yearId = requireId(formData.get("academic_year_id"), "שנה אקדמית");
   if (isError(yearId)) return yearId;
-  const name = requireText(formData.get("name"), "שם החופשה");
+  const name = requireText(formData.get("name"), "שם");
   if (isError(name)) return name;
+  const kind = parseHolidayKind(formData.get("kind"));
+  if (isError(kind)) return kind;
   const startDate = requireIsoDate(formData.get("start_date"), "תאריך התחלה");
   if (isError(startDate)) return startDate;
   const endRaw = String(formData.get("end_date") ?? "").trim().slice(0, 10);
@@ -203,9 +212,17 @@ function parseHolidayPeriodForm(formData: FormData) {
   return {
     academic_year_id: yearId,
     name,
+    kind,
     start_date: startDate,
     end_date: endDate,
   };
+}
+
+function holidayWriteError(error: { message?: string; code?: string } | null): string {
+  if (isMissingHolidayKind(error)) {
+    return "יש להריץ ב-Supabase את הקובץ supabase/patches/009_holiday_kinds_and_student_notes.sql";
+  }
+  return "שמירת לוח החופשות נכשלה";
 }
 
 export async function createHolidayPeriodAction(formData: FormData) {
@@ -217,7 +234,7 @@ export async function createHolidayPeriodAction(formData: FormData) {
   const supabase = actionAuth.supabase;
 
   const { error } = await supabase.from("holiday_periods").insert(payload);
-  if (error) return { error: error.message };
+  if (error) return { error: holidayWriteError(error) };
 
   try {
     await applyHolidaysToYearOccurrences(payload.academic_year_id, supabase);
@@ -241,12 +258,13 @@ export async function updateHolidayPeriodAction(id: string, formData: FormData) 
     .from("holiday_periods")
     .update({
       name: payload.name,
+      kind: payload.kind,
       start_date: payload.start_date,
       end_date: payload.end_date,
     })
     .eq("id", id)
     .eq("academic_year_id", payload.academic_year_id);
-  if (error) return { error: error.message };
+  if (error) return { error: holidayWriteError(error) };
 
   try {
     await applyHolidaysToYearOccurrences(payload.academic_year_id, supabase);
@@ -278,6 +296,38 @@ export async function deleteHolidayPeriodAction(id: string) {
     await applyHolidaysToYearOccurrences(existing.academic_year_id, supabase);
   } catch (e) {
     return { error: (e as Error).message };
+  }
+
+  revalidateLessonCalendarPaths();
+  return { success: true };
+}
+
+export async function toggleHolidayDayAction(
+  yearId: string,
+  iso: string,
+  kind: HolidayKind,
+  name: string
+) {
+  const date = requireIsoDate(iso, "תאריך");
+  if (isError(date)) return date;
+  const year = requireId(yearId, "שנה אקדמית");
+  if (isError(year)) return year;
+  const parsedKind = parseHolidayKind(kind);
+  if (isError(parsedKind)) return parsedKind;
+  const label =
+    String(name ?? "").trim() ||
+    (parsedKind === "cancelled_studies" ? "ביטול לימודים" : "חופשה");
+
+  const actionAuth = await createActionClient();
+  if ("error" in actionAuth) return { error: actionAuth.error };
+
+  const toggled = await toggleHolidayDate(actionAuth.supabase, year, date, parsedKind, label);
+  if (toggled.error) return toggled;
+
+  try {
+    await applyHolidaysToYearOccurrences(year, actionAuth.supabase);
+  } catch {
+    return { error: "היום נשמר, אך רענון מופעי השיעור נכשל" };
   }
 
   revalidateLessonCalendarPaths();
@@ -631,6 +681,28 @@ export async function updateStudentAction(id: string, formData: FormData) {
   const { error } = await supabase.from("students").update(patch).eq("id", id);
   if (error) return { error: error.message };
   revalidatePath("/students");
+  revalidatePath(`/students/${id}`);
+  return { success: true };
+}
+
+export async function updateStudentPersonalNoteAction(formData: FormData) {
+  const actionAuth = await createActionClient();
+  if ("error" in actionAuth) return { error: actionAuth.error };
+  const id = requireId(formData.get("student_id"), "תלמידה");
+  if (isError(id)) return id;
+  const note = String(formData.get("personal_note") ?? "").trim();
+  if (note.length > 2000) return { error: "ההערה ארוכה מדי" };
+
+  const { error } = await actionAuth.supabase
+    .from("students")
+    .update({ personal_note: note || null })
+    .eq("id", id);
+  if (error) {
+    if (/personal_note|PGRST204/i.test(error.message)) {
+      return { error: "יש להריץ ב-Supabase את הקובץ supabase/patches/009_holiday_kinds_and_student_notes.sql" };
+    }
+    return { error: "שמירת ההערה נכשלה" };
+  }
   revalidatePath(`/students/${id}`);
   return { success: true };
 }
@@ -1134,6 +1206,54 @@ export async function cancelOccurrenceAction(occurrenceId: string) {
   revalidatePath("/lessons");
   revalidatePath("/attendance");
   return { success: true };
+}
+
+export async function createOccurrenceAction(formData: FormData) {
+  const actionAuth = await createActionClient();
+  if ("error" in actionAuth) return { error: actionAuth.error };
+  const supabase = actionAuth.supabase;
+  const lessonId = requireId(formData.get("lesson_id"), "שיעור");
+  if (isError(lessonId)) return lessonId;
+  const date = requireIsoDate(formData.get("occurrence_date"), "תאריך");
+  if (isError(date)) return date;
+
+  const { data: lesson, error: lessonError } = await supabase
+    .from("lessons")
+    .select("id")
+    .eq("id", lessonId)
+    .maybeSingle();
+  if (lessonError || !lesson) return { error: "השיעור לא נמצא" };
+
+  const { data: existing } = await supabase
+    .from("lesson_occurrences")
+    .select("id, status")
+    .eq("lesson_id", lessonId)
+    .eq("occurrence_date", date)
+    .maybeSingle();
+
+  if (existing) {
+    if (existing.status === "cancelled") {
+      const { error } = await supabase
+        .from("lesson_occurrences")
+        .update({ status: "scheduled", gap_handling: null })
+        .eq("id", existing.id);
+      if (error) return { error: "לא ניתן לפתוח מחדש את התאריך" };
+    }
+    revalidatePath("/lessons");
+    revalidatePath("/attendance");
+    return { success: true, occurrenceId: existing.id, date };
+  }
+
+  const { data: created, error } = await supabase
+    .from("lesson_occurrences")
+    .insert({ lesson_id: lessonId, occurrence_date: date, status: "scheduled" })
+    .select("id")
+    .single();
+  if (error || !created) return { error: "הוספת התאריך נכשלה" };
+
+  revalidatePath("/lessons");
+  revalidatePath("/attendance");
+  return { success: true, occurrenceId: created.id, date };
 }
 
 export async function setOccurrenceGapHandlingAction(

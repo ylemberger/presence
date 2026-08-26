@@ -6,6 +6,8 @@ import { cn } from "@/lib/cn";
 import {
   buildHebrewMonth,
   formatGregorianDate,
+  formatGregorianDayMonth,
+  formatGregorianRange,
   hebrewMonthFromIso,
   hebrewMonthOptionsForYear,
   hebrewWeekdayLabels,
@@ -23,8 +25,10 @@ export interface HebrewMonthCalendarProps {
   completeDates?: string[];
   /** dates with lessons that are not fully marked yet */
   partialDates?: string[];
-  /** dates with no studies (holiday / vacation) */
+  /** dates with no studies (vacation) */
   holidayDates?: string[];
+  /** cancelled study days (different color from vacation) */
+  cancelledDates?: string[];
   onSelectDate?: (iso: string) => void;
   onMonthRangeChange?: (rangeStart: string, rangeEnd: string) => void;
   /** Compact month grid used on the attendance screen. */
@@ -44,6 +48,7 @@ export function HebrewMonthCalendar({
   completeDates = [],
   partialDates = [],
   holidayDates = [],
+  cancelledDates = [],
   onSelectDate,
   onMonthRangeChange,
   compact = false,
@@ -52,6 +57,7 @@ export function HebrewMonthCalendar({
   const [cursor, setCursor] = useState(seed);
   const today = todayIso();
   const holidaySet = useMemo(() => new Set(holidayDates), [holidayDates]);
+  const cancelledSet = useMemo(() => new Set(cancelledDates), [cancelledDates]);
   const completeSet = useMemo(() => new Set(completeDates), [completeDates]);
   const partialSet = useMemo(() => new Set(partialDates), [partialDates]);
 
@@ -96,7 +102,11 @@ export function HebrewMonthCalendar({
       >
         <Icon name="chevron_right" />
       </button>
-      <div className="flex min-w-0 flex-wrap items-center justify-center gap-2">
+      <div className="flex min-w-0 flex-col items-center justify-center gap-1">
+        <p className="font-caption text-caption text-on-surface-variant">
+          {formatGregorianRange(month.rangeStart, month.rangeEnd)}
+        </p>
+        <div className="flex min-w-0 flex-wrap items-center justify-center gap-2">
         <select
           className={navSelectClass}
           aria-label="חודש עברי"
@@ -128,6 +138,7 @@ export function HebrewMonthCalendar({
             </option>
           ))}
         </select>
+        </div>
       </div>
       <button
         type="button"
@@ -166,8 +177,14 @@ export function HebrewMonthCalendar({
       )}
       {holidayDates.length > 0 && (
         <span className="inline-flex items-center gap-1.5">
-          <span className="h-2.5 w-2.5 rounded-sm bg-secondary-container" />
+          <span className="h-2.5 w-2.5 rounded-sm bg-holiday-vacation" />
           חופשה
+        </span>
+      )}
+      {cancelledDates.length > 0 && (
+        <span className="inline-flex items-center gap-1.5">
+          <span className="h-2.5 w-2.5 rounded-sm bg-holiday-cancelled" />
+          ביטול לימודים
         </span>
       )}
     </div>
@@ -196,6 +213,7 @@ export function HebrewMonthCalendar({
           const complete = completeSet.has(day.iso);
           const partial = !complete && partialSet.has(day.iso);
           const holiday = holidaySet.has(day.iso);
+          const cancelled = cancelledSet.has(day.iso);
           const hasLessons = count > 0;
           const isToday = day.iso === today;
 
@@ -204,7 +222,7 @@ export function HebrewMonthCalendar({
               key={day.iso}
               type="button"
               onClick={() => onSelectDate?.(day.iso)}
-              aria-label={`${formatGregorianDate(day.iso)}${hasLessons ? `, ${lessonCountLabel(count)}` : ""}${complete ? ", הושלם" : ""}${partial ? ", ממתין לרישום" : ""}${holiday ? ", חופשה" : ""}`}
+              aria-label={`${formatGregorianDate(day.iso)}${hasLessons ? `, ${lessonCountLabel(count)}` : ""}${complete ? ", הושלם" : ""}${partial ? ", ממתין לרישום" : ""}${cancelled ? ", ביטול לימודים" : holiday ? ", חופשה" : ""}`}
               className={cn(
                 "relative flex flex-col items-center justify-center rounded-xl text-center transition-colors",
                 compact ? "min-h-12 px-0.5 py-1" : "min-h-16 px-1 py-1.5",
@@ -217,16 +235,31 @@ export function HebrewMonthCalendar({
                   !partial &&
                   "bg-primary/10 text-primary hover:bg-primary/15",
                 !selected &&
-                  holiday &&
+                  cancelled &&
                   !hasLessons &&
-                  "bg-secondary-container/70 text-on-secondary-container hover:bg-secondary-container",
+                  "bg-holiday-cancelled/80 text-primary hover:bg-holiday-cancelled",
+                !selected &&
+                  holiday &&
+                  !cancelled &&
+                  !hasLessons &&
+                  "bg-holiday-vacation/80 text-on-secondary-container hover:bg-holiday-vacation",
                 !selected &&
                   !hasLessons &&
                   !holiday &&
+                  !cancelled &&
                   "text-on-surface hover:bg-surface-container",
                 isToday && !selected && "ring-1 ring-inset ring-primary/50"
               )}
             >
+              <span
+                className={cn(
+                  "leading-none",
+                  compact ? "text-[9px]" : "font-caption text-caption",
+                  selected ? "text-white/80" : "text-on-surface-variant"
+                )}
+              >
+                {formatGregorianDayMonth(day.iso)}
+              </span>
               <span className={cn("leading-none", compact ? "font-body-md text-body-md" : "font-title-lg text-title-lg")}>
                 {day.label}
               </span>

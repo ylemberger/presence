@@ -11,7 +11,7 @@ import {
   summarizeAttendance,
 } from "@/lib/attendance/calculator";
 import { getPendingAttendanceSummary } from "@/lib/attendance/pending";
-import { holidayDateSet } from "@/lib/lessons/holidays";
+import { holidayDatesByKind } from "@/lib/lessons/holidays";
 import {
   audienceForLesson,
   audienceMapFromRows,
@@ -90,7 +90,7 @@ export default async function AttendancePage({ searchParams }: Props) {
       .order("occurrence_date"),
     supabase
       .from("holiday_periods")
-      .select("start_date, end_date")
+      .select("start_date, end_date, kind")
       .eq("academic_year_id", activeYear.id),
     supabase.from("lesson_audience").select("lesson_id, class_id, track_id, specialization_id"),
     supabase
@@ -378,6 +378,7 @@ export default async function AttendancePage({ searchParams }: Props) {
   }));
 
   const pendingSummary = await getPendingAttendanceSummary(activeYear.id);
+  const holidaySets = holidayDatesByKind(holidayRows ?? []);
 
   return (
     <div className="flex flex-col gap-stack_lg">
@@ -418,7 +419,8 @@ export default async function AttendancePage({ searchParams }: Props) {
         noteLessonId={selectedOcc?.lessonId ?? null}
         completeDates={completeDates}
         partialDates={partialDates}
-        holidayDates={[...holidayDateSet(holidayRows ?? [])]}
+        holidayDates={holidaySets.vacation}
+        cancelledDates={holidaySets.cancelled}
         insightsByStudent={insightsByStudent}
       />
     </div>

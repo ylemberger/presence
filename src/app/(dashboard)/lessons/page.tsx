@@ -15,7 +15,7 @@ import {
 import { DAY_OF_WEEK_LABELS } from "@/lib/constants";
 import { Icon } from "@/components/ui/Icon";
 import type { Lesson } from "@/types/database";
-import { holidayDateSet } from "@/lib/lessons/holidays";
+import { holidayDatesByKind } from "@/lib/lessons/holidays";
 import {
   audienceForLesson,
   audienceMapFromRows,
@@ -95,7 +95,7 @@ export default async function LessonsPage({ searchParams }: Props) {
       supabase.from("attendance_rules").select("*"),
       supabase
         .from("holiday_periods")
-        .select("start_date, end_date")
+        .select("start_date, end_date, kind")
         .eq("academic_year_id", activeYear.id),
       supabase.from("lesson_audience").select("lesson_id, class_id, track_id, specialization_id"),
       supabase
@@ -376,7 +376,8 @@ export default async function LessonsPage({ searchParams }: Props) {
             occurrences={occurrenceRows}
             lessons={lessonCards}
             monthQuery={filterQuery.toString()}
-            holidayDates={[...holidayDateSet(holidays.data ?? [])]}
+            holidayDates={holidayDatesByKind(holidays.data ?? []).vacation}
+            cancelledDates={holidayDatesByKind(holidays.data ?? []).cancelled}
             students={yearStudents}
           />
         </div>

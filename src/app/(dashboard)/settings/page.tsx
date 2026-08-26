@@ -314,9 +314,11 @@ export default async function SettingsPage() {
       {holidaysMissing ? (
         <div className="space-y-3 p-6">
           <p className="font-body-md text-body-md text-on-surface">
-            טבלת החופשות עדיין לא קיימת במסד. הריצי ב-Supabase SQL Editor את הקובץ{" "}
+            טבלת החופשות עדיין לא קיימת במסד. הריצי ב-Supabase SQL Editor את{" "}
             <code className="font-mono text-caption">supabase/patches/run_005_to_007.sql</code>
-            {" "}(או לפחות <code className="font-mono text-caption">005_holiday_periods.sql</code>), ואז רענני את הדף.
+            {" "}ואז{" "}
+            <code className="font-mono text-caption">009_holiday_kinds_and_student_notes.sql</code>
+            , ואז רענני את הדף.
           </p>
           <p className="font-caption text-caption text-on-surface-variant">
             אחרי ההרצה: הגדרות ← לשונית «לוח חופשות».

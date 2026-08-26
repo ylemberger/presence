@@ -1,4 +1,4 @@
-﻿-- presence: full database schema (run once in Supabase SQL Editor)
+-- presence: full database schema (run once in Supabase SQL Editor)
 
 create table academic_years (
   id uuid primary key default gen_random_uuid(),
@@ -49,6 +49,8 @@ create table holiday_periods (
   name text not null,
   start_date date not null,
   end_date date not null,
+  kind text not null default 'vacation'
+    check (kind in ('vacation', 'cancelled_studies')),
   constraint holiday_periods_dates_check check (end_date >= start_date)
 );
 
@@ -667,6 +669,22 @@ alter table students
   drop constraint if exists students_cohort_positive;
 alter table students
   add constraint students_cohort_positive check (cohort_number >= 1);
+
+alter table students
+  add column if not exists personal_note text;
+
+alter table holiday_periods
+  add column if not exists kind text;
+
+update holiday_periods set kind = 'vacation' where kind is null;
+
+alter table holiday_periods
+  drop constraint if exists holiday_periods_kind_check;
+alter table holiday_periods
+  alter column kind set default 'vacation',
+  alter column kind set not null,
+  add constraint holiday_periods_kind_check
+    check (kind in ('vacation', 'cancelled_studies'));
 
 alter table student_assignments
   add column if not exists secondary_specialization_id uuid references specializations(id),

@@ -26,11 +26,14 @@ import {
 import { formatLessonOptionLabel } from "@/lib/lessons/hours";
 import { ABSENCE_REASONS, type AbsenceReason } from "@/lib/attendance/reasons";
 import { Icon } from "@/components/ui/Icon";
+import { PrintButton } from "@/components/ui/PrintButton";
 import { AssignStudentToLesson } from "../lessons/AssignStudentToLesson";
 import {
   AttendanceStatusPicker,
   type AttendancePickerPhase,
 } from "./AttendanceStatusPicker";
+import { AttendanceBlankSheet } from "./AttendanceBlankSheet";
+import { AddOccurrenceDate } from "./AddOccurrenceDate";
 
 export type AttendanceMode = "single" | "group";
 
@@ -105,6 +108,7 @@ interface Props {
   completeDates?: string[];
   partialDates?: string[];
   holidayDates?: string[];
+  cancelledDates?: string[];
   insightsByStudent?: Record<string, StudentInsight>;
 }
 
@@ -152,6 +156,7 @@ export function AttendanceBoard({
   completeDates = [],
   partialDates = [],
   holidayDates = [],
+  cancelledDates = [],
   insightsByStudent = {},
 }: Props) {
   const router = useRouter();
@@ -676,7 +681,7 @@ export function AttendanceBoard({
 
   return (
     <div className="flex flex-col gap-stack_lg" onTouchStart={onTouchStart} onTouchEnd={onTouchEnd}>
-      <div className="flex flex-wrap items-center gap-2 font-body-md text-body-md text-on-surface-variant">
+      <div className="flex flex-wrap items-center gap-2 font-body-md text-body-md text-on-surface-variant print:hidden">
         <span className={cn(!activeOccurrenceId && "font-bold text-primary")}>
           שלב 1: בחירת תאריך
         </span>
@@ -718,7 +723,7 @@ export function AttendanceBoard({
       )}
 
       {/* desktop filters */}
-      <div className="hidden overflow-hidden rounded-xl border border-outline-variant/30 bg-surface-container-lowest shadow-tactile-md md:block">
+      <div className="hidden overflow-hidden rounded-xl border border-outline-variant/30 bg-surface-container-lowest shadow-tactile-md print:hidden md:block">
         <button
           type="button"
           className="flex w-full items-center justify-between gap-3 px-4 py-3 text-right font-label-md text-label-md text-primary transition-colors hover:bg-surface-container-low/60"
@@ -742,7 +747,7 @@ export function AttendanceBoard({
       </div>
 
       {/* mobile filter sheet trigger */}
-      <div className="md:hidden">
+      <div className="print:hidden md:hidden">
         <Button type="button" variant="secondary" className="w-full" onClick={() => setFiltersOpen(true)}>
           <Icon name="filter_list" className="text-[18px]" />
           סינון ומצב רישום
@@ -768,8 +773,7 @@ export function AttendanceBoard({
         )}
       </div>
 
-      <div className="grid grid-cols-1 items-start gap-gutter xl:grid-cols-12">
-        <div className="flex flex-col gap-stack_lg xl:col-span-5">
+      <div className="mx-auto w-full max-w-xl print:hidden">
       <HebrewMonthCalendar
         compact
         initialMonthIso={monthFrom}
@@ -778,12 +782,16 @@ export function AttendanceBoard({
         completeDates={completeDates}
         partialDates={partialDates}
         holidayDates={holidayDates}
+        cancelledDates={cancelledDates}
         onSelectDate={selectDate}
         onMonthRangeChange={(from, to) => {
           navigate(buildParams({ from, to, date: selectedDate, occurrenceId: undefined }));
         }}
       />
+      </div>
 
+      <div className="grid grid-cols-1 items-start gap-gutter print:hidden xl:grid-cols-12">
+        <div className="flex flex-col gap-stack_lg xl:col-span-5">
           <section className="rounded-xl border border-outline-variant/30 bg-surface-container-lowest p-6 shadow-tactile-md">
             <div className="mb-4 border-b border-outline-variant/30 pb-4">
               <h3 className="flex flex-wrap items-center gap-2 font-title-lg text-title-lg text-primary">
@@ -816,11 +824,17 @@ export function AttendanceBoard({
               <div className="px-2 py-6 text-center">
                 <Icon name="event_busy" className="mb-2 inline-block text-[36px] text-secondary" />
                 <p className="font-body-md text-body-md text-on-surface-variant">
-                  {holidayDates.includes(selectedDate)
-                    ? "יום חופשה — אין לימודים ולא נספרת נוכחות."
-                    : "אין שיעורים ביום זה."}
+                  {cancelledDates.includes(selectedDate)
+                    ? "ביטול לימודים — אין שיעורים אוטומטיים ביום זה."
+                    : holidayDates.includes(selectedDate)
+                      ? "יום חופשה — אין לימודים ולא נספרת נוכחות."
+                      : "אין שיעורים ביום זה."}
                 </p>
-                {!holidayDates.includes(selectedDate) && (
+                {lessonId ? (
+                  <div className="mt-3">
+                    <AddOccurrenceDate lessonId={lessonId} />
+                  </div>
+                ) : !holidayDates.includes(selectedDate) && !cancelledDates.includes(selectedDate) ? (
                   <Link
                     href="/lessons"
                     className="mt-3 inline-flex items-center gap-1 font-label-md text-label-md text-secondary hover:underline"
@@ -828,7 +842,7 @@ export function AttendanceBoard({
                     <Icon name="add" className="text-[16px]" />
                     צרי שיעור (עם טווח תאריכים)
                   </Link>
-                )}
+                ) : null}
               </div>
             ) : (
               <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
@@ -891,7 +905,8 @@ export function AttendanceBoard({
       {activeLesson ? (
         <div className="flex h-full min-h-[32rem] flex-col overflow-hidden rounded-xl border border-outline-variant/30 bg-surface-container-lowest shadow-tactile-md xl:h-[800px]">
           <div className="sticky top-0 z-10 border-b border-outline-variant/30 bg-surface-container-lowest p-6">
-            <div className="mb-4">
+            <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
+              <div>
               <h3 className="font-headline-md text-headline-md text-primary">
                 {activeLesson.subject}
                 {activeLesson.lessonNumber
@@ -902,6 +917,15 @@ export function AttendanceBoard({
                 {formatHebrewDate(selectedDate)}
                 {activeLesson.teacherName ? ` • המורה ${activeLesson.teacherName}` : ""}
               </p>
+              </div>
+              <div className="flex flex-col items-end gap-2 print:hidden">
+                <PrintButton
+                  label="הדפסת דף ריק"
+                  documentTitle={`נוכחות-${activeLesson.subject}`}
+                  disabled={lessonStudents.length === 0}
+                />
+                <AddOccurrenceDate lessonId={activeLesson.lessonId} />
+              </div>
             </div>
             <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg bg-surface-container-low p-3">
               <div className="flex flex-wrap gap-2">
@@ -1130,6 +1154,15 @@ export function AttendanceBoard({
       )}
         </div>
       </div>
+
+      {activeLesson && (
+        <AttendanceBlankSheet
+          subject={activeLesson.subject}
+          teacherName={activeLesson.teacherName}
+          date={selectedDate}
+          students={lessonStudents}
+        />
+      )}
 
       {undo && (
         <div className="fixed bottom-8 left-8 z-50 flex items-center gap-4 rounded-lg bg-primary px-6 py-4 font-body-md text-body-md text-on-primary shadow-tactile-lg">

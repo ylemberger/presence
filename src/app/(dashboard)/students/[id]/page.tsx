@@ -11,6 +11,7 @@ import { formatDate, isDateInRange } from "@/lib/dates/hebrew";
 import { summarizeAttendance, evaluateAbsenceAgainstRule } from "@/lib/attendance/calculator";
 import { StudentDetailForms } from "./StudentDetailForms";
 import { StudentLessonAssignments } from "./StudentLessonAssignments";
+import { StudentPersonalNote } from "./StudentPersonalNote";
 import type { AttendanceStatus } from "@/types/database";
 import { cn } from "@/lib/cn";
 import { Icon } from "@/components/ui/Icon";
@@ -625,6 +626,10 @@ export default async function StudentDetailPage({ params }: Props) {
           </Section>
         </div>
       </div>
+
+      <Section icon="edit_note" title="הערה אישית">
+        <StudentPersonalNote studentId={id} note={student.personal_note ?? null} />
+      </Section>
     </div>
   );
 }

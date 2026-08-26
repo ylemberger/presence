@@ -3,6 +3,7 @@ export type OccurrenceStatus = "scheduled" | "completed" | "cancelled";
 export type BillingType = "mandatory" | "specialization";
 export type RangeType = "annual" | "semester_a" | "semester_b" | "course";
 export type AssignmentType = "automatic" | "manual";
+export type HolidayKind = "vacation" | "cancelled_studies";
 
 export interface AcademicYear {
   id: string;
@@ -51,6 +52,7 @@ export interface HolidayPeriod {
   name: string;
   start_date: string;
   end_date: string;
+  kind?: HolidayKind;
 }
 
 export interface AttendanceRule {
@@ -65,6 +67,7 @@ export interface Student {
   identity_number: string;
   cohort_number: number;
   is_active: boolean;
+  personal_note: string | null;
   created_at: string;
 }
 
