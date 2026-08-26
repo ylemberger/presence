@@ -42,7 +42,7 @@ export function LessonsForm({
   const [formEpoch, setFormEpoch] = useState(0);
   const [billingType, setBillingType] = useState<"mandatory" | "specialization">("mandatory");
   const [forPsychology, setForPsychology] = useState(false);
-  const [gradeId, setGradeId] = useState("");
+  const [gradeIds, setGradeIds] = useState<string[]>([]);
   const [classIds, setClassIds] = useState<string[]>([]);
   const [trackIds, setTrackIds] = useState<string[]>([]);
   const [specializationIds, setSpecializationIds] = useState<string[]>([]);
@@ -51,11 +51,14 @@ export function LessonsForm({
   const [periodCount, setPeriodCount] = useState("1");
 
   const filteredClasses = useMemo(
-    () => classes.filter((c) => !gradeId || c.grade_id === gradeId),
-    [classes, gradeId]
+    () =>
+      gradeIds.length === 0
+        ? classes
+        : classes.filter((c) => gradeIds.includes(c.grade_id)),
+    [classes, gradeIds]
   );
 
-  const gradeName = grades.find((g) => g.id === gradeId)?.name;
+  const gradeNames = grades.filter((g) => gradeIds.includes(g.id)).map((g) => g.name);
   const classNames = classes.filter((c) => classIds.includes(c.id)).map((c) => c.name);
   const trackNames = tracks.filter((t) => trackIds.includes(t.id)).map((t) => t.name);
   const specializationNames = specializations
@@ -64,7 +67,7 @@ export function LessonsForm({
 
   const audienceSummary = describeAudienceScope({
     billing_type: billingType,
-    gradeName,
+    gradeNames,
     classNames,
     trackNames,
     specializationNames,
@@ -81,12 +84,12 @@ export function LessonsForm({
       const fd = new FormData(form);
       fd.set("academic_year_id", yearId);
       fd.set("billing_type", billingType);
-      if (gradeId) fd.set("grade_id", gradeId);
-      if (!gradeId) {
-        setError("יש לבחור שכבה");
+      if (gradeIds.length === 0) {
+        setError("יש לבחור לפחות שכבה אחת");
         setLoading(false);
         return;
       }
+      fd.set("grade_id", gradeIds[0]);
       if (wholeGrade) fd.set("whole_grade", "1");
       if (billingType === "specialization") {
         fd.set("class_id", "");
@@ -111,7 +114,7 @@ export function LessonsForm({
       form.reset();
       setBillingType("mandatory");
       setForPsychology(false);
-      setGradeId("");
+      setGradeIds([]);
       setClassIds([]);
       setTrackIds([]);
       setSpecializationIds([]);
@@ -147,18 +150,24 @@ export function LessonsForm({
       <div>
         <p className="mb-2 font-label-md text-label-md text-primary">קהל יעד</p>
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-          <Combobox
-            label="שכבה"
-            name="grade_id"
-            required
-            value={gradeId}
-            onChange={(v) => {
-              setGradeId(v);
-              setClassIds([]);
-            }}
-            options={grades.map((g) => ({ value: g.id, label: g.name }))}
-            emptyLabel="בחרי שכבה"
-          />
+          <div className="sm:col-span-2">
+            <MultiSelect
+              label="שכבות"
+              name="grade_ids"
+              values={gradeIds}
+              onChange={(next) => {
+                setGradeIds(next);
+                setClassIds((prev) =>
+                  prev.filter((id) => {
+                    const cls = classes.find((c) => c.id === id);
+                    return cls ? next.includes(cls.grade_id) : false;
+                  })
+                );
+              }}
+              options={grades.map((g) => ({ value: g.id, label: g.name }))}
+              hint="אפשר כמה שכבות. תלמידה תשויך אם היא באחת מהן (ובנוסף עומדת בשאר התנאים)."
+            />
+          </div>
           <Select
             label="סוג שיעור"
             name="billing_type_ui"
@@ -178,7 +187,7 @@ export function LessonsForm({
                 values={specializationIds}
                 onChange={setSpecializationIds}
                 options={specializations.map((s) => ({ value: s.id, label: s.name }))}
-                hint="אפשר כמה. תלמידה תשויך אם יש לה אחת מהן (ראשית או נוספת)."
+                hint="תלמידה תשויך אם היא באחת השכבות שנבחרו וגם יש לה אחת מההתמחויות (ראשית או נוספת)."
               />
             </div>
           ) : (
@@ -216,7 +225,7 @@ export function LessonsForm({
                       }}
                       className="rounded border-outline-variant"
                     />
-                    כל השכבה
+                    כל השכבות שנבחרו
                   </label>
                   {!wholeGrade && (
                     <>
@@ -225,8 +234,14 @@ export function LessonsForm({
                         name="class_ids"
                         values={classIds}
                         onChange={setClassIds}
-                        options={filteredClasses.map((c) => ({ value: c.id, label: c.name }))}
-                        hint="בחירה מרובה — מי שבאחת הכיתות."
+                        options={filteredClasses.map((c) => {
+                          const gName = grades.find((g) => g.id === c.grade_id)?.name;
+                          return {
+                            value: c.id,
+                            label: gradeIds.length > 1 && gName ? `${gName} · ${c.name}` : c.name,
+                          };
+                        })}
+                        hint="אופציונלי. אם נבחר — חייבת להיות באחת הכיתות."
                       />
                       <MultiSelect
                         label="מסלולים"
@@ -234,7 +249,7 @@ export function LessonsForm({
                         values={trackIds}
                         onChange={setTrackIds}
                         options={tracks.map((t) => ({ value: t.id, label: t.name }))}
-                        hint="בחירה מרובה — מי שבאחד המסלולים."
+                        hint="אופציונלי. אם נבחר — חייבת להיות באחד המסלולים."
                       />
                       <div className="sm:col-span-2">
                         <MultiSelect
@@ -243,7 +258,7 @@ export function LessonsForm({
                           values={specializationIds}
                           onChange={setSpecializationIds}
                           options={specializations.map((s) => ({ value: s.id, label: s.name }))}
-                          hint="גם כאן: מי שיש לה אחת מההתמחויות האלה תשויך."
+                          hint="אופציונלי. אם נבחר — חייבת להיות עם אחת מההתמחויות."
                         />
                       </div>
                     </>
@@ -255,12 +270,13 @@ export function LessonsForm({
         </div>
         <p className="mt-2 rounded-lg bg-surface-container-low px-3 py-2 font-caption text-caption text-on-surface-variant">
           {forPsychology
-            ? "ישויכו רק תלמידות המסומנות כפסיכולוגיה בשכבה זו."
+            ? "ישויכו תלמידות המסומנות כפסיכולוגיה באחת השכבות שנבחרו."
             : billingType === "specialization"
-              ? "ישויכו תלמידות בשכבה עם אחת מההתמחויות שנבחרו."
-              : wholeGrade || (classIds.length === 0 && trackIds.length === 0 && specializationIds.length === 0)
-                ? "כל תלמידות השכבה ישויכו."
-                : "תלמידה תשויך אם היא באחת הכיתות, או באחד המסלולים, או באחת ההתמחויות שנבחרו."}
+              ? "ישויכו תלמידות שבאחת השכבות וגם עם אחת מההתמחויות שנבחרו."
+              : wholeGrade ||
+                  (classIds.length === 0 && trackIds.length === 0 && specializationIds.length === 0)
+                ? "כל תלמידות השכבות שנבחרו ישויכו."
+                : "תלמידה תשויך אם היא באחת השכבות, וגם עומדת בכל שאר התנאים שנבחרו (כיתה / מסלול / התמחות)."}
         </p>
       </div>
 
@@ -319,7 +335,7 @@ export function LessonsForm({
         </p>
       </div>
 
-      {gradeId && (
+      {gradeIds.length > 0 && (
         <div className="rounded-lg border border-secondary/20 bg-secondary-container/40 px-3 py-2 font-body-sm text-body-sm text-primary">
           <div className="font-semibold">סיכום</div>
           <div className="mt-1 text-on-surface-variant">קהל: {audienceSummary}</div>

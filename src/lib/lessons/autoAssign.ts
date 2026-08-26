@@ -2,6 +2,7 @@ import { createClient } from "@/lib/supabase/server";
 import { addDays, todayIso } from "@/lib/dates/hebrew";
 
 export type LessonAudienceIds = {
+  grade_ids: string[];
   class_ids: string[];
   track_ids: string[];
   specialization_ids: string[];
@@ -28,16 +29,41 @@ export type Placement = {
 };
 
 function audienceOf(lesson: LessonScope): LessonAudienceIds {
-  if (lesson.audience) return lesson.audience;
+  if (lesson.audience) {
+    return {
+      grade_ids: lesson.audience.grade_ids?.length
+        ? lesson.audience.grade_ids
+        : lesson.grade_id
+          ? [lesson.grade_id]
+          : [],
+      class_ids: lesson.audience.class_ids ?? [],
+      track_ids: lesson.audience.track_ids ?? [],
+      specialization_ids: lesson.audience.specialization_ids ?? [],
+    };
+  }
   return {
+    grade_ids: lesson.grade_id ? [lesson.grade_id] : [],
     class_ids: lesson.class_id ? [lesson.class_id] : [],
     track_ids: lesson.track_id ? [lesson.track_id] : [],
     specialization_ids: lesson.specialization_id ? [lesson.specialization_id] : [],
   };
 }
 
+/**
+ * Match: student must be in one of the lesson grades.
+ * Then AND across dimensions that have targets (class / track / specialization).
+ * Within a dimension, any of the selected values matches (OR).
+ */
 export function studentMatchesLesson(placement: Placement, lesson: LessonScope): boolean {
-  if (lesson.grade_id && lesson.grade_id !== placement.grade_id) {
+  const audience = audienceOf(lesson);
+  const gradeIds =
+    audience.grade_ids.length > 0
+      ? audience.grade_ids
+      : lesson.grade_id
+        ? [lesson.grade_id]
+        : [];
+
+  if (gradeIds.length > 0 && !gradeIds.includes(placement.grade_id)) {
     return false;
   }
 
@@ -45,31 +71,29 @@ export function studentMatchesLesson(placement: Placement, lesson: LessonScope):
     return Boolean(placement.is_psychology);
   }
 
-  const audience = audienceOf(lesson);
-  const hasTargets =
-    audience.class_ids.length > 0 ||
-    audience.track_ids.length > 0 ||
-    audience.specialization_ids.length > 0;
+  const hasClass = audience.class_ids.length > 0;
+  const hasTrack = audience.track_ids.length > 0;
+  const hasSpec = audience.specialization_ids.length > 0;
 
-  if (!hasTargets) {
+  if (!hasClass && !hasTrack && !hasSpec) {
     return true;
   }
 
-  if (audience.class_ids.includes(placement.class_id)) return true;
-  if (audience.track_ids.includes(placement.track_id)) return true;
-  if (
-    placement.specialization_id &&
-    audience.specialization_ids.includes(placement.specialization_id)
-  ) {
-    return true;
+  if (hasClass && !audience.class_ids.includes(placement.class_id)) {
+    return false;
   }
-  if (
-    placement.secondary_specialization_id &&
-    audience.specialization_ids.includes(placement.secondary_specialization_id)
-  ) {
-    return true;
+  if (hasTrack && !audience.track_ids.includes(placement.track_id)) {
+    return false;
   }
-  return false;
+  if (hasSpec) {
+    const specOk =
+      (placement.specialization_id &&
+        audience.specialization_ids.includes(placement.specialization_id)) ||
+      (placement.secondary_specialization_id &&
+        audience.specialization_ids.includes(placement.secondary_specialization_id));
+    if (!specOk) return false;
+  }
+  return true;
 }
 
 export function lessonMismatchMessage(placement: Placement, lesson: LessonScope): string | null {
@@ -77,7 +101,7 @@ export function lessonMismatchMessage(placement: Placement, lesson: LessonScope)
   if (lesson.for_psychology) {
     return "השיעור מיועד לפסיכולוגיה והתלמידה אינה מסומנת כפסיכולוגיה. אם תאשרי, השיעור ייספר כחיוב נוכחות שלה בדוחות.";
   }
-  return "התלמידה לא שייכת לכיתה/מסלול/התמחות של השיעור. אם תאשרי, השיעור ייספר כחיוב נוכחות שלה בדוחות.";
+  return "התלמידה לא שייכת לשכבה/כיתה/מסלול/התמחות של השיעור. אם תאשרי, השיעור ייספר כחיוב נוכחות שלה בדוחות.";
 }
 
 function placementFromRow(p: {
@@ -100,6 +124,7 @@ function placementFromRow(p: {
 
 export type AudienceRow = {
   lesson_id: string;
+  grade_id: string | null;
   class_id: string | null;
   track_id: string | null;
   specialization_id: string | null;
@@ -109,10 +134,12 @@ export function audienceMapFromRows(rows: AudienceRow[]): Map<string, LessonAudi
   const map = new Map<string, LessonAudienceIds>();
   for (const r of rows) {
     const cur = map.get(r.lesson_id) ?? {
+      grade_ids: [],
       class_ids: [],
       track_ids: [],
       specialization_ids: [],
     };
+    if (r.grade_id) cur.grade_ids.push(r.grade_id);
     if (r.class_id) cur.class_ids.push(r.class_id);
     if (r.track_id) cur.track_ids.push(r.track_id);
     if (r.specialization_id) cur.specialization_ids.push(r.specialization_id);
@@ -122,19 +149,37 @@ export function audienceMapFromRows(rows: AudienceRow[]): Map<string, LessonAudi
 }
 
 export function audienceForLesson(
-  lesson: { id: string; class_id: string | null; track_id: string | null; specialization_id: string | null },
+  lesson: {
+    id: string;
+    grade_id?: string | null;
+    class_id: string | null;
+    track_id: string | null;
+    specialization_id: string | null;
+  },
   map: Map<string, LessonAudienceIds>
 ): LessonAudienceIds {
   const fromMap = map.get(lesson.id);
   if (
     fromMap &&
-    (fromMap.class_ids.length > 0 ||
+    (fromMap.grade_ids.length > 0 ||
+      fromMap.class_ids.length > 0 ||
       fromMap.track_ids.length > 0 ||
       fromMap.specialization_ids.length > 0)
   ) {
-    return fromMap;
+    return {
+      grade_ids:
+        fromMap.grade_ids.length > 0
+          ? fromMap.grade_ids
+          : lesson.grade_id
+            ? [lesson.grade_id]
+            : [],
+      class_ids: fromMap.class_ids,
+      track_ids: fromMap.track_ids,
+      specialization_ids: fromMap.specialization_ids,
+    };
   }
   return {
+    grade_ids: lesson.grade_id ? [lesson.grade_id] : [],
     class_ids: lesson.class_id ? [lesson.class_id] : [],
     track_ids: lesson.track_id ? [lesson.track_id] : [],
     specialization_ids: lesson.specialization_id ? [lesson.specialization_id] : [],
@@ -167,9 +212,13 @@ function withAudience(
   rows: AudienceRow[]
 ): LessonScope {
   const mine = rows.filter((r) => r.lesson_id === lesson.id);
+  const grade_ids = mine
+    .map((r) => r.grade_id)
+    .filter((id): id is string => Boolean(id));
   return {
     ...lesson,
     audience: {
+      grade_ids: grade_ids.length > 0 ? grade_ids : lesson.grade_id ? [lesson.grade_id] : [],
       class_ids: mine.map((r) => r.class_id).filter((id): id is string => Boolean(id)),
       track_ids: mine.map((r) => r.track_id).filter((id): id is string => Boolean(id)),
       specialization_ids: mine
@@ -209,7 +258,7 @@ export async function autoAssignStudentsToLesson(
         .is("end_date", null),
       supabase
         .from("lesson_audience")
-        .select("lesson_id, class_id, track_id, specialization_id")
+        .select("lesson_id, grade_id, class_id, track_id, specialization_id")
         .eq("lesson_id", lessonId),
     ]);
 
@@ -282,7 +331,7 @@ export async function refreshAutomaticLessonAssignmentsForStudent(
       .eq("academic_year_id", academicYearId),
     supabase
       .from("lesson_audience")
-      .select("lesson_id, class_id, track_id, specialization_id"),
+      .select("lesson_id, grade_id, class_id, track_id, specialization_id"),
   ]);
 
   const closeIds = (currentAutos ?? []).map((r) => r.id);

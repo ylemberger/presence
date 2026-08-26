@@ -54,6 +54,14 @@ function collectIds(formData: FormData, name: string): string[] {
   return [...new Set(values)];
 }
 
+export function parseLessonGradeIds(formData: FormData): string[] | { error: string } {
+  const gradeIds = collectIds(formData, "grade_ids");
+  const single = String(formData.get("grade_id") ?? "").trim();
+  if (single && !gradeIds.includes(single)) gradeIds.push(single);
+  if (gradeIds.length === 0) return { error: "יש לבחור לפחות שכבה אחת" };
+  return gradeIds;
+}
+
 export function parseLessonBilling(formData: FormData):
   | {
       billing_type: "mandatory" | "specialization";
@@ -158,10 +166,11 @@ export function parseLessonBilling(formData: FormData):
   return { error: "יש לבחור סוג שיעור: חובה או התמחות" };
 }
 
-/** Audience: OR across selected classes / tracks / specializations; whole grade if none. */
+/** Audience: OR within a dimension; AND across dimensions that were selected. */
 export function describeAudienceScope(opts: {
   billing_type: "mandatory" | "specialization";
   gradeName?: string | null;
+  gradeNames?: string[];
   classNames?: string[];
   trackNames?: string[];
   specializationNames?: string[];
@@ -171,8 +180,12 @@ export function describeAudienceScope(opts: {
   forPsychology?: boolean;
   wholeGrade?: boolean;
 }): string {
+  const gradeLabel = opts.gradeNames?.length
+    ? opts.gradeNames.join(" / ")
+    : opts.gradeName ?? null;
+
   if (opts.forPsychology) {
-    return [opts.gradeName, "פסיכולוגיה"].filter(Boolean).join(" · ");
+    return [gradeLabel, "פסיכולוגיה"].filter(Boolean).join(" · ");
   }
   const classNames = opts.classNames?.length
     ? opts.classNames
@@ -192,14 +205,18 @@ export function describeAudienceScope(opts: {
 
   if (opts.billing_type === "specialization") {
     const specs = specNames.length ? specNames.join(" / ") : "התמחות";
-    return [opts.gradeName, specs].filter(Boolean).join(" · ");
+    return [gradeLabel, specs].filter(Boolean).join(" · ");
   }
   if (opts.wholeGrade || (classNames.length === 0 && trackNames.length === 0 && specNames.length === 0)) {
-    return [opts.gradeName, "כל השכבה"].filter(Boolean).join(" · ");
+    return [gradeLabel, "כל השכבה"].filter(Boolean).join(" · ");
   }
   const parts: string[] = [];
-  if (opts.gradeName) parts.push(opts.gradeName);
-  const groups = [...classNames, ...trackNames, ...specNames];
-  if (groups.length) parts.push(groups.join(" / "));
+  if (gradeLabel) parts.push(gradeLabel);
+  const groups = [
+    ...classNames,
+    ...trackNames,
+    ...specNames,
+  ];
+  if (groups.length) parts.push(groups.join(" · "));
   return parts.length ? parts.join(" · ") : "חובה";
 }

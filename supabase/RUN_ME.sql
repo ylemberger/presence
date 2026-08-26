@@ -6,7 +6,7 @@
 --
 -- מה כלול כאן (בטוח להרצה חוזרת — idempotent):
 --   • חופשות / ביטול לימודים + kind
---   • קהל מרובה לשיעור, period_count
+--   • קהל מרובה לשיעור (כולל שכבות מרובות), period_count
 --   • סיבת היעדרות, gap_handling, attendance_notes
 --   • סנכרון מורות משכר
 --   • שדות תלמידה מורחבים (שם פרטי/משפחה, טלפונים, כתובת, ת.ל., תיכון, חץ…)
@@ -73,7 +73,22 @@ create table if not exists lesson_audience (
   created_at timestamptz default now()
 );
 
+alter table lesson_audience
+  add column if not exists grade_id uuid references grades(id) on delete cascade;
+
+alter table lesson_audience drop constraint if exists lesson_audience_one_target;
+alter table lesson_audience
+  add constraint lesson_audience_one_target check (
+    (class_id is not null)::int
+    + (track_id is not null)::int
+    + (specialization_id is not null)::int
+    + (grade_id is not null)::int = 1
+  );
+
 create index if not exists idx_lesson_audience_lesson on lesson_audience (lesson_id);
+create unique index if not exists idx_lesson_audience_grade
+  on lesson_audience (lesson_id, grade_id)
+  where grade_id is not null;
 
 alter table lesson_audience enable row level security;
 

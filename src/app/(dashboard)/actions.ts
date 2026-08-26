@@ -29,6 +29,7 @@ import type { AttendanceStatus, HolidayKind } from "@/types/database";
 import {
   isError,
   parseLessonBilling,
+  parseLessonGradeIds,
   requireId,
   requireIsoDate,
   requireText,
@@ -826,7 +827,7 @@ export async function createStudentLessonAssignmentAction(formData: FormData) {
       .maybeSingle(),
     supabase
       .from("lesson_audience")
-      .select("lesson_id, class_id, track_id, specialization_id")
+      .select("lesson_id, grade_id, class_id, track_id, specialization_id")
       .eq("lesson_id", lessonId),
   ]);
 
@@ -1031,12 +1032,14 @@ async function insertTeachingAssignmentFromForm(
   if (isError(yearId)) return yearId;
   const subject = requireText(formData.get("subject"), "מקצוע");
   if (isError(subject)) return subject;
-  const gradeId = requireId(formData.get("grade_id"), "שכבה");
-  if (isError(gradeId)) return gradeId;
+  const gradeIds = parseLessonGradeIds(formData);
+  if ("error" in gradeIds) return gradeIds;
+  const gradeId = gradeIds[0];
   const billing = parseLessonBilling(formData);
   if ("error" in billing) return billing;
 
   if (billing.class_ids.length > 0) {
+    const allowedGrades = new Set(gradeIds);
     const { data: clsRows } = await supabase
       .from("classes")
       .select("id, grade_id")
@@ -1044,8 +1047,8 @@ async function insertTeachingAssignmentFromForm(
     if ((clsRows ?? []).length !== billing.class_ids.length) {
       return { error: "אחת הכיתות שנבחרו אינה תקינה" };
     }
-    if ((clsRows ?? []).some((c) => c.grade_id !== gradeId)) {
-      return { error: "כל הכיתות חייבות להיות מתוך השכבה שנבחרה" };
+    if ((clsRows ?? []).some((c) => !allowedGrades.has(c.grade_id))) {
+      return { error: "כל הכיתות חייבות להיות מתוך השכבות שנבחרו" };
     }
   }
 
@@ -1217,22 +1220,38 @@ export async function createLessonAction(formData: FormData) {
   }
 
   const billing = parseLessonBilling(formData);
+  const gradeIdsParsed = parseLessonGradeIds(formData);
+  const gradeIdsForAudience =
+    !("error" in gradeIdsParsed) && gradeIdsParsed.length > 0
+      ? gradeIdsParsed
+      : [payload.grade_id];
+
   if (!("error" in billing)) {
     const audienceRows = [
+      ...gradeIdsForAudience.map((grade_id) => ({
+        lesson_id: lesson.id,
+        grade_id,
+        class_id: null as string | null,
+        track_id: null as string | null,
+        specialization_id: null as string | null,
+      })),
       ...billing.class_ids.map((class_id) => ({
         lesson_id: lesson.id,
+        grade_id: null as string | null,
         class_id,
         track_id: null as string | null,
         specialization_id: null as string | null,
       })),
       ...billing.track_ids.map((track_id) => ({
         lesson_id: lesson.id,
+        grade_id: null as string | null,
         class_id: null as string | null,
         track_id,
         specialization_id: null as string | null,
       })),
       ...billing.specialization_ids.map((specialization_id) => ({
         lesson_id: lesson.id,
+        grade_id: null as string | null,
         class_id: null as string | null,
         track_id: null as string | null,
         specialization_id,

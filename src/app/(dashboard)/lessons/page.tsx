@@ -97,7 +97,7 @@ export default async function LessonsPage({ searchParams }: Props) {
         .from("holiday_periods")
         .select("start_date, end_date, kind")
         .eq("academic_year_id", activeYear.id),
-      supabase.from("lesson_audience").select("lesson_id, class_id, track_id, specialization_id"),
+      supabase.from("lesson_audience").select("lesson_id, grade_id, class_id, track_id, specialization_id"),
       supabase
         .from("student_assignments")
         .select("student_id, students(id, full_name, is_active)")
@@ -170,9 +170,15 @@ export default async function LessonsPage({ searchParams }: Props) {
     const assignment = one<{ teacher_id: string; teachers?: unknown }>(l.teacher_teaching_assignments);
     const teacherName = one<{ full_name: string }>(assignment?.teachers)?.full_name ?? "";
     const audience = audienceForLesson(l, audienceByLesson);
+    const gradeNames =
+      audience.grade_ids.length > 0
+        ? audience.grade_ids
+            .map((id) => gradeById.get(id))
+            .filter((n): n is string => Boolean(n))
+        : [gradeById.get(l.grade_id)].filter((n): n is string => Boolean(n));
     const audienceLabel = describeAudienceScope({
       billing_type: l.billing_type,
-      gradeName: gradeById.get(l.grade_id) ?? null,
+      gradeNames,
       classNames: audience.class_ids.map((id) => classById.get(id)).filter((n): n is string => Boolean(n)),
       trackNames: audience.track_ids.map((id) => trackById.get(id)).filter((n): n is string => Boolean(n)),
       specializationNames: audience.specialization_ids
@@ -187,7 +193,7 @@ export default async function LessonsPage({ searchParams }: Props) {
     return {
       ...l,
       teacherName,
-      gradeName: gradeById.get(l.grade_id) ?? "",
+      gradeName: gradeNames.join(" / ") || (gradeById.get(l.grade_id) ?? ""),
       audienceLabel,
       rangeName: rangeById.get(l.activity_range_id) ?? "",
       studentCount: studentCountByLesson.get(l.id) ?? 0,

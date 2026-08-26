@@ -156,13 +156,15 @@ create table lessons (
 create table lesson_audience (
   id uuid primary key default gen_random_uuid(),
   lesson_id uuid not null references lessons(id) on delete cascade,
+  grade_id uuid references grades(id) on delete cascade,
   class_id uuid references classes(id) on delete cascade,
   track_id uuid references tracks(id) on delete cascade,
   specialization_id uuid references specializations(id) on delete cascade,
   constraint lesson_audience_one_target check (
     (class_id is not null)::int
     + (track_id is not null)::int
-    + (specialization_id is not null)::int = 1
+    + (specialization_id is not null)::int
+    + (grade_id is not null)::int = 1
   )
 );
 
@@ -220,6 +222,9 @@ create index idx_teacher_teaching_assignments_teacher on teacher_teaching_assign
 create index idx_teacher_teaching_assignments_year on teacher_teaching_assignments(academic_year_id);
 create index idx_lessons_academic_year on lessons(academic_year_id);
 create index idx_lesson_audience_lesson on lesson_audience(lesson_id);
+create unique index idx_lesson_audience_grade
+  on lesson_audience (lesson_id, grade_id)
+  where grade_id is not null;
 create index idx_lesson_occurrences_date on lesson_occurrences(occurrence_date);
 create index idx_lesson_occurrences_lesson on lesson_occurrences(lesson_id);
 create index idx_student_lesson_assignments_student on student_lesson_assignments(student_id);

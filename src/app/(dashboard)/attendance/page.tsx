@@ -92,7 +92,7 @@ export default async function AttendancePage({ searchParams }: Props) {
       .from("holiday_periods")
       .select("start_date, end_date, kind")
       .eq("academic_year_id", activeYear.id),
-    supabase.from("lesson_audience").select("lesson_id, class_id, track_id, specialization_id"),
+    supabase.from("lesson_audience").select("lesson_id, grade_id, class_id, track_id, specialization_id"),
     supabase
       .from("lessons")
       .select("id, subject, day_of_week, lesson_number, period_count")

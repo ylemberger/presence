@@ -162,6 +162,7 @@ export interface Lesson {
 export interface LessonAudience {
   id: string;
   lesson_id: string;
+  grade_id: string | null;
   class_id: string | null;
   track_id: string | null;
   specialization_id: string | null;

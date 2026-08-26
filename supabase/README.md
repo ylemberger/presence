@@ -13,6 +13,7 @@
 
 | מצב | מה להריץ |
 |-----|----------|
+| **שכבות מרובות בשיעור** | [`patches/013_lesson_audience_grades.sql`](patches/013_lesson_audience_grades.sql) |
 | **רק שדות תלמידה חדשים** | [`patches/010_student_roster_fields.sql`](patches/010_student_roster_fields.sql) |
 | **מחיקת כל התלמידות** (בלי seed) | [`patches/012_wipe_all_students.sql`](patches/012_wipe_all_students.sql) |
 | **מחיקה + 35 לבדיקת קידום** | [`patches/011_wipe_and_seed_35_promo_test.sql`](patches/011_wipe_and_seed_35_promo_test.sql) |
