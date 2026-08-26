@@ -384,7 +384,12 @@ export default async function StudentDetailPage({ params }: Props) {
               <h2 className="mb-1 font-headline-lg text-headline-lg text-primary">
                 {student.full_name}
               </h2>
-              <div className="flex flex-wrap items-center gap-4 font-body-md text-body-md text-on-surface-variant">
+              <StudentPersonalNote
+                studentId={id}
+                note={student.personal_note ?? null}
+                compact
+              />
+              <div className="mt-3 flex flex-wrap items-center gap-4 font-body-md text-body-md text-on-surface-variant">
                 <span className="flex items-center gap-1">
                   <Icon name="badge" className="text-[18px]" />
                   מ.ז.: {student.identity_number ?? "—"}
@@ -648,9 +653,6 @@ export default async function StudentDetailPage({ params }: Props) {
         </div>
       </div>
 
-      <Section icon="edit_note" title="הערה אישית">
-        <StudentPersonalNote studentId={id} note={student.personal_note ?? null} />
-      </Section>
     </div>
   );
 }

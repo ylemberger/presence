@@ -16,8 +16,22 @@ import { Icon } from "@/components/ui/Icon";
 interface StudentRow {
   id: string;
   full_name: string;
+  first_name: string;
+  last_name: string;
+  mi: string | null;
   identity_number: string;
   cohort_number: number;
+  city: string | null;
+  phone: string | null;
+  father_phone: string | null;
+  mother_phone: string | null;
+  student_phone: string | null;
+  high_school: string | null;
+  chetz_program: boolean;
+  birth_date: string | null;
+  birth_date_hebrew: string | null;
+  address: string | null;
+  personal_note: string | null;
   is_active: boolean;
   className: string;
   gradeName: string;
@@ -105,7 +119,12 @@ export function StudentsDirectory({
       if (!q) return true;
       return (
         s.full_name.includes(q) ||
+        s.first_name.includes(q) ||
+        s.last_name.includes(q) ||
         s.identity_number.includes(q) ||
+        (s.city ?? "").includes(q) ||
+        (s.phone ?? "").includes(q) ||
+        (s.high_school ?? "").includes(q) ||
         s.className.includes(q) ||
         s.gradeName.includes(q) ||
         s.trackName.includes(q) ||
@@ -233,54 +252,87 @@ export function StudentsDirectory({
         </p>
       )}
 
+      <div className="overflow-x-auto">
       <Table
         headers={[
-          "תלמידה",
-          'ת"ז',
-          "מחזור",
-          "שכבה",
+          "מי",
+          "שם פרטי",
+          "משפחה",
+          "מ.ז.",
           "כיתה",
+          "שכבה",
+          "עיר",
+          "טל",
+          "פל אב",
+          "פל אם",
+          "פל תלמידה",
+          "תיכון",
+          "חץ",
           "מסלול",
           "התמחות",
+          "פסיכ׳",
           "סטטוס",
           "",
         ]}
       >
         {filtered.map((s) => (
           <TableRow key={s.id}>
+            <TableCell className="text-on-surface-variant">{s.mi ?? "—"}</TableCell>
             <TableCell>
-              <div className="flex items-center gap-3">
-                <span
-                  className="flex h-9 w-9 items-center justify-center rounded-full bg-primary text-caption font-bold text-white"
-                  aria-hidden
-                >
-                  {s.full_name.slice(0, 1)}
-                </span>
-                <div>
-                  <span className="font-label-md text-label-md text-primary">
-                    {s.full_name}
+              <div className="flex min-w-[8rem] flex-col gap-0.5">
+                <div className="flex items-center gap-2">
+                  <span
+                    className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-primary text-caption font-bold text-white"
+                    aria-hidden
+                  >
+                    {(s.first_name || s.full_name).slice(0, 1)}
                   </span>
-                  {s.isPsychology && (
-                    <span className="mr-2 text-caption text-on-surface-variant">
-                      · פסיכולוגיה
-                    </span>
-                  )}
+                  <span className="font-label-md text-label-md text-primary whitespace-nowrap">
+                    {s.first_name || s.full_name.split(" ")[0]}
+                  </span>
                 </div>
+                {s.personal_note && (
+                  <p
+                    className="max-w-[12rem] truncate pe-1 font-caption text-caption text-secondary"
+                    title={s.personal_note}
+                  >
+                    <Icon name="sticky_note_2" className="me-0.5 inline text-[12px] align-text-bottom" />
+                    {s.personal_note}
+                  </p>
+                )}
               </div>
             </TableCell>
-            <TableCell className="font-mono text-on-surface-variant" dir="ltr">
+            <TableCell className="whitespace-nowrap font-label-md text-label-md text-primary">
+              {s.last_name || "—"}
+            </TableCell>
+            <TableCell className="font-mono text-on-surface-variant whitespace-nowrap" dir="ltr">
               {s.identity_number}
             </TableCell>
-            <TableCell>{s.cohort_number}</TableCell>
+            <TableCell className="whitespace-nowrap">{s.className}</TableCell>
             <TableCell>{s.gradeName}</TableCell>
-            <TableCell>{s.className}</TableCell>
-            <TableCell>{s.trackName}</TableCell>
-            <TableCell>
+            <TableCell className="whitespace-nowrap">{s.city ?? "—"}</TableCell>
+            <TableCell className="whitespace-nowrap font-mono text-caption" dir="ltr">
+              {s.phone ?? "—"}
+            </TableCell>
+            <TableCell className="whitespace-nowrap font-mono text-caption" dir="ltr">
+              {s.father_phone ?? "—"}
+            </TableCell>
+            <TableCell className="whitespace-nowrap font-mono text-caption" dir="ltr">
+              {s.mother_phone ?? "—"}
+            </TableCell>
+            <TableCell className="whitespace-nowrap font-mono text-caption" dir="ltr">
+              {s.student_phone ?? "—"}
+            </TableCell>
+            <TableCell className="whitespace-nowrap">{s.high_school ?? "—"}</TableCell>
+            <TableCell>{s.chetz_program ? "כן" : "לא"}</TableCell>
+            <TableCell className="whitespace-nowrap">{s.trackName}</TableCell>
+            <TableCell className="whitespace-nowrap">
               {s.specializationName}
               {s.secondarySpecializationName !== "—"
                 ? ` + ${s.secondarySpecializationName}`
                 : ""}
             </TableCell>
+            <TableCell>{s.isPsychology ? "כן" : "לא"}</TableCell>
             <TableCell>
               <StatusPill tone={s.is_active ? "ok" : "muted"}>
                 {s.is_active ? "פעילה" : "לא פעילה"}
@@ -289,15 +341,16 @@ export function StudentsDirectory({
             <TableCell>
               <Link
                 href={`/students/${s.id}`}
-                className="inline-flex items-center gap-1 text-label-md text-secondary transition-colors hover:text-primary hover:underline"
+                className="inline-flex items-center gap-1 whitespace-nowrap text-label-md text-secondary transition-colors hover:text-primary hover:underline"
               >
                 <Icon name="badge" className="text-[16px]" />
-                כרטיס תלמידה
+                כרטיס
               </Link>
             </TableCell>
           </TableRow>
         ))}
       </Table>
+      </div>
       {filtered.length === 0 && (
         <div className="flex flex-col items-center gap-2 px-5 py-12 text-center">
           <Icon name="group" className="text-5xl text-outline-variant" />

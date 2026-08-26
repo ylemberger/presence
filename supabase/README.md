@@ -13,13 +13,16 @@
 
 | מצב | מה להריץ |
 |-----|----------|
-| **רק שדות תלמידה חדשים** (אם כבר הרצת 005–009 / RUN_ME חלקית) | [`patches/010_student_roster_fields.sql`](patches/010_student_roster_fields.sql) |
-| **לא בטוחה מה חסר** | כל [`RUN_ME.sql`](RUN_ME.sql) — בטוח, לא הורס מה שכבר קיים |
+| **רק שדות תלמידה חדשים** | [`patches/010_student_roster_fields.sql`](patches/010_student_roster_fields.sql) |
+| **מחיקת כל התלמידות** (בלי seed) | [`patches/012_wipe_all_students.sql`](patches/012_wipe_all_students.sql) |
+| **מחיקה + 35 לבדיקת קידום** | [`patches/011_wipe_and_seed_35_promo_test.sql`](patches/011_wipe_and_seed_35_promo_test.sql) |
+| **לא בטוחה מה חסר** | כל [`RUN_ME.sql`](RUN_ME.sql) |
+
+קבצי אקסל לדמו (אחרי שיש קטלוג כמו בהנחיות): `demo-import/01-100-students-3-grades.xlsx`, `demo-import/02-35-students-grade-alef.xlsx`.
 
 1. פתחי **Supabase → SQL Editor**.
 2. הדביקי והריצי.
-3. אם רוצות למחוק רק תלמידות לפני ייבוא מחדש — בתוך `RUN_ME.sql` יש 3 שורות `delete` בהערה בראש הקובץ.
-4. רענני את האפליקציה.
+3. רענני את האפליקציה.
 
 ### למה לא 1000 קבצי patch?
 
