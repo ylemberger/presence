@@ -28,6 +28,7 @@ import {
 } from "../actions";
 import { SettingsForms } from "./SettingsForms";
 import { HolidayCalendar } from "./HolidayCalendar";
+import { RepairPromotionsButton } from "./RepairPromotionsButton";
 import {
   EditableActivityRangeRow,
   EditableAttendanceRuleRow,
@@ -138,6 +139,9 @@ export default async function SettingsPage() {
               </tbody>
             </table>
           </div>
+        </Section>
+        <Section icon="history" title="שחזור שיבוצים אחרי קידום" className="mt-gutter">
+          <RepairPromotionsButton />
         </Section>
       </div>
     </div>

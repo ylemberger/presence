@@ -6,8 +6,10 @@ export type PendingOccurrence = {
   id: string;
   date: string;
   subject: string;
+  lessonId: string;
   marked: number;
   total: number;
+  gapHandling: "in_treatment" | "continued" | null;
 };
 
 export type IncompleteWeek = {
@@ -61,7 +63,7 @@ export const getPendingAttendanceSummary = cache(
     const { data: occs } = await supabase
       .from("lesson_occurrences")
       .select(
-        `id, occurrence_date, lesson_id,
+        `id, occurrence_date, lesson_id, gap_handling,
          lessons!inner(id, subject, academic_year_id)`
       )
       .eq("lessons.academic_year_id", academicYearId)
@@ -110,12 +112,18 @@ export const getPendingAttendanceSummary = cache(
       if (marked >= total) continue;
 
       const lesson = o.lessons as unknown as { subject: string };
+      const gap =
+        o.gap_handling === "in_treatment" || o.gap_handling === "continued"
+          ? o.gap_handling
+          : null;
       items.push({
         id: o.id,
         date: o.occurrence_date,
         subject: lesson.subject,
+        lessonId: o.lesson_id,
         marked,
         total,
+        gapHandling: gap,
       });
     }
 

@@ -5,15 +5,27 @@ import { validateIsraeliId } from "@/lib/validation";
 import { todayIso } from "@/lib/dates/hebrew";
 
 export const STUDENT_IMPORT_HEADERS = [
-  "שם מלא",
-  "תעודת זהות",
-  "מחזור",
-  "שכבה",
+  "מי",
+  "שם פרטי",
+  "משפחה",
   "כיתה",
+  "מ.ז.",
+  "ת.ל. עברי",
+  "ת.ל. לועזי",
+  "כתובת",
+  "עיר",
+  "טל",
+  "פל אב",
+  "פל אם",
+  "פל תלמידה",
+  "תיכון",
+  "תוכנית חץ",
+  "שכבה",
   "מסלול",
   "התמחות",
-  "התמחות נוספת",
   "פסיכולוגיה",
+  "התמחות נוספת",
+  "מחזור",
   "בתוקף מתאריך",
 ] as const;
 
@@ -21,8 +33,21 @@ export const MAX_STUDENT_IMPORT_ROWS = 500;
 export const MAX_STUDENT_IMPORT_BYTES = 3 * 1024 * 1024;
 
 export type CanonicalStudentImportKey =
+  | "mi"
+  | "firstName"
+  | "lastName"
   | "fullName"
   | "identity"
+  | "birthHebrew"
+  | "birthGregorian"
+  | "address"
+  | "city"
+  | "phone"
+  | "fatherPhone"
+  | "motherPhone"
+  | "studentPhone"
+  | "highSchool"
+  | "chetz"
   | "cohort"
   | "grade"
   | "className"
@@ -41,8 +66,21 @@ export interface StudentImportCatalogs {
 
 export interface ParsedStudentImportRow {
   rowNumber: number;
+  mi: string | null;
+  firstName: string;
+  lastName: string;
   fullName: string;
   identityNumber: string;
+  birthDateHebrew: string | null;
+  birthDate: string | null;
+  address: string | null;
+  city: string | null;
+  phone: string | null;
+  fatherPhone: string | null;
+  motherPhone: string | null;
+  studentPhone: string | null;
+  highSchool: string | null;
+  chetzProgram: boolean;
   cohortNumber: number;
   gradeId: string;
   classId: string;
@@ -64,6 +102,11 @@ export interface StudentImportParseResult {
 }
 
 const HEADER_ALIASES: Record<string, CanonicalStudentImportKey> = {
+  מי: "mi",
+  "שם פרטי": "firstName",
+  פרטי: "firstName",
+  משפחה: "lastName",
+  "שם משפחה": "lastName",
   "שם מלא": "fullName",
   שם: "fullName",
   "תעודת זהות": "identity",
@@ -71,7 +114,24 @@ const HEADER_ALIASES: Record<string, CanonicalStudentImportKey> = {
   "ת״ז": "identity",
   "ת.ז.": "identity",
   "ת.ז": "identity",
+  "מ.ז.": "identity",
+  "מ.ז": "identity",
+  מז: "identity",
   תז: "identity",
+  "ת.ל. עברי": "birthHebrew",
+  "תל עברי": "birthHebrew",
+  "ת.ל. לועזי": "birthGregorian",
+  "תל לועזי": "birthGregorian",
+  כתובת: "address",
+  עיר: "city",
+  טל: "phone",
+  טלפון: "phone",
+  "פל אב": "fatherPhone",
+  "פל אם": "motherPhone",
+  "פל תלמידה": "studentPhone",
+  תיכון: "highSchool",
+  "תוכנית חץ": "chetz",
+  חץ: "chetz",
   מחזור: "cohort",
   שכבה: "grade",
   כיתה: "className",
@@ -177,30 +237,17 @@ export function parseStudentImportWorkbook(
     if (key && !columnIndex.has(key)) columnIndex.set(key, i);
   }
 
-  const required: CanonicalStudentImportKey[] = [
-    "fullName",
-    "identity",
-    "cohort",
-    "grade",
-    "className",
-    "track",
-    "specialization",
-    "psychology",
-    "startDate",
-  ];
-  const missing = required.filter((key) => !columnIndex.has(key));
-  if (missing.length > 0) {
+  const hasName =
+    columnIndex.has("fullName") ||
+    (columnIndex.has("firstName") && columnIndex.has("lastName"));
+  if (!hasName || !columnIndex.has("identity") || !columnIndex.has("className")) {
     return {
       rows: [],
       errors: [
         {
           rowNumber: 1,
-          message: `חסרות עמודות חובה: ${missing
-            .map((key) => {
-              const label = STUDENT_IMPORT_HEADERS.find((header) => HEADER_ALIASES[header] === key);
-              return label ?? key;
-            })
-            .join(", ")}`,
+          message:
+            "חסרות עמודות חובה: שם פרטי+משפחה (או שם מלא), מ.ז., כיתה. מומלץ גם מסלול, התמחות, שכבה.",
         },
       ],
     };
@@ -231,7 +278,21 @@ export function parseStudentImportWorkbook(
       return index == null ? "" : cellToString(rawRow[index]);
     };
 
-    const fullName = get("fullName");
+    const firstNameRaw = get("firstName");
+    const lastNameRaw = get("lastName");
+    const fullNameRaw = get("fullName");
+    let firstName = firstNameRaw;
+    let lastName = lastNameRaw;
+    let fullName = fullNameRaw;
+    if (!fullName && (firstName || lastName)) {
+      fullName = `${firstName} ${lastName}`.replace(/\s+/g, " ").trim();
+    }
+    if ((!firstName || !lastName) && fullName) {
+      const parts = fullName.split(/\s+/).filter(Boolean);
+      firstName = firstName || parts[0] || "";
+      lastName = lastName || parts.slice(1).join(" ") || "";
+    }
+
     const identityRaw = get("identity");
     const cohortRaw = get("cohort");
     const gradeName = get("grade");
@@ -241,44 +302,73 @@ export function parseStudentImportWorkbook(
     const secondarySpecName = get("secondarySpecialization");
     const psychologyRaw = get("psychology");
     const startDateRaw = get("startDate");
+    const mi = get("mi") || null;
+    const birthHebrew = get("birthHebrew") || null;
+    const birthGregorianRaw = get("birthGregorian");
+    const address = get("address") || null;
+    const city = get("city") || null;
+    const phone = get("phone") || null;
+    const fatherPhone = get("fatherPhone") || null;
+    const motherPhone = get("motherPhone") || null;
+    const studentPhone = get("studentPhone") || null;
+    const highSchool = get("highSchool") || null;
+    const chetzRaw = get("chetz");
 
     const empty =
       !fullName &&
+      !firstName &&
+      !lastName &&
       !identityRaw &&
-      !cohortRaw &&
-      !gradeName &&
       !className &&
-      !trackName &&
-      !specName &&
-      !secondarySpecName &&
-      !psychologyRaw &&
-      !startDateRaw;
+      !trackName;
     if (empty) continue;
 
     const rowErrors: string[] = [];
-    if (!fullName) rowErrors.push("חסר שם מלא");
+    if (!firstName || !lastName) rowErrors.push("חסרים שם פרטי ומשפחה");
 
     const identity = validateIsraeliId(identityRaw);
     if (typeof identity !== "string") rowErrors.push(identity.error);
 
-    const cohortNumber = parseInt(cohortRaw.replace(/\D/g, ""), 10);
-    if (!cohortRaw || Number.isNaN(cohortNumber) || cohortNumber < 1) {
-      rowErrors.push("מחזור חייב להיות מספר שלם מ-1 ומעלה");
+    let cohortNumber = 1;
+    if (cohortRaw) {
+      cohortNumber = parseInt(cohortRaw.replace(/\D/g, ""), 10);
+      if (Number.isNaN(cohortNumber) || cohortNumber < 1) {
+        rowErrors.push("מחזור חייב להיות מספר שלם מ-1 ומעלה");
+        cohortNumber = 1;
+      }
     }
 
-    const grade = lookupByName(catalogs.grades, gradeName);
-    if (!gradeName) rowErrors.push("חסרה שכבה");
-    else if (!grade) rowErrors.push(`שכבה לא נמצאה בהגדרות: ${gradeName}`);
+    let classRow =
+      catalogs.classes.find(
+        (c) => c.name.trim().replace(/\s+/g, " ") === className.trim().replace(/\s+/g, " ")
+      ) ?? undefined;
+    let grade =
+      (gradeName ? lookupByName(catalogs.grades, gradeName) : undefined) ??
+      (classRow ? catalogs.grades.find((g) => g.id === classRow!.grade_id) : undefined);
 
-    const classRow = grade
-      ? catalogs.classes.find(
-          (c) =>
-            c.grade_id === grade.id &&
-            c.name.trim().replace(/\s+/g, " ") === className.trim().replace(/\s+/g, " ")
-        )
-      : lookupByName(catalogs.classes, className);
+    if (gradeName && !lookupByName(catalogs.grades, gradeName)) {
+      rowErrors.push(`שכבה לא נמצאה בהגדרות: ${gradeName}`);
+    }
     if (!className) rowErrors.push("חסרה כיתה");
-    else if (!classRow) rowErrors.push(`כיתה לא נמצאה בהגדרות לשכבה ${gradeName || ""}: ${className}`);
+    else {
+      const matches = catalogs.classes.filter(
+        (c) => c.name.trim().replace(/\s+/g, " ") === className.trim().replace(/\s+/g, " ")
+      );
+      if (grade) {
+        classRow = matches.find((c) => c.grade_id === grade!.id);
+        if (!classRow) rowErrors.push(`כיתה לא נמצאה בשכבה ${grade.name}: ${className}`);
+      } else if (matches.length === 1) {
+        classRow = matches[0];
+        grade = catalogs.grades.find((g) => g.id === classRow!.grade_id);
+      } else if (matches.length === 0) {
+        rowErrors.push(`כיתה לא נמצאה בהגדרות: ${className}`);
+      } else {
+        rowErrors.push(`כיתה ${className} קיימת בכמה שכבות — מלאי גם עמודת שכבה`);
+      }
+    }
+    if (!grade && !rowErrors.some((e) => e.includes("שכבה") || e.includes("כיתה"))) {
+      rowErrors.push("לא ניתן לקבוע שכבה — מלאי שכבה או כיתה חד־משמעית");
+    }
 
     const track = lookupByName(catalogs.tracks, trackName);
     if (!trackName) rowErrors.push("חסר מסלול");
@@ -302,13 +392,22 @@ export function parseStudentImportWorkbook(
       } else secondarySpecializationId = spec.id;
     }
 
-    if (!psychologyRaw) {
-      rowErrors.push("חסר שדה פסיכולוגיה (כן / לא)");
-    }
-    const psychology = parsePsychology(psychologyRaw);
-    if (psychologyRaw && typeof psychology !== "boolean") rowErrors.push(psychology.error);
+    const psychology = parsePsychology(psychologyRaw || "לא");
+    if (typeof psychology !== "boolean") rowErrors.push(psychology.error);
 
-    const startDate = parseStartDate(startDateRaw);
+    const chetz = parsePsychology(chetzRaw || "לא");
+    if (typeof chetz !== "boolean") rowErrors.push('בשדה תוכנית חץ יש למלא "כן" או "לא"');
+
+    let birthDate: string | null = null;
+    if (birthGregorianRaw) {
+      const parsedBirth = parseStartDate(birthGregorianRaw);
+      if (typeof parsedBirth === "string") birthDate = parsedBirth;
+      else rowErrors.push(`ת.ל. לועזי: ${parsedBirth.error}`);
+    }
+
+    const startDate = startDateRaw
+      ? parseStartDate(startDateRaw)
+      : defaultStartDate;
     if (typeof startDate !== "string") rowErrors.push(startDate.error);
 
     if (typeof identity === "string") {
@@ -327,8 +426,21 @@ export function parseStudentImportWorkbook(
 
     rows.push({
       rowNumber,
+      mi,
+      firstName,
+      lastName,
       fullName,
       identityNumber: identity as string,
+      birthDateHebrew: birthHebrew,
+      birthDate,
+      address,
+      city,
+      phone,
+      fatherPhone,
+      motherPhone,
+      studentPhone,
+      highSchool,
+      chetzProgram: chetz as boolean,
       cohortNumber,
       gradeId: grade!.id,
       classId: classRow!.id,
@@ -360,30 +472,42 @@ export function buildStudentImportTemplate(catalogs: StudentImportCatalogs): Uin
   const dataSheet = XLSX.utils.aoa_to_sheet([
     [...STUDENT_IMPORT_HEADERS],
     [
-      "דוגמה כהן",
-      "123456789",
-      1,
-      exampleGrade,
+      "",
+      "רחל",
+      "כהן",
       exampleClass,
-      exampleTrack,
-      exampleSpec,
+      "123456789",
+      "",
+      "",
+      "",
+      "",
+      "",
+      "",
+      "",
+      "",
       "",
       "לא",
+      exampleGrade,
+      exampleTrack,
+      exampleSpec,
+      "לא",
+      "",
+      1,
       todayIso(),
     ],
   ]);
   dataSheet["!cols"] = STUDENT_IMPORT_HEADERS.map((header) => ({
-    wch: Math.max(14, header.length + 4),
+    wch: Math.max(12, header.length + 2),
   }));
   XLSX.utils.book_append_sheet(workbook, dataSheet, "תלמידות");
 
   const allowed: (string | number)[][] = [
     ["הנחיות לייבוא תלמידות"],
     ["1. מחקי את שורת הדוגמה ומלאי תלמידות אמיתיות."],
-    ['2. אם תעודת זהות כבר קיימת במערכת — השם, המחזור והשיבוץ יעודכנו (לא תיווצר כפילות).'],
-    ["3. שמות שכבה / כיתה / מסלול / התמחות חייבים להתאים בדיוק להגדרות השנה הפעילה."],
-    ["4. חובה למלא את כל העמודות מלבד התמחות נוספת. פסיכולוגיה: כן או לא. תאריך: YYYY-MM-DD או DD.MM.YYYY."],
-    ["5. עמודת תעודת זהות עדיף כטקסט, כדי לשמור אפסים בתחילת המספר."],
+    ["2. אם מ.ז. כבר קיימת — הפרטים והשיבוץ יעודכנו (לא כפילות)."],
+    ["3. כיתה/מסלול/התמחות חייבים להתאים להגדרות השנה. שכבה מומלצת אם יש כיתות באותו שם."],
+    ["4. תוכנית חץ / פסיכולוגיה: כן או לא. תאריכים: YYYY-MM-DD או DD.MM.YYYY."],
+    ["5. מחזור ובתוקף מתאריך — רשות (ברירת מחדל: מחזור 1, היום)."],
     [],
     ["ערכים מותרים בשנה הפעילה"],
     ["שכבות", catalogs.grades.map((g) => g.name).join(" | ") || "אין"],

@@ -34,6 +34,8 @@ import {
 } from "./AttendanceStatusPicker";
 import { AttendanceBlankSheet } from "./AttendanceBlankSheet";
 import { AddOccurrenceDate } from "./AddOccurrenceDate";
+import { AttendanceGapModal, type GapItem } from "./AttendanceGapModal";
+import { Modal } from "@/components/ui/Modal";
 
 export type AttendanceMode = "single" | "group";
 
@@ -110,6 +112,8 @@ interface Props {
   holidayDates?: string[];
   cancelledDates?: string[];
   insightsByStudent?: Record<string, StudentInsight>;
+  pastGaps?: GapItem[];
+  lessonIdsWithNotes?: string[];
 }
 
 type DraftKey = string;
@@ -158,6 +162,8 @@ export function AttendanceBoard({
   holidayDates = [],
   cancelledDates = [],
   insightsByStudent = {},
+  pastGaps = [],
+  lessonIdsWithNotes = [],
 }: Props) {
   const router = useRouter();
   const [draft, setDraft] = useState<Record<DraftKey, AttendanceStatus | null>>({});
@@ -170,8 +176,10 @@ export function AttendanceBoard({
   const [message, setMessage] = useState<string | null>(null);
   const [note, setNote] = useState(noteBody);
   const [noteSaving, setNoteSaving] = useState(false);
+  const [noteModalOpen, setNoteModalOpen] = useState(false);
+  const [gapQueue, setGapQueue] = useState<GapItem[]>([]);
   const [filtersOpen, setFiltersOpen] = useState(
-    Boolean(classId || trackId || specializationId || teacherId || subject || studentId || lessonId)
+    Boolean(classId || trackId || specializationId || subject || studentId || lessonId)
   );
   const [focusedIdx, setFocusedIdx] = useState(0);
   const [undo, setUndo] = useState<UndoItem | null>(null);
@@ -193,6 +201,14 @@ export function AttendanceBoard({
   useEffect(() => {
     setNote(noteBody);
   }, [noteBody]);
+
+  useEffect(() => {
+    const hard = pastGaps.filter((g) => !g.gapHandling);
+    const soft = pastGaps.filter((g) => g.gapHandling === "in_treatment");
+    setGapQueue(hard.length ? hard : soft.slice(0, 1));
+  }, [pastGaps]);
+
+  const activeGap = gapQueue[0] ?? null;
 
   useEffect(() => {
     if (!activeOccurrenceId) {
@@ -312,6 +328,27 @@ export function AttendanceBoard({
   function updateFilter(key: string, value: string | undefined) {
     navigate(buildParams({ [key]: value, occurrenceId: undefined }));
   }
+
+  useEffect(() => {
+    try {
+      const saved = window.localStorage.getItem("presence.attendance.teacherId");
+      if (!teacherId && saved && teachers.some((t) => t.id === saved)) {
+        navigate(buildParams({ teacherId: saved, occurrenceId: undefined }));
+      }
+    } catch {
+      /* ignore */
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  useEffect(() => {
+    try {
+      if (teacherId) window.localStorage.setItem("presence.attendance.teacherId", teacherId);
+      else window.localStorage.removeItem("presence.attendance.teacherId");
+    } catch {
+      /* ignore */
+    }
+  }, [teacherId]);
 
   function bumpMarkedCount(occurrenceId: string, delta: number) {
     setDayOccurrences((prev) =>
@@ -658,12 +695,6 @@ export function AttendanceBoard({
           options={specializations.map((s) => ({ value: s.id, label: s.name }))}
         />
         <Combobox
-          label="מורה"
-          value={teacherId ?? ""}
-          onChange={(v) => updateFilter("teacherId", v || undefined)}
-          options={teachers.map((t) => ({ value: t.id, label: t.name }))}
-        />
-        <Combobox
           label="מקצוע"
           value={subject ?? ""}
           onChange={(v) => updateFilter("subject", v || undefined)}
@@ -681,9 +712,27 @@ export function AttendanceBoard({
 
   return (
     <div className="flex flex-col gap-stack_lg" onTouchStart={onTouchStart} onTouchEnd={onTouchEnd}>
+      {activeGap && (
+        <AttendanceGapModal
+          gap={activeGap}
+          soft={Boolean(activeGap.gapHandling)}
+          onResolved={() => setGapQueue((q) => q.slice(1))}
+          onMarkAttendance={(gap) => {
+            setGapQueue((q) => q.slice(1));
+            navigate(
+              buildParams({
+                date: gap.date,
+                occurrenceId: gap.occurrenceId,
+                lessonId: gap.lessonId,
+              })
+            );
+          }}
+        />
+      )}
+
       <div className="flex flex-wrap items-center gap-2 font-body-md text-body-md text-on-surface-variant print:hidden">
         <span className={cn(!activeOccurrenceId && "font-bold text-primary")}>
-          שלב 1: בחירת תאריך
+          שלב 1: מורה ותאריך
         </span>
         <Icon name="arrow_back" className="text-[16px]" />
         <span className={cn(!activeOccurrenceId && "font-bold text-primary")}>
@@ -693,10 +742,48 @@ export function AttendanceBoard({
         <span className={cn(activeOccurrenceId && "font-bold text-primary")}>שלב 3: רישום</span>
       </div>
 
+      {/* Teacher-first strip */}
+      <div className="rounded-xl border border-secondary/30 bg-secondary-container/30 p-4 print:hidden">
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+          <Combobox
+            label="מורה (סינון ראשי)"
+            value={teacherId ?? ""}
+            onChange={(v) => updateFilter("teacherId", v || undefined)}
+            options={teachers.map((t) => ({ value: t.id, label: t.name }))}
+            emptyLabel="כל המורות"
+          />
+          <Combobox
+            label="שיעור"
+            value={lessonId ?? ""}
+            onChange={(v) => updateFilter("lessonId", v || undefined)}
+            options={lessons.map((l) => ({
+              value: l.id,
+              label: formatLessonOptionLabel(l),
+            }))}
+            emptyLabel="כל השיעורים"
+          />
+          <div className="flex items-end">
+            <Button
+              type="button"
+              variant="secondary"
+              className="w-full"
+              onClick={() => setFiltersOpen((v) => !v)}
+            >
+              <Icon name="filter_list" className="text-[18px]" />
+              {filtersOpen ? "הסתר סינון נוסף" : "סינון נוסף (כיתה / מסלול / …)"}
+            </Button>
+          </div>
+        </div>
+      </div>
+
       {(classId || trackId || specializationId || teacherId || subject || studentId || lessonId) && (
-        <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-primary/20 bg-primary/5 px-4 py-2.5">
+        <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-primary/20 bg-primary/5 px-4 py-2.5 print:hidden">
           <p className="font-body-sm text-body-sm text-primary">
-            היומן מציג רק שיעורים ושיוכים לפי הסינון הפעיל.
+            היומן מציג רק שיעורים לפי הסינון הפעיל
+            {teacherId
+              ? ` · מורה: ${teachers.find((t) => t.id === teacherId)?.name ?? ""}`
+              : ""}
+            .
           </p>
           <Button
             type="button"
@@ -722,76 +809,38 @@ export function AttendanceBoard({
         </div>
       )}
 
-      {/* desktop filters */}
-      <div className="hidden overflow-hidden rounded-xl border border-outline-variant/30 bg-surface-container-lowest shadow-tactile-md print:hidden md:block">
-        <button
-          type="button"
-          className="flex w-full items-center justify-between gap-3 px-4 py-3 text-right font-label-md text-label-md text-primary transition-colors hover:bg-surface-container-low/60"
-          onClick={() => setFiltersOpen((v) => !v)}
-        >
-          <span className="flex items-center gap-2">
-            <Icon name="filter_list" className="text-secondary" />
-            סינון — היומן מציג רק את מה שתואם
-          </span>
-          <Icon
-            name="expand_more"
-            className={cn(
-              "text-on-surface-variant transition-transform",
-              filtersOpen && "rotate-180"
-            )}
-          />
-        </button>
-        {filtersOpen && (
-          <div className="border-t border-outline-variant/30 px-4 pb-4 pt-4">{filtersPanel}</div>
-        )}
-      </div>
+      {filtersOpen && (
+        <div className="overflow-hidden rounded-xl border border-outline-variant/30 bg-surface-container-lowest p-4 shadow-tactile-md print:hidden">
+          {filtersPanel}
+        </div>
+      )}
 
-      {/* mobile filter sheet trigger */}
       <div className="print:hidden md:hidden">
         <Button type="button" variant="secondary" className="w-full" onClick={() => setFiltersOpen(true)}>
           <Icon name="filter_list" className="text-[18px]" />
-          סינון ומצב רישום
+          סינון מלא
         </Button>
-        {filtersOpen && (
-          <div className="fixed inset-0 z-50 flex flex-col justify-end bg-primary/40" role="dialog">
-            <button
-              type="button"
-              className="flex-1"
-              aria-label="סגור"
-              onClick={() => setFiltersOpen(false)}
-            />
-            <div className="max-h-[80vh] overflow-y-auto rounded-t-3xl bg-surface-container-lowest p-5 shadow-tactile-lg">
-              <div className="mb-4 flex items-center justify-between">
-                <h3 className="font-title-lg text-title-lg text-primary">סינון</h3>
-                <Button type="button" size="sm" variant="secondary" onClick={() => setFiltersOpen(false)}>
-                  סגור
-                </Button>
-              </div>
-              {filtersPanel}
-            </div>
-          </div>
-        )}
-      </div>
-
-      <div className="mx-auto w-full max-w-xl print:hidden">
-      <HebrewMonthCalendar
-        compact
-        initialMonthIso={monthFrom}
-        selectedDate={selectedDate}
-        countsByDate={countsByDate}
-        completeDates={completeDates}
-        partialDates={partialDates}
-        holidayDates={holidayDates}
-        cancelledDates={cancelledDates}
-        onSelectDate={selectDate}
-        onMonthRangeChange={(from, to) => {
-          navigate(buildParams({ from, to, date: selectedDate, occurrenceId: undefined }));
-        }}
-      />
       </div>
 
       <div className="grid grid-cols-1 items-start gap-gutter print:hidden xl:grid-cols-12">
         <div className="flex flex-col gap-stack_lg xl:col-span-5">
+          <div className="rounded-xl border border-outline-variant/30 bg-surface-container-lowest p-3 shadow-tactile-md">
+            <HebrewMonthCalendar
+              compact
+              initialMonthIso={monthFrom}
+              selectedDate={selectedDate}
+              countsByDate={countsByDate}
+              completeDates={completeDates}
+              partialDates={partialDates}
+              holidayDates={holidayDates}
+              cancelledDates={cancelledDates}
+              onSelectDate={selectDate}
+              onMonthRangeChange={(from, to) => {
+                navigate(buildParams({ from, to, date: selectedDate, occurrenceId: undefined }));
+              }}
+            />
+          </div>
+
           <section className="rounded-xl border border-outline-variant/30 bg-surface-container-lowest p-6 shadow-tactile-md">
             <div className="mb-4 border-b border-outline-variant/30 pb-4">
               <h3 className="flex flex-wrap items-center gap-2 font-title-lg text-title-lg text-primary">
@@ -809,7 +858,7 @@ export function AttendanceBoard({
               )}
               {weekWarning.thisWeekPartial.length > 0 && (
                 <p className="mt-2 rounded-lg bg-attendance-late/10 px-3 py-2 font-caption text-caption text-attendance-late">
-                  בשבוע זה יש שיעורים שסומנו רק חלקית. השלימי את כל התלמידות לפני שממשיכות הלאה.
+                  בשבוע זה יש שיעורים שסומנו רק חלקית.
                 </p>
               )}
               {weekWarning.prevIncomplete.length > 0 && (
@@ -828,21 +877,8 @@ export function AttendanceBoard({
                     ? "ביטול לימודים — אין שיעורים אוטומטיים ביום זה."
                     : holidayDates.includes(selectedDate)
                       ? "יום חופשה — אין לימודים ולא נספרת נוכחות."
-                      : "אין שיעורים ביום זה."}
+                      : "אין שיעורים ביום זה לפי הסינון."}
                 </p>
-                {lessonId ? (
-                  <div className="mt-3">
-                    <AddOccurrenceDate lessonId={lessonId} />
-                  </div>
-                ) : !holidayDates.includes(selectedDate) && !cancelledDates.includes(selectedDate) ? (
-                  <Link
-                    href="/lessons"
-                    className="mt-3 inline-flex items-center gap-1 font-label-md text-label-md text-secondary hover:underline"
-                  >
-                    <Icon name="add" className="text-[16px]" />
-                    צרי שיעור (עם טווח תאריכים)
-                  </Link>
-                ) : null}
               </div>
             ) : (
               <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
@@ -851,6 +887,7 @@ export function AttendanceBoard({
                   const complete = o.studentCount > 0 && o.markedCount >= o.studentCount;
                   const pct =
                     o.studentCount > 0 ? Math.round((o.markedCount / o.studentCount) * 100) : 0;
+                  const hasNote = lessonIdsWithNotes.includes(o.lessonId);
                   return (
                     <button
                       key={o.id}
@@ -866,16 +903,24 @@ export function AttendanceBoard({
                       {selected && (
                         <span className="absolute left-0 top-0 h-1 w-full bg-secondary" />
                       )}
-                      <span
-                        className={cn(
-                          "self-start rounded-md px-2 py-0.5 font-label-md text-label-md",
-                          selected
-                            ? "bg-secondary-container text-secondary"
-                            : "bg-surface-variant text-on-surface-variant"
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span
+                          className={cn(
+                            "rounded-md px-2 py-0.5 font-label-md text-label-md",
+                            selected
+                              ? "bg-secondary-container text-secondary"
+                              : "bg-surface-variant text-on-surface-variant"
+                          )}
+                        >
+                          שיעור {o.lessonNumber || "—"}
+                        </span>
+                        {hasNote && (
+                          <span className="inline-flex items-center gap-0.5 rounded-md bg-primary/10 px-2 py-0.5 font-caption text-caption text-primary">
+                            <Icon name="sticky_note_2" className="text-[14px]" />
+                            הערה
+                          </span>
                         )}
-                      >
-                        שיעור {o.lessonNumber || "—"}
-                      </span>
+                      </div>
                       <h4 className="mt-1 font-title-lg text-title-lg text-primary">{o.subject}</h4>
                       <p className="flex items-center gap-1 font-body-md text-body-md text-on-surface-variant">
                         <Icon name="person" className="text-[16px]" />
@@ -919,6 +964,15 @@ export function AttendanceBoard({
               </p>
               </div>
               <div className="flex flex-col items-end gap-2 print:hidden">
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="secondary"
+                  onClick={() => setNoteModalOpen(true)}
+                >
+                  <Icon name="edit_note" className="text-[18px]" />
+                  {note.trim() ? "הערה לשיעור ✓" : "הערה לשיעור"}
+                </Button>
                 <PrintButton
                   label="הדפסת דף ריק"
                   documentTitle={`נוכחות-${activeLesson.subject}`}
@@ -1107,28 +1161,6 @@ export function AttendanceBoard({
                 />
               </div>
             )}
-
-            {noteLessonId && lessonStudents.length > 0 && (
-              <div className="mt-6 rounded-xl border-l-4 border-l-primary bg-surface-container-low/60 p-stack_md">
-                <label className="mb-2 flex items-center gap-2 font-label-md text-label-md text-primary">
-                  <Icon name="edit_note" className="text-secondary" />
-                  הערות כלליות לשיעור
-                </label>
-                <div className="flex flex-col gap-2 sm:flex-row">
-                  <textarea
-                    value={note}
-                    onChange={(e) => setNote(e.target.value)}
-                    rows={2}
-                    className="min-h-[3rem] flex-1 rounded-lg border border-outline-variant/60 bg-surface-container-lowest px-3 py-2 font-body-sm text-body-sm text-on-surface transition-all focus:border-secondary focus:outline-none focus:ring-2 focus:ring-secondary/30"
-                    placeholder="הקלידי הערות מיוחדות, אירועים חריגים או בקשות הקשורות לשיעור זה…"
-                  />
-                  <Button type="button" size="sm" disabled={noteSaving} onClick={saveNote}>
-                    <Icon name="save" className="text-[18px]" />
-                    {noteSaving ? "שומר…" : "שמור הערה"}
-                  </Button>
-                </div>
-              </div>
-            )}
           </div>
           <div className="mt-auto flex justify-end gap-3 border-t border-outline-variant/30 bg-surface-container-lowest p-6">
             <button
@@ -1177,6 +1209,38 @@ export function AttendanceBoard({
           </button>
         </div>
       )}
+
+      <Modal
+        open={noteModalOpen && Boolean(noteLessonId)}
+        title="הערה לשיעור"
+        description={activeLesson ? activeLesson.subject : undefined}
+        onClose={() => setNoteModalOpen(false)}
+      >
+        <div className="space-y-3">
+          <textarea
+            value={note}
+            onChange={(e) => setNote(e.target.value)}
+            rows={5}
+            className="w-full rounded-lg border border-outline-variant/60 bg-surface-container-lowest px-3 py-2 font-body-sm text-body-sm text-on-surface focus:border-secondary focus:outline-none focus:ring-2 focus:ring-secondary/30"
+            placeholder="הערה שנשמרת על השיעור ומוצגת בכל המופעים שלו…"
+          />
+          <div className="flex justify-end gap-2">
+            <Button type="button" variant="secondary" onClick={() => setNoteModalOpen(false)}>
+              סגור
+            </Button>
+            <Button
+              type="button"
+              disabled={noteSaving}
+              onClick={async () => {
+                await saveNote();
+                setNoteModalOpen(false);
+              }}
+            >
+              {noteSaving ? "שומר…" : "שמור"}
+            </Button>
+          </div>
+        </div>
+      </Modal>
     </div>
   );
 }

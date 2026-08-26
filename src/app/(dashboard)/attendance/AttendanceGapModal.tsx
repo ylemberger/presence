@@ -76,7 +76,7 @@ export function AttendanceGapModal({ gap, soft, onResolved, onMarkAttendance }: 
             onClick={() => onMarkAttendance(gap)}
             className="justify-center py-3"
           >
-            סימון נוכחות למופע זה
+            למלא נוכחות עכשיו
           </Button>
           <Button
             type="button"
@@ -85,16 +85,16 @@ export function AttendanceGapModal({ gap, soft, onResolved, onMarkAttendance }: 
             onClick={() => run("in_treatment")}
             className="justify-center py-3"
           >
-            בטיפול
+            אין לי עדיין את הנתונים — תזכירי שוב
           </Button>
           <Button
             type="button"
-            variant="secondary"
+            variant="ghost"
             disabled={busy}
             onClick={() => run("continued")}
             className="justify-center py-3 sm:col-span-2"
           >
-            המשך בכל זאת
+            המשך בכל זאת (בלי למלא עכשיו)
           </Button>
         </div>
 

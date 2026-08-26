@@ -79,7 +79,9 @@ export async function applyStudentImportRows(
     try {
       const { data: existing, error: lookupError } = await supabase
         .from("students")
-        .select("id, full_name, cohort_number, is_active")
+        .select(
+          "id, full_name, first_name, last_name, cohort_number, is_active, chetz_program, mi, birth_date, birth_date_hebrew, address, city, phone, father_phone, mother_phone, student_phone, high_school"
+        )
         .eq("identity_number", row.identityNumber)
         .maybeSingle();
       if (lookupError) {
@@ -90,15 +92,30 @@ export async function applyStudentImportRows(
       let studentId = existing?.id;
       let studentChanged = false;
 
+      const studentFields = {
+        full_name: row.fullName,
+        first_name: row.firstName,
+        last_name: row.lastName,
+        mi: row.mi,
+        identity_number: row.identityNumber,
+        cohort_number: row.cohortNumber,
+        birth_date: row.birthDate,
+        birth_date_hebrew: row.birthDateHebrew,
+        address: row.address,
+        city: row.city,
+        phone: row.phone,
+        father_phone: row.fatherPhone,
+        mother_phone: row.motherPhone,
+        student_phone: row.studentPhone,
+        high_school: row.highSchool,
+        chetz_program: row.chetzProgram,
+        is_active: true,
+      };
+
       if (!studentId) {
         const { data: created, error: insertError } = await supabase
           .from("students")
-          .insert({
-            full_name: row.fullName,
-            identity_number: row.identityNumber,
-            cohort_number: row.cohortNumber,
-            is_active: true,
-          })
+          .insert(studentFields)
           .select("id")
           .single();
         if (insertError || !created) {
@@ -125,19 +142,10 @@ export async function applyStudentImportRows(
         continue;
       }
 
-      if (
-        existing &&
-        (existing.full_name !== row.fullName ||
-          existing.cohort_number !== row.cohortNumber ||
-          existing.is_active !== true)
-      ) {
+      if (existing) {
         const { error: updateError } = await supabase
           .from("students")
-          .update({
-            full_name: row.fullName,
-            cohort_number: row.cohortNumber,
-            is_active: true,
-          })
+          .update(studentFields)
           .eq("id", studentId);
         if (updateError) {
           result.errors.push({ rowNumber: row.rowNumber, message: updateError.message });

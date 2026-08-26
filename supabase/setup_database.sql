@@ -1,4 +1,4 @@
--- presence: full database schema (run once in Supabase SQL Editor)
+﻿-- presence: full database schema (run once in Supabase SQL Editor)
 
 create table academic_years (
   id uuid primary key default gen_random_uuid(),
@@ -63,7 +63,22 @@ create table attendance_rules (
 create table students (
   id uuid primary key default gen_random_uuid(),
   full_name text not null,
+  first_name text not null default '',
+  last_name text not null default '',
+  mi text,
   identity_number text unique not null,
+  cohort_number integer not null default 1 check (cohort_number >= 1),
+  birth_date date,
+  birth_date_hebrew text,
+  address text,
+  city text,
+  phone text,
+  father_phone text,
+  mother_phone text,
+  student_phone text,
+  high_school text,
+  chetz_program boolean not null default false,
+  personal_note text,
   is_active boolean default true,
   created_at timestamptz default now()
 );
@@ -653,7 +668,7 @@ create index if not exists idx_attendance_occurrence_student
   on attendance (lesson_occurrence_id, student_id);
 
 
--- Student extras, teaching types, psychology lessons, cohorts, fixed grades ׳/׳‘/׳’
+-- Student extras, teaching types, psychology lessons, cohorts, fixed grades א/ב/ג
 
 -- Cohort stays on the student across years
 alter table students
@@ -670,8 +685,40 @@ alter table students
 alter table students
   add constraint students_cohort_positive check (cohort_number >= 1);
 
+alter table students add column if not exists personal_note text;
+alter table students add column if not exists mi text;
+alter table students add column if not exists first_name text;
+alter table students add column if not exists last_name text;
+alter table students add column if not exists birth_date date;
+alter table students add column if not exists birth_date_hebrew text;
+alter table students add column if not exists address text;
+alter table students add column if not exists city text;
+alter table students add column if not exists phone text;
+alter table students add column if not exists father_phone text;
+alter table students add column if not exists mother_phone text;
+alter table students add column if not exists student_phone text;
+alter table students add column if not exists high_school text;
+alter table students add column if not exists chetz_program boolean;
+
+update students set chetz_program = false where chetz_program is null;
 alter table students
-  add column if not exists personal_note text;
+  alter column chetz_program set default false,
+  alter column chetz_program set not null;
+
+update students
+set
+  first_name = coalesce(nullif(trim(first_name), ''), nullif(split_part(trim(full_name), ' ', 1), ''), trim(full_name)),
+  last_name = coalesce(
+    nullif(trim(last_name), ''),
+    nullif(trim(substring(trim(full_name) from position(' ' in trim(full_name) || ' ') + 1)), ''),
+    ''
+  )
+where first_name is null or last_name is null;
+
+alter table students alter column first_name set default '';
+alter table students alter column last_name set default '';
+update students set first_name = coalesce(first_name, '') where first_name is null;
+update students set last_name = coalesce(last_name, '') where last_name is null;
 
 alter table holiday_periods
   add column if not exists kind text;

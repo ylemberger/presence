@@ -16,6 +16,7 @@ import {
 import {
   ensureFixedGrades,
   promoteStudentsToYear,
+  repairMissingPromotions,
 } from "@/lib/years/promote";
 import { filterFixedGrades, FIXED_GRADE_NAMES } from "@/lib/years/grades";
 import {
@@ -102,6 +103,28 @@ export async function deleteAcademicYearAction(id: string) {
   if (error) return { error: error.message };
   revalidatePath("/settings");
   return { success: true };
+}
+
+/** Restore missing placements in the active year from the previous year's data. */
+export async function repairMissingPromotionsAction() {
+  const actionAuth = await createActionClient();
+  if ("error" in actionAuth) return { error: actionAuth.error };
+  const supabase = actionAuth.supabase;
+
+  const { data: active } = await supabase
+    .from("academic_years")
+    .select("id, name")
+    .eq("is_active", true)
+    .maybeSingle();
+  if (!active) return { error: "אין שנה פעילה" };
+
+  const result = await repairMissingPromotions(active.id, undefined, supabase);
+  if (result.error) return { error: result.error };
+
+  revalidatePath("/students");
+  revalidatePath("/settings");
+  revalidatePath("/", "layout");
+  return { success: true, result };
 }
 
 // --- Generic year-scoped entity CRUD helpers ---
@@ -581,9 +604,33 @@ export async function updateAttendanceRuleAction(id: string, formData: FormData)
 }
 
 // --- Students ---
+function buildStudentFullName(firstName: string, lastName: string): string {
+  return `${firstName} ${lastName}`.replace(/\s+/g, " ").trim();
+}
+
+function parseOptionalText(value: FormDataEntryValue | null, max = 200): string | null {
+  const t = String(value ?? "").trim();
+  if (!t) return null;
+  return t.slice(0, max);
+}
+
+function parseChetzProgram(formData: FormData): boolean {
+  const raw = String(formData.get("chetz_program") ?? "").trim().toLowerCase();
+  return (
+    formData.get("chetz_program") === "on" ||
+    formData.get("chetz_program") === "1" ||
+    raw === "כן" ||
+    raw === "true" ||
+    raw === "yes"
+  );
+}
+
 export async function createStudentAction(formData: FormData) {
-  const fullName = requireText(formData.get("full_name"), "שם מלא");
-  if (isError(fullName)) return fullName;
+  const firstName = requireText(formData.get("first_name"), "שם פרטי");
+  if (isError(firstName)) return firstName;
+  const lastName = requireText(formData.get("last_name"), "שם משפחה");
+  if (isError(lastName)) return lastName;
+  const fullName = buildStudentFullName(firstName, lastName);
   const identity = validateIsraeliId(String(formData.get("identity_number") ?? ""));
   if (isError(identity)) return identity;
 
@@ -612,6 +659,12 @@ export async function createStudentAction(formData: FormData) {
   const isPsychology =
     formData.get("is_psychology") === "on" || formData.get("is_psychology") === "1";
 
+  const birthDateRaw = String(formData.get("birth_date") ?? "").trim();
+  if (birthDateRaw) {
+    const birthOk = requireIsoDate(birthDateRaw, "ת.ל. לועזי");
+    if (isError(birthOk)) return birthOk;
+  }
+
   const actionAuth = await createActionClient();
   if ("error" in actionAuth) return { error: actionAuth.error };
   const supabase = actionAuth.supabase;
@@ -619,8 +672,21 @@ export async function createStudentAction(formData: FormData) {
     .from("students")
     .insert({
       full_name: fullName,
+      first_name: firstName,
+      last_name: lastName,
+      mi: parseOptionalText(formData.get("mi"), 40),
       identity_number: identity,
       cohort_number: cohortNumber,
+      birth_date: birthDateRaw || null,
+      birth_date_hebrew: parseOptionalText(formData.get("birth_date_hebrew"), 80),
+      address: parseOptionalText(formData.get("address"), 200),
+      city: parseOptionalText(formData.get("city"), 80),
+      phone: parseOptionalText(formData.get("phone"), 40),
+      father_phone: parseOptionalText(formData.get("father_phone"), 40),
+      mother_phone: parseOptionalText(formData.get("mother_phone"), 40),
+      student_phone: parseOptionalText(formData.get("student_phone"), 40),
+      high_school: parseOptionalText(formData.get("high_school"), 120),
+      chetz_program: parseChetzProgram(formData),
     })
     .select("id")
     .single();
@@ -669,11 +735,34 @@ export async function updateStudentAction(id: string, formData: FormData) {
   const actionAuth = await createActionClient();
   if ("error" in actionAuth) return { error: actionAuth.error };
   const supabase = actionAuth.supabase;
+  const firstName = requireText(formData.get("first_name"), "שם פרטי");
+  if (isError(firstName)) return firstName;
+  const lastName = requireText(formData.get("last_name"), "שם משפחה");
+  if (isError(lastName)) return lastName;
   const cohortRaw = String(formData.get("cohort_number") ?? "").trim();
   const cohortNumber = parseInt(cohortRaw, 10);
-  const patch: { full_name: string; is_active: boolean; cohort_number?: number } = {
-    full_name: formData.get("full_name") as string,
+  const birthDateRaw = String(formData.get("birth_date") ?? "").trim();
+  if (birthDateRaw) {
+    const birthOk = requireIsoDate(birthDateRaw, "ת.ל. לועזי");
+    if (isError(birthOk)) return birthOk;
+  }
+
+  const patch: Record<string, unknown> = {
+    first_name: firstName,
+    last_name: lastName,
+    full_name: buildStudentFullName(firstName, lastName),
     is_active: formData.get("is_active") === "on",
+    mi: parseOptionalText(formData.get("mi"), 40),
+    birth_date: birthDateRaw || null,
+    birth_date_hebrew: parseOptionalText(formData.get("birth_date_hebrew"), 80),
+    address: parseOptionalText(formData.get("address"), 200),
+    city: parseOptionalText(formData.get("city"), 80),
+    phone: parseOptionalText(formData.get("phone"), 40),
+    father_phone: parseOptionalText(formData.get("father_phone"), 40),
+    mother_phone: parseOptionalText(formData.get("mother_phone"), 40),
+    student_phone: parseOptionalText(formData.get("student_phone"), 40),
+    high_school: parseOptionalText(formData.get("high_school"), 120),
+    chetz_program: parseChetzProgram(formData),
   };
   if (cohortRaw && !Number.isNaN(cohortNumber) && cohortNumber >= 1) {
     patch.cohort_number = cohortNumber;

@@ -1,32 +1,33 @@
 # מסד נתונים (Supabase)
 
-תיקייה זו מכילה **שני קבצי SQL בלבד** — אין צורך בקבצים נוספים.
+**שני קבצים בלבד לשימוש יומיומי:**
 
 | קובץ | מתי להריץ |
 |------|-----------|
-| [`setup_database.sql`](setup_database.sql) | **פרויקט Supabase חדש** — פעם אחת. יוצר את כל הטבלאות, אינדקסים, טריגרים ו-RLS. |
-| [`reset_all_data.sql`](reset_all_data.sql) | **ריקון נתונים** — מוחק את כל הרשומות, שומר את מבנה הטבלאות. |
+| [`setup_database.sql`](setup_database.sql) | **פרויקט Supabase חדש** — פעם אחת. |
+| [`RUN_ME.sql`](RUN_ME.sql) | **מסד קיים** — פעם אחת (או אחרי עדכון סכימה). כולל את כל השינויים החסרים + שדות תלמידה מורחבים. בטוח להרצה חוזרת. |
 
-## שינוי סכימה (למתכנתים)
+ריקון כל הנתונים (אופציונלי): [`reset_all_data.sql`](reset_all_data.sql).
 
-1. עדכן את [`setup_database.sql`](setup_database.sql) — כך שפרויקט חדש יקבל את הסכימה העדכנית.
-2. אם יש כבר מסד בפרודקשן — צור קובץ patch חדש ב-`supabase/patches/` עם **רק** השינוי, והרץ אותו ב-SQL Editor.
-3. עדכן [`src/types/database.ts`](../src/types/database.ts) בהתאם.
+### מה להריץ עכשיו (מסד קיים)
 
-### Patches קיימים
+1. פתחי **Supabase → SQL Editor**.
+2. הדביקי והריצי את כל [`RUN_ME.sql`](RUN_ME.sql).
+3. אם רוצות למחוק רק תלמידות לפני ייבוא מחדש — בתוך `RUN_ME.sql` יש 3 שורות `delete` בהערה בראש הקובץ; הסירי את `--` והריצי שוב רק את החלק הזה (או את כל הקובץ).
+4. רענני את האפליקציה.
 
-| קובץ | תיאור |
-|------|--------|
-| [`patches/001_teaching_assignments_columns.sql`](patches/001_teaching_assignments_columns.sql) | עמודות חסרות ב-teaching assignments |
-| [`patches/002_attendance_indexes.sql`](patches/002_attendance_indexes.sql) | אינדקסים לביצועי נוכחות |
-| [`patches/003_attendance_reason.sql`](patches/003_attendance_reason.sql) | שדה `reason` להיעדרות |
-| [`patches/004_makeup_blocked_status.sql`](patches/004_makeup_blocked_status.sql) | מאפשר `required_exams=0` לחסומות |
-| [`patches/005_holiday_periods.sql`](patches/005_holiday_periods.sql) | לוח חופשות שנתי (`holiday_periods`) |
-| [`patches/006_lesson_audience.sql`](patches/006_lesson_audience.sql) | קהל מרובה לשיעור (`lesson_audience`) |
-| [`patches/007_lesson_period_count.sql`](patches/007_lesson_period_count.sql) | שיעור של כמה שעות רצופות (`period_count`) |
-| [`patches/008_salary_teacher_source.sql`](patches/008_salary_teacher_source.sql) | שדות שכר ב-`teacher_source_records` + `teacher_id` |
-| [`patches/009_holiday_kinds_and_student_notes.sql`](patches/009_holiday_kinds_and_student_notes.sql) | סוג חופשה/ביטול לימודים + הערה אישית לתלמידה |
-| [`patches/run_005_to_007.sql`](patches/run_005_to_007.sql) | **הרצה אחת** — 005+006+007 למסד קיים |
+### למה לא 1000 קבצי patch?
+
+תיקיית `patches/` היא ארכיון היסטורי למתכנתים. **אין צורך להריץ אותם אחד־אחד** — `RUN_ME.sql` מאגד את מה שצריך למסד קיים, ו־`setup_database.sql` הוא המקור לפרויקט חדש.
+
+### לוגיקת תלמידות (אל תשברו)
+
+| באקסל / במסך | איפה במסד |
+|---------------|-----------|
+| מי, שם פרטי, משפחה, מ.ז., ת.ל., כתובת, עיר, טלפונים, תיכון, תוכנית חץ | `students` (קבוע) |
+| כיתה, מסלול, התמחות, פסיכולוגיה, התמחות נוספת | `student_assignments` **לפי שנה** (היסטוריה) |
+
+`full_name` נשמר לחיפוש/תצוגה = שם פרטי + משפחה.
 
 ## טבלאות עיקריות
 

@@ -1,8 +1,9 @@
 import { PageHeader } from "@/components/ui/PageHeader";
 import { createClient } from "@/lib/supabase/server";
-import { getActiveAcademicYear } from "@/lib/utils";
+import { getActiveAcademicYear, getAllAcademicYears } from "@/lib/utils";
 import { filterFixedGrades } from "@/lib/years/grades";
 import { StudentsDirectory } from "./StudentsDirectory";
+import { RepairPromotionsButton } from "../settings/RepairPromotionsButton";
 
 type YearAssignment = {
   student_id: string;
@@ -32,6 +33,7 @@ function pickPlacementForYear(rows: YearAssignment[]): Map<string, YearAssignmen
 
 export default async function StudentsPage() {
   const activeYear = await getActiveAcademicYear();
+  const allYears = await getAllAcademicYears();
   const supabase = await createClient();
 
   const { data: students } = await supabase
@@ -129,12 +131,27 @@ export default async function StudentsPage() {
       isPsychology: assignments[s.id]?.isPsychology ?? false,
     }));
 
+  const activeUnplaced = rows.filter((s) => s.is_active && !placedStudentIds.has(s.id)).length;
+  const yearIdx = allYears.findIndex((y) => y.id === activeYear?.id);
+  const previousYear = yearIdx >= 0 ? allYears[yearIdx + 1] : allYears[1];
+
   return (
     <div>
       <PageHeader
         title="תלמידות"
         description="כרטסת קבועה עם מחזור. שיבוץ (שכבה/כיתה/מסלול) לפי השנה שנבחרה למעלה. בארכיון רואים את מה שהיה באותה שנה."
       />
+      {activeUnplaced > 0 && previousYear && (
+        <div className="mb-4 rounded-xl border border-primary/20 bg-secondary-container/40 p-4">
+          <p className="mb-2 text-body-md font-medium text-on-surface">
+            {activeUnplaced} תלמידות פעילות בלי שיבוץ בשנה הנוכחית
+          </p>
+          <RepairPromotionsButton
+            missingCount={activeUnplaced}
+            previousYearName={previousYear.name}
+          />
+        </div>
+      )}
       <StudentsDirectory students={rows} yearOptions={yearOptions} />
     </div>
   );

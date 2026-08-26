@@ -94,8 +94,12 @@ async function ensureClass(
  * - Grade ג: single class "שנה ג"
  * - Tracks / specializations: copy by name
  */
-export async function copyYearStructure(fromYearId: string, toYearId: string) {
-  const supabase = await createClient();
+export async function copyYearStructure(
+  fromYearId: string,
+  toYearId: string,
+  supabaseClient?: SupabaseClient
+) {
+  const supabase = supabaseClient ?? (await createClient());
   await ensureFixedGrades(toYearId, supabase);
 
   const [
@@ -178,13 +182,150 @@ export async function copyYearStructure(fromYearId: string, toYearId: string) {
   if (specRows.length) await supabase.from("specializations").insert(specRows);
 }
 
+type PlacementRow = {
+  id: string;
+  student_id: string;
+  grade_id: string;
+  class_id: string;
+  track_id: string;
+  specialization_id: string | null;
+  secondary_specialization_id: string | null;
+  is_psychology: boolean;
+  start_date: string;
+  end_date: string | null;
+  classes: { name: string } | null;
+  tracks: { name: string } | null;
+  students: { id: string; is_active: boolean } | null;
+};
+
+function pickLatestPlacementPerStudent(rows: PlacementRow[]): PlacementRow[] {
+  const sorted = [...rows].sort((a, b) => {
+    if (a.end_date === null && b.end_date !== null) return -1;
+    if (a.end_date !== null && b.end_date === null) return 1;
+    return b.start_date.localeCompare(a.start_date);
+  });
+  const seen = new Set<string>();
+  const out: PlacementRow[] = [];
+  for (const row of sorted) {
+    if (seen.has(row.student_id)) continue;
+    seen.add(row.student_id);
+    out.push(row);
+  }
+  return out;
+}
+
+async function applyPromotionFromPlacement(
+  supabase: SupabaseClient,
+  p: PlacementRow,
+  args: {
+    fromYearId: string;
+    toYearId: string;
+    fromGradeName: Map<string, string>;
+    toGradeByName: Map<string, string>;
+    toClasses: Array<{ id: string; name: string; grade_id: string }>;
+    toTrackByName: Map<string, string>;
+    fromTrackName: Map<string, string>;
+    fromSpecName: Map<string, string>;
+    toSpecByName: Map<string, string>;
+    startDate: string;
+    endDate: string;
+  }
+): Promise<"promoted" | "graduated" | "skipped"> {
+  const student = p.students;
+  if (!student?.is_active) return "skipped";
+
+  const gradeName = args.fromGradeName.get(p.grade_id) ?? "";
+  const nextGradeName = GRADE_PROMOTE[gradeName];
+
+  if (p.end_date === null) {
+    const { error: closeError } = await supabase
+      .from("student_assignments")
+      .update({ end_date: args.endDate })
+      .eq("id", p.id);
+    if (closeError) return "skipped";
+  }
+
+  if (nextGradeName === null) {
+    await supabase.from("students").update({ is_active: false }).eq("id", p.student_id);
+    return "graduated";
+  }
+  if (!nextGradeName) return "skipped";
+
+  const nextGradeId = args.toGradeByName.get(nextGradeName);
+  if (!nextGradeId) return "skipped";
+
+  const oldClassName = p.classes?.name ?? "";
+  const nextClassName = mapPromotedClassName(gradeName, nextGradeName, oldClassName);
+  const nextClass = await ensureClass(
+    supabase,
+    args.toYearId,
+    nextGradeId,
+    nextClassName,
+    args.toClasses
+  );
+  if (!nextClass) return "skipped";
+
+  const trackName = p.tracks?.name ?? args.fromTrackName.get(p.track_id) ?? "";
+  const nextTrackId = await ensureNamedEntity(
+    supabase,
+    "tracks",
+    args.toYearId,
+    trackName,
+    args.toTrackByName
+  );
+  if (!nextTrackId) return "skipped";
+
+  const specName = p.specialization_id ? args.fromSpecName.get(p.specialization_id) : null;
+  const secondaryName = p.secondary_specialization_id
+    ? args.fromSpecName.get(p.secondary_specialization_id)
+    : null;
+
+  const nextSpecId = specName
+    ? await ensureNamedEntity(
+        supabase,
+        "specializations",
+        args.toYearId,
+        specName,
+        args.toSpecByName
+      )
+    : null;
+  const nextSecondaryId = secondaryName
+    ? await ensureNamedEntity(
+        supabase,
+        "specializations",
+        args.toYearId,
+        secondaryName,
+        args.toSpecByName
+      )
+    : null;
+
+  const { error } = await supabase.from("student_assignments").insert({
+    student_id: p.student_id,
+    academic_year_id: args.toYearId,
+    grade_id: nextGradeId,
+    class_id: nextClass.id,
+    track_id: nextTrackId,
+    specialization_id: nextSpecId,
+    secondary_specialization_id: nextSecondaryId,
+    is_psychology: Boolean(p.is_psychology),
+    start_date: args.startDate,
+    end_date: null,
+  });
+
+  return error ? "skipped" : "promoted";
+}
+
 /**
  * Promote open placements: א→ב, ב→ג, ג→ archive.
  * Always closes the old assignment before opening the new one (overlap trigger).
  */
-export async function promoteStudentsToYear(fromYearId: string, toYearId: string) {
-  const supabase = await createClient();
-  await copyYearStructure(fromYearId, toYearId);
+export async function promoteStudentsToYear(
+  fromYearId: string,
+  toYearId: string,
+  supabaseClient?: SupabaseClient
+) {
+  const supabase = supabaseClient ?? (await createClient());
+  await copyYearStructure(fromYearId, toYearId, supabase);
 
   const [
     { data: fromGrades },
@@ -206,7 +347,7 @@ export async function promoteStudentsToYear(fromYearId: string, toYearId: string
     supabase
       .from("student_assignments")
       .select(
-        "id, student_id, grade_id, class_id, track_id, specialization_id, secondary_specialization_id, is_psychology, classes(name), tracks(name), students(id, is_active)"
+        "id, student_id, grade_id, class_id, track_id, specialization_id, secondary_specialization_id, is_psychology, start_date, end_date, classes(name), tracks(name), students(id, is_active)"
       )
       .eq("academic_year_id", fromYearId)
       .is("end_date", null),
@@ -225,104 +366,139 @@ export async function promoteStudentsToYear(fromYearId: string, toYearId: string
   let skipped = 0;
   const startDate = todayIso();
   const endDate = addDays(startDate, -1);
+  const ctx = {
+    fromYearId,
+    toYearId,
+    fromGradeName,
+    toGradeByName,
+    toClasses,
+    toTrackByName,
+    fromTrackName,
+    fromSpecName,
+    toSpecByName,
+    startDate,
+    endDate,
+  };
 
-  for (const p of placements ?? []) {
-    const student = p.students as unknown as { id: string; is_active: boolean } | null;
-    if (!student?.is_active) continue;
-
-    const gradeName = fromGradeName.get(p.grade_id) ?? "";
-    const nextGradeName = GRADE_PROMOTE[gradeName];
-
-    // Close old placement first (required by overlap trigger)
-    const { error: closeError } = await supabase
-      .from("student_assignments")
-      .update({ end_date: endDate })
-      .eq("id", p.id);
-    if (closeError) {
-      skipped++;
-      continue;
-    }
-
-    if (nextGradeName === null) {
-      await supabase.from("students").update({ is_active: false }).eq("id", p.student_id);
-      graduated++;
-      continue;
-    }
-    if (!nextGradeName) {
-      skipped++;
-      continue;
-    }
-
-    const nextGradeId = toGradeByName.get(nextGradeName);
-    if (!nextGradeId) {
-      skipped++;
-      continue;
-    }
-
-    const oldClassName = (p.classes as unknown as { name: string } | null)?.name ?? "";
-    const nextClassName = mapPromotedClassName(gradeName, nextGradeName, oldClassName);
-    const nextClass = await ensureClass(
-      supabase,
-      toYearId,
-      nextGradeId,
-      nextClassName,
-      toClasses
-    );
-    if (!nextClass) {
-      skipped++;
-      continue;
-    }
-
-    const trackName =
-      (p.tracks as unknown as { name: string } | null)?.name ??
-      fromTrackName.get(p.track_id) ??
-      "";
-    const nextTrackId = await ensureNamedEntity(
-      supabase,
-      "tracks",
-      toYearId,
-      trackName,
-      toTrackByName
-    );
-    if (!nextTrackId) {
-      skipped++;
-      continue;
-    }
-
-    const specName = p.specialization_id ? fromSpecName.get(p.specialization_id) : null;
-    const secondaryName = p.secondary_specialization_id
-      ? fromSpecName.get(p.secondary_specialization_id)
-      : null;
-
-    const nextSpecId = specName
-      ? await ensureNamedEntity(supabase, "specializations", toYearId, specName, toSpecByName)
-      : null;
-    const nextSecondaryId = secondaryName
-      ? await ensureNamedEntity(
-          supabase,
-          "specializations",
-          toYearId,
-          secondaryName,
-          toSpecByName
-        )
-      : null;
-
-    const { error } = await supabase.from("student_assignments").insert({
-      student_id: p.student_id,
-      academic_year_id: toYearId,
-      grade_id: nextGradeId,
-      class_id: nextClass.id,
-      track_id: nextTrackId,
-      specialization_id: nextSpecId,
-      secondary_specialization_id: nextSecondaryId,
-      is_psychology: Boolean(p.is_psychology),
-      start_date: startDate,
-      end_date: null,
-    });
-
-    if (error) skipped++;
-    else promoted++;
+  for (const raw of placements ?? []) {
+    const p = raw as unknown as PlacementRow;
+    const result = await applyPromotionFromPlacement(supabase, p, ctx);
+    if (result === "promoted") promoted++;
+    else if (result === "graduated") graduated++;
+    else skipped++;
   }
 
   return { promoted, graduated, skipped };
 }
+
+/**
+ * Repair: for students missing a placement in the target year, recreate from the
+ * previous year's latest placement (even if already closed by a failed promote).
+ */
+export async function repairMissingPromotions(
+  toYearId: string,
+  fromYearId?: string,
+  supabaseClient?: SupabaseClient
+) {
+  const supabase = supabaseClient ?? (await createClient());
+
+  let resolvedFromId = fromYearId ?? null;
+  if (!resolvedFromId) {
+    const { data: years } = await supabase
+      .from("academic_years")
+      .select("id, created_at")
+      .order("created_at", { ascending: false });
+    const idx = (years ?? []).findIndex((y) => y.id === toYearId);
+    resolvedFromId =
+      idx >= 0 ? (years?.[idx + 1]?.id ?? null) : (years?.[1]?.id ?? null);
+  }
+
+  if (!resolvedFromId) {
+    return {
+      promoted: 0,
+      graduated: 0,
+      skipped: 0,
+      alreadyHad: 0,
+      fromYearId: null as string | null,
+      error: "לא נמצאה שנה קודמת לשחזור ממנה",
+    };
+  }
+
+  await copyYearStructure(resolvedFromId, toYearId, supabase);
+
+  const [
+    { data: fromGrades },
+    { data: toGrades },
+    { data: toClassesRaw },
+    { data: toTracks },
+    { data: fromTracks },
+    { data: fromSpecs },
+    { data: toSpecs },
+    { data: fromPlacements },
+    { data: toPlacements },
+  ] = await Promise.all([
+    supabase.from("grades").select("id, name").eq("academic_year_id", resolvedFromId),
+    supabase.from("grades").select("id, name").eq("academic_year_id", toYearId),
+    supabase.from("classes").select("id, name, grade_id").eq("academic_year_id", toYearId),
+    supabase.from("tracks").select("id, name").eq("academic_year_id", toYearId),
+    supabase.from("tracks").select("id, name").eq("academic_year_id", resolvedFromId),
+    supabase.from("specializations").select("id, name").eq("academic_year_id", resolvedFromId),
+    supabase.from("specializations").select("id, name").eq("academic_year_id", toYearId),
+    supabase
+      .from("student_assignments")
+      .select(
+        "id, student_id, grade_id, class_id, track_id, specialization_id, secondary_specialization_id, is_psychology, start_date, end_date, classes(name), tracks(name), students(id, is_active)"
+      )
+      .eq("academic_year_id", resolvedFromId),
+    supabase.from("student_assignments").select("student_id").eq("academic_year_id", toYearId),
+  ]);
+
+  const already = new Set((toPlacements ?? []).map((r) => r.student_id));
+  const candidates = pickLatestPlacementPerStudent(
+    (fromPlacements ?? []) as unknown as PlacementRow[]
+  ).filter((p) => !already.has(p.student_id));
+
+  const fromGradeName = new Map((fromGrades ?? []).map((g) => [g.id, g.name]));
+  const toGradeByName = new Map((toGrades ?? []).map((g) => [g.name, g.id]));
+  const toClasses = [...(toClassesRaw ?? [])];
+  const toTrackByName = new Map((toTracks ?? []).map((t) => [t.name, t.id]));
+  const fromTrackName = new Map((fromTracks ?? []).map((t) => [t.id, t.name]));
+  const fromSpecName = new Map((fromSpecs ?? []).map((s) => [s.id, s.name]));
+  const toSpecByName = new Map((toSpecs ?? []).map((s) => [s.name, s.id]));
+
+  let promoted = 0;
+  let graduated = 0;
+  let skipped = 0;
+  const startDate = todayIso();
+  const endDate = addDays(startDate, -1);
+  const ctx = {
+    fromYearId: resolvedFromId,
+    toYearId,
+    fromGradeName,
+    toGradeByName,
+    toClasses,
+    toTrackByName,
+    fromTrackName,
+    fromSpecName,
+    toSpecByName,
+    startDate,
+    endDate,
+  };
+
+  for (const p of candidates) {
+    const result = await applyPromotionFromPlacement(supabase, p, ctx);
+    if (result === "promoted") promoted++;
+    else if (result === "graduated") graduated++;
+    else skipped++;
+  }
+
+  return {
+    promoted,
+    graduated,
+    skipped,
+    alreadyHad: already.size,
+    fromYearId: resolvedFromId,
+    error: null as string | null,
+  };
+}
+

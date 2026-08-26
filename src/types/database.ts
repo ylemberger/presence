@@ -64,8 +64,21 @@ export interface AttendanceRule {
 export interface Student {
   id: string;
   full_name: string;
+  first_name: string;
+  last_name: string;
+  mi: string | null;
   identity_number: string;
   cohort_number: number;
+  birth_date: string | null;
+  birth_date_hebrew: string | null;
+  address: string | null;
+  city: string | null;
+  phone: string | null;
+  father_phone: string | null;
+  mother_phone: string | null;
+  student_phone: string | null;
+  high_school: string | null;
+  chetz_program: boolean;
   is_active: boolean;
   personal_note: string | null;
   created_at: string;

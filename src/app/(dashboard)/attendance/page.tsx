@@ -380,6 +380,34 @@ export default async function AttendancePage({ searchParams }: Props) {
   const pendingSummary = await getPendingAttendanceSummary(activeYear.id);
   const holidaySets = holidayDatesByKind(holidayRows ?? []);
 
+  const pastGaps = pendingSummary.items
+    .filter((i) => i.date < todayIso())
+    .map((i) => ({
+      lessonId: i.lessonId,
+      subject: i.subject,
+      date: i.date,
+      occurrenceId: i.id,
+      gapHandling: i.gapHandling,
+    }));
+
+  const dayLessonIds = [
+    ...new Set(
+      dayOccurrences.map((o) => o.lessonId).filter(Boolean) as string[]
+    ),
+  ];
+  let lessonIdsWithNotes: string[] = [];
+  if (dayLessonIds.length > 0) {
+    const { data: noteRows } = await supabase
+      .from("attendance_notes")
+      .select("lesson_id")
+      .eq("academic_year_id", activeYear.id)
+      .in("lesson_id", dayLessonIds)
+      .not("body", "eq", "");
+    lessonIdsWithNotes = (noteRows ?? [])
+      .map((n) => n.lesson_id)
+      .filter(Boolean) as string[];
+  }
+
   return (
     <div className="flex flex-col gap-stack_lg">
       <PageHeader title="נוכחות" size="headline" />
@@ -422,6 +450,8 @@ export default async function AttendancePage({ searchParams }: Props) {
         holidayDates={holidaySets.vacation}
         cancelledDates={holidaySets.cancelled}
         insightsByStudent={insightsByStudent}
+        pastGaps={pastGaps}
+        lessonIdsWithNotes={lessonIdsWithNotes}
       />
     </div>
   );

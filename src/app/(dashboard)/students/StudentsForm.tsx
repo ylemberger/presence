@@ -88,9 +88,26 @@ export function StudentsForm({
     <form onSubmit={handleSubmit} className="space-y-6">
       <section className="space-y-3">
         <h3 className="text-sm font-semibold text-slate-800">פרטי תלמידה</h3>
-        <div className="grid gap-3 sm:grid-cols-2">
-          <Input label="שם מלא" name="full_name" required autoFocus />
-          <Input label='תעודת זהות' name="identity_number" required inputMode="numeric" />
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+          <Input label="מי" name="mi" placeholder="סימון מהאקסל (רשות)" />
+          <Input label="שם פרטי" name="first_name" required autoFocus />
+          <Input label="משפחה" name="last_name" required />
+          <Input label="מ.ז." name="identity_number" required inputMode="numeric" />
+          <Input label="ת.ל. עברי" name="birth_date_hebrew" placeholder="למשל א׳ בניסן תשס״ה" />
+          <HebrewDateInput label="ת.ל. לועזי" name="birth_date" />
+          <div className="sm:col-span-2">
+            <Input label="כתובת" name="address" />
+          </div>
+          <Input label="עיר" name="city" />
+          <Input label="טל" name="phone" inputMode="tel" />
+          <Input label="פל אב" name="father_phone" inputMode="tel" />
+          <Input label="פל אם" name="mother_phone" inputMode="tel" />
+          <Input label="פל תלמידה" name="student_phone" inputMode="tel" />
+          <Input label="תיכון" name="high_school" />
+          <label className="flex items-center gap-2 self-end pb-2 text-sm text-slate-700">
+            <input type="checkbox" name="chetz_program" className="rounded border-stone-300" />
+            תוכנית חץ
+          </label>
           <Input
             label="מחזור"
             name="cohort_number"

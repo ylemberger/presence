@@ -387,12 +387,23 @@ export default async function StudentDetailPage({ params }: Props) {
               <div className="flex flex-wrap items-center gap-4 font-body-md text-body-md text-on-surface-variant">
                 <span className="flex items-center gap-1">
                   <Icon name="badge" className="text-[18px]" />
-                  ת&quot;ז: {student.identity_number ?? "—"}
+                  מ.ז.: {student.identity_number ?? "—"}
                 </span>
                 <span className="flex items-center gap-1">
                   <Icon name="school" className="text-[18px]" />
                   מחזור: {student.cohort_number ?? "—"}
                 </span>
+                {student.city && (
+                  <span className="flex items-center gap-1">
+                    <Icon name="location_city" className="text-[18px]" />
+                    {student.city}
+                  </span>
+                )}
+                {student.chetz_program && (
+                  <span className="rounded-md bg-secondary-container px-2 py-0.5 text-caption font-semibold text-secondary">
+                    תוכנית חץ
+                  </span>
+                )}
                 <span className="flex items-center gap-2">
                   <span
                     className={cn(
@@ -403,6 +414,16 @@ export default async function StudentDetailPage({ params }: Props) {
                   />
                   סטטוס: {student.is_active ? "פעילה" : "לא פעילה"}
                 </span>
+              </div>
+              <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 font-caption text-caption text-on-surface-variant">
+                {student.phone && <span>טל: {student.phone}</span>}
+                {student.father_phone && <span>פל אב: {student.father_phone}</span>}
+                {student.mother_phone && <span>פל אם: {student.mother_phone}</span>}
+                {student.student_phone && <span>פל תלמידה: {student.student_phone}</span>}
+                {student.high_school && <span>תיכון: {student.high_school}</span>}
+                {student.birth_date_hebrew && <span>ת.ל. עברי: {student.birth_date_hebrew}</span>}
+                {student.birth_date && <span>ת.ל. לועזי: {student.birth_date}</span>}
+                {student.address && <span>כתובת: {student.address}</span>}
               </div>
             </div>
           </div>
