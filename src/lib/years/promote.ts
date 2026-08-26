@@ -11,6 +11,22 @@ const GRADE_PROMOTE: Record<string, string | null> = {
 
 export const YEAR_G_CLASS_NAME = "שנה ג";
 
+function embedOne<T>(value: T | T[] | null | undefined): T | null {
+  if (value == null) return null;
+  return (Array.isArray(value) ? value[0] ?? null : value) as T | null;
+}
+
+/** Close old placement the day before new start, without violating date checks or overlap. */
+export function promotionDatePair(placementStart: string, preferredNewStart = todayIso()) {
+  let newStart = preferredNewStart;
+  let oldEnd = addDays(newStart, -1);
+  if (placementStart > oldEnd) {
+    oldEnd = placementStart;
+    newStart = addDays(placementStart, 1);
+  }
+  return { oldEnd, newStart };
+}
+
 /** Map class name when promoting grades (א→ב: יג→יד; ב→ג: שנה ג). */
 export function mapPromotedClassName(
   fromGrade: string,
@@ -193,9 +209,9 @@ type PlacementRow = {
   is_psychology: boolean;
   start_date: string;
   end_date: string | null;
-  classes: { name: string } | null;
-  tracks: { name: string } | null;
-  students: { id: string; is_active: boolean } | null;
+  classes: { name: string } | { name: string }[] | null;
+  tracks: { name: string } | { name: string }[] | null;
+  students: { id: string; is_active: boolean } | { id: string; is_active: boolean }[] | null;
 };
 
 function pickLatestPlacementPerStudent(rows: PlacementRow[]): PlacementRow[] {
@@ -225,22 +241,28 @@ async function applyPromotionFromPlacement(
     toClasses: Array<{ id: string; name: string; grade_id: string }>;
     toTrackByName: Map<string, string>;
     fromTrackName: Map<string, string>;
+    fromClassName: Map<string, string>;
     fromSpecName: Map<string, string>;
     toSpecByName: Map<string, string>;
-    startDate: string;
-    endDate: string;
   }
 ): Promise<"promoted" | "graduated" | "skipped"> {
-  const student = p.students;
+  const student = embedOne(p.students);
   if (!student?.is_active) return "skipped";
 
-  const gradeName = args.fromGradeName.get(p.grade_id) ?? "";
-  const nextGradeName = GRADE_PROMOTE[gradeName];
+  const gradeName = (args.fromGradeName.get(p.grade_id) ?? "").trim();
+  const nextGradeName = Object.prototype.hasOwnProperty.call(GRADE_PROMOTE, gradeName)
+    ? GRADE_PROMOTE[gradeName]
+    : undefined;
+
+  const { oldEnd, newStart } = promotionDatePair(
+    p.start_date.slice(0, 10),
+    todayIso()
+  );
 
   if (p.end_date === null) {
     const { error: closeError } = await supabase
       .from("student_assignments")
-      .update({ end_date: args.endDate })
+      .update({ end_date: oldEnd })
       .eq("id", p.id);
     if (closeError) return "skipped";
   }
@@ -254,8 +276,14 @@ async function applyPromotionFromPlacement(
   const nextGradeId = args.toGradeByName.get(nextGradeName);
   if (!nextGradeId) return "skipped";
 
-  const oldClassName = p.classes?.name ?? "";
+  const classEmbed = embedOne(p.classes);
+  const oldClassName =
+    classEmbed?.name?.trim() ||
+    args.fromClassName.get(p.class_id)?.trim() ||
+    "";
   const nextClassName = mapPromotedClassName(gradeName, nextGradeName, oldClassName);
+  if (!nextClassName.trim()) return "skipped";
+
   const nextClass = await ensureClass(
     supabase,
     args.toYearId,
@@ -265,7 +293,13 @@ async function applyPromotionFromPlacement(
   );
   if (!nextClass) return "skipped";
 
-  const trackName = p.tracks?.name ?? args.fromTrackName.get(p.track_id) ?? "";
+  const trackEmbed = embedOne(p.tracks);
+  const trackName =
+    trackEmbed?.name?.trim() ||
+    args.fromTrackName.get(p.track_id)?.trim() ||
+    "";
+  if (!trackName) return "skipped";
+
   const nextTrackId = await ensureNamedEntity(
     supabase,
     "tracks",
@@ -299,6 +333,15 @@ async function applyPromotionFromPlacement(
       )
     : null;
 
+  // If previous placement already closed on/after preferred start, open the next day
+  let startDate = newStart;
+  if (p.end_date != null) {
+    const closedEnd = p.end_date.slice(0, 10);
+    if (closedEnd >= startDate) {
+      startDate = addDays(closedEnd, 1);
+    }
+  }
+
   const { error } = await supabase.from("student_assignments").insert({
     student_id: p.student_id,
     academic_year_id: args.toYearId,
@@ -308,7 +351,7 @@ async function applyPromotionFromPlacement(
     specialization_id: nextSpecId,
     secondary_specialization_id: nextSecondaryId,
     is_psychology: Boolean(p.is_psychology),
-    start_date: args.startDate,
+    start_date: startDate,
     end_date: null,
   });
 
@@ -333,6 +376,7 @@ export async function promoteStudentsToYear(
     { data: toClassesRaw },
     { data: toTracks },
     { data: fromTracks },
+    { data: fromClasses },
     { data: fromSpecs },
     { data: toSpecs },
     { data: placements },
@@ -342,6 +386,7 @@ export async function promoteStudentsToYear(
     supabase.from("classes").select("id, name, grade_id").eq("academic_year_id", toYearId),
     supabase.from("tracks").select("id, name").eq("academic_year_id", toYearId),
     supabase.from("tracks").select("id, name").eq("academic_year_id", fromYearId),
+    supabase.from("classes").select("id, name").eq("academic_year_id", fromYearId),
     supabase.from("specializations").select("id, name").eq("academic_year_id", fromYearId),
     supabase.from("specializations").select("id, name").eq("academic_year_id", toYearId),
     supabase
@@ -358,14 +403,13 @@ export async function promoteStudentsToYear(
   const toClasses = [...(toClassesRaw ?? [])];
   const toTrackByName = new Map((toTracks ?? []).map((t) => [t.name, t.id]));
   const fromTrackName = new Map((fromTracks ?? []).map((t) => [t.id, t.name]));
+  const fromClassName = new Map((fromClasses ?? []).map((c) => [c.id, c.name]));
   const fromSpecName = new Map((fromSpecs ?? []).map((s) => [s.id, s.name]));
   const toSpecByName = new Map((toSpecs ?? []).map((s) => [s.name, s.id]));
 
   let promoted = 0;
   let graduated = 0;
   let skipped = 0;
-  const startDate = todayIso();
-  const endDate = addDays(startDate, -1);
   const ctx = {
     fromYearId,
     toYearId,
@@ -374,10 +418,9 @@ export async function promoteStudentsToYear(
     toClasses,
     toTrackByName,
     fromTrackName,
+    fromClassName,
     fromSpecName,
     toSpecByName,
-    startDate,
-    endDate,
   };
 
   for (const raw of placements ?? []) {
@@ -432,6 +475,7 @@ export async function repairMissingPromotions(
     { data: toClassesRaw },
     { data: toTracks },
     { data: fromTracks },
+    { data: fromClasses },
     { data: fromSpecs },
     { data: toSpecs },
     { data: fromPlacements },
@@ -442,6 +486,7 @@ export async function repairMissingPromotions(
     supabase.from("classes").select("id, name, grade_id").eq("academic_year_id", toYearId),
     supabase.from("tracks").select("id, name").eq("academic_year_id", toYearId),
     supabase.from("tracks").select("id, name").eq("academic_year_id", resolvedFromId),
+    supabase.from("classes").select("id, name").eq("academic_year_id", resolvedFromId),
     supabase.from("specializations").select("id, name").eq("academic_year_id", resolvedFromId),
     supabase.from("specializations").select("id, name").eq("academic_year_id", toYearId),
     supabase
@@ -463,14 +508,13 @@ export async function repairMissingPromotions(
   const toClasses = [...(toClassesRaw ?? [])];
   const toTrackByName = new Map((toTracks ?? []).map((t) => [t.name, t.id]));
   const fromTrackName = new Map((fromTracks ?? []).map((t) => [t.id, t.name]));
+  const fromClassName = new Map((fromClasses ?? []).map((c) => [c.id, c.name]));
   const fromSpecName = new Map((fromSpecs ?? []).map((s) => [s.id, s.name]));
   const toSpecByName = new Map((toSpecs ?? []).map((s) => [s.name, s.id]));
 
   let promoted = 0;
   let graduated = 0;
   let skipped = 0;
-  const startDate = todayIso();
-  const endDate = addDays(startDate, -1);
   const ctx = {
     fromYearId: resolvedFromId,
     toYearId,
@@ -479,10 +523,9 @@ export async function repairMissingPromotions(
     toClasses,
     toTrackByName,
     fromTrackName,
+    fromClassName,
     fromSpecName,
     toSpecByName,
-    startDate,
-    endDate,
   };
 
   for (const p of candidates) {

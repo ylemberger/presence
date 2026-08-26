@@ -366,50 +366,68 @@ export default async function StudentDetailPage({ params }: Props) {
     }
   }
 
-  const initial = student.full_name?.[0] ?? "?";
+  const displayName =
+    [student.first_name, student.last_name].filter(Boolean).join(" ") ||
+    student.full_name;
+  const initial =
+    (student.first_name || student.full_name || "?").slice(0, 1) || "?";
+
+  const currentAssignmentRow =
+    (activeYear &&
+      (assignmentRows ?? []).find(
+        (a) => a.academic_year_id === activeYear.id && a.end_date == null
+      )) ||
+    (activeYear &&
+      (assignmentRows ?? []).find((a) => a.academic_year_id === activeYear.id)) ||
+    null;
+  const currentPlacement = currentAssignmentRow
+    ? {
+        grade: gradeHistById.get(currentAssignmentRow.grade_id) ?? "—",
+        className: classHistById.get(currentAssignmentRow.class_id) ?? "—",
+        track: trackHistById.get(currentAssignmentRow.track_id) ?? "—",
+        specialization: currentAssignmentRow.specialization_id
+          ? specHistById.get(currentAssignmentRow.specialization_id) ?? "—"
+          : "—",
+        secondary: currentAssignmentRow.secondary_specialization_id
+          ? specHistById.get(currentAssignmentRow.secondary_specialization_id) ?? "—"
+          : "—",
+        psychology: currentAssignmentRow.is_psychology,
+      }
+    : null;
+
+  function detail(label: string, value: string | number | null | undefined) {
+    const text =
+      value === null || value === undefined || value === ""
+        ? "—"
+        : String(value);
+    return (
+      <div className="min-w-0">
+        <dt className="font-caption text-caption text-on-surface-variant">{label}</dt>
+        <dd className="mt-0.5 break-words font-body-md text-body-md text-on-surface">
+          {text}
+        </dd>
+      </div>
+    );
+  }
 
   return (
     <div className="flex flex-col gap-gutter">
       {/* Student Header Profile Card — bento hero with top accent */}
       <section className="rounded-xl border border-outline-variant/30 border-t-4 border-t-secondary bg-surface-container-lowest p-6 shadow-tactile-md">
-        <div className="flex flex-col items-start justify-between gap-4 md:flex-row md:items-center">
-          <div className="flex items-center gap-6">
+        <div className="flex flex-col items-start justify-between gap-4 md:flex-row md:items-start">
+          <div className="flex w-full min-w-0 flex-1 items-start gap-6">
             <span
               aria-hidden
               className="flex h-20 w-20 shrink-0 items-center justify-center rounded-full border-2 border-outline-variant bg-secondary-container font-headline-lg text-headline-lg font-bold text-primary"
             >
               {initial}
             </span>
-            <div>
-              <h2 className="mb-1 font-headline-lg text-headline-lg text-primary">
-                {student.full_name}
-              </h2>
-              <StudentPersonalNote
-                studentId={id}
-                note={student.personal_note ?? null}
-                compact
-              />
-              <div className="mt-3 flex flex-wrap items-center gap-4 font-body-md text-body-md text-on-surface-variant">
-                <span className="flex items-center gap-1">
-                  <Icon name="badge" className="text-[18px]" />
-                  מ.ז.: {student.identity_number ?? "—"}
-                </span>
-                <span className="flex items-center gap-1">
-                  <Icon name="school" className="text-[18px]" />
-                  מחזור: {student.cohort_number ?? "—"}
-                </span>
-                {student.city && (
-                  <span className="flex items-center gap-1">
-                    <Icon name="location_city" className="text-[18px]" />
-                    {student.city}
-                  </span>
-                )}
-                {student.chetz_program && (
-                  <span className="rounded-md bg-secondary-container px-2 py-0.5 text-caption font-semibold text-secondary">
-                    תוכנית חץ
-                  </span>
-                )}
-                <span className="flex items-center gap-2">
+            <div className="min-w-0 flex-1">
+              <div className="flex flex-wrap items-center gap-3">
+                <h2 className="font-headline-lg text-headline-lg text-primary">
+                  {displayName}
+                </h2>
+                <span className="flex items-center gap-2 font-body-md text-body-md text-on-surface-variant">
                   <span
                     className={cn(
                       "inline-block h-2 w-2 rounded-full",
@@ -417,19 +435,70 @@ export default async function StudentDetailPage({ params }: Props) {
                     )}
                     aria-hidden
                   />
-                  סטטוס: {student.is_active ? "פעילה" : "לא פעילה"}
+                  {student.is_active ? "פעילה" : "לא פעילה"}
                 </span>
+                {student.chetz_program && (
+                  <span className="rounded-md bg-secondary-container px-2 py-0.5 text-caption font-semibold text-secondary">
+                    תוכנית חץ
+                  </span>
+                )}
+                {currentPlacement?.psychology && (
+                  <span className="rounded-md bg-surface-container-high px-2 py-0.5 text-caption font-semibold text-primary">
+                    פסיכולוגיה
+                  </span>
+                )}
               </div>
-              <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 font-caption text-caption text-on-surface-variant">
-                {student.phone && <span>טל: {student.phone}</span>}
-                {student.father_phone && <span>פל אב: {student.father_phone}</span>}
-                {student.mother_phone && <span>פל אם: {student.mother_phone}</span>}
-                {student.student_phone && <span>פל תלמידה: {student.student_phone}</span>}
-                {student.high_school && <span>תיכון: {student.high_school}</span>}
-                {student.birth_date_hebrew && <span>ת.ל. עברי: {student.birth_date_hebrew}</span>}
-                {student.birth_date && <span>ת.ל. לועזי: {student.birth_date}</span>}
-                {student.address && <span>כתובת: {student.address}</span>}
-              </div>
+              <StudentPersonalNote
+                studentId={id}
+                note={student.personal_note ?? null}
+                compact
+              />
+
+              {currentPlacement && (
+                <p className="mt-2 font-body-md text-body-md text-on-surface-variant">
+                  {[
+                    `שכבה ${currentPlacement.grade}`,
+                    currentPlacement.className,
+                    currentPlacement.track,
+                    currentPlacement.specialization !== "—"
+                      ? currentPlacement.specialization
+                      : null,
+                    currentPlacement.secondary !== "—"
+                      ? `+ ${currentPlacement.secondary}`
+                      : null,
+                  ]
+                    .filter(Boolean)
+                    .join(" · ")}
+                  {activeYear ? ` · ${activeYear.name}` : ""}
+                </p>
+              )}
+
+              <dl className="mt-4 grid grid-cols-2 gap-x-4 gap-y-3 sm:grid-cols-3 lg:grid-cols-4">
+                {detail("מי", student.mi)}
+                {detail("שם פרטי", student.first_name || null)}
+                {detail("משפחה", student.last_name || null)}
+                {detail("מ.ז.", student.identity_number)}
+                {detail("מחזור", student.cohort_number)}
+                {detail("עיר", student.city)}
+                {detail("כתובת", student.address)}
+                {detail("ת.ל. לועזי", student.birth_date)}
+                {detail("ת.ל. עברי", student.birth_date_hebrew)}
+                {detail("טלפון", student.phone)}
+                {detail("פל׳ אב", student.father_phone)}
+                {detail("פל׳ אם", student.mother_phone)}
+                {detail("פל׳ תלמידה", student.student_phone)}
+                {detail("תיכון", student.high_school)}
+                {detail("תוכנית חץ", student.chetz_program ? "כן" : "לא")}
+                {currentPlacement && detail("שכבה", currentPlacement.grade)}
+                {currentPlacement && detail("כיתה", currentPlacement.className)}
+                {currentPlacement && detail("מסלול", currentPlacement.track)}
+                {currentPlacement &&
+                  detail("התמחות", currentPlacement.specialization)}
+                {currentPlacement &&
+                  detail("התמחות נוספת", currentPlacement.secondary)}
+                {currentPlacement &&
+                  detail("פסיכולוגיה", currentPlacement.psychology ? "כן" : "לא")}
+              </dl>
             </div>
           </div>
           <PrintButton />

@@ -279,7 +279,10 @@ export function StudentsDirectory({
           <TableRow key={s.id}>
             <TableCell className="text-on-surface-variant">{s.mi ?? "—"}</TableCell>
             <TableCell>
-              <div className="flex min-w-[8rem] flex-col gap-0.5">
+              <Link
+                href={`/students/${s.id}`}
+                className="flex min-w-[8rem] flex-col gap-0.5 rounded-md outline-none transition-colors hover:bg-secondary-container/30 focus-visible:ring-2 focus-visible:ring-secondary"
+              >
                 <div className="flex items-center gap-2">
                   <span
                     className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-primary text-caption font-bold text-white"
@@ -287,7 +290,7 @@ export function StudentsDirectory({
                   >
                     {(s.first_name || s.full_name).slice(0, 1)}
                   </span>
-                  <span className="font-label-md text-label-md text-primary whitespace-nowrap">
+                  <span className="font-label-md text-label-md text-primary whitespace-nowrap underline-offset-2 group-hover:underline">
                     {s.first_name || s.full_name.split(" ")[0]}
                   </span>
                 </div>
@@ -300,10 +303,15 @@ export function StudentsDirectory({
                     {s.personal_note}
                   </p>
                 )}
-              </div>
+              </Link>
             </TableCell>
             <TableCell className="whitespace-nowrap font-label-md text-label-md text-primary">
-              {s.last_name || "—"}
+              <Link
+                href={`/students/${s.id}`}
+                className="hover:underline underline-offset-2"
+              >
+                {s.last_name || "—"}
+              </Link>
             </TableCell>
             <TableCell className="font-mono text-on-surface-variant whitespace-nowrap" dir="ltr">
               {s.identity_number}

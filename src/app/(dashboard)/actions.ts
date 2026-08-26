@@ -82,7 +82,7 @@ export async function createAcademicYearAction(formData: FormData) {
 
   let promoteResult = null;
   if (shouldPromote && previousActive?.id) {
-    promoteResult = await promoteStudentsToYear(previousActive.id, created.id);
+    promoteResult = await promoteStudentsToYear(previousActive.id, created.id, supabase);
   }
 
   revalidatePath("/settings");
