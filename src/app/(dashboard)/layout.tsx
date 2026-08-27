@@ -37,7 +37,7 @@ export default async function DashboardLayout({
       {/* Main Content Area — offset right by the fixed sidebar width */}
       <main className="relative mr-[17.5rem] flex min-h-screen w-[calc(100%-17.5rem)] min-w-0 flex-1 flex-col print:mr-0 print:w-full">
         {/* TopAppBar */}
-        <header className="print:hidden sticky top-0 z-40 flex items-center justify-between gap-4 bg-surface/95 px-container_padding py-4 shadow-tactile-sm backdrop-blur-md">
+        <header className="print:hidden sticky top-0 z-40 flex items-center justify-between gap-4 bg-surface/95 px-container_padding py-2 shadow-tactile-sm backdrop-blur-md">
           <div className="font-headline-md text-headline-md font-bold text-primary">
             מערכת ניהול פנימית
           </div>

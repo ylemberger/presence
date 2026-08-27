@@ -21,7 +21,7 @@ export function Table({ headers, children, className }: TableProps) {
               {headers.map((header) => (
                 <th
                   key={header}
-                  className="px-4 py-3 text-right text-caption font-semibold tracking-wide text-on-surface-variant print:bg-surface-container-low"
+                  className="px-3 py-2 text-right text-caption font-semibold tracking-wide text-on-surface-variant print:bg-surface-container-low"
                 >
                   {header}
                 </th>
@@ -59,7 +59,7 @@ export function TableCell({
   dir?: "ltr" | "rtl" | "auto";
 }) {
   return (
-    <td className={cn("px-4 py-3.5 text-right text-on-surface", className)} dir={dir}>
+    <td className={cn("px-3 py-2 text-right text-on-surface", className)} dir={dir}>
       {children}
     </td>
   );

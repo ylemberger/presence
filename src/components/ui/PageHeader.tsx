@@ -19,8 +19,8 @@ export function PageHeader({
   size = "display",
 }: PageHeaderProps) {
   return (
-    <div className="flex flex-wrap items-end justify-between gap-4">
-      <div className="flex min-w-0 flex-col gap-1">
+    <div className="flex flex-wrap items-end justify-between gap-2">
+      <div className="flex min-w-0 flex-col gap-0.5">
         <h2
           className={cn(
             "text-primary",
@@ -32,7 +32,7 @@ export function PageHeader({
           {title}
         </h2>
         {description && (
-          <p className="font-body-lg text-body-lg text-on-surface-variant">
+          <p className="font-body-sm text-body-sm text-on-surface-variant">
             {description}
           </p>
         )}

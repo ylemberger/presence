@@ -12,6 +12,7 @@ import { summarizeAttendance, evaluateAbsenceAgainstRule } from "@/lib/attendanc
 import { StudentDetailForms } from "./StudentDetailForms";
 import { StudentLessonAssignments } from "./StudentLessonAssignments";
 import { StudentPersonalNote } from "./StudentPersonalNote";
+import { FillAttendanceTarget } from "./FillAttendanceTarget";
 import type { AttendanceStatus } from "@/types/database";
 import { cn } from "@/lib/cn";
 import { Icon } from "@/components/ui/Icon";
@@ -675,6 +676,20 @@ export default async function StudentDetailPage({ params }: Props) {
           {activeYear && (
             <Section icon="menu_book" title="שיוך לשיעורים">
               <StudentLessonAssignments
+                studentId={id}
+                lessons={lessons}
+                assignments={lessonAssignments}
+              />
+            </Section>
+          )}
+
+          {activeYear && (
+            <Section
+              icon="percent"
+              title="סדר נוכחות לשיעור"
+              className="print:hidden"
+            >
+              <FillAttendanceTarget
                 studentId={id}
                 lessons={lessons}
                 assignments={lessonAssignments}

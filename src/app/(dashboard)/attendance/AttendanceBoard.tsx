@@ -35,6 +35,7 @@ import {
 import { AttendanceBlankSheet } from "./AttendanceBlankSheet";
 import { AddOccurrenceDate } from "./AddOccurrenceDate";
 import { AttendanceGapModal, type GapItem } from "./AttendanceGapModal";
+import { HebrewDateInput } from "@/components/ui/HebrewDateInput";
 import { Modal } from "@/components/ui/Modal";
 
 export type AttendanceMode = "single" | "group";
@@ -948,77 +949,80 @@ export function AttendanceBoard({
 
         <div className="xl:col-span-7">
       {activeLesson ? (
-        <div className="flex h-full min-h-[32rem] flex-col overflow-hidden rounded-xl border border-outline-variant/30 bg-surface-container-lowest shadow-tactile-md xl:h-[800px]">
-          <div className="sticky top-0 z-10 border-b border-outline-variant/30 bg-surface-container-lowest p-6">
-            <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
-              <div>
-              <h3 className="font-headline-md text-headline-md text-primary">
-                {activeLesson.subject}
-                {activeLesson.lessonNumber
-                  ? ` - שיעור ${activeLesson.lessonNumber}`
-                  : ""}
-              </h3>
-              <p className="font-body-md text-body-md text-on-surface-variant">
-                {formatHebrewDate(selectedDate)}
-                {activeLesson.teacherName ? ` • המורה ${activeLesson.teacherName}` : ""}
-              </p>
+        <div className="flex h-full min-h-[28rem] flex-col overflow-hidden rounded-xl border border-outline-variant/30 bg-surface-container-lowest shadow-tactile-md xl:h-[720px]">
+          <div className="sticky top-0 z-10 border-b border-outline-variant/30 bg-surface-container-lowest px-3 py-2">
+            <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+              <div className="min-w-0 flex-1">
+                <h3 className="truncate font-title-lg text-title-lg text-primary">
+                  {activeLesson.subject}
+                  {activeLesson.lessonNumber
+                    ? ` · שיעור ${activeLesson.lessonNumber}`
+                    : ""}
+                </h3>
+                <div className="mt-1 max-w-[14rem]">
+                  <HebrewDateInput
+                    name="attendance_sheet_date"
+                    value={selectedDate}
+                    onChange={(iso) => {
+                      if (iso) selectDate(iso);
+                    }}
+                  />
+                </div>
               </div>
-              <div className="flex flex-col items-end gap-2 print:hidden">
+              <div className="flex flex-wrap items-center gap-1.5 print:hidden">
                 <Button
                   type="button"
                   size="sm"
                   variant="secondary"
                   onClick={() => setNoteModalOpen(true)}
                 >
-                  <Icon name="edit_note" className="text-[18px]" />
-                  {note.trim() ? "הערה לשיעור ✓" : "הערה לשיעור"}
+                  <Icon name="edit_note" className="text-[16px]" />
+                  {note.trim() ? "הערה ✓" : "הערה"}
                 </Button>
                 <PrintButton
-                  label="הדפסת דף ריק"
+                  label="דף ריק"
                   documentTitle={`נוכחות-${activeLesson.subject}`}
                   disabled={lessonStudents.length === 0}
                 />
                 <AddOccurrenceDate lessonId={activeLesson.lessonId} />
               </div>
             </div>
-            <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg bg-surface-container-low p-3">
-              <div className="flex flex-wrap gap-2">
-                <button
-                  type="button"
-                  disabled={!canMark || bulkSaving}
-                  onClick={() => markAll("present")}
-                  className="rounded-md border border-outline px-3 py-1.5 font-label-md text-label-md text-primary transition-colors hover:bg-surface-container disabled:opacity-50"
-                >
-                  {bulkSaving ? "שומר…" : "סמן הכל נוכח"}
-                </button>
-                <button
-                  type="button"
-                  disabled={!canMark || bulkSaving || unmarkedCount === 0}
-                  onClick={markRestAbsent}
-                  className="rounded-md border border-outline px-3 py-1.5 font-label-md text-label-md text-primary transition-colors hover:bg-surface-container disabled:opacity-50"
-                >
-                  סמן שאר חסר
-                </button>
-                <button
-                  type="button"
-                  disabled={!canMark || copying}
-                  onClick={copyPrevious}
-                  className="rounded-md border border-outline px-3 py-1.5 font-label-md text-label-md text-primary transition-colors hover:bg-surface-container disabled:opacity-50"
-                >
-                  {copying ? "מעתיק…" : "העתק מקודם"}
-                </button>
-              </div>
-              <p className="font-caption text-caption text-on-surface-variant">
-                קיצורי מקלדת: נוכחת (N) • נעדרה (X) • איחור (A)
-              </p>
+            <div className="flex flex-wrap items-center gap-1.5">
+              <button
+                type="button"
+                disabled={!canMark || bulkSaving}
+                onClick={() => markAll("present")}
+                className="rounded-md border border-outline px-2.5 py-1 font-label-md text-label-md text-primary transition-colors hover:bg-surface-container disabled:opacity-50"
+              >
+                {bulkSaving ? "שומר…" : "הכל נוכח"}
+              </button>
+              <button
+                type="button"
+                disabled={!canMark || bulkSaving || unmarkedCount === 0}
+                onClick={markRestAbsent}
+                className="rounded-md border border-outline px-2.5 py-1 font-label-md text-label-md text-primary transition-colors hover:bg-surface-container disabled:opacity-50"
+              >
+                שאר חסר
+              </button>
+              <button
+                type="button"
+                disabled={!canMark || copying}
+                onClick={copyPrevious}
+                className="rounded-md border border-outline px-2.5 py-1 font-label-md text-label-md text-primary transition-colors hover:bg-surface-container disabled:opacity-50"
+              >
+                {copying ? "מעתיק…" : "העתק קודם"}
+              </button>
+              <span className="ms-auto font-caption text-caption text-on-surface-variant">
+                {markedInLesson}/{lessonStudents.length}
+              </span>
             </div>
           </div>
 
-          <div className="flex-1 space-y-3 overflow-y-auto p-6">
+          <div className="flex-1 space-y-1 overflow-y-auto px-2 py-2">
             {message && (
               <p
                 className={cn(
-                  "mb-4 rounded-lg px-3 py-2 font-body-sm text-body-sm",
+                  "mb-2 rounded-lg px-3 py-1.5 font-body-sm text-body-sm",
                   message.includes("שגיא") || message.includes("אין הרשאה")
                     ? "bg-error-container/60 text-on-error-container"
                     : "bg-attendance-present/10 text-attendance-present"
@@ -1029,29 +1033,28 @@ export function AttendanceBoard({
             )}
 
             {mode === "single" && !studentId && (
-              <p className="mb-4 font-body-sm text-body-sm text-attendance-late">
+              <p className="mb-2 font-body-sm text-body-sm text-attendance-late">
                 בחרי תלמידה בסינון.
               </p>
             )}
 
             {lessonStudents.length === 0 && (
-              <div className="rounded-xl border border-dashed border-outline-variant/50 bg-surface-container-low/60 px-4 py-8 text-center">
-                <Icon name="group_off" className="mb-2 block text-[36px] text-secondary" />
-                <p className="font-body-md text-body-md text-on-surface-variant">
+              <div className="rounded-lg border border-dashed border-outline-variant/50 bg-surface-container-low/60 px-3 py-4 text-center">
+                <p className="font-body-sm text-body-sm text-on-surface-variant">
                   אין תלמידות משויכות לשיעור זה.
                 </p>
                 <Button
                   type="button"
                   size="sm"
-                  className="mt-3"
+                  className="mt-2"
                   disabled={syncing}
                   onClick={syncStudents}
                 >
-                  <Icon name="group_add" className="text-[18px]" />
-                  {syncing ? "משייכת…" : "שייך תלמידות אוטומטית לפי כיתה/מסלול"}
+                  <Icon name="group_add" className="text-[16px]" />
+                  {syncing ? "משייכת…" : "שייך אוטומטית"}
                 </Button>
                 {activeLesson && (
-                  <div className="mx-auto mt-4 max-w-md text-right">
+                  <div className="mx-auto mt-3 max-w-md text-right">
                     <AssignStudentToLesson
                       lessonId={activeLesson.lessonId}
                       students={allStudents}
@@ -1062,15 +1065,13 @@ export function AttendanceBoard({
               </div>
             )}
 
-            <div className="space-y-3">
+            <div className="space-y-1">
               {lessonStudents.map((student, idx) => {
                 const k = keyOf(student.id, activeOccurrenceId!);
                 const marked = draft[k] != null;
-                const insight = insightsByStudent[student.id];
                 const focused = focusedIdx === idx;
                 const absent = draft[k] === "absent";
 
-                const initial = student.full_name?.[0] ?? "?";
                 return (
                   <div
                     key={student.id}
@@ -1081,46 +1082,18 @@ export function AttendanceBoard({
                     onKeyDown={(e) => onRowKeyDown(e, idx)}
                     onFocus={() => setFocusedIdx(idx)}
                     className={cn(
-                      "flex flex-col gap-3 rounded-lg border p-4 outline-none transition-all sm:flex-row sm:items-center sm:justify-between",
+                      "flex flex-wrap items-center gap-2 rounded-md border px-2 py-1 outline-none transition-colors",
                       absent
-                        ? "border-y border-r border-outline-variant/50 border-l-4 border-l-attendance-absent bg-error-container/10"
-                        : "border-outline-variant/50 bg-surface-container-lowest hover:border-secondary/50 hover:shadow-tactile-sm",
+                        ? "border-outline-variant/50 border-s-4 border-s-attendance-absent bg-error-container/10"
+                        : "border-outline-variant/40 bg-surface-container-lowest hover:border-secondary/40",
                       !marked && !absent && "opacity-90",
                       focused && "ring-2 ring-secondary/40"
                     )}
                   >
-                    <div className="flex min-w-[10rem] flex-1 items-center gap-3">
-                      <span
-                        aria-hidden
-                        className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-primary font-caption text-caption font-bold text-white"
-                      >
-                        {initial}
-                      </span>
-                      <div className="min-w-0 flex flex-col gap-1">
-                          <span className="font-title-lg text-title-lg text-primary">
-                            {student.full_name}
-                          </span>
-                        <p className="font-caption text-caption text-on-surface-variant">
-                          {insight && insight.ruleLevel !== "ok" ? (
-                            <span
-                              className={cn(
-                                "inline-flex items-center gap-1",
-                                insight.ruleLevel === "blocked"
-                                  ? "text-attendance-absent"
-                                  : "text-attendance-late"
-                              )}
-                            >
-                              <Icon name="warning" className="text-[14px]" />
-                              {insight.absencePercent}% היעדרויות
-                              {insight.ruleLevel === "blocked" ? " · חריגה" : ""}
-                            </span>
-                          ) : (
-                            "נוכחות תקינה"
-                          )}
-                        </p>
-                      </div>
-                    </div>
-                    <div className="flex w-full max-w-md flex-col gap-2">
+                    <span className="min-w-[7rem] flex-1 truncate font-label-md text-label-md text-on-surface">
+                      {student.full_name}
+                    </span>
+                    <div className="flex flex-1 flex-wrap items-center justify-end gap-2">
                       <AttendanceStatusPicker
                         value={draft[k] ?? null}
                         phase={cellPhase[k] ?? "idle"}
@@ -1128,7 +1101,7 @@ export function AttendanceBoard({
                       />
                       {draft[k] === "absent" && (
                         <select
-                          className="rounded-lg border border-outline-variant/60 bg-surface-container-lowest px-3 py-2 font-body-sm text-body-sm text-on-surface focus:border-secondary focus:outline-none focus:ring-2 focus:ring-secondary/30"
+                          className="min-w-[10rem] rounded-md border border-outline-variant/60 bg-surface-container-lowest px-2 py-1 font-body-sm text-body-sm text-on-surface focus:border-secondary focus:outline-none focus:ring-1 focus:ring-secondary/30"
                           value={reasons[k] ?? ""}
                           onChange={(e) =>
                             setReason(
@@ -1138,7 +1111,7 @@ export function AttendanceBoard({
                             )
                           }
                         >
-                          <option value="">סיבת היעדרות (אופציונלי)</option>
+                          <option value="">הערה (אופציונלי)</option>
                           {ABSENCE_REASONS.map((r) => (
                             <option key={r.value} value={r.value}>
                               {r.label}
@@ -1153,7 +1126,7 @@ export function AttendanceBoard({
             </div>
 
             {activeLesson && lessonStudents.length > 0 && (
-              <div className="mt-4">
+              <div className="mt-2">
                 <AssignStudentToLesson
                   lessonId={activeLesson.lessonId}
                   students={allStudents}
@@ -1162,16 +1135,16 @@ export function AttendanceBoard({
               </div>
             )}
           </div>
-          <div className="mt-auto flex justify-end gap-3 border-t border-outline-variant/30 bg-surface-container-lowest p-6">
+          <div className="mt-auto flex justify-end gap-2 border-t border-outline-variant/30 bg-surface-container-lowest px-3 py-2">
             <button
               type="button"
               onClick={() => navigate(buildParams({ occurrenceId: undefined }))}
-              className="rounded-lg border border-outline px-6 py-2 font-label-md text-label-md text-primary transition-colors hover:bg-surface-container"
+              className="rounded-lg border border-outline px-4 py-1.5 font-label-md text-label-md text-primary transition-colors hover:bg-surface-container"
             >
-              ביטול
+              סגור
             </button>
-            <span className="rounded-lg bg-primary px-6 py-2 font-label-md text-label-md text-white shadow-tactile-sm">
-              {markedInLesson}/{lessonStudents.length} נשמרו
+            <span className="rounded-lg bg-primary px-4 py-1.5 font-label-md text-label-md text-white shadow-tactile-sm">
+              {markedInLesson}/{lessonStudents.length}
             </span>
           </div>
         </div>

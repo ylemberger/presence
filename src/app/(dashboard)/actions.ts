@@ -26,6 +26,7 @@ import {
 } from "@/lib/students/excelImport";
 import { applyStudentImportRows } from "@/lib/students/importApply";
 import type { AttendanceStatus, HolidayKind } from "@/types/database";
+import { todayIso } from "@/lib/dates/hebrew";
 import {
   isError,
   parseLessonBilling,
@@ -1632,6 +1633,162 @@ export async function bulkAttendanceAction(
   revalidatePath("/attendance");
   revalidatePath("/");
   return { success: true };
+}
+
+/**
+ * Fill past attendance for one student+lesson so presence reaches 80% or 100%.
+ * Keeps present/late; fills unmarked first (oldest→newest); then converts absent if needed.
+ */
+export async function fillAttendanceToTargetAction(
+  studentId: string,
+  lessonId: string,
+  targetPercent: 80 | 100
+) {
+  const actionAuth = await createActionClient();
+  if ("error" in actionAuth) return { error: actionAuth.error };
+  const supabase = actionAuth.supabase;
+
+  if (targetPercent !== 80 && targetPercent !== 100) {
+    return { error: "יעד לא תקין" };
+  }
+
+  const { data: link } = await supabase
+    .from("student_lesson_assignments")
+    .select("start_date, end_date")
+    .eq("student_id", studentId)
+    .eq("lesson_id", lessonId)
+    .is("end_date", null)
+    .maybeSingle();
+
+  const openLink = link;
+  const { data: anyLink } =
+    openLink
+      ? { data: null }
+      : await supabase
+          .from("student_lesson_assignments")
+          .select("start_date, end_date")
+          .eq("student_id", studentId)
+          .eq("lesson_id", lessonId)
+          .order("start_date", { ascending: false })
+          .limit(1)
+          .maybeSingle();
+
+  const assignment = openLink ?? anyLink;
+  if (!assignment) return { error: "התלמידה אינה משויכת לשיעור זה" };
+
+  const today = todayIso();
+  const { data: occurrences, error: occError } = await supabase
+    .from("lesson_occurrences")
+    .select("id, occurrence_date, status")
+    .eq("lesson_id", lessonId)
+    .lte("occurrence_date", today)
+    .neq("status", "cancelled")
+    .gte("occurrence_date", assignment.start_date)
+    .order("occurrence_date", { ascending: true });
+
+  if (occError) return { error: "טעינת מופעים נכשלה" };
+
+  const eligible = (occurrences ?? []).filter((o) => {
+    if (assignment.end_date && o.occurrence_date > assignment.end_date) return false;
+    return true;
+  });
+
+  if (eligible.length === 0) {
+    return { error: "אין מופעי שיעור עד היום לסדר" };
+  }
+
+  const occIds = eligible.map((o) => o.id);
+  const { data: attendanceRows } = await supabase
+    .from("attendance")
+    .select("lesson_occurrence_id, status")
+    .eq("student_id", studentId)
+    .in("lesson_occurrence_id", occIds);
+
+  const statusByOcc = new Map(
+    (attendanceRows ?? []).map((r) => [r.lesson_occurrence_id, r.status as AttendanceStatus])
+  );
+
+  const alreadyPresent = eligible.filter((o) => {
+    const s = statusByOcc.get(o.id);
+    return s === "present" || s === "late";
+  }).length;
+
+  const targetPresent = Math.ceil((eligible.length * targetPercent) / 100);
+  let need = Math.max(0, targetPresent - alreadyPresent);
+
+  if (need === 0) {
+    return {
+      success: true,
+      result: {
+        total: eligible.length,
+        alreadyPresent,
+        marked: 0,
+        convertedAbsent: 0,
+        targetPercent,
+        presencePercent: Math.round((alreadyPresent / eligible.length) * 100),
+      },
+    };
+  }
+
+  const unmarked = eligible.filter((o) => !statusByOcc.has(o.id));
+  const absents = eligible.filter((o) => statusByOcc.get(o.id) === "absent");
+
+  const updates: {
+    studentId: string;
+    occurrenceId: string;
+    status: AttendanceStatus;
+    reason?: null;
+  }[] = [];
+
+  for (const o of unmarked) {
+    if (need <= 0) break;
+    updates.push({ studentId, occurrenceId: o.id, status: "present", reason: null });
+    need--;
+  }
+
+  let convertedAbsent = 0;
+  for (const o of absents) {
+    if (need <= 0) break;
+    updates.push({ studentId, occurrenceId: o.id, status: "present", reason: null });
+    convertedAbsent++;
+    need--;
+  }
+
+  if (updates.length === 0) {
+    return { error: "לא נמצאו מופעים למילוי" };
+  }
+
+  const records = updates.map((u) => ({
+    student_id: u.studentId,
+    lesson_occurrence_id: u.occurrenceId,
+    status: u.status,
+    reason: null as string | null,
+  }));
+
+  const { error } = await supabase
+    .from("attendance")
+    .upsert(records, { onConflict: "student_id,lesson_occurrence_id" });
+  if (error) return { error: error.message };
+
+  for (const occId of [...new Set(updates.map((u) => u.occurrenceId))]) {
+    await tryMarkOccurrenceComplete(supabase, occId);
+  }
+
+  const finalPresent = alreadyPresent + updates.length;
+  revalidatePath("/attendance");
+  revalidatePath(`/students/${studentId}`);
+  revalidatePath("/");
+  return {
+    success: true,
+    result: {
+      total: eligible.length,
+      alreadyPresent,
+      marked: updates.length,
+      convertedAbsent,
+      targetPercent,
+      presencePercent: Math.round((finalPresent / eligible.length) * 100),
+    },
+  };
 }
 
 /** Copy attendance statuses from the previous occurrence of the same lesson. */

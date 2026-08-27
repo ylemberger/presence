@@ -77,9 +77,9 @@ const config: Config = {
         sidebar_width: "17.5rem",
         stack_sm: "0.5rem",
         stack_md: "1rem",
-        stack_lg: "2rem",
-        gutter: "1.5rem",
-        container_padding: "2rem",
+        stack_lg: "1.25rem",
+        gutter: "1rem",
+        container_padding: "1.25rem",
       },
       boxShadow: {
         "tactile-sm": "0 2px 8px rgba(22, 58, 64, 0.04)",
