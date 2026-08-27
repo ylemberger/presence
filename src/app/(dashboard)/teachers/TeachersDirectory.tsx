@@ -19,7 +19,7 @@ export type TeacherDirectoryRow = {
   salaryMeetings: string;
 };
 
-const PREVIEW_LIMIT = 6;
+const PREVIEW_LIMIT = 50;
 
 const HEADERS = [
   "שם המורה",
@@ -28,7 +28,7 @@ const HEADERS = [
   "אימייל",
   "מקצוע",
   "מסלול",
-  "שכבה",
+  "שנה",
   "סמסטר",
   "מפגשים",
   "סטטוס",

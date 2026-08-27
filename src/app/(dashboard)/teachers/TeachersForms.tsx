@@ -25,7 +25,7 @@ export function TeachersForms() {
       if (result && "result" in result && result.result) {
         const r = result.result;
         setSummary(
-          `נוספו ${r.teachersCreated} מורות ו-${r.sourceRowsAdded} שיבוצי שכר. דולגו ${r.skippedExisting} קיימים ו-${r.skippedInvalid} לא תקינים.`
+          `נוספו ${r.teachersCreated} מורות, ${r.sourceRowsAdded} שיבוצי שכר חדשים, עודכנו ${r.sourceRowsUpdated ?? 0}. דולגו ${r.skippedInvalid} לא תקינים.`
         );
       }
       router.refresh();
