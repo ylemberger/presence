@@ -24,13 +24,30 @@ export default async function TeacherDetailPage({ params }: Props) {
   const { data: teacher } = await supabase.from("teachers").select("*").eq("id", id).single();
   if (!teacher) notFound();
 
-  const { data: sourceRows } = await supabase
+  const richSource = await supabase
     .from("teacher_source_records")
     .select(
       "id, salary_subject, salary_track, salary_grade_year, salary_semester, salary_meetings, subject, synced_at"
     )
     .eq("teacher_identity_number", teacher.identity_number)
     .order("synced_at", { ascending: false });
+  const sourceRows = (
+    richSource.error
+      ? await supabase
+          .from("teacher_source_records")
+          .select("id, subject, synced_at")
+          .eq("teacher_identity_number", teacher.identity_number)
+          .order("synced_at", { ascending: false })
+      : richSource
+  ).data as Array<{
+    id: string;
+    subject?: string | null;
+    salary_subject?: string | null;
+    salary_track?: string | null;
+    salary_grade_year?: string | null;
+    salary_semester?: string | null;
+    salary_meetings?: number | null;
+  }> | null;
 
   const { data: taIdsRaw } = activeYear
     ? await supabase

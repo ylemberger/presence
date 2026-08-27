@@ -20,12 +20,13 @@ type AssignmentRow = {
 };
 
 type SourceRow = {
-  teacher_id: string | null;
-  salary_subject: string | null;
-  salary_track: string | null;
-  salary_grade_year: string | null;
-  salary_semester: string | null;
-  salary_meetings: number | null;
+  teacher_id?: string | null;
+  teacher_identity_number?: string | null;
+  salary_subject?: string | null;
+  salary_track?: string | null;
+  salary_grade_year?: string | null;
+  salary_semester?: string | null;
+  salary_meetings?: number | null;
   subject: string | null;
 };
 
@@ -44,21 +45,35 @@ export default async function TeachersPage() {
   const activeYear = await getActiveAcademicYear();
   const supabase = await createClient();
 
-  const [{ data: teachers }, { data: sourceRows }] = await Promise.all([
-    supabase.from("teachers").select("*").order("full_name"),
-    supabase
-      .from("teacher_source_records")
-      .select(
-        "teacher_id, salary_subject, salary_track, salary_grade_year, salary_semester, salary_meetings, subject"
-      ),
-  ]);
+  const { data: teachers } = await supabase.from("teachers").select("*").order("full_name");
+
+  const richSources = await supabase
+    .from("teacher_source_records")
+    .select(
+      "teacher_id, teacher_identity_number, salary_subject, salary_track, salary_grade_year, salary_semester, salary_meetings, subject"
+    );
+  const basicSources = richSources.error
+    ? await supabase
+        .from("teacher_source_records")
+        .select("teacher_identity_number, subject")
+    : null;
+  const sourceRows = (richSources.error ? basicSources?.data : richSources.data) ?? [];
+
+  const identityToTeacherId = new Map(
+    (teachers ?? []).map((t) => [t.identity_number, t.id])
+  );
 
   const sourcesByTeacher = new Map<string, SourceRow[]>();
-  for (const row of (sourceRows ?? []) as SourceRow[]) {
-    if (!row.teacher_id) continue;
-    const list = sourcesByTeacher.get(row.teacher_id) ?? [];
+  for (const row of sourceRows as SourceRow[]) {
+    const teacherId =
+      row.teacher_id ||
+      (row.teacher_identity_number
+        ? identityToTeacherId.get(row.teacher_identity_number)
+        : undefined);
+    if (!teacherId) continue;
+    const list = sourcesByTeacher.get(teacherId) ?? [];
     list.push(row);
-    sourcesByTeacher.set(row.teacher_id, list);
+    sourcesByTeacher.set(teacherId, list);
   }
 
   const directoryRows: TeacherDirectoryRow[] = (teachers ?? []).map((t) => {
