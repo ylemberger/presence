@@ -3,7 +3,7 @@ import { createClient } from "@/lib/supabase/server";
 import { getActiveAcademicYear } from "@/lib/utils";
 import { BILLING_TYPE_LABELS } from "@/lib/constants";
 import { TeachersForms } from "./TeachersForms";
-import { TeachersDirectory } from "./TeachersDirectory";
+import { TeachersDirectory, type TeacherDirectoryRow } from "./TeachersDirectory";
 import { TeachersLessons, type TeacherLessonRow } from "./TeachersLessons";
 import { Icon } from "@/components/ui/Icon";
 
@@ -19,14 +19,72 @@ type AssignmentRow = {
   specializations: { name: string } | null;
 };
 
+type SourceRow = {
+  teacher_id: string | null;
+  salary_subject: string | null;
+  salary_track: string | null;
+  salary_grade_year: string | null;
+  salary_semester: string | null;
+  salary_meetings: number | null;
+  subject: string | null;
+};
+
+function uniqueJoined(values: Array<string | null | undefined>): string {
+  const list = [
+    ...new Set(
+      values
+        .map((v) => String(v ?? "").trim())
+        .filter(Boolean)
+    ),
+  ];
+  return list.length ? list.join(" · ") : "—";
+}
+
 export default async function TeachersPage() {
   const activeYear = await getActiveAcademicYear();
   const supabase = await createClient();
 
-  const { data: teachers } = await supabase
-    .from("teachers")
-    .select("*")
-    .order("full_name");
+  const [{ data: teachers }, { data: sourceRows }] = await Promise.all([
+    supabase.from("teachers").select("*").order("full_name"),
+    supabase
+      .from("teacher_source_records")
+      .select(
+        "teacher_id, salary_subject, salary_track, salary_grade_year, salary_semester, salary_meetings, subject"
+      ),
+  ]);
+
+  const sourcesByTeacher = new Map<string, SourceRow[]>();
+  for (const row of (sourceRows ?? []) as SourceRow[]) {
+    if (!row.teacher_id) continue;
+    const list = sourcesByTeacher.get(row.teacher_id) ?? [];
+    list.push(row);
+    sourcesByTeacher.set(row.teacher_id, list);
+  }
+
+  const directoryRows: TeacherDirectoryRow[] = (teachers ?? []).map((t) => {
+    const sources = sourcesByTeacher.get(t.id) ?? [];
+    const meetings = sources
+      .map((s) => s.salary_meetings)
+      .filter((n): n is number => typeof n === "number");
+    return {
+      id: t.id,
+      full_name: t.full_name,
+      identity_number: t.identity_number,
+      phone: t.phone,
+      email: t.email,
+      is_local: t.is_local,
+      salarySubjects: uniqueJoined(
+        sources.map((s) => s.salary_subject || s.subject)
+      ),
+      salaryTracks: uniqueJoined(sources.map((s) => s.salary_track)),
+      salaryGradeYears: uniqueJoined(sources.map((s) => s.salary_grade_year)),
+      salarySemesters: uniqueJoined(sources.map((s) => s.salary_semester)),
+      salaryMeetings:
+        meetings.length === 0
+          ? "—"
+          : String(meetings.reduce((a, b) => a + b, 0)),
+    };
+  });
 
   let lessonRows: TeacherLessonRow[] = [];
 
@@ -63,10 +121,6 @@ export default async function TeachersPage() {
         size="display"
       />
 
-      {/*
-        Layout matches the provided teachers screenshot:
-        form is a tall card on the right (RTL start), tables stack on the left.
-      */}
       <div className="grid grid-cols-1 items-start gap-gutter lg:grid-cols-12">
         <div className="lg:col-span-4 lg:row-span-2">
           <section className="rounded-xl border-t-4 border-secondary bg-surface-container-lowest p-stack_md shadow-tactile-md">
@@ -79,7 +133,7 @@ export default async function TeachersPage() {
         </div>
 
         <div className="lg:col-span-8">
-          <TeachersDirectory teachers={teachers ?? []} />
+          <TeachersDirectory teachers={directoryRows} />
         </div>
 
         {activeYear && (

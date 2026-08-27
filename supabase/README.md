@@ -18,6 +18,7 @@
 | **מחיקת כל התלמידות** (בלי seed) | [`patches/012_wipe_all_students.sql`](patches/012_wipe_all_students.sql) |
 | **מחיקה + 35 לבדיקת קידום** | [`patches/011_wipe_and_seed_35_promo_test.sql`](patches/011_wipe_and_seed_35_promo_test.sql) |
 | **לא בטוחה מה חסר** | כל [`RUN_ME.sql`](RUN_ME.sql) |
+| **RLS קריאה בלבד במסד השכר** (פרויקט אחר) | [`salary_read_only_rls.sql`](salary_read_only_rls.sql) — לא על מסד הנוכחות |
 
 קבצי אקסל לדמו (אחרי שיש קטלוג כמו בהנחיות): `demo-import/01-100-students-3-grades.xlsx`, `demo-import/02-35-students-grade-alef.xlsx`.
 

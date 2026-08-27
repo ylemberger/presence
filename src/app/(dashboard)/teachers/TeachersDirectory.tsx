@@ -3,12 +3,39 @@
 import { useMemo, useState } from "react";
 import Link from "next/link";
 import { StatusPill } from "@/components/ui/PageHeader";
-import type { Teacher } from "@/types/database";
 import { Icon } from "@/components/ui/Icon";
+
+export type TeacherDirectoryRow = {
+  id: string;
+  full_name: string;
+  identity_number: string;
+  phone: string | null;
+  email: string | null;
+  is_local: boolean;
+  salarySubjects: string;
+  salaryTracks: string;
+  salaryGradeYears: string;
+  salarySemesters: string;
+  salaryMeetings: string;
+};
 
 const PREVIEW_LIMIT = 6;
 
-export function TeachersDirectory({ teachers }: { teachers: Teacher[] }) {
+const HEADERS = [
+  "שם המורה",
+  'ת"ז',
+  "טלפון",
+  "אימייל",
+  "מקצוע",
+  "מסלול",
+  "שכבה",
+  "סמסטר",
+  "מפגשים",
+  "סטטוס",
+  "פעולות",
+] as const;
+
+export function TeachersDirectory({ teachers }: { teachers: TeacherDirectoryRow[] }) {
   const [query, setQuery] = useState("");
   const [showAll, setShowAll] = useState(false);
 
@@ -20,7 +47,11 @@ export function TeachersDirectory({ teachers }: { teachers: Teacher[] }) {
         t.full_name.includes(q) ||
         t.identity_number.includes(q) ||
         (t.phone ?? "").includes(q) ||
-        (t.email ?? "").includes(q)
+        (t.email ?? "").includes(q) ||
+        t.salarySubjects.includes(q) ||
+        t.salaryTracks.includes(q) ||
+        t.salaryGradeYears.includes(q) ||
+        t.salarySemesters.includes(q)
     );
   }, [teachers, query]);
 
@@ -45,13 +76,13 @@ export function TeachersDirectory({ teachers }: { teachers: Teacher[] }) {
       </div>
 
       <div className="flex-1 overflow-x-auto">
-        <table className="w-full border-collapse text-right">
+        <table className="w-full min-w-[64rem] border-collapse text-right">
           <thead>
             <tr className="border-b border-outline-variant bg-background text-on-surface-variant">
-              {["שם המורה", 'ת"ז', "טלפון", "סטטוס", "פעולות"].map((h) => (
+              {HEADERS.map((h) => (
                 <th
                   key={h}
-                  className="px-4 py-3 font-label-md text-label-md font-medium"
+                  className="whitespace-nowrap px-3 py-3 font-label-md text-label-md font-medium"
                 >
                   {h}
                 </th>
@@ -64,27 +95,49 @@ export function TeachersDirectory({ teachers }: { teachers: Teacher[] }) {
                 key={t.id}
                 className="group border-b border-surface-variant transition-colors hover:bg-surface-variant/50"
               >
-                <td className="px-4 py-3 font-body-md text-body-md text-on-surface">
+                <td className="whitespace-nowrap px-3 py-3 font-body-md text-body-md text-on-surface">
                   {t.full_name}
                 </td>
                 <td
-                  className="px-4 py-3 font-body-md text-body-md text-on-surface-variant"
+                  className="whitespace-nowrap px-3 py-3 font-body-md text-body-md text-on-surface-variant"
                   dir="ltr"
                 >
                   {t.identity_number}
                 </td>
                 <td
-                  className="px-4 py-3 font-body-md text-body-md text-on-surface-variant"
+                  className="whitespace-nowrap px-3 py-3 font-body-md text-body-md text-on-surface-variant"
                   dir="ltr"
                 >
                   {t.phone ?? "—"}
                 </td>
-                <td className="px-4 py-3">
+                <td
+                  className="max-w-[10rem] truncate px-3 py-3 font-body-md text-body-md text-on-surface-variant"
+                  dir="ltr"
+                  title={t.email ?? undefined}
+                >
+                  {t.email ?? "—"}
+                </td>
+                <td className="px-3 py-3 font-body-md text-body-md text-on-surface-variant">
+                  {t.salarySubjects}
+                </td>
+                <td className="px-3 py-3 font-body-md text-body-md text-on-surface-variant">
+                  {t.salaryTracks}
+                </td>
+                <td className="whitespace-nowrap px-3 py-3 font-body-md text-body-md text-on-surface-variant">
+                  {t.salaryGradeYears}
+                </td>
+                <td className="whitespace-nowrap px-3 py-3 font-body-md text-body-md text-on-surface-variant">
+                  {t.salarySemesters}
+                </td>
+                <td className="whitespace-nowrap px-3 py-3 font-body-md text-body-md text-on-surface-variant">
+                  {t.salaryMeetings}
+                </td>
+                <td className="px-3 py-3">
                   <StatusPill tone={t.is_local ? "warn" : "ok"}>
                     {t.is_local ? "מקומית" : "מסונכרנת"}
                   </StatusPill>
                 </td>
-                <td className="px-4 py-3 text-center">
+                <td className="px-3 py-3 text-center">
                   <Link
                     href={`/teachers/${t.id}`}
                     className="inline-flex items-center rounded p-1 text-primary-container transition-colors hover:bg-surface-variant hover:text-primary"

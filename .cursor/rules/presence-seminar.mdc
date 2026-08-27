@@ -12,6 +12,7 @@ alwaysApply: false
 - קידום שנה: ראי `year-promotion.mdc` (א→ב יג→יד, ב→ג כיתה `שנה ג`, ג→ארכיון)
 - שיעורים: `lessons` = תבנית, `lesson_occurrences` = מופע; ביטול רק ברמת מופע
 - מורות מקומיות: לא לדרוס `teachers.is_local = true`
+- מערכת שכר: קריאה בלבד — ראי `salary-system-read-only.mdc`
 
 ## אבטחה בפרויקט
 
@@ -21,6 +22,7 @@ alwaysApply: false
 - Cron: `isValidCronRequest()` + `CRON_SECRET` (16+ תווים) + `SUPABASE_SERVICE_ROLE_KEY` (שרת בלבד)
 - אין `service_role` key באפליקציה
 - אין secrets ב-`NEXT_PUBLIC_*`
+- שכר: רק `SALARY_SUPABASE_URL` + `SALARY_SUPABASE_ANON_KEY` (שרת); אסור כתיבה למסד השכר
 
 ## קוד
 

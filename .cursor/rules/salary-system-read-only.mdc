@@ -1,0 +1,36 @@
+---
+description: מערכת השכר — קריאה בלבד; אסור לכתוב או להיכנס ב-UI
+alwaysApply: true
+---
+
+# מערכת שכר — קריאה בלבד
+
+מערכת דיווח השכר (Supabase נפרד / אתר seminar) היא **מקור לקריאה בלבד**. אין ל-presence שום הרשאת כתיבה לשם.
+
+## אסור
+
+- `insert` / `update` / `delete` / upsert מול לקוח השכר
+- RPC או פונקציות שמשנות נתונים במסד השכר
+- התחברות לאתר השכר עם סיסמת UI, סקרייפינג, או אוטומציה בדפדפן
+- חשיפת `SALARY_*` ב-`NEXT_PUBLIC_*`
+- שימוש ב-`service_role` של פרויקט השכר בקוד לקוח (ובכלל — לא כברירת מחדל)
+
+## מותר
+
+- קריאה בלבד דרך `createSalaryReadClient()` ב-`src/lib/sync/salary-client.ts`
+- רק `.select(...)` (למשל מ-`salary_records` עם `is_approved = true`) כמו ב-`src/lib/sync/teachers.ts`
+- כתיבה **רק** למסד הנוכחות: `teachers`, `teacher_source_records` (וטבלאות presence אחרות)
+
+## משתני סביבה (presence)
+
+| משתנה | משמעות |
+|--------|--------|
+| `SALARY_SUPABASE_URL` | Project URL של **מסד השכר** |
+| `SALARY_SUPABASE_ANON_KEY` | anon של **מסד השכר** (לא סיסמת אתר, לא DB password) |
+
+אל תבלבלי עם `NEXT_PUBLIC_SUPABASE_*` — אלה מסד **הנוכחות**.
+
+## אכיפה במסד השכר (חובה)
+
+ב-Supabase של **השכר** (לא של הנוכחות): RLS מופעל, ול-`anon` יש רק `SELECT`.
+אין פוליסות `insert` / `update` / `delete` ל-anon. בלי זה המפתח לבדו לא חוסם כתיבה.
