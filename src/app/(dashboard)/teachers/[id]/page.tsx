@@ -141,7 +141,7 @@ export default async function TeacherDetailPage({ params }: Props) {
             אין שיבוצי שכר מיובאים למורה זו.
           </p>
         ) : (
-          <Table headers={["מקצוע", "מסלול", "שכבה", "סמסטר", "מפגשים"]}>
+          <Table headers={["מקצוע בסיס", "מסלול בסיס", "שנה בסיס", "סמסטר בסיס", "מפגשים"]}>
             {(sourceRows ?? []).map((row) => (
               <TableRow key={row.id}>
                 <TableCell className="font-semibold text-primary">
