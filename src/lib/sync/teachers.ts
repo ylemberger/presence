@@ -93,6 +93,34 @@ function sourcePayload(row: SalaryRow, identity: string, fullName: string) {
   };
 }
 
+/** Presence DB only — never the salary project. */
+function isMissingPresenceSourceColumn(error: {
+  message?: string;
+  code?: string;
+} | null): boolean {
+  if (!error) return false;
+  const code = error.code ?? "";
+  const msg = error.message ?? "";
+  return (
+    code === "PGRST204" ||
+    code === "42703" ||
+    msg.includes("schema cache") ||
+    /column .* does not exist/i.test(msg)
+  );
+}
+
+function throwPresenceSourceError(
+  error: { message?: string; code?: string } | null,
+  fallback: string
+): never {
+  if (isMissingPresenceSourceColumn(error)) {
+    throw new Error(
+      "חסרות עמודות שיבוץ-שכר במסד הנוכחות. הריצי את supabase/patches/008_salary_teacher_source.sql בעורך SQL של פרויקט הנוכחות (לא של השכר), ואז Settings → API → Reload schema."
+    );
+  }
+  throw new Error(fallback);
+}
+
 /** Pull salary rows. Never updates/deletes the salary system. Never deletes local teachers. */
 export async function syncTeacherSourceRecords(
   supabaseClient?: SupabaseClient
@@ -127,13 +155,23 @@ export async function syncTeacherSourceRecords(
 
   const supabase = supabaseClient ?? (await createClient());
 
-  const { data: existingSource, error: existingError } = await supabase
-    .from("teacher_source_records")
-    .select("id, external_id, teacher_id");
-  if (existingError) throw new Error("קריאת רשומות מקור נכשלה.");
+  // Only columns that existed before salary-field mapping. `teacher_id` was
+  // added in patch 008; selecting it crashes if the presence schema cache is stale.
+  const existingSource: { id: string; external_id: string }[] = [];
+  for (let from = 0; ; from += pageSize) {
+    const { data, error: existingError } = await supabase
+      .from("teacher_source_records")
+      .select("id, external_id")
+      .range(from, from + pageSize - 1);
+    if (existingError) {
+      throwPresenceSourceError(existingError, "קריאת רשומות מקור נכשלה.");
+    }
+    existingSource.push(...(data ?? []));
+    if ((data ?? []).length < pageSize) break;
+  }
 
   const existingByExternal = new Map(
-    (existingSource ?? []).map((r) => [r.external_id, r])
+    existingSource.map((r) => [r.external_id, r])
   );
 
   for (const row of rows) {
@@ -193,10 +231,13 @@ export async function syncTeacherSourceRecords(
         .from("teacher_source_records")
         .update({
           ...payload,
-          teacher_id: existing.teacher_id ?? teacher.id,
+          teacher_id: teacher.id,
         })
         .eq("id", existing.id);
       if (updateError) {
+        if (isMissingPresenceSourceColumn(updateError)) {
+          throwPresenceSourceError(updateError, "עדכון רשומת מקור נכשל.");
+        }
         result.skippedInvalid++;
         continue;
       }
@@ -204,20 +245,26 @@ export async function syncTeacherSourceRecords(
       continue;
     }
 
-    const { error: insertSourceError } = await supabase.from("teacher_source_records").insert({
-      external_id: externalId,
-      teacher_id: teacher.id,
-      ...payload,
-    });
-    if (insertSourceError) {
+    const { data: inserted, error: insertSourceError } = await supabase
+      .from("teacher_source_records")
+      .insert({
+        external_id: externalId,
+        teacher_id: teacher.id,
+        ...payload,
+      })
+      .select("id")
+      .single();
+    if (insertSourceError || !inserted) {
+      if (isMissingPresenceSourceColumn(insertSourceError)) {
+        throwPresenceSourceError(insertSourceError, "הוספת רשומת מקור נכשלה.");
+      }
       result.skippedInvalid++;
       continue;
     }
     result.sourceRowsAdded++;
     existingByExternal.set(externalId, {
-      id: externalId,
+      id: inserted.id,
       external_id: externalId,
-      teacher_id: teacher.id,
     });
   }
 

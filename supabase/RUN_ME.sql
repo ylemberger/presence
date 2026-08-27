@@ -240,5 +240,8 @@ comment on column students.mi is 'עמודת «מי» מהאקסל (סימון �
 comment on column students.chetz_program is 'תוכנית חץ';
 comment on column students.birth_date_hebrew is 'תאריך לידה עברי כטקסט חופשי';
 
+-- Presence project only (never the salary database).
+notify pgrst, 'reload schema';
+
 -- סיום
 select 'RUN_ME.sql completed' as status;

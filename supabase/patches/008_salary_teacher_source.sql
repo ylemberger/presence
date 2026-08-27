@@ -21,3 +21,6 @@ alter table teacher_source_records
 
 create index if not exists idx_teacher_source_records_teacher
   on teacher_source_records (teacher_id);
+
+-- Presence project only (never the salary database).
+notify pgrst, 'reload schema';
