@@ -6,6 +6,7 @@ import { TeachersForms } from "./TeachersForms";
 import { TeachersDirectory, type TeacherDirectoryRow } from "./TeachersDirectory";
 import { TeachersLessons, type TeacherLessonRow } from "./TeachersLessons";
 import { Icon } from "@/components/ui/Icon";
+import { salaryDisplayFields } from "@/lib/teachers/salary-display";
 
 type AssignmentRow = {
   id: string;
@@ -28,6 +29,7 @@ type SourceRow = {
   salary_semester?: string | null;
   salary_meetings?: number | null;
   subject: string | null;
+  payload?: unknown;
 };
 
 function uniqueJoined(values: Array<string | null | undefined>): string {
@@ -47,24 +49,16 @@ export default async function TeachersPage() {
 
   const { data: teachers } = await supabase.from("teachers").select("*").order("full_name");
 
-  const richSources = await supabase
+  const { data: sourceRows } = await supabase
     .from("teacher_source_records")
-    .select(
-      "teacher_id, teacher_identity_number, salary_subject, salary_track, salary_grade_year, salary_semester, salary_meetings, subject"
-    );
-  const basicSources = richSources.error
-    ? await supabase
-        .from("teacher_source_records")
-        .select("teacher_identity_number, subject")
-    : null;
-  const sourceRows = (richSources.error ? basicSources?.data : richSources.data) ?? [];
+    .select("teacher_identity_number, subject, payload");
 
   const identityToTeacherId = new Map(
     (teachers ?? []).map((t) => [t.identity_number, t.id])
   );
 
   const sourcesByTeacher = new Map<string, SourceRow[]>();
-  for (const row of sourceRows as SourceRow[]) {
+  for (const row of (sourceRows ?? []) as SourceRow[]) {
     const teacherId =
       row.teacher_id ||
       (row.teacher_identity_number
@@ -78,8 +72,9 @@ export default async function TeachersPage() {
 
   const directoryRows: TeacherDirectoryRow[] = (teachers ?? []).map((t) => {
     const sources = sourcesByTeacher.get(t.id) ?? [];
-    const meetings = sources
-      .map((s) => s.salary_meetings)
+    const fields = sources.map((s) => salaryDisplayFields(s));
+    const meetings = fields
+      .map((f) => f.meetings)
       .filter((n): n is number => typeof n === "number");
     return {
       id: t.id,
@@ -88,12 +83,10 @@ export default async function TeachersPage() {
       phone: t.phone,
       email: t.email,
       is_local: t.is_local,
-      salarySubjects: uniqueJoined(
-        sources.map((s) => s.salary_subject || s.subject)
-      ),
-      salaryTracks: uniqueJoined(sources.map((s) => s.salary_track)),
-      salaryGradeYears: uniqueJoined(sources.map((s) => s.salary_grade_year)),
-      salarySemesters: uniqueJoined(sources.map((s) => s.salary_semester)),
+      salarySubjects: uniqueJoined(fields.map((f) => f.subject)),
+      salaryTracks: uniqueJoined(fields.map((f) => f.track)),
+      salaryGradeYears: uniqueJoined(fields.map((f) => f.year)),
+      salarySemesters: uniqueJoined(fields.map((f) => f.semester)),
       salaryMeetings:
         meetings.length === 0
           ? "—"

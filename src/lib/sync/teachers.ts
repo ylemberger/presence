@@ -67,21 +67,44 @@ function usableEmail(raw: string | null | undefined): string | null {
   return email || null;
 }
 
+function usableMeetings(raw: number | string | null | undefined): number | null {
+  if (raw == null || raw === "") return null;
+  const n = typeof raw === "number" ? raw : Number(String(raw).trim());
+  if (!Number.isFinite(n)) return null;
+  return Math.trunc(n);
+}
+
 function shouldImport(row: SalaryRow): boolean {
   if (row.is_approved === false) return false;
   return true;
 }
 
-/**
- * Only original presence columns. Never teacher_id / salary_* —
- * those may be missing and must not block import.
- */
-function coreSourcePayload(row: SalaryRow, identity: string, fullName: string) {
+function isMissingColumnError(error: { message?: string; code?: string } | null): boolean {
+  if (!error) return false;
+  const code = error.code ?? "";
+  const msg = error.message ?? "";
+  return (
+    code === "PGRST204" ||
+    code === "42703" ||
+    msg.includes("schema cache") ||
+    /column .* does not exist/i.test(msg)
+  );
+}
+
+/** Original presence columns only. Extra salary fields go in `payload` jsonb. */
+function sourceRecordWrite(row: SalaryRow, identity: string, fullName: string) {
   return {
     teacher_identity_number: identity,
     full_name: fullName,
     subject: text(row.subject) || "—",
     source_year: "salary",
+    payload: {
+      salary_subject: text(row.subject) || null,
+      salary_track: text(row.track) || null,
+      salary_grade_year: text(row.year) || null,
+      salary_semester: text(row.semester) || null,
+      salary_meetings: usableMeetings(row.meetings),
+    },
   };
 }
 
@@ -102,13 +125,23 @@ export async function syncTeacherSourceRecords(
 
   const rows: SalaryRow[] = [];
   const pageSize = 1000;
+  const salarySelects = [
+    "id, teacher_name, tz, phone, email, subject, track, year, semester, meetings",
+    "id, teacher_name, tz, phone, email, subject, track, year, semester",
+  ];
+  let salarySelect = salarySelects[0];
   for (let from = 0; ; from += pageSize) {
     const { data: remote, error: remoteError } = await salary.client
       .from("salary_records")
-      .select("id, teacher_name, tz, phone, email, subject, track, year, semester")
+      .select(salarySelect)
       .range(from, from + pageSize - 1);
 
     if (remoteError) {
+      if (salarySelect === salarySelects[0] && from === 0) {
+        salarySelect = salarySelects[1];
+        from -= pageSize;
+        continue;
+      }
       throw new Error("לא ניתן לקרוא מורות ממערכת השכר.");
     }
 
@@ -152,7 +185,7 @@ export async function syncTeacherSourceRecords(
     const identity = teacherIdentity(row);
     const phone = usablePhone(row.phone);
     const email = usableEmail(row.email);
-    const payload = coreSourcePayload(row, identity, fullName);
+    const payload = sourceRecordWrite(row, identity, fullName);
 
     let { data: teacher } = await supabase
       .from("teachers")
@@ -189,10 +222,17 @@ export async function syncTeacherSourceRecords(
 
     const existing = existingByExternal.get(externalId);
     if (existing) {
-      const { error: updateError } = await supabase
+      let { error: updateError } = await supabase
         .from("teacher_source_records")
         .update(payload)
         .eq("id", existing.id);
+      if (updateError && isMissingColumnError(updateError)) {
+        const { payload: _ignored, ...coreOnly } = payload;
+        ({ error: updateError } = await supabase
+          .from("teacher_source_records")
+          .update(coreOnly)
+          .eq("id", existing.id));
+      }
       if (updateError) {
         result.skippedInvalid++;
         continue;
@@ -201,7 +241,7 @@ export async function syncTeacherSourceRecords(
       continue;
     }
 
-    const { data: inserted, error: insertSourceError } = await supabase
+    let { data: inserted, error: insertSourceError } = await supabase
       .from("teacher_source_records")
       .insert({
         external_id: externalId,
@@ -209,6 +249,17 @@ export async function syncTeacherSourceRecords(
       })
       .select("id")
       .single();
+    if (insertSourceError && isMissingColumnError(insertSourceError)) {
+      const { payload: _ignored, ...coreOnly } = payload;
+      ({ data: inserted, error: insertSourceError } = await supabase
+        .from("teacher_source_records")
+        .insert({
+          external_id: externalId,
+          ...coreOnly,
+        })
+        .select("id")
+        .single());
+    }
     if (insertSourceError || !inserted) {
       result.skippedInvalid++;
       continue;

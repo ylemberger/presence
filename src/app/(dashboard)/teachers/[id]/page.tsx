@@ -10,6 +10,7 @@ import { BILLING_TYPE_LABELS } from "@/lib/constants";
 import { hebrewWeekdayLabels } from "@/lib/dates/hebrew";
 import { Icon } from "@/components/ui/Icon";
 import { TeacherEditForm } from "../TeacherEditForm";
+import { salaryDisplayFields } from "@/lib/teachers/salary-display";
 
 interface Props {
   params: { id: string };
@@ -24,30 +25,11 @@ export default async function TeacherDetailPage({ params }: Props) {
   const { data: teacher } = await supabase.from("teachers").select("*").eq("id", id).single();
   if (!teacher) notFound();
 
-  const richSource = await supabase
+  const { data: sourceRows } = await supabase
     .from("teacher_source_records")
-    .select(
-      "id, salary_subject, salary_track, salary_grade_year, salary_semester, salary_meetings, subject, synced_at"
-    )
+    .select("id, subject, payload, synced_at")
     .eq("teacher_identity_number", teacher.identity_number)
     .order("synced_at", { ascending: false });
-  const sourceRows = (
-    richSource.error
-      ? await supabase
-          .from("teacher_source_records")
-          .select("id, subject, synced_at")
-          .eq("teacher_identity_number", teacher.identity_number)
-          .order("synced_at", { ascending: false })
-      : richSource
-  ).data as Array<{
-    id: string;
-    subject?: string | null;
-    salary_subject?: string | null;
-    salary_track?: string | null;
-    salary_grade_year?: string | null;
-    salary_semester?: string | null;
-    salary_meetings?: number | null;
-  }> | null;
 
   const { data: taIdsRaw } = activeYear
     ? await supabase
@@ -159,25 +141,28 @@ export default async function TeacherDetailPage({ params }: Props) {
           </p>
         ) : (
           <Table headers={["מקצוע בסיס", "מסלול בסיס", "שנה בסיס", "סמסטר בסיס", "מפגשים"]}>
-            {(sourceRows ?? []).map((row) => (
+            {(sourceRows ?? []).map((row) => {
+              const f = salaryDisplayFields(row);
+              return (
               <TableRow key={row.id}>
                 <TableCell className="font-semibold text-primary">
-                  {row.salary_subject || row.subject || "—"}
+                  {f.subject || "—"}
                 </TableCell>
                 <TableCell className="text-on-surface-variant">
-                  {row.salary_track || "—"}
+                  {f.track || "—"}
                 </TableCell>
                 <TableCell className="text-on-surface-variant">
-                  {row.salary_grade_year || "—"}
+                  {f.year || "—"}
                 </TableCell>
                 <TableCell className="text-on-surface-variant">
-                  {row.salary_semester || "—"}
+                  {f.semester || "—"}
                 </TableCell>
                 <TableCell className="text-on-surface-variant">
-                  {row.salary_meetings ?? "—"}
+                  {f.meetings ?? "—"}
                 </TableCell>
               </TableRow>
-            ))}
+              );
+            })}
           </Table>
         )}
       </Section>
