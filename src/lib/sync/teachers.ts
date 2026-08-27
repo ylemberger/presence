@@ -67,19 +67,15 @@ function usableEmail(raw: string | null | undefined): string | null {
   return email || null;
 }
 
-function usableMeetings(raw: number | string | null | undefined): number | null {
-  if (raw == null || raw === "") return null;
-  const n = typeof raw === "number" ? raw : Number(String(raw).trim());
-  if (!Number.isFinite(n)) return null;
-  return Math.trunc(n);
-}
-
 function shouldImport(row: SalaryRow): boolean {
   if (row.is_approved === false) return false;
   return true;
 }
 
-/** Columns that have always existed on presence teacher_source_records. */
+/**
+ * Only original presence columns. Never teacher_id / salary_* —
+ * those may be missing and must not block import.
+ */
 function coreSourcePayload(row: SalaryRow, identity: string, fullName: string) {
   return {
     teacher_identity_number: identity,
@@ -87,39 +83,6 @@ function coreSourcePayload(row: SalaryRow, identity: string, fullName: string) {
     subject: text(row.subject) || "—",
     source_year: "salary",
   };
-}
-
-function extendedSourcePayload(
-  row: SalaryRow,
-  identity: string,
-  fullName: string,
-  teacherId: string
-) {
-  return {
-    ...coreSourcePayload(row, identity, fullName),
-    teacher_id: teacherId,
-    salary_subject: text(row.subject) || null,
-    salary_track: text(row.track) || null,
-    salary_grade_year: text(row.year) || null,
-    salary_semester: text(row.semester) || null,
-    salary_meetings: usableMeetings(row.meetings),
-  };
-}
-
-/** Presence DB only — never the salary project. */
-function isMissingPresenceSourceColumn(error: {
-  message?: string;
-  code?: string;
-} | null): boolean {
-  if (!error) return false;
-  const code = error.code ?? "";
-  const msg = error.message ?? "";
-  return (
-    code === "PGRST204" ||
-    code === "42703" ||
-    msg.includes("schema cache") ||
-    /column .* does not exist/i.test(msg)
-  );
 }
 
 /** Pull salary rows. Never updates/deletes the salary system. Never deletes local teachers. */
@@ -173,21 +136,6 @@ export async function syncTeacherSourceRecords(
     existingSource.map((r) => [r.external_id, r])
   );
 
-  // Prefer extra salary columns when the presence DB has them; otherwise
-  // write only the original source-record fields. Never touch the salary DB.
-  let useExtendedColumns = true;
-
-  function payloadFor(
-    row: SalaryRow,
-    identity: string,
-    fullName: string,
-    teacherId: string
-  ) {
-    return useExtendedColumns
-      ? extendedSourcePayload(row, identity, fullName, teacherId)
-      : coreSourcePayload(row, identity, fullName);
-  }
-
   for (const row of rows) {
     if (!shouldImport(row)) {
       result.skippedInvalid++;
@@ -204,6 +152,7 @@ export async function syncTeacherSourceRecords(
     const identity = teacherIdentity(row);
     const phone = usablePhone(row.phone);
     const email = usableEmail(row.email);
+    const payload = coreSourcePayload(row, identity, fullName);
 
     let { data: teacher } = await supabase
       .from("teachers")
@@ -240,17 +189,10 @@ export async function syncTeacherSourceRecords(
 
     const existing = existingByExternal.get(externalId);
     if (existing) {
-      let { error: updateError } = await supabase
+      const { error: updateError } = await supabase
         .from("teacher_source_records")
-        .update(payloadFor(row, identity, fullName, teacher.id))
+        .update(payload)
         .eq("id", existing.id);
-      if (updateError && isMissingPresenceSourceColumn(updateError) && useExtendedColumns) {
-        useExtendedColumns = false;
-        ({ error: updateError } = await supabase
-          .from("teacher_source_records")
-          .update(payloadFor(row, identity, fullName, teacher.id))
-          .eq("id", existing.id));
-      }
       if (updateError) {
         result.skippedInvalid++;
         continue;
@@ -259,25 +201,14 @@ export async function syncTeacherSourceRecords(
       continue;
     }
 
-    let { data: inserted, error: insertSourceError } = await supabase
+    const { data: inserted, error: insertSourceError } = await supabase
       .from("teacher_source_records")
       .insert({
         external_id: externalId,
-        ...payloadFor(row, identity, fullName, teacher.id),
+        ...payload,
       })
       .select("id")
       .single();
-    if (insertSourceError && isMissingPresenceSourceColumn(insertSourceError) && useExtendedColumns) {
-      useExtendedColumns = false;
-      ({ data: inserted, error: insertSourceError } = await supabase
-        .from("teacher_source_records")
-        .insert({
-          external_id: externalId,
-          ...payloadFor(row, identity, fullName, teacher.id),
-        })
-        .select("id")
-        .single());
-    }
     if (insertSourceError || !inserted) {
       result.skippedInvalid++;
       continue;
