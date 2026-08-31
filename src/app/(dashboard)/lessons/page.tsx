@@ -8,12 +8,9 @@ import { LessonsFilters } from "./LessonsFilters";
 import { filterFixedGrades } from "@/lib/years/grades";
 import {
   buildHebrewMonth,
-  formatHebrewDate,
   hebrewMonthFromIso,
   todayIso,
 } from "@/lib/dates/hebrew";
-import { DAY_OF_WEEK_LABELS } from "@/lib/constants";
-import { Icon } from "@/components/ui/Icon";
 import type { Lesson } from "@/types/database";
 import { holidayDatesByKind } from "@/lib/lessons/holidays";
 import {
@@ -61,7 +58,6 @@ export default async function LessonsPage({ searchParams }: Props) {
   const month = buildHebrewMonth(monthSeed.year, monthSeed.month);
   const from = searchParams.from || month.rangeStart;
   const to = searchParams.to || month.rangeEnd;
-  const today = todayIso();
 
   const [lessonsRes, teachers, grades, classes, tracks, specializations, ranges, rules, holidays, audienceRes, yearStudentsRes] =
     await Promise.all([
@@ -203,28 +199,18 @@ export default async function LessonsPage({ searchParams }: Props) {
   const occurrenceSelect =
     "id, occurrence_date, status, notes, lesson_id, lessons!inner(subject, academic_year_id)";
 
-  const [monthOcc, todayOcc] =
+  const monthOcc =
     filteredIds.length === 0
-      ? [{ data: [] }, { data: [] }]
-      : await Promise.all([
-          supabase
-            .from("lesson_occurrences")
-            .select(occurrenceSelect)
-            .eq("lessons.academic_year_id", activeYear.id)
-            .in("lesson_id", filteredIds)
-            .neq("status", "cancelled")
-            .gte("occurrence_date", from)
-            .lte("occurrence_date", to)
-            .order("occurrence_date"),
-          supabase
-            .from("lesson_occurrences")
-            .select(occurrenceSelect)
-            .eq("lessons.academic_year_id", activeYear.id)
-            .in("lesson_id", filteredIds)
-            .neq("status", "cancelled")
-            .eq("occurrence_date", today)
-            .order("occurrence_date"),
-        ]);
+      ? { data: [] }
+      : await supabase
+          .from("lesson_occurrences")
+          .select(occurrenceSelect)
+          .eq("lessons.academic_year_id", activeYear.id)
+          .in("lesson_id", filteredIds)
+          .neq("status", "cancelled")
+          .gte("occurrence_date", from)
+          .lte("occurrence_date", to)
+          .order("occurrence_date");
 
   const lessonById = new Map(filteredLessons.map((l) => [l.id, l]));
   const mapOcc = (
@@ -255,28 +241,6 @@ export default async function LessonsPage({ searchParams }: Props) {
     });
 
   const occurrenceRows = mapOcc(monthOcc.data ?? []);
-  const todayRows = mapOcc(todayOcc.data ?? []);
-
-  const todayItems = todayRows
-    .map((o) => {
-      const lesson = lessonById.get(o.lesson_id);
-      const assignment = one<{
-        teacher_id: string;
-        teachers?: unknown;
-      }>(lesson?.teacher_teaching_assignments);
-      const teacherName = one<{ full_name: string }>(assignment?.teachers)?.full_name ?? "";
-      const cls = one<{ name: string }>(lesson?.classes)?.name;
-      const track = one<{ name: string }>(lesson?.tracks)?.name;
-      const spec = one<{ name: string }>(lesson?.specializations)?.name;
-      const audience = spec ?? cls ?? track ?? "";
-      return {
-        ...o,
-        lessonNumber: lesson?.lesson_number ?? 0,
-        teacherName,
-        audience,
-      };
-    })
-    .sort((a, b) => a.lessonNumber - b.lessonNumber);
 
   const formProps = {
     yearId: activeYear.id,
@@ -297,8 +261,6 @@ export default async function LessonsPage({ searchParams }: Props) {
   }
   if (searchParams.teacherId) filterQuery.set("teacherId", searchParams.teacherId);
   if (searchParams.subject) filterQuery.set("subject", searchParams.subject);
-
-  const weekday = DAY_OF_WEEK_LABELS[new Date(`${today}T12:00:00`).getDay()] ?? "";
 
   return (
     <div className="flex flex-col gap-stack_lg">
@@ -326,42 +288,6 @@ export default async function LessonsPage({ searchParams }: Props) {
 
       <div className="grid grid-cols-1 gap-gutter xl:grid-cols-12">
         <div className="flex flex-col gap-gutter xl:col-span-4">
-          <Section
-            icon="today"
-            title="שיעורי היום"
-            subtitle={`${formatHebrewDate(today)}${weekday ? ` · יום ${weekday}` : ""}`}
-          >
-            {todayItems.length === 0 ? (
-              <div className="flex flex-col items-center gap-2 rounded-lg border border-dashed border-outline-variant/50 bg-surface-container-low/60 px-4 py-8 text-center">
-                <Icon name="event_available" className="text-[32px] text-secondary" />
-                <p className="font-body-md text-body-md text-on-surface-variant">
-                  אין שיעורים היום{filterQuery.toString() ? " לפי הסינון" : ""}.
-                </p>
-              </div>
-            ) : (
-              <ul className="flex flex-col gap-2">
-                {todayItems.map((item) => (
-                  <li
-                    key={item.id}
-                    className="rounded-lg border border-outline-variant/40 bg-surface-container-low/50 px-3 py-2.5"
-                  >
-                    <div className="flex items-baseline justify-between gap-2">
-                      <span className="font-title-lg text-title-lg text-on-surface">
-                        {item.subject}
-                      </span>
-                      <span className="font-caption text-caption text-on-surface-variant">
-                        שיעור {item.lessonNumber}
-                      </span>
-                    </div>
-                    <p className="mt-0.5 font-caption text-caption text-on-surface-variant">
-                      {[item.teacherName, item.audience].filter(Boolean).join(" · ")}
-                    </p>
-                  </li>
-                ))}
-              </ul>
-            )}
-          </Section>
-
           <Section icon="edit_note" title="יצירת שיעור חדש" accent="featured">
             {formProps.teachers.length === 0 && (
               <p className="mb-3 rounded-lg bg-attendance-late/10 px-3 py-2 font-body-sm text-body-sm text-attendance-late">

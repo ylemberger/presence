@@ -4,7 +4,7 @@ import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
-import { HebrewDateRangePicker } from "@/components/ui/HebrewDateRangePicker";
+import { HebrewDateInput } from "@/components/ui/HebrewDateInput";
 import { HebrewMonthCalendar } from "@/components/ui/HebrewMonthCalendar";
 import { DeleteButton } from "@/components/ui/DeleteButton";
 import { Icon } from "@/components/ui/Icon";
@@ -152,13 +152,10 @@ export function HolidayCalendar({
           <p className="font-label-md text-label-md text-primary">הוספת טווח</p>
           <Input label="שם" name="name" placeholder={HOLIDAY_KIND_LABELS[paintKind]} />
           <input type="hidden" name="kind" value={paintKind} />
-          <HebrewDateRangePicker
-            startName="start_date"
-            endName="end_date"
-            required
-            singleClickSelectsDay
-            className="basis-full"
-          />
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+            <HebrewDateInput label="מתאריך" name="start_date" required />
+            <HebrewDateInput label="עד תאריך" name="end_date" required />
+          </div>
           <Button type="submit" disabled={loading} className="self-start">
             <Icon name="add" className="text-[18px]" />
             {loading ? "שומר..." : `הוספת ${HOLIDAY_KIND_LABELS[paintKind]}`}
@@ -318,15 +315,20 @@ function HolidayEditRow({
               ביטול לימודים
             </label>
           </div>
-          <HebrewDateRangePicker
-            startName="start_date"
-            endName="end_date"
-            defaultStart={period.start_date}
-            defaultEnd={period.end_date}
-            required
-            singleClickSelectsDay
-            className="basis-full"
-          />
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+            <HebrewDateInput
+              label="מתאריך"
+              name="start_date"
+              defaultValue={period.start_date}
+              required
+            />
+            <HebrewDateInput
+              label="עד תאריך"
+              name="end_date"
+              defaultValue={period.end_date}
+              required
+            />
+          </div>
           <div className="flex flex-wrap gap-2">
             <Button type="submit" size="sm" disabled={saving}>
               {saving ? "שומר..." : "שמירה"}

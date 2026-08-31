@@ -824,8 +824,81 @@ export function AttendanceBoard({
       </div>
 
       <div className="grid grid-cols-1 items-start gap-gutter print:hidden xl:grid-cols-12">
-        <div className="flex flex-col gap-stack_lg xl:col-span-5">
-          <div className="rounded-xl border border-outline-variant/30 bg-surface-container-lowest p-3 shadow-tactile-md">
+        <section className="order-2 rounded-xl border border-outline-variant/30 bg-surface-container-lowest p-3 shadow-tactile-md xl:order-1 xl:col-span-7">
+          <div className="mb-2 flex flex-wrap items-center gap-2 border-b border-outline-variant/30 pb-2">
+            <h3 className="flex flex-wrap items-center gap-1.5 font-label-md text-label-md text-primary">
+              <Icon name="today" className="text-[16px] text-secondary" />
+              {formatHebrewDate(selectedDate)}
+              <span className="font-caption text-caption text-on-surface-variant">
+                ({formatGregorianDate(selectedDate)})
+              </span>
+            </h3>
+            {completeDateSet.has(selectedDate) && dayOccurrences.length > 0 && (
+              <span className="inline-flex items-center gap-1 rounded-full bg-attendance-present/10 px-2 py-0.5 text-caption font-semibold text-attendance-present">
+                <Icon name="task_alt" className="text-[12px]" />
+                הושלם
+              </span>
+            )}
+          </div>
+          {weekWarning.thisWeekPartial.length > 0 && (
+            <p className="mb-2 rounded-md bg-attendance-late/10 px-2 py-1 font-caption text-caption text-attendance-late">
+              בשבוע זה יש שיעורים שסומנו רק חלקית.
+            </p>
+          )}
+          {weekWarning.prevIncomplete.length > 0 && (
+            <p className="mb-2 rounded-md bg-error-container/50 px-2 py-1 font-caption text-caption text-on-error-container">
+              לא מולאה נוכחות מלאה לשבוע {formatHebrewDate(weekWarning.prevStart)} –{" "}
+              {formatHebrewDate(addDays(weekWarning.prevStart, 6))}.
+            </p>
+          )}
+
+          {dayOccurrences.length === 0 ? (
+            <p className="px-1 py-2 font-caption text-caption text-on-surface-variant">
+              {cancelledDates.includes(selectedDate)
+                ? "ביטול לימודים — אין שיעורים אוטומטיים ביום זה."
+                : holidayDates.includes(selectedDate)
+                  ? "יום חופשה — אין לימודים ולא נספרת נוכחות."
+                  : "אין שיעורים ביום זה לפי הסינון."}
+            </p>
+          ) : (
+            <div className="grid grid-cols-2 gap-1.5 sm:grid-cols-3">
+              {dayOccurrences.map((o) => {
+                const selected = o.id === activeOccurrenceId;
+                const complete = o.studentCount > 0 && o.markedCount >= o.studentCount;
+                const hasNote = lessonIdsWithNotes.includes(o.lessonId);
+                return (
+                  <button
+                    key={o.id}
+                    type="button"
+                    onClick={() => selectLesson(o.id)}
+                    className={cn(
+                      "relative flex min-w-0 flex-col gap-0.5 overflow-hidden rounded-md border px-2 py-1.5 text-right",
+                      selected
+                        ? "border-secondary bg-secondary-container/40"
+                        : "border-outline-variant/50 bg-surface-container-lowest hover:border-secondary/50"
+                    )}
+                  >
+                    <span className="truncate font-label-md text-label-md text-primary">
+                      {o.subject}
+                      {o.lessonNumber ? ` · ${o.lessonNumber}` : ""}
+                    </span>
+                    <span className="truncate font-caption text-caption text-on-surface-variant">
+                      {o.teacherName || "ללא מורה"}
+                    </span>
+                    <span className="font-caption text-caption text-on-surface-variant">
+                      {o.markedCount}/{o.studentCount}
+                      {complete ? " ✓" : ""}
+                      {hasNote ? " · הערה" : ""}
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+          )}
+        </section>
+
+        <div className="order-1 xl:sticky xl:top-14 xl:order-2 xl:col-span-5">
+          <div className="rounded-xl border border-outline-variant/30 bg-surface-container-lowest p-2 shadow-tactile-md">
             <HebrewMonthCalendar
               compact
               initialMonthIso={monthFrom}
@@ -841,115 +914,12 @@ export function AttendanceBoard({
               }}
             />
           </div>
-
-          <section className="rounded-xl border border-outline-variant/30 bg-surface-container-lowest p-6 shadow-tactile-md">
-            <div className="mb-4 border-b border-outline-variant/30 pb-4">
-              <h3 className="flex flex-wrap items-center gap-2 font-title-lg text-title-lg text-primary">
-                <Icon name="today" className="text-secondary" />
-                {formatHebrewDate(selectedDate)}
-                <span className="font-caption text-caption font-semibold text-on-surface-variant">
-                  ({formatGregorianDate(selectedDate)})
-                </span>
-              </h3>
-              {completeDateSet.has(selectedDate) && dayOccurrences.length > 0 && (
-                <span className="mt-2 inline-flex items-center gap-1 rounded-full bg-attendance-present/10 px-3 py-1 text-caption font-semibold text-attendance-present">
-                  <Icon name="task_alt" className="text-[14px]" />
-                  הושלם
-                </span>
-              )}
-              {weekWarning.thisWeekPartial.length > 0 && (
-                <p className="mt-2 rounded-lg bg-attendance-late/10 px-3 py-2 font-caption text-caption text-attendance-late">
-                  בשבוע זה יש שיעורים שסומנו רק חלקית.
-                </p>
-              )}
-              {weekWarning.prevIncomplete.length > 0 && (
-                <p className="mt-2 rounded-lg bg-error-container/50 px-3 py-2 font-caption text-caption text-on-error-container">
-                  לא מולאה נוכחות מלאה לשבוע {formatHebrewDate(weekWarning.prevStart)} –{" "}
-                  {formatHebrewDate(addDays(weekWarning.prevStart, 6))}.
-                </p>
-              )}
-            </div>
-
-            {dayOccurrences.length === 0 ? (
-              <div className="px-2 py-6 text-center">
-                <Icon name="event_busy" className="mb-2 inline-block text-[36px] text-secondary" />
-                <p className="font-body-md text-body-md text-on-surface-variant">
-                  {cancelledDates.includes(selectedDate)
-                    ? "ביטול לימודים — אין שיעורים אוטומטיים ביום זה."
-                    : holidayDates.includes(selectedDate)
-                      ? "יום חופשה — אין לימודים ולא נספרת נוכחות."
-                      : "אין שיעורים ביום זה לפי הסינון."}
-                </p>
-              </div>
-            ) : (
-              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-                {dayOccurrences.map((o) => {
-                  const selected = o.id === activeOccurrenceId;
-                  const complete = o.studentCount > 0 && o.markedCount >= o.studentCount;
-                  const pct =
-                    o.studentCount > 0 ? Math.round((o.markedCount / o.studentCount) * 100) : 0;
-                  const hasNote = lessonIdsWithNotes.includes(o.lessonId);
-                  return (
-                    <button
-                      key={o.id}
-                      type="button"
-                      onClick={() => selectLesson(o.id)}
-                      className={cn(
-                        "relative flex flex-col gap-2 overflow-hidden rounded-lg border bg-surface-container-lowest p-4 text-right transition-transform hover:-translate-y-0.5",
-                        selected
-                          ? "border-2 border-secondary shadow-tactile-sm"
-                          : "border-outline-variant hover:shadow-tactile-md"
-                      )}
-                    >
-                      {selected && (
-                        <span className="absolute left-0 top-0 h-1 w-full bg-secondary" />
-                      )}
-                      <div className="flex flex-wrap items-center gap-2">
-                        <span
-                          className={cn(
-                            "rounded-md px-2 py-0.5 font-label-md text-label-md",
-                            selected
-                              ? "bg-secondary-container text-secondary"
-                              : "bg-surface-variant text-on-surface-variant"
-                          )}
-                        >
-                          שיעור {o.lessonNumber || "—"}
-                        </span>
-                        {hasNote && (
-                          <span className="inline-flex items-center gap-0.5 rounded-md bg-primary/10 px-2 py-0.5 font-caption text-caption text-primary">
-                            <Icon name="sticky_note_2" className="text-[14px]" />
-                            הערה
-                          </span>
-                        )}
-                      </div>
-                      <h4 className="mt-1 font-title-lg text-title-lg text-primary">{o.subject}</h4>
-                      <p className="flex items-center gap-1 font-body-md text-body-md text-on-surface-variant">
-                        <Icon name="person" className="text-[16px]" />
-                        {o.teacherName ? `המורה ${o.teacherName}` : "ללא מורה"}
-                      </p>
-                      <div className="mt-2 h-1.5 w-full rounded-full bg-surface-variant">
-                        <div
-                          className={cn(
-                            "h-1.5 rounded-full",
-                            complete ? "bg-attendance-present" : "bg-secondary"
-                          )}
-                          style={{ width: `${pct}%` }}
-                        />
-                      </div>
-                      <span className="font-caption text-caption text-on-surface-variant">
-                        {o.markedCount}/{o.studentCount} רשומים
-                      </span>
-                    </button>
-                  );
-                })}
-              </div>
-            )}
-          </section>
         </div>
+      </div>
 
-        <div className="xl:col-span-7">
+      <div className="print:hidden">
       {activeLesson ? (
-        <div className="flex h-full min-h-[28rem] flex-col overflow-hidden rounded-xl border border-outline-variant/30 bg-surface-container-lowest shadow-tactile-md xl:h-[720px]">
+        <div className="mt-2 flex max-h-[70vh] min-h-[12rem] flex-col overflow-hidden rounded-xl border border-outline-variant/30 bg-surface-container-lowest shadow-tactile-md">
           <div className="sticky top-0 z-10 border-b border-outline-variant/30 bg-surface-container-lowest px-3 py-2">
             <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
               <div className="min-w-0 flex-1">
@@ -1149,15 +1119,10 @@ export function AttendanceBoard({
           </div>
         </div>
       ) : (
-        <div className="flex min-h-[20rem] flex-col items-center justify-center rounded-xl border border-dashed border-outline-variant/50 bg-surface-container-lowest px-6 py-10 text-center shadow-tactile-md">
-          <Icon name="touch_app" className="mb-3 text-[36px] text-secondary" />
-          <p className="font-title-lg text-title-lg text-primary">בחרי שיעור לרישום</p>
-          <p className="mt-1 max-w-sm font-body-md text-body-md text-on-surface-variant">
-            שלב 1 ו־2: בחרי תאריך ואז שיעור, והרשימה תופיע כאן.
-          </p>
+        <div className="mt-1 flex h-8 w-28 items-center justify-center rounded-md border border-dashed border-outline-variant/60 bg-surface-container-lowest px-2 text-center font-caption text-caption text-on-surface-variant">
+          בחרי שיעור
         </div>
       )}
-        </div>
       </div>
 
       {activeLesson && (
