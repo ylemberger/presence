@@ -5,7 +5,6 @@ import Link from "next/link";
 import { Button } from "@/components/ui/Button";
 import { Combobox } from "@/components/ui/Combobox";
 import { Input, Select } from "@/components/ui/Input";
-import { Table, TableRow, TableCell } from "@/components/ui/Table";
 import { StatusPill } from "@/components/ui/PageHeader";
 import { Modal } from "@/components/ui/Modal";
 import { StudentsForm } from "./StudentsForm";
@@ -160,7 +159,7 @@ export function StudentsDirectory({
   );
 
   return (
-    <div className="overflow-hidden rounded-xl border border-outline-variant/30 bg-surface-container-lowest shadow-tactile-md">
+    <div className="min-w-0 overflow-x-hidden rounded-xl border border-outline-variant/30 bg-surface-container-lowest shadow-tactile-md">
       <div className="grid gap-3 border-b border-outline-variant/30 bg-surface-container-low/60 px-5 py-4 md:grid-cols-2 xl:grid-cols-7">
         <div className="xl:col-span-2">
           <Input
@@ -252,112 +251,128 @@ export function StudentsDirectory({
         </p>
       )}
 
-      <div className="overflow-x-auto">
-      <Table
-        headers={[
-          "מי",
-          "שם פרטי",
-          "משפחה",
-          "מ.ז.",
-          "כיתה",
-          "שכבה",
-          "עיר",
-          "טל",
-          "פל אב",
-          "פל אם",
-          "פל תלמידה",
-          "תיכון",
-          "חץ",
-          "מסלול",
-          "התמחות",
-          "פסיכ׳",
-          "סטטוס",
-          "",
-        ]}
-      >
-        {filtered.map((s) => (
-          <TableRow key={s.id}>
-            <TableCell className="text-on-surface-variant">{s.mi ?? "—"}</TableCell>
-            <TableCell>
-              <Link
-                href={`/students/${s.id}`}
-                className="flex min-w-[8rem] flex-col gap-0.5 rounded-md outline-none transition-colors hover:bg-secondary-container/30 focus-visible:ring-2 focus-visible:ring-secondary"
-              >
-                <div className="flex items-center gap-2">
-                  <span
-                    className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-primary text-caption font-bold text-white"
-                    aria-hidden
-                  >
-                    {(s.first_name || s.full_name).slice(0, 1)}
-                  </span>
-                  <span className="font-label-md text-label-md text-primary whitespace-nowrap underline-offset-2 group-hover:underline">
-                    {s.first_name || s.full_name.split(" ")[0]}
-                  </span>
-                </div>
-                {s.personal_note && (
-                  <p
-                    className="max-w-[12rem] truncate pe-1 font-caption text-caption text-secondary"
-                    title={s.personal_note}
-                  >
-                    <Icon name="sticky_note_2" className="me-0.5 inline text-[12px] align-text-bottom" />
-                    {s.personal_note}
-                  </p>
-                )}
-              </Link>
-            </TableCell>
-            <TableCell className="whitespace-nowrap font-label-md text-label-md text-primary">
-              <Link
-                href={`/students/${s.id}`}
-                className="hover:underline underline-offset-2"
-              >
-                {s.last_name || "—"}
-              </Link>
-            </TableCell>
-            <TableCell className="font-mono text-on-surface-variant whitespace-nowrap" dir="ltr">
-              {s.identity_number}
-            </TableCell>
-            <TableCell className="whitespace-nowrap">{s.className}</TableCell>
-            <TableCell>{s.gradeName}</TableCell>
-            <TableCell className="whitespace-nowrap">{s.city ?? "—"}</TableCell>
-            <TableCell className="whitespace-nowrap font-mono text-caption" dir="ltr">
-              {s.phone ?? "—"}
-            </TableCell>
-            <TableCell className="whitespace-nowrap font-mono text-caption" dir="ltr">
-              {s.father_phone ?? "—"}
-            </TableCell>
-            <TableCell className="whitespace-nowrap font-mono text-caption" dir="ltr">
-              {s.mother_phone ?? "—"}
-            </TableCell>
-            <TableCell className="whitespace-nowrap font-mono text-caption" dir="ltr">
-              {s.student_phone ?? "—"}
-            </TableCell>
-            <TableCell className="whitespace-nowrap">{s.high_school ?? "—"}</TableCell>
-            <TableCell>{s.chetz_program ? "כן" : "לא"}</TableCell>
-            <TableCell className="whitespace-nowrap">{s.trackName}</TableCell>
-            <TableCell className="whitespace-nowrap">
-              {s.specializationName}
-              {s.secondarySpecializationName !== "—"
-                ? ` + ${s.secondarySpecializationName}`
-                : ""}
-            </TableCell>
-            <TableCell>{s.isPsychology ? "כן" : "לא"}</TableCell>
-            <TableCell>
-              <StatusPill tone={s.is_active ? "ok" : "muted"}>
-                {s.is_active ? "פעילה" : "לא פעילה"}
-              </StatusPill>
-            </TableCell>
-            <TableCell>
-              <Link
-                href={`/students/${s.id}`}
-                className="inline-flex items-center gap-1 whitespace-nowrap text-label-md text-secondary transition-colors hover:text-primary hover:underline"
-              >
-                <Icon name="badge" className="text-[16px]" />
-                כרטיס
-              </Link>
-            </TableCell>
-          </TableRow>
-        ))}
-      </Table>
+      <div className="min-w-0 overflow-x-hidden">
+        <table className="w-full table-fixed border-collapse text-right">
+          <colgroup>
+            <col className="w-[26%]" />
+            <col className="w-[14%]" />
+            <col className="w-[28%]" />
+            <col className="w-[16%]" />
+            <col className="w-[10%]" />
+            <col className="w-[6%]" />
+          </colgroup>
+          <thead>
+            <tr className="border-b border-outline-variant/40 bg-surface-container-low text-on-surface-variant">
+              {["תלמידה", 'ת"ז', "שיבוץ", "קשר", "סטטוס", ""].map((h) => (
+                <th
+                  key={h || "card"}
+                  className="px-3 py-2 text-right text-caption font-semibold tracking-wide"
+                >
+                  {h}
+                </th>
+              ))}
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-outline-variant/25">
+            {filtered.map((s) => {
+              const contactPhone =
+                s.student_phone || s.phone || s.mother_phone || s.father_phone || null;
+              return (
+                <tr
+                  key={s.id}
+                  className="transition-colors hover:bg-[var(--accent-soft)]"
+                >
+                  <td className="px-3 py-2">
+                    <Link
+                      href={`/students/${s.id}`}
+                      className="flex min-w-0 items-start gap-2 rounded-md outline-none transition-colors hover:bg-secondary-container/30 focus-visible:ring-2 focus-visible:ring-secondary"
+                    >
+                      <span
+                        className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-primary text-caption font-bold text-white"
+                        aria-hidden
+                      >
+                        {(s.first_name || s.full_name).slice(0, 1)}
+                      </span>
+                      <span className="min-w-0">
+                        <span className="block break-words font-label-md text-label-md text-primary">
+                          {s.first_name || s.full_name.split(" ")[0]}{" "}
+                          {s.last_name}
+                          {s.mi ? (
+                            <span className="ms-1 font-caption text-caption text-on-surface-variant">
+                              {s.mi}
+                            </span>
+                          ) : null}
+                        </span>
+                        <span className="mt-0.5 flex flex-wrap gap-1">
+                          {s.chetz_program && (
+                            <span className="rounded-full bg-surface-container-high px-1.5 py-0 font-caption text-caption text-on-surface-variant">
+                              חץ
+                            </span>
+                          )}
+                          {s.isPsychology && (
+                            <span className="rounded-full bg-surface-container-high px-1.5 py-0 font-caption text-caption text-on-surface-variant">
+                              פסיכ׳
+                            </span>
+                          )}
+                        </span>
+                        {s.personal_note && (
+                          <p
+                            className="mt-0.5 break-words font-caption text-caption text-secondary"
+                            title={s.personal_note}
+                          >
+                            <Icon
+                              name="sticky_note_2"
+                              className="me-0.5 inline text-[12px] align-text-bottom"
+                            />
+                            {s.personal_note}
+                          </p>
+                        )}
+                      </span>
+                    </Link>
+                  </td>
+                  <td className="break-all px-3 py-2 font-mono text-caption text-on-surface-variant" dir="ltr">
+                    {s.identity_number}
+                  </td>
+                  <td className="px-3 py-2 font-caption text-caption text-on-surface">
+                    <div className="break-words">
+                      {s.gradeName}
+                      {s.className && s.className !== "—" ? ` · ${s.className}` : ""}
+                    </div>
+                    <div className="mt-0.5 break-words text-on-surface-variant">
+                      {s.trackName}
+                      {s.specializationName !== "—"
+                        ? ` · ${s.specializationName}`
+                        : ""}
+                      {s.secondarySpecializationName !== "—"
+                        ? ` + ${s.secondarySpecializationName}`
+                        : ""}
+                    </div>
+                  </td>
+                  <td className="px-3 py-2 font-caption text-caption text-on-surface-variant">
+                    <div className="break-words">{s.city ?? "—"}</div>
+                    <div className="mt-0.5 break-all" dir="ltr">
+                      {contactPhone ?? "—"}
+                    </div>
+                  </td>
+                  <td className="px-3 py-2">
+                    <StatusPill tone={s.is_active ? "ok" : "muted"}>
+                      {s.is_active ? "פעילה" : "לא פעילה"}
+                    </StatusPill>
+                  </td>
+                  <td className="px-3 py-2">
+                    <Link
+                      href={`/students/${s.id}`}
+                      className="inline-flex items-center gap-1 font-label-md text-label-md text-secondary transition-colors hover:text-primary hover:underline"
+                    >
+                      <Icon name="badge" className="text-[16px]" />
+                      כרטיס
+                    </Link>
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
       </div>
       {filtered.length === 0 && (
         <div className="flex flex-col items-center gap-2 px-5 py-12 text-center">

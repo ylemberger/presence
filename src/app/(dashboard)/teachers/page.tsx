@@ -140,12 +140,12 @@ export default async function TeachersPage() {
           </section>
         </div>
 
-        <div className="lg:col-span-8">
+        <div className="min-w-0 lg:col-span-8">
           <TeachersDirectory teachers={directoryRows} />
         </div>
 
         {activeYear && (
-          <div className="lg:col-span-8">
+          <div className="min-w-0 lg:col-span-8">
             <TeachersLessons rows={lessonRows} />
           </div>
         )}

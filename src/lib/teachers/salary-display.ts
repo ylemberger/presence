@@ -46,3 +46,35 @@ export function salaryDisplayFields(row: {
     meetings: asMeetings(row.salary_meetings) ?? asMeetings(p.salary_meetings),
   };
 }
+
+export function uniqueSalaryAssignments(
+  fields: SalaryDisplayFields[]
+): SalaryDisplayFields[] {
+  const seen = new Set<string>();
+  const out: SalaryDisplayFields[] = [];
+  for (const f of fields) {
+    const key = [f.subject, f.track, f.year, f.semester, f.meetings ?? ""].join("|");
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push(f);
+  }
+  return out;
+}
+
+export function formatSalaryAssignment(f: SalaryDisplayFields): string {
+  const parts = [
+    f.subject,
+    f.track,
+    f.year,
+    f.semester,
+    f.meetings != null ? `${f.meetings} מפגשים` : null,
+  ].filter(Boolean);
+  return parts.length ? parts.join(" · ") : "אין פרטי שכר";
+}
+
+export function salarySearchKeywords(fields: SalaryDisplayFields[]): string {
+  return fields
+    .flatMap((f) => [f.subject, f.track, f.year, f.semester])
+    .filter((v): v is string => Boolean(v))
+    .join(" ");
+}

@@ -21,19 +21,7 @@ export type TeacherDirectoryRow = {
 
 const PREVIEW_LIMIT = 50;
 
-const HEADERS = [
-  "שם המורה",
-  'ת"ז',
-  "טלפון",
-  "אימייל",
-  "מקצוע בסיס",
-  "מסלול בסיס",
-  "שנה בסיס",
-  "סמסטר בסיס",
-  "מפגשים",
-  "סטטוס",
-  "פעולות",
-] as const;
+const HEADERS = ["מורה", "קשר", "שיבוצי שכר", "סטטוס", ""] as const;
 
 export function TeachersDirectory({ teachers }: { teachers: TeacherDirectoryRow[] }) {
   const [query, setQuery] = useState("");
@@ -58,7 +46,7 @@ export function TeachersDirectory({ teachers }: { teachers: TeacherDirectoryRow[
   const visible = showAll ? filtered : filtered.slice(0, PREVIEW_LIMIT);
 
   return (
-    <div className="flex h-full flex-col rounded-xl bg-surface-container-lowest p-stack_md shadow-tactile-md">
+    <div className="flex h-full min-w-0 flex-col overflow-x-hidden rounded-xl bg-surface-container-lowest p-stack_md shadow-tactile-md">
       <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
         <h3 className="flex items-center gap-2 font-title-lg text-title-lg text-primary">
           <Icon name="list_alt" className="text-primary-container" />
@@ -75,14 +63,21 @@ export function TeachersDirectory({ teachers }: { teachers: TeacherDirectoryRow[
         </div>
       </div>
 
-      <div className="flex-1 overflow-x-auto">
-        <table className="w-full min-w-[64rem] border-collapse text-right">
+      <div className="min-w-0 flex-1 overflow-x-hidden">
+        <table className="w-full table-fixed border-collapse text-right">
+          <colgroup>
+            <col className="w-[22%]" />
+            <col className="w-[22%]" />
+            <col className="w-[38%]" />
+            <col className="w-[12%]" />
+            <col className="w-[6%]" />
+          </colgroup>
           <thead>
             <tr className="border-b border-outline-variant bg-background text-on-surface-variant">
               {HEADERS.map((h) => (
                 <th
-                  key={h}
-                  className="whitespace-nowrap px-3 py-3 font-label-md text-label-md font-medium"
+                  key={h || "actions"}
+                  className="px-3 py-3 font-label-md text-label-md font-medium"
                 >
                   {h}
                 </th>
@@ -95,42 +90,36 @@ export function TeachersDirectory({ teachers }: { teachers: TeacherDirectoryRow[
                 key={t.id}
                 className="group border-b border-surface-variant transition-colors hover:bg-surface-variant/50"
               >
-                <td className="whitespace-nowrap px-3 py-3 font-body-md text-body-md text-on-surface">
-                  {t.full_name}
+                <td className="px-3 py-3">
+                  <div className="break-words font-body-md text-body-md text-on-surface">
+                    {t.full_name}
+                  </div>
+                  <div className="mt-0.5 break-all font-caption text-caption text-on-surface-variant" dir="ltr">
+                    {t.identity_number}
+                  </div>
                 </td>
-                <td
-                  className="whitespace-nowrap px-3 py-3 font-body-md text-body-md text-on-surface-variant"
-                  dir="ltr"
-                >
-                  {t.identity_number}
+                <td className="px-3 py-3 font-caption text-caption text-on-surface-variant">
+                  <div className="break-all" dir="ltr">
+                    {t.phone ?? "—"}
+                  </div>
+                  <div className="mt-0.5 break-all" dir="ltr" title={t.email ?? undefined}>
+                    {t.email ?? "—"}
+                  </div>
                 </td>
-                <td
-                  className="whitespace-nowrap px-3 py-3 font-body-md text-body-md text-on-surface-variant"
-                  dir="ltr"
-                >
-                  {t.phone ?? "—"}
-                </td>
-                <td
-                  className="max-w-[10rem] truncate px-3 py-3 font-body-md text-body-md text-on-surface-variant"
-                  dir="ltr"
-                  title={t.email ?? undefined}
-                >
-                  {t.email ?? "—"}
-                </td>
-                <td className="px-3 py-3 font-body-md text-body-md text-on-surface-variant">
-                  {t.salarySubjects}
-                </td>
-                <td className="px-3 py-3 font-body-md text-body-md text-on-surface-variant">
-                  {t.salaryTracks}
-                </td>
-                <td className="whitespace-nowrap px-3 py-3 font-body-md text-body-md text-on-surface-variant">
-                  {t.salaryGradeYears}
-                </td>
-                <td className="whitespace-nowrap px-3 py-3 font-body-md text-body-md text-on-surface-variant">
-                  {t.salarySemesters}
-                </td>
-                <td className="whitespace-nowrap px-3 py-3 font-body-md text-body-md text-on-surface-variant">
-                  {t.salaryMeetings}
+                <td className="px-3 py-3 font-caption text-caption text-on-surface-variant">
+                  <div className="break-words">
+                    <span className="text-on-surface">{t.salarySubjects}</span>
+                    {t.salaryTracks !== "—" ? ` · ${t.salaryTracks}` : ""}
+                  </div>
+                  <div className="mt-0.5 break-words">
+                    {[
+                      t.salaryGradeYears !== "—" ? t.salaryGradeYears : null,
+                      t.salarySemesters !== "—" ? t.salarySemesters : null,
+                      t.salaryMeetings !== "—" ? `${t.salaryMeetings} מפגשים` : null,
+                    ]
+                      .filter(Boolean)
+                      .join(" · ") || "—"}
+                  </div>
                 </td>
                 <td className="px-3 py-3">
                   <StatusPill tone={t.is_local ? "warn" : "ok"}>

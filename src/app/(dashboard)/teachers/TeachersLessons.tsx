@@ -30,7 +30,7 @@ export function TeachersLessons({ rows }: { rows: TeacherLessonRow[] }) {
   }, [rows, query]);
 
   return (
-    <div className="rounded-xl bg-surface-container-lowest p-stack_md shadow-tactile-md">
+    <div className="min-w-0 overflow-x-hidden rounded-xl bg-surface-container-lowest p-stack_md shadow-tactile-md">
       <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
         <h3 className="flex items-center gap-2 font-title-lg text-title-lg text-primary">
           <Icon name="menu_book" className="text-primary" />
@@ -71,14 +71,14 @@ export function TeachersLessons({ rows }: { rows: TeacherLessonRow[] }) {
           </Link>
         </div>
       ) : (
-        <div className="overflow-x-auto">
-          <table className="w-full border-collapse text-right">
+        <div className="min-w-0 overflow-x-hidden">
+          <table className="w-full table-fixed border-collapse text-right">
             <thead>
               <tr className="border-b border-outline-variant bg-background text-on-surface-variant">
                 {["מורה", "מקצוע", "סוג", "כיתה/שכבה", "קהל יעד"].map((h) => (
                   <th
                     key={h}
-                    className="px-4 py-3 font-label-md text-label-md font-medium"
+                    className="px-3 py-3 font-label-md text-label-md font-medium"
                   >
                     {h}
                   </th>
@@ -91,19 +91,19 @@ export function TeachersLessons({ rows }: { rows: TeacherLessonRow[] }) {
                   key={r.id}
                   className="border-b border-surface-variant transition-colors hover:bg-surface-variant/50"
                 >
-                  <td className="px-4 py-3 font-label-md text-label-md text-primary">
+                  <td className="break-words px-3 py-3 font-label-md text-label-md text-primary">
                     {r.teacherName}
                   </td>
-                  <td className="px-4 py-3 font-body-md text-body-md text-on-surface">
+                  <td className="break-words px-3 py-3 font-body-md text-body-md text-on-surface">
                     {r.subject}
                   </td>
-                  <td className="px-4 py-3 font-body-md text-body-md text-on-surface-variant">
+                  <td className="break-words px-3 py-3 font-body-md text-body-md text-on-surface-variant">
                     {r.typeLabel}
                   </td>
-                  <td className="px-4 py-3 font-body-md text-body-md text-on-surface-variant">
+                  <td className="break-words px-3 py-3 font-body-md text-body-md text-on-surface-variant">
                     {r.grade}
                   </td>
-                  <td className="px-4 py-3 font-body-md text-body-md text-on-surface-variant">
+                  <td className="break-words px-3 py-3 font-body-md text-body-md text-on-surface-variant">
                     {r.audience}
                   </td>
                 </tr>

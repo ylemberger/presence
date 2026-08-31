@@ -20,7 +20,12 @@ import {
 } from "@/lib/lessons/autoAssign";
 import { describeAudienceScope } from "@/lib/validation";
 import { formatLessonHours } from "@/lib/lessons/hours";
+import {
+  salaryDisplayFields,
+  uniqueSalaryAssignments,
+} from "@/lib/teachers/salary-display";
 import type { LessonTemplateCard } from "./LessonsCalendar";
+import type { LessonFormTeacher } from "./LessonsForm";
 
 interface Props {
   searchParams: {
@@ -59,7 +64,7 @@ export default async function LessonsPage({ searchParams }: Props) {
   const from = searchParams.from || month.rangeStart;
   const to = searchParams.to || month.rangeEnd;
 
-  const [lessonsRes, teachers, grades, classes, tracks, specializations, ranges, rules, holidays, audienceRes, yearStudentsRes] =
+  const [lessonsRes, teachers, sourceRowsRes, grades, classes, tracks, specializations, ranges, rules, holidays, audienceRes, yearStudentsRes] =
     await Promise.all([
       supabase
         .from("lessons")
@@ -74,7 +79,12 @@ export default async function LessonsPage({ searchParams }: Props) {
         )
         .eq("academic_year_id", activeYear.id)
         .order("day_of_week"),
-      supabase.from("teachers").select("id, full_name").order("full_name"),
+      supabase.from("teachers").select("id, full_name, identity_number").order("full_name"),
+      supabase
+        .from("teacher_source_records")
+        .select(
+          "teacher_id, teacher_identity_number, subject, payload, salary_subject, salary_track, salary_grade_year, salary_semester, salary_meetings"
+        ),
       supabase.from("grades").select("id, name").eq("academic_year_id", activeYear.id).order("name"),
       supabase
         .from("classes")
@@ -242,9 +252,36 @@ export default async function LessonsPage({ searchParams }: Props) {
 
   const occurrenceRows = mapOcc(monthOcc.data ?? []);
 
+  const identityToTeacherId = new Map(
+    (teachers.data ?? []).map((t) => [t.identity_number, t.id])
+  );
+  const sourcesByTeacher = new Map<
+    string,
+    NonNullable<typeof sourceRowsRes.data>
+  >();
+  for (const row of sourceRowsRes.data ?? []) {
+    const teacherId =
+      row.teacher_id ||
+      (row.teacher_identity_number
+        ? identityToTeacherId.get(row.teacher_identity_number)
+        : undefined);
+    if (!teacherId) continue;
+    const list = sourcesByTeacher.get(teacherId) ?? [];
+    list.push(row);
+    sourcesByTeacher.set(teacherId, list);
+  }
+
+  const teachersForForm: LessonFormTeacher[] = (teachers.data ?? []).map((t) => ({
+    id: t.id,
+    full_name: t.full_name,
+    salaryAssignments: uniqueSalaryAssignments(
+      (sourcesByTeacher.get(t.id) ?? []).map((s) => salaryDisplayFields(s))
+    ),
+  }));
+
   const formProps = {
     yearId: activeYear.id,
-    teachers: teachers.data ?? [],
+    teachers: teachersForForm,
     grades: filterFixedGrades(grades.data ?? []),
     classes: classes.data ?? [],
     tracks: tracks.data ?? [],
@@ -286,34 +323,28 @@ export default async function LessonsPage({ searchParams }: Props) {
         }}
       />
 
-      <div className="grid grid-cols-1 gap-gutter xl:grid-cols-12">
-        <div className="flex flex-col gap-gutter xl:col-span-4">
-          <Section icon="edit_note" title="יצירת שיעור חדש" accent="featured">
-            {formProps.teachers.length === 0 && (
-              <p className="mb-3 rounded-lg bg-attendance-late/10 px-3 py-2 font-body-sm text-body-sm text-attendance-late">
-                אין מורות במערכת.{" "}
-                <a href="/teachers" className="font-semibold underline">
-                  הוסיפי מורה
-                </a>{" "}
-                לפני יצירת שיעור.
-              </p>
-            )}
-            <LessonsForm {...formProps} />
-          </Section>
-        </div>
+      <Section icon="edit_note" title="יצירת שיעור חדש" accent="featured">
+        {formProps.teachers.length === 0 && (
+          <p className="mb-3 rounded-lg bg-attendance-late/10 px-3 py-2 font-body-sm text-body-sm text-attendance-late">
+            אין מורות במערכת.{" "}
+            <a href="/teachers" className="font-semibold underline">
+              הוסיפי מורה
+            </a>{" "}
+            לפני יצירת שיעור.
+          </p>
+        )}
+        <LessonsForm {...formProps} />
+      </Section>
 
-        <div className="xl:col-span-8">
-          <LessonsCalendar
-            initialMonthIso={from}
-            occurrences={occurrenceRows}
-            lessons={lessonCards}
-            monthQuery={filterQuery.toString()}
-            holidayDates={holidayDatesByKind(holidays.data ?? []).vacation}
-            cancelledDates={holidayDatesByKind(holidays.data ?? []).cancelled}
-            students={yearStudents}
-          />
-        </div>
-      </div>
+      <LessonsCalendar
+        initialMonthIso={from}
+        occurrences={occurrenceRows}
+        lessons={lessonCards}
+        monthQuery={filterQuery.toString()}
+        holidayDates={holidayDatesByKind(holidays.data ?? []).vacation}
+        cancelledDates={holidayDatesByKind(holidays.data ?? []).cancelled}
+        students={yearStudents}
+      />
     </div>
   );
 }

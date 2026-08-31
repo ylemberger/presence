@@ -10,20 +10,34 @@ const MAX_SUGGESTIONS = 8;
 const fieldClass =
   "w-full rounded-lg border border-outline-variant bg-surface-container-lowest px-3.5 py-2.5 pe-9 text-body-md text-on-surface shadow-tactile-sm transition-colors placeholder:text-on-surface-variant/70 focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary";
 
+export type ComboboxOption = {
+  value: string;
+  label: string;
+  description?: string;
+  keywords?: string;
+};
+
 interface ComboboxProps {
   label?: string;
   name?: string;
   value?: string;
   defaultValue?: string;
   onChange?: (value: string) => void;
-  options: { value: string; label: string }[];
+  options: ComboboxOption[];
   placeholder?: string;
   emptyLabel?: string;
   required?: boolean;
 }
 
+function optionMatches(opt: ComboboxOption, q: string) {
+  if (!q) return true;
+  return [opt.label, opt.description, opt.keywords]
+    .filter(Boolean)
+    .some((part) => part!.toLowerCase().includes(q));
+}
+
 function labelOf(
-  options: { value: string; label: string }[],
+  options: ComboboxOption[],
   value: string,
   emptyLabel: string
 ) {
@@ -65,7 +79,7 @@ export function Combobox({
         extra: Math.max(0, options.length - MAX_SUGGESTIONS),
       };
     }
-    const rows = options.filter((o) => o.label.toLowerCase().includes(q));
+    const rows = options.filter((o) => optionMatches(o, q));
     return {
       shown: rows.slice(0, MAX_SUGGESTIONS),
       extra: Math.max(0, rows.length - MAX_SUGGESTIONS),
@@ -156,7 +170,7 @@ export function Combobox({
             ref={listRef}
             id={listId}
             role="listbox"
-            className="z-[80] overflow-hidden rounded-lg border border-outline-variant bg-surface-container-lowest py-1 shadow-tactile-lg"
+            className="z-[80] max-h-72 overflow-y-auto overflow-x-hidden rounded-lg border border-outline-variant bg-surface-container-lowest py-1 shadow-tactile-lg"
             style={{
               position: "fixed",
               top: box.top,
@@ -183,7 +197,12 @@ export function Combobox({
                     onMouseDown={(ev) => ev.preventDefault()}
                     onClick={() => commit(opt.value)}
                   >
-                    {opt.label}
+                    <span className="block whitespace-normal">{opt.label}</span>
+                    {opt.description ? (
+                      <span className="mt-0.5 block whitespace-normal font-caption text-caption text-on-surface-variant">
+                        {opt.description}
+                      </span>
+                    ) : null}
                   </button>
                 </li>
               ))
