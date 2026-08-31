@@ -78,3 +78,15 @@ export function salarySearchKeywords(fields: SalaryDisplayFields[]): string {
     .filter((v): v is string => Boolean(v))
     .join(" ");
 }
+
+export function salaryAssignmentEntries(
+  f: SalaryDisplayFields
+): { label: string; value: string }[] {
+  return [
+    { label: "מקצוע בסיס", value: f.subject || "—" },
+    { label: "מסלול", value: f.track || "—" },
+    { label: "שנה", value: f.year || "—" },
+    { label: "סמסטר", value: f.semester || "—" },
+    { label: "מפגשים", value: f.meetings != null ? String(f.meetings) : "—" },
+  ];
+}

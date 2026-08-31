@@ -11,6 +11,7 @@ import { describeAudienceScope } from "@/lib/validation";
 import { formatLessonHours } from "@/lib/lessons/hours";
 import {
   formatSalaryAssignment,
+  salaryAssignmentEntries,
   salarySearchKeywords,
   type SalaryDisplayFields,
 } from "@/lib/teachers/salary-display";
@@ -60,8 +61,7 @@ export function LessonsForm({
   const [wholeGrade, setWholeGrade] = useState(false);
   const [lessonNumber, setLessonNumber] = useState("1");
   const [periodCount, setPeriodCount] = useState("1");
-  const [teacherId, setTeacherId] = useState("");
-  const [subject, setSubject] = useState("");
+  const [assignmentKey, setAssignmentKey] = useState("");
 
   const filteredClasses = useMemo(
     () =>
@@ -71,24 +71,47 @@ export function LessonsForm({
     [classes, gradeIds]
   );
 
-  const selectedTeacher = useMemo(
-    () => teachers.find((t) => t.id === teacherId) ?? null,
-    [teachers, teacherId]
+  const assignmentOptions = useMemo(
+    () =>
+      teachers.flatMap((t) => {
+        if (t.salaryAssignments.length === 0) {
+          return [
+            {
+              value: `${t.id}::`,
+              label: t.full_name,
+              description: "אין שיבוצי שכר",
+              keywords: t.full_name,
+            },
+          ];
+        }
+        return t.salaryAssignments.map((a, i) => ({
+          value: `${t.id}::${i}`,
+          label: t.full_name,
+          description: formatSalaryAssignment(a),
+          selectedLabel: a.subject ? `${t.full_name} · ${a.subject}` : t.full_name,
+          keywords: `${t.full_name} ${salarySearchKeywords([a])}`,
+        }));
+      }),
+    [teachers]
   );
-  const teacherSalary = selectedTeacher?.salaryAssignments ?? [];
 
-  function applyTeacher(nextId: string) {
-    setTeacherId(nextId);
-    const next = teachers.find((t) => t.id === nextId);
-    const subjects = [
-      ...new Set(
-        (next?.salaryAssignments ?? [])
-          .map((a) => a.subject?.trim())
-          .filter((v): v is string => Boolean(v))
-      ),
-    ];
-    if (subjects.length === 1) setSubject(subjects[0]);
-  }
+  const picked = useMemo(() => {
+    if (!assignmentKey) return null;
+    const sep = assignmentKey.indexOf("::");
+    if (sep < 0) return null;
+    const teacherId = assignmentKey.slice(0, sep);
+    const indexRaw = assignmentKey.slice(sep + 2);
+    const teacher = teachers.find((t) => t.id === teacherId) ?? null;
+    if (!teacher) return null;
+    const index = indexRaw === "" ? null : Number(indexRaw);
+    const selectedAssignment =
+      index != null && Number.isFinite(index) ? (teacher.salaryAssignments[index] ?? null) : null;
+    return { teacher, teacherId, index, selectedAssignment };
+  }, [assignmentKey, teachers]);
+
+  const teacherId = picked?.teacherId ?? "";
+  const teacherSalary = picked?.teacher.salaryAssignments ?? [];
+  const selectedAssignment = picked?.selectedAssignment ?? null;
 
   const gradeNames = grades.filter((g) => gradeIds.includes(g.id)).map((g) => g.name);
   const classNames = classes.filter((c) => classIds.includes(c.id)).map((c) => c.name);
@@ -116,6 +139,11 @@ export function LessonsForm({
       const fd = new FormData(form);
       fd.set("academic_year_id", yearId);
       fd.set("billing_type", billingType);
+      if (!teacherId) {
+        setError("יש לבחור מורה ושיבוץ");
+        setLoading(false);
+        return;
+      }
       if (gradeIds.length === 0) {
         setError("יש לבחור לפחות שכבה אחת");
         setLoading(false);
@@ -153,8 +181,7 @@ export function LessonsForm({
       setWholeGrade(false);
       setLessonNumber("1");
       setPeriodCount("1");
-      setTeacherId("");
-      setSubject("");
+      setAssignmentKey("");
       setFormEpoch((n) => n + 1);
       onCreated?.();
       router.refresh();
@@ -170,102 +197,89 @@ export function LessonsForm({
       <div>
         <p className="mb-2 font-label-md text-label-md text-primary">מורה ומקצוע</p>
         <div className="grid grid-cols-1 items-start gap-3 lg:grid-cols-12">
-          <div className="flex flex-col gap-3 lg:col-span-4">
+          <div className="flex flex-col gap-3 lg:col-span-5">
+            <input type="hidden" name="teacher_id" value={teacherId} />
             <Combobox
-              label="מורה"
-              name="teacher_id"
-              required
-              value={teacherId}
-              onChange={applyTeacher}
-              options={teachers.map((t) => ({
-                value: t.id,
-                label: t.full_name,
-                description:
-                  t.salaryAssignments.length > 0
-                    ? [
-                        ...new Set(
-                          t.salaryAssignments
-                            .map((a) => a.subject)
-                            .filter((v): v is string => Boolean(v))
-                        ),
-                      ].join(" · ")
-                    : "אין שיבוצי שכר",
-                keywords: salarySearchKeywords(t.salaryAssignments),
-              }))}
-              emptyLabel="בחרי מורה"
+              label="מורה ושיבוץ שכר"
+              value={assignmentKey}
+              onChange={setAssignmentKey}
+              options={assignmentOptions}
+              emptyLabel="בחרי מורה ושיבוץ"
+              placeholder="הקלידי שם מורה, מקצוע או מסלול…"
+              maxSuggestions={12}
             />
-            <Input
-              label="מקצוע"
-              name="subject"
-              required
-              value={subject}
-              onChange={(e) => setSubject(e.target.value)}
-            />
-          </div>
-          <div className="min-w-0 lg:col-span-8">
-            <p className="mb-1.5 font-label-md text-label-md text-on-surface">
-              שיבוצי שכר של המורה
+            <Input label="מקצוע" name="subject" required />
+            <p className="font-caption text-caption text-on-surface-variant">
+              השיבוץ מהשכר הוא לעיון בלבד — ממלאים את פרטי השיעור ידנית.
             </p>
-            {!teacherId ? (
-              <p className="rounded-lg border border-dashed border-outline-variant/50 bg-surface-container-low/60 px-3 py-3 font-caption text-caption text-on-surface-variant">
-                בחרי מורה — יוצגו כאן המקצוע, המסלול, השנה, הסמסטר ומספר המפגשים ממערכת השכר.
-              </p>
-            ) : teacherSalary.length === 0 ? (
-              <p className="rounded-lg border border-dashed border-outline-variant/50 bg-surface-container-low/60 px-3 py-3 font-caption text-caption text-on-surface-variant">
-                אין שיבוצי שכר מיובאים למורה זו.
-              </p>
+          </div>
+          <div className="min-w-0 lg:col-span-7">
+            {!picked ? (
+              <div className="rounded-lg border border-dashed border-outline-variant/50 bg-surface-container-low/60 px-3 py-4">
+                <p className="font-label-md text-label-md text-on-surface">שיבוץ נבחר</p>
+                <p className="mt-1 font-caption text-caption text-on-surface-variant">
+                  בחרי מורה ואת השיבוץ הספציפי שלה. הפרטים יופיעו כאן בצד, כדי לעזור למלא את
+                  השיעור.
+                </p>
+              </div>
             ) : (
-              <div className="max-h-40 overflow-y-auto overflow-x-hidden rounded-lg border border-outline-variant/40">
-                <table className="w-full table-fixed text-right">
-                  <thead>
-                    <tr className="border-b border-outline-variant/40 bg-surface-container-low text-on-surface-variant">
-                      {["מקצוע בסיס", "מסלול", "שנה", "סמסטר", "מפגשים", ""].map((h) => (
-                        <th
-                          key={h || "action"}
-                          className="px-2 py-1.5 font-caption text-caption font-semibold"
-                        >
-                          {h}
-                        </th>
+              <div className="flex flex-col gap-3">
+                <div className="rounded-lg border border-secondary/30 bg-secondary-container/40 p-3">
+                  <p className="font-label-md text-label-md text-primary">
+                    השיבוץ שנבחר · {picked.teacher.full_name}
+                  </p>
+                  {selectedAssignment ? (
+                    <dl className="mt-2 grid grid-cols-2 gap-x-3 gap-y-1 sm:grid-cols-3">
+                      {salaryAssignmentEntries(selectedAssignment).map((item) => (
+                        <div key={item.label} className="min-w-0">
+                          <dt className="font-caption text-caption text-on-surface-variant">
+                            {item.label}
+                          </dt>
+                          <dd className="break-words font-body-sm text-body-sm text-on-surface">
+                            {item.value}
+                          </dd>
+                        </div>
                       ))}
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {teacherSalary.map((row, i) => (
-                      <tr
-                        key={`${row.subject}-${row.track}-${row.year}-${row.semester}-${i}`}
-                        className="border-b border-outline-variant/20 last:border-0"
-                      >
-                        <td className="break-words px-2 py-1.5 font-caption text-caption font-medium text-primary">
-                          {row.subject || "—"}
-                        </td>
-                        <td className="break-words px-2 py-1.5 font-caption text-caption text-on-surface-variant">
-                          {row.track || "—"}
-                        </td>
-                        <td className="break-words px-2 py-1.5 font-caption text-caption text-on-surface-variant">
-                          {row.year || "—"}
-                        </td>
-                        <td className="break-words px-2 py-1.5 font-caption text-caption text-on-surface-variant">
-                          {row.semester || "—"}
-                        </td>
-                        <td className="px-2 py-1.5 font-caption text-caption text-on-surface-variant">
-                          {row.meetings ?? "—"}
-                        </td>
-                        <td className="px-2 py-1.5">
-                          {row.subject ? (
+                    </dl>
+                  ) : (
+                    <p className="mt-2 font-caption text-caption text-on-surface-variant">
+                      אין שיבוצי שכר מיובאים למורה זו.
+                    </p>
+                  )}
+                </div>
+                {teacherSalary.length > 1 && (
+                  <div>
+                    <p className="mb-1.5 font-caption text-caption text-on-surface-variant">
+                      כל השיבוצים של {picked.teacher.full_name} — לחצי כדי לבחור שיבוץ אחר
+                    </p>
+                    <ul className="flex flex-col gap-1">
+                      {teacherSalary.map((row, i) => {
+                        const active = picked.index === i;
+                        return (
+                          <li key={`${row.subject}-${row.track}-${i}`}>
                             <button
                               type="button"
-                              className="whitespace-nowrap font-caption text-caption text-secondary hover:underline"
-                              title={formatSalaryAssignment(row)}
-                              onClick={() => setSubject(row.subject ?? "")}
+                              onClick={() => setAssignmentKey(`${picked.teacherId}::${i}`)}
+                              className={
+                                active
+                                  ? "w-full rounded-md border border-secondary bg-secondary-container/50 px-3 py-2 text-right"
+                                  : "w-full rounded-md border border-outline-variant/40 bg-surface-container-lowest px-3 py-2 text-right hover:border-secondary/40"
+                              }
                             >
-                              למקצוע
+                              <span className="block font-label-md text-label-md text-primary">
+                                {row.subject || "שיבוץ"}
+                                {active ? " · נבחר" : ""}
+                              </span>
+                              <span className="mt-0.5 block break-words font-caption text-caption text-on-surface-variant">
+                                {formatSalaryAssignment(row)}
+                              </span>
                             </button>
-                          ) : null}
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
+                          </li>
+                        );
+                      })}
+                    </ul>
+                  </div>
+                )}
               </div>
             )}
           </div>

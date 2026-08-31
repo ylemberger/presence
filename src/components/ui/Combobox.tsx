@@ -15,6 +15,7 @@ export type ComboboxOption = {
   label: string;
   description?: string;
   keywords?: string;
+  selectedLabel?: string;
 };
 
 interface ComboboxProps {
@@ -27,6 +28,7 @@ interface ComboboxProps {
   placeholder?: string;
   emptyLabel?: string;
   required?: boolean;
+  maxSuggestions?: number;
 }
 
 function optionMatches(opt: ComboboxOption, q: string) {
@@ -42,7 +44,9 @@ function labelOf(
   emptyLabel: string
 ) {
   if (!value) return emptyLabel;
-  return options.find((o) => o.value === value)?.label ?? emptyLabel;
+  const opt = options.find((o) => o.value === value);
+  if (!opt) return emptyLabel;
+  return opt.selectedLabel ?? opt.label;
 }
 
 export function Combobox({
@@ -55,6 +59,7 @@ export function Combobox({
   placeholder = "הקלידי לחיפוש…",
   emptyLabel = "הכל",
   required = false,
+  maxSuggestions = MAX_SUGGESTIONS,
 }: ComboboxProps) {
   const autoId = useId();
   const listId = `${autoId}-list`;
@@ -75,27 +80,30 @@ export function Combobox({
     const q = query.trim().toLowerCase();
     if (!q) {
       return {
-        shown: options.slice(0, MAX_SUGGESTIONS),
-        extra: Math.max(0, options.length - MAX_SUGGESTIONS),
+        shown: options.slice(0, maxSuggestions),
+        extra: Math.max(0, options.length - maxSuggestions),
       };
     }
     const rows = options.filter((o) => optionMatches(o, q));
     return {
-      shown: rows.slice(0, MAX_SUGGESTIONS),
-      extra: Math.max(0, rows.length - MAX_SUGGESTIONS),
+      shown: rows.slice(0, maxSuggestions),
+      extra: Math.max(0, rows.length - maxSuggestions),
     };
-  }, [options, query]);
+  }, [options, query, maxSuggestions]);
 
-  const showList =
-    open &&
-    (query.trim().length > 0 || (options.length > 0 && options.length <= MAX_SUGGESTIONS));
+  const showList = open && options.length > 0;
 
   const updateBox = useCallback(() => {
     const el = inputRef.current;
     if (!el) return;
     const r = el.getBoundingClientRect();
-    setBox({ top: r.bottom + 4, left: r.left, width: r.width });
-  }, []);
+    const wantWide = options.some((o) => o.description);
+    const width = wantWide
+      ? Math.min(Math.max(r.width, 380), Math.max(window.innerWidth - 16, r.width))
+      : r.width;
+    const left = Math.max(8, Math.min(r.left, window.innerWidth - width - 8));
+    setBox({ top: r.bottom + 4, left, width });
+  }, [options]);
 
   function commit(next: string) {
     if (value === undefined) setInternal(next);
