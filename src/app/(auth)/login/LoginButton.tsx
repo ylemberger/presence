@@ -9,14 +9,10 @@ import {
   oauthUrlPointsAtVercel,
 } from "@/lib/auth/oauth-redirect";
 
-type LoginButtonProps = {
-  loginHintEmail?: string | null;
-};
-
 const LOCALHOST_SETUP_ERROR =
   "ההתחברות המקומית לא הושלמה. פני למנהלת המערכת כדי לאפשר חזרה לכתובת המחשב אחרי התחברות.";
 
-export function LoginButton({ loginHintEmail }: LoginButtonProps) {
+export function LoginButton() {
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
@@ -33,7 +29,6 @@ export function LoginButton({ loginHintEmail }: LoginButtonProps) {
           redirectTo: callbackUrl,
           skipBrowserRedirect: true,
           queryParams: {
-            ...(loginHintEmail ? { login_hint: loginHintEmail } : {}),
             prompt: "select_account",
           },
         },

@@ -1,4 +1,3 @@
-import { getLoginHintEmail } from "@/lib/auth/allowed-emails";
 import { LoginButton } from "./LoginButton";
 import { Icon } from "@/components/ui/Icon";
 
@@ -12,8 +11,6 @@ export default function LoginPage({
 }: {
   searchParams: { error?: string };
 }) {
-  const loginHintEmail = getLoginHintEmail();
-
   const error = searchParams.error
     ? (ERROR_MESSAGES[searchParams.error] ?? ERROR_MESSAGES.auth)
     : null;
@@ -72,15 +69,6 @@ export default function LoginPage({
             יש להתחבר עם חשבון מורשה כדי לגשת למערכת ניהול הנוכחות.
           </p>
 
-          {loginHintEmail && (
-            <p
-              className="mb-stack_md w-full rounded-lg border border-outline-variant bg-surface-container-low px-3 py-2 text-body-md text-on-surface"
-              dir="ltr"
-            >
-              {loginHintEmail}
-            </p>
-          )}
-
           {error && (
             <div
               className="mb-stack_md flex w-full items-center justify-center gap-2 rounded-lg border border-error/20 bg-error-container p-3 text-on-error-container"
@@ -91,7 +79,7 @@ export default function LoginPage({
             </div>
           )}
 
-          <LoginButton loginHintEmail={loginHintEmail} />
+          <LoginButton />
 
           <div className="mt-stack_lg flex w-full items-center justify-center gap-2 border-t border-outline-variant/30 pt-stack_md font-caption text-caption text-on-surface-variant">
             <Icon name="verified_user" className="text-base" />

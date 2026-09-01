@@ -20,9 +20,3 @@ export function isAllowedLoginEmail(email: string | null | undefined): boolean {
   if (allowed.size === 0) return false;
   return allowed.has(email.trim().toLowerCase());
 }
-
-/** First allowed email — for Google login_hint UX only. */
-export function getLoginHintEmail(): string | null {
-  const first = getAllowedLoginEmails().values().next().value;
-  return first ?? null;
-}
