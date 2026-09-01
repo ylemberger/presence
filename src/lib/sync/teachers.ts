@@ -75,8 +75,7 @@ function usableMeetings(raw: number | string | null | undefined): number | null 
 }
 
 function shouldImport(row: SalaryRow): boolean {
-  if (row.is_approved === false) return false;
-  return true;
+  return row.is_approved === true;
 }
 
 function isMissingColumnError(error: { message?: string; code?: string } | null): boolean {
@@ -126,14 +125,15 @@ export async function syncTeacherSourceRecords(
   const rows: SalaryRow[] = [];
   const pageSize = 1000;
   const salarySelects = [
-    "id, teacher_name, tz, phone, email, subject, track, year, semester, meetings",
-    "id, teacher_name, tz, phone, email, subject, track, year, semester",
+    "id, teacher_name, tz, phone, email, subject, track, year, semester, meetings, is_approved",
+    "id, teacher_name, tz, phone, email, subject, track, year, semester, is_approved",
   ];
   let salarySelect = salarySelects[0];
   for (let from = 0; ; from += pageSize) {
     const { data: remote, error: remoteError } = await salary.client
       .from("salary_records")
       .select(salarySelect)
+      .eq("is_approved", true)
       .range(from, from + pageSize - 1);
 
     if (remoteError) {
@@ -142,7 +142,7 @@ export async function syncTeacherSourceRecords(
         from -= pageSize;
         continue;
       }
-      throw new Error("לא ניתן לקרוא מורות ממערכת השכר.");
+      throw new Error("לא ניתן לקרוא מורות מאושרות ממערכת השכר.");
     }
 
     const chunk = (remote ?? []) as SalaryRow[];
