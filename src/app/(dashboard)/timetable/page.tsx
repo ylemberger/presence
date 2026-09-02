@@ -6,6 +6,7 @@ import {
   type TimetableEntry,
 } from "@/components/timetable/WeeklyTimetableGrid";
 import { TimetableFilters } from "./TimetableFilters";
+import { formatSubjectLessonLabel } from "@/lib/lessons/subject-label";
 import { Section } from "@/components/ui/Section";
 import { Icon } from "@/components/ui/Icon";
 
@@ -81,13 +82,10 @@ export default async function TimetablePage({ searchParams }: Props) {
       .select("id, name")
       .eq("academic_year_id", activeYear.id)
       .order("start_date"),
-    supabase
-      .from("lessons")
-      .select("subject")
-      .eq("academic_year_id", activeYear.id),
+    supabase.from("subjects").select("name").eq("academic_year_id", activeYear.id).order("name"),
   ]);
 
-  const subjects = [...new Set((subjectsRows ?? []).map((r: any) => r.subject))].sort((a, b) =>
+  const subjects = [...new Set((subjectsRows ?? []).map((r) => r.name))].sort((a, b) =>
     a.localeCompare(b, "he")
   );
 
@@ -109,6 +107,7 @@ export default async function TimetablePage({ searchParams }: Props) {
       `
         id, subject, day_of_week, lesson_number, period_count, billing_type, for_psychology,
         class_id, track_id, specialization_id,
+        subjects(name),
         teacher_teaching_assignments(teacher_id, teachers(full_name)),
         classes(name),
         tracks(name),
@@ -173,7 +172,6 @@ export default async function TimetablePage({ searchParams }: Props) {
   if (params.teacherId) {
     // We'll filter in-memory after join because teacher_teaching_assignments is a nested relation
   }
-  if (params.subject) lessonsQuery = lessonsQuery.eq("subject", params.subject);
   if (params.activityRangeId) lessonsQuery = lessonsQuery.eq("activity_range_id", params.activityRangeId);
   if (forPsychology !== undefined) lessonsQuery = lessonsQuery.eq("for_psychology", forPsychology);
 
@@ -181,15 +179,22 @@ export default async function TimetablePage({ searchParams }: Props) {
 
   const entries: TimetableEntry[] = (lessonsRows ?? [])
     .filter((l: any) => {
-      if (!params.teacherId) return true;
-      const teacherId = (l.teacher_teaching_assignments as any)?.teacher_id ?? null;
-      return teacherId === params.teacherId;
+      if (params.teacherId) {
+        const teacherId = (l.teacher_teaching_assignments as any)?.teacher_id ?? null;
+        if (teacherId !== params.teacherId) return false;
+      }
+      if (params.subject) {
+        const parent = Array.isArray(l.subjects) ? l.subjects[0]?.name : l.subjects?.name;
+        if (parent !== params.subject && l.subject !== params.subject) return false;
+      }
+      return true;
     })
     .map((l: any) => {
       const teacher = (l.teacher_teaching_assignments as any)?.teachers as
         | { full_name: string }
         | null;
       const teacherId = (l.teacher_teaching_assignments as any)?.teacher_id ?? null;
+      const parent = Array.isArray(l.subjects) ? l.subjects[0]?.name : l.subjects?.name;
 
       let audienceLabel = "";
       if (l.billing_type === "specialization") {
@@ -203,7 +208,7 @@ export default async function TimetablePage({ searchParams }: Props) {
 
       return {
         lessonId: l.id,
-        subject: l.subject,
+        subject: formatSubjectLessonLabel(parent, l.subject),
         teacherName: teacher?.full_name ?? "",
         teacherId,
         dayOfWeek: l.day_of_week,

@@ -20,10 +20,15 @@ import {
 } from "@/lib/lessons/autoAssign";
 import { describeAudienceScope } from "@/lib/validation";
 import { formatLessonHours } from "@/lib/lessons/hours";
+import { formatSubjectLessonLabel } from "@/lib/lessons/subject-label";
 import {
   salaryDisplayFields,
   uniqueSalaryAssignments,
 } from "@/lib/teachers/salary-display";
+import {
+  fetchTeacherSourceRecords,
+  groupSourceRowsByTeacher,
+} from "@/lib/teachers/source-records";
 import type { LessonTemplateCard } from "./LessonsCalendar";
 import type { LessonFormTeacher } from "./LessonsForm";
 
@@ -64,13 +69,14 @@ export default async function LessonsPage({ searchParams }: Props) {
   const from = searchParams.from || month.rangeStart;
   const to = searchParams.to || month.rangeEnd;
 
-  const [lessonsRes, teachers, sourceRowsRes, grades, classes, tracks, specializations, ranges, rules, holidays, audienceRes, yearStudentsRes] =
+  const [lessonsRes, teachers, sourceRows, grades, classes, tracks, specializations, subjectsRes, ranges, rules, holidays, audienceRes, yearStudentsRes] =
     await Promise.all([
       supabase
         .from("lessons")
         .select(
           `
           *,
+          subjects(name),
           teacher_teaching_assignments(teacher_id, teachers(full_name)),
           classes(name),
           tracks(name),
@@ -80,11 +86,7 @@ export default async function LessonsPage({ searchParams }: Props) {
         .eq("academic_year_id", activeYear.id)
         .order("day_of_week"),
       supabase.from("teachers").select("id, full_name, identity_number").order("full_name"),
-      supabase
-        .from("teacher_source_records")
-        .select(
-          "teacher_id, teacher_identity_number, subject, payload, salary_subject, salary_track, salary_grade_year, salary_semester, salary_meetings"
-        ),
+      fetchTeacherSourceRecords(supabase),
       supabase.from("grades").select("id, name").eq("academic_year_id", activeYear.id).order("name"),
       supabase
         .from("classes")
@@ -97,6 +99,7 @@ export default async function LessonsPage({ searchParams }: Props) {
         .select("id, name")
         .eq("academic_year_id", activeYear.id)
         .order("name"),
+      supabase.from("subjects").select("id, name").eq("academic_year_id", activeYear.id).order("name"),
       supabase.from("activity_ranges").select("*").eq("academic_year_id", activeYear.id),
       supabase.from("attendance_rules").select("*"),
       supabase
@@ -112,6 +115,7 @@ export default async function LessonsPage({ searchParams }: Props) {
     ]);
 
   type LessonRow = Lesson & {
+    subjects?: { name: string } | { name: string }[] | null;
     teacher_teaching_assignments?: unknown;
     classes?: unknown;
     tracks?: unknown;
@@ -130,7 +134,10 @@ export default async function LessonsPage({ searchParams }: Props) {
     ) {
       return false;
     }
-    if (searchParams.subject && l.subject !== searchParams.subject) return false;
+    if (searchParams.subject) {
+      const parentName = one<{ name: string }>(l.subjects)?.name ?? "";
+      if (parentName !== searchParams.subject && l.subject !== searchParams.subject) return false;
+    }
     if (searchParams.teacherId) {
       const assignment = one<{ teacher_id: string }>(l.teacher_teaching_assignments);
       if (assignment?.teacher_id !== searchParams.teacherId) return false;
@@ -139,7 +146,8 @@ export default async function LessonsPage({ searchParams }: Props) {
   });
 
   const filteredIds = filteredLessons.map((l) => l.id);
-  const subjects = [...new Set(allLessons.map((l) => l.subject))].sort((a, b) =>
+  const yearSubjects = subjectsRes.data ?? [];
+  const subjects = [...new Set(yearSubjects.map((s) => s.name))].sort((a, b) =>
     a.localeCompare(b, "he")
   );
 
@@ -198,6 +206,7 @@ export default async function LessonsPage({ searchParams }: Props) {
     });
     return {
       ...l,
+      subject: formatSubjectLessonLabel(one<{ name: string }>(l.subjects)?.name, l.subject),
       teacherName,
       gradeName: gradeNames.join(" / ") || (gradeById.get(l.grade_id) ?? ""),
       audienceLabel,
@@ -207,7 +216,7 @@ export default async function LessonsPage({ searchParams }: Props) {
   });
 
   const occurrenceSelect =
-    "id, occurrence_date, status, notes, lesson_id, lessons!inner(subject, academic_year_id)";
+    "id, occurrence_date, status, notes, lesson_id, lessons!inner(subject, academic_year_id, subjects(name))";
 
   const monthOcc =
     filteredIds.length === 0
@@ -242,7 +251,10 @@ export default async function LessonsPage({ searchParams }: Props) {
         status: o.status,
         notes: o.notes,
         lesson_id: o.lesson_id,
-        subject: one<{ subject: string }>(o.lessons)?.subject ?? lesson?.subject ?? "",
+        subject: formatSubjectLessonLabel(
+          one<{ name: string }>(lesson?.subjects)?.name,
+          lesson?.subject ?? ""
+        ),
         teacherName: one<{ full_name: string }>(assignment?.teachers)?.full_name ?? "",
         hoursLabel: lesson
           ? formatLessonHours(lesson.lesson_number, lesson.period_count ?? 1)
@@ -255,21 +267,7 @@ export default async function LessonsPage({ searchParams }: Props) {
   const identityToTeacherId = new Map(
     (teachers.data ?? []).map((t) => [t.identity_number, t.id])
   );
-  const sourcesByTeacher = new Map<
-    string,
-    NonNullable<typeof sourceRowsRes.data>
-  >();
-  for (const row of sourceRowsRes.data ?? []) {
-    const teacherId =
-      row.teacher_id ||
-      (row.teacher_identity_number
-        ? identityToTeacherId.get(row.teacher_identity_number)
-        : undefined);
-    if (!teacherId) continue;
-    const list = sourcesByTeacher.get(teacherId) ?? [];
-    list.push(row);
-    sourcesByTeacher.set(teacherId, list);
-  }
+  const sourcesByTeacher = groupSourceRowsByTeacher(sourceRows, identityToTeacherId);
 
   const teachersForForm: LessonFormTeacher[] = (teachers.data ?? []).map((t) => ({
     id: t.id,
@@ -286,6 +284,7 @@ export default async function LessonsPage({ searchParams }: Props) {
     classes: classes.data ?? [],
     tracks: tracks.data ?? [],
     specializations: specializations.data ?? [],
+    subjects: yearSubjects,
     ranges: ranges.data ?? [],
     rules: rules.data ?? [],
   };
@@ -323,9 +322,14 @@ export default async function LessonsPage({ searchParams }: Props) {
         }}
       />
 
-      <Section icon="edit_note" title="יצירת שיעור חדש" accent="featured">
+      <Section
+        icon="edit_note"
+        title="יצירת שיעור חדש"
+        accent="featured"
+        titleClassName="font-headline-md text-headline-md"
+      >
         {formProps.teachers.length === 0 && (
-          <p className="mb-3 rounded-lg bg-attendance-late/10 px-3 py-2 font-body-sm text-body-sm text-attendance-late">
+          <p className="mb-3 rounded-lg bg-attendance-late/10 px-4 py-3 font-body-lg text-body-lg text-attendance-late">
             אין מורות במערכת.{" "}
             <a href="/teachers" className="font-semibold underline">
               הוסיפי מורה

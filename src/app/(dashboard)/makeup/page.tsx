@@ -11,6 +11,7 @@ import {
 } from "@/lib/attendance/calculator";
 import { isDateInRange } from "@/lib/dates/hebrew";
 import type { AttendanceStatus } from "@/types/database";
+import { formatSubjectLessonLabel } from "@/lib/lessons/subject-label";
 import { MakeupForms } from "./MakeupForms";
 import { MakeupFilters, type MakeupFilterStatus } from "./MakeupFilters";
 import { Icon } from "@/components/ui/Icon";
@@ -65,7 +66,7 @@ export default async function MakeupPage({ searchParams }: Props) {
     supabase
       .from("makeup_exams")
       .select(
-        "*, students(full_name), lessons(subject, class_id, track_id, specialization_id, teacher_teaching_assignments(teacher_id, teachers(full_name)), attendance_rules(name, max_allowed_absence_percent))"
+        "*, students(full_name), lessons(subject, subject_id, class_id, track_id, specialization_id, subjects(name), teacher_teaching_assignments(teacher_id, teachers(full_name)), attendance_rules(name, max_allowed_absence_percent))"
       )
       .eq("academic_year_id", activeYear.id)
       .order("created_at", { ascending: false }),
@@ -89,7 +90,7 @@ export default async function MakeupPage({ searchParams }: Props) {
     supabase
       .from("lessons")
       .select(
-        "id, subject, attendance_rule_id, attendance_rules(max_allowed_absence_percent), class_id, track_id, specialization_id, teacher_teaching_assignments(teacher_id, teachers(full_name))"
+        "id, subject, subject_id, attendance_rule_id, attendance_rules(max_allowed_absence_percent), class_id, track_id, specialization_id, subjects(name), teacher_teaching_assignments(teacher_id, teachers(full_name))"
       )
       .eq("academic_year_id", activeYear.id)
       .order("subject"),
@@ -110,6 +111,15 @@ export default async function MakeupPage({ searchParams }: Props) {
     supabase.from("attendance").select("student_id, lesson_occurrence_id, status"),
   ]);
 
+  function parentName(lesson: {
+    subject: string;
+    subjects?: unknown;
+  }): string {
+    const embedded = lesson.subjects as { name: string } | { name: string }[] | null | undefined;
+    const name = Array.isArray(embedded) ? embedded[0]?.name : embedded?.name;
+    return (name ?? "").trim() || lesson.subject;
+  }
+
   const suggestions: Array<{
     studentId: string;
     studentName: string;
@@ -127,7 +137,7 @@ export default async function MakeupPage({ searchParams }: Props) {
   }> = [];
 
   const existingKeys = new Set(
-    (existing ?? []).map((e) => `${e.student_id}::${e.lesson_id}`)
+    (existing ?? []).map((e) => `${e.student_id}::${(e as { subject_id?: string }).subject_id || e.lesson_id}`)
   );
   const studentName = new Map((students ?? []).map((s) => [s.id, s.full_name]));
   const attendanceByStudent = new Map<string, typeof attendance>();
@@ -137,24 +147,54 @@ export default async function MakeupPage({ searchParams }: Props) {
     attendanceByStudent.set(a.student_id, list);
   }
 
+  const groups = new Map<
+    string,
+    {
+      studentId: string;
+      subjectId: string;
+      links: NonNullable<typeof lessonLinks>;
+      lessonsInGroup: NonNullable<typeof lessons>;
+    }
+  >();
   for (const link of lessonLinks ?? []) {
     const lesson = (lessons ?? []).find((l) => l.id === link.lesson_id);
     if (!lesson) continue;
-    const max =
-      Number(
-        (lesson.attendance_rules as unknown as { max_allowed_absence_percent: number } | null)
-          ?.max_allowed_absence_percent
-      ) || 20;
+    const subjectId = (lesson as { subject_id?: string }).subject_id || lesson.id;
+    const key = `${link.student_id}::${subjectId}`;
+    const g = groups.get(key) ?? {
+      studentId: link.student_id,
+      subjectId,
+      links: [] as NonNullable<typeof lessonLinks>,
+      lessonsInGroup: [] as NonNullable<typeof lessons>,
+    };
+    g.links.push(link);
+    if (!g.lessonsInGroup.some((l) => l.id === lesson.id)) g.lessonsInGroup.push(lesson);
+    groups.set(key, g);
+  }
 
-    const studentAtt = attendanceByStudent.get(link.student_id) ?? [];
-    const studentPlacements = (placements ?? []).filter((p) => p.student_id === link.student_id);
+  for (const g of groups.values()) {
+    const percents = g.lessonsInGroup.map(
+      (lesson) =>
+        Number(
+          (lesson.attendance_rules as unknown as { max_allowed_absence_percent: number } | null)
+            ?.max_allowed_absence_percent
+        ) || 20
+    );
+    const max = Math.min(...percents);
+    const studentAtt = attendanceByStudent.get(g.studentId) ?? [];
+    const studentPlacements = (placements ?? []).filter((p) => p.student_id === g.studentId);
+    const lessonIds = new Set(g.lessonsInGroup.map((l) => l.id));
+    const linkByLesson = new Map(g.links.map((link) => [link.lesson_id, link]));
+
     const eligible = (occurrences ?? [])
-      .filter((o) => o.lesson_id === link.lesson_id)
+      .filter((o) => lessonIds.has(o.lesson_id))
       .filter((o) => {
         const date = o.occurrence_date;
         const inPlacement = studentPlacements.some((p) =>
           isDateInRange(date, p.start_date, p.end_date)
         );
+        const link = linkByLesson.get(o.lesson_id);
+        if (!link) return false;
         const inLesson = isDateInRange(date, link.start_date, link.end_date);
         return inPlacement && inLesson;
       })
@@ -174,14 +214,15 @@ export default async function MakeupPage({ searchParams }: Props) {
     if (makeup.tier === "none") continue;
     if (makeup.requiredExams === 0 && makeup.tier !== "blocked") continue;
 
-    const key = `${link.student_id}::${link.lesson_id}`;
+    const key = `${g.studentId}::${g.subjectId}`;
     if (existingKeys.has(key)) continue;
 
+    const lesson = g.lessonsInGroup[0];
     suggestions.push({
-      studentId: link.student_id,
-      studentName: studentName.get(link.student_id) ?? "תלמידה",
-      lessonId: link.lesson_id,
-      subject: lesson.subject,
+      studentId: g.studentId,
+      studentName: studentName.get(g.studentId) ?? "תלמידה",
+      lessonId: lesson.id,
+      subject: parentName(lesson),
       classId: (lesson as unknown as { class_id: string | null }).class_id ?? null,
       trackId: (lesson as unknown as { track_id: string | null }).track_id ?? null,
       specializationId: (lesson as unknown as { specialization_id: string | null }).specialization_id ?? null,
@@ -201,7 +242,7 @@ export default async function MakeupPage({ searchParams }: Props) {
   const blockedSuggestions = suggestions.filter((s) => s.tier === "blocked");
   const normalSuggestions = suggestions.filter((s) => s.tier !== "blocked");
 
-  const subjects = [...new Set((lessons ?? []).map((l: any) => l.subject))].sort((a, b) =>
+  const subjects = [...new Set((lessons ?? []).map((l) => parentName(l)))].sort((a, b) =>
     a.localeCompare(b, "he")
   );
 
@@ -240,6 +281,7 @@ export default async function MakeupPage({ searchParams }: Props) {
           track_id?: string | null;
           specialization_id?: string | null;
           subject?: string;
+          subjects?: { name: string } | { name: string }[] | null;
           teacher_teaching_assignments?: { teacher_id?: string | null } | null;
         }
       | undefined;
@@ -256,7 +298,10 @@ export default async function MakeupPage({ searchParams }: Props) {
       const teacherId = (lesson?.teacher_teaching_assignments as any)?.teacher_id ?? null;
       if (teacherId !== params.teacherId) return false;
     }
-    if (params.subject && lesson?.subject !== params.subject) return false;
+    if (params.subject) {
+      const name = lesson ? parentName({ subject: lesson.subject ?? "", subjects: lesson.subjects }) : "";
+      if (name !== params.subject && (lesson?.subject ?? "") !== params.subject) return false;
+    }
 
     return true;
   });
@@ -314,8 +359,9 @@ export default async function MakeupPage({ searchParams }: Props) {
                         ?.full_name ?? "—"}
                     </TableCell>
                     <TableCell className="text-on-surface-variant">
-                      {(row.lessons as unknown as { subject: string } | null)
-                        ?.subject ?? "—"}
+                      {row.lessons
+                        ? parentName(row.lessons as { subject: string; subjects?: unknown })
+                        : "—"}
                     </TableCell>
                     <TableCell className="text-on-surface-variant">
                       {row.required_exams}
@@ -397,7 +443,10 @@ export default async function MakeupPage({ searchParams }: Props) {
             <MakeupForms
               yearId={activeYear.id}
               students={students ?? []}
-              lessons={(lessons ?? []).map((l) => ({ id: l.id, subject: l.subject }))}
+              lessons={(lessons ?? []).map((l) => ({
+                id: l.id,
+                subject: formatSubjectLessonLabel(parentName(l), l.subject),
+              }))}
             />
           </Section>
 

@@ -23,7 +23,7 @@ import {
   startOfWeekSunday,
   todayIso,
 } from "@/lib/dates/hebrew";
-import { formatLessonOptionLabel } from "@/lib/lessons/hours";
+import { formatLessonHours, formatLessonOptionLabel } from "@/lib/lessons/hours";
 import { ABSENCE_REASONS, type AbsenceReason } from "@/lib/attendance/reasons";
 import { Icon } from "@/components/ui/Icon";
 import { PrintButton } from "@/components/ui/PrintButton";
@@ -55,8 +55,11 @@ export interface DayLessonRow {
   teacherName: string;
   lessonId: string;
   lessonNumber?: number;
+  periodCount?: number;
+  groupLabel?: string;
   studentCount: number;
   markedCount: number;
+  linkedOccurrenceIds?: string[];
 }
 
 interface Option {
@@ -129,6 +132,12 @@ type UndoItem = {
 
 function keyOf(studentId: string, occurrenceId: string): DraftKey {
   return `${studentId}::${occurrenceId}`;
+}
+
+function linkedOccurrenceIds(row: DayLessonRow | undefined, fallbackId?: string): string[] {
+  if (row?.linkedOccurrenceIds?.length) return row.linkedOccurrenceIds;
+  if (fallbackId) return [fallbackId];
+  return row?.id ? [row.id] : [];
 }
 
 export function AttendanceBoard({
@@ -217,10 +226,16 @@ export function AttendanceBoard({
       setReasons({});
       return;
     }
+    const linked = linkedOccurrenceIds(
+      dayOccurrences.find((o) => o.id === activeOccurrenceId),
+      activeOccurrenceId
+    );
     const byKey = new Map<string, { status: AttendanceStatus; reason: AbsenceReason | null }>();
     for (const a of attendance) {
-      if (a.lesson_occurrence_id === activeOccurrenceId) {
-        byKey.set(keyOf(a.student_id, a.lesson_occurrence_id), {
+      if (!linked.includes(a.lesson_occurrence_id)) continue;
+      const k = keyOf(a.student_id, activeOccurrenceId);
+      if (!byKey.has(k) || a.lesson_occurrence_id === activeOccurrenceId) {
+        byKey.set(k, {
           status: a.status as AttendanceStatus,
           reason: (a.reason as AbsenceReason | null) ?? null,
         });
@@ -241,7 +256,7 @@ export function AttendanceBoard({
 
     const firstUnmarked = lessonStudents.findIndex((s) => !byKey.has(keyOf(s.id, activeOccurrenceId)));
     setFocusedIdx(firstUnmarked >= 0 ? firstUnmarked : 0);
-  }, [lessonStudents, attendance, activeOccurrenceId]);
+  }, [lessonStudents, attendance, activeOccurrenceId, dayOccurrences]);
 
   useEffect(() => {
     if (dayOccurrences.length === 1 && !selectedOccurrenceId) {
@@ -388,12 +403,26 @@ export function AttendanceBoard({
 
       if (previous === null) bumpMarkedCount(occurrenceId, 1);
 
-      const result = await upsertAttendanceAction(
-        sid,
-        occurrenceId,
-        status,
-        status === "absent" ? reason ?? null : null
+      const block = dayOccurrences.find(
+        (o) => o.id === occurrenceId || o.linkedOccurrenceIds?.includes(occurrenceId)
       );
+      const ids = linkedOccurrenceIds(block, occurrenceId);
+      const result =
+        ids.length > 1
+          ? await bulkAttendanceAction(
+              ids.map((id) => ({
+                studentId: sid,
+                occurrenceId: id,
+                status,
+                reason: status === "absent" ? reason ?? null : null,
+              }))
+            )
+          : await upsertAttendanceAction(
+              sid,
+              occurrenceId,
+              status,
+              status === "absent" ? reason ?? null : null
+            );
       if (result && "error" in result && result.error) {
         if (previous === null) bumpMarkedCount(occurrenceId, -1);
         setDraft((prev) => ({ ...prev, [k]: previous }));
@@ -420,7 +449,7 @@ export function AttendanceBoard({
       }
     },
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [draft, reasons, lessonStudents]
+    [draft, reasons, lessonStudents, dayOccurrences]
   );
 
   async function undoLast() {
@@ -445,15 +474,18 @@ export function AttendanceBoard({
     setBulkSaving(true);
     setMessage(null);
 
-    const updates = lessonStudents.map((s) => ({
-      studentId: s.id,
-      occurrenceId: activeOccurrenceId,
-      status,
-    }));
+    const ids = linkedOccurrenceIds(activeLesson, activeOccurrenceId);
+    const updates = lessonStudents.flatMap((s) =>
+      ids.map((occurrenceId) => ({
+        studentId: s.id,
+        occurrenceId,
+        status,
+      }))
+    );
 
     const next = { ...draft };
-    for (const u of updates) {
-      next[keyOf(u.studentId, u.occurrenceId)] = status;
+    for (const s of lessonStudents) {
+      next[keyOf(s.id, activeOccurrenceId)] = status;
     }
     setDraft(next);
     setDayOccurrences((prev) =>
@@ -467,7 +499,7 @@ export function AttendanceBoard({
       setMessage(result.error);
       router.refresh();
     } else {
-      setMessage(`נשמר — ${updates.length} תלמידות`);
+      setMessage(`נשמר — ${lessonStudents.length} תלמידות`);
     }
     setBulkSaving(false);
   }
@@ -482,18 +514,21 @@ export function AttendanceBoard({
       return;
     }
     setBulkSaving(true);
-    const updates = unmarked.map((s) => ({
-      studentId: s.id,
-      occurrenceId: activeOccurrenceId,
-      status: "absent" as const,
-    }));
+    const ids = linkedOccurrenceIds(activeLesson, activeOccurrenceId);
+    const updates = unmarked.flatMap((s) =>
+      ids.map((occurrenceId) => ({
+        studentId: s.id,
+        occurrenceId,
+        status: "absent" as const,
+      }))
+    );
     const next = { ...draft };
-    for (const u of updates) next[keyOf(u.studentId, u.occurrenceId)] = "absent";
+    for (const s of unmarked) next[keyOf(s.id, activeOccurrenceId)] = "absent";
     setDraft(next);
     setDayOccurrences((prev) =>
       prev.map((o) =>
         o.id === activeOccurrenceId
-          ? { ...o, markedCount: Math.min(o.studentCount, o.markedCount + updates.length) }
+          ? { ...o, markedCount: Math.min(o.studentCount, o.markedCount + unmarked.length) }
           : o
       )
     );
@@ -502,7 +537,7 @@ export function AttendanceBoard({
       setMessage(result.error);
       router.refresh();
     } else {
-      setMessage(`סומנו ${updates.length} נעדרות (מי שלא סומנה)`);
+      setMessage(`סומנו ${unmarked.length} נעדרות (מי שלא סומנה)`);
     }
     setBulkSaving(false);
   }
@@ -511,7 +546,10 @@ export function AttendanceBoard({
     if (!activeOccurrenceId) return;
     setCopying(true);
     setMessage(null);
-    const result = await copyPreviousAttendanceAction(activeOccurrenceId);
+    const result = await copyPreviousAttendanceAction(
+      activeOccurrenceId,
+      linkedOccurrenceIds(activeLesson, activeOccurrenceId)
+    );
     if (result && "error" in result && result.error) {
       setMessage(result.error);
     } else if (result && "copied" in result) {
@@ -567,7 +605,22 @@ export function AttendanceBoard({
     if (status !== "absent") return;
     const nextReason = reason || null;
     setReasons((prev) => ({ ...prev, [k]: nextReason }));
-    await upsertAttendanceAction(sid, occurrenceId, "absent", nextReason);
+    const ids = linkedOccurrenceIds(
+      dayOccurrences.find((o) => o.id === occurrenceId || o.linkedOccurrenceIds?.includes(occurrenceId)),
+      occurrenceId
+    );
+    if (ids.length > 1) {
+      await bulkAttendanceAction(
+        ids.map((id) => ({
+          studentId: sid,
+          occurrenceId: id,
+          status: "absent" as const,
+          reason: nextReason,
+        }))
+      );
+    } else {
+      await upsertAttendanceAction(sid, occurrenceId, "absent", nextReason);
+    }
   }
 
   function onRowKeyDown(e: React.KeyboardEvent, idx: number) {
@@ -863,7 +916,9 @@ export function AttendanceBoard({
           ) : (
             <div className="grid grid-cols-2 gap-1.5 sm:grid-cols-3">
               {dayOccurrences.map((o) => {
-                const selected = o.id === activeOccurrenceId;
+                const selected =
+                  o.id === activeOccurrenceId ||
+                  Boolean(activeOccurrenceId && o.linkedOccurrenceIds?.includes(activeOccurrenceId));
                 const complete = o.studentCount > 0 && o.markedCount >= o.studentCount;
                 const hasNote = lessonIdsWithNotes.includes(o.lessonId);
                 return (
@@ -880,10 +935,13 @@ export function AttendanceBoard({
                   >
                     <span className="truncate font-label-md text-label-md text-primary">
                       {o.subject}
-                      {o.lessonNumber ? ` · ${o.lessonNumber}` : ""}
+                      {o.lessonNumber
+                        ? ` · ${formatLessonHours(o.lessonNumber, o.periodCount ?? 1)}`
+                        : ""}
                     </span>
-                    <span className="truncate font-caption text-caption text-on-surface-variant">
+                    <span className="line-clamp-2 font-caption text-caption text-on-surface-variant">
                       {o.teacherName || "ללא מורה"}
+                      {o.groupLabel ? ` · ${o.groupLabel}` : ""}
                     </span>
                     <span className="font-caption text-caption text-on-surface-variant">
                       {o.markedCount}/{o.studentCount}
@@ -926,9 +984,13 @@ export function AttendanceBoard({
                 <h3 className="truncate font-title-lg text-title-lg text-primary">
                   {activeLesson.subject}
                   {activeLesson.lessonNumber
-                    ? ` · שיעור ${activeLesson.lessonNumber}`
+                    ? ` · ${formatLessonHours(activeLesson.lessonNumber, activeLesson.periodCount ?? 1)}`
                     : ""}
                 </h3>
+                <p className="mt-0.5 truncate font-body-md text-body-md text-on-surface-variant">
+                  {activeLesson.teacherName || "ללא מורה"}
+                  {activeLesson.groupLabel ? ` · ${activeLesson.groupLabel}` : ""}
+                </p>
                 <div className="mt-1 max-w-[14rem]">
                   <HebrewDateInput
                     name="attendance_sheet_date"
@@ -1129,6 +1191,7 @@ export function AttendanceBoard({
         <AttendanceBlankSheet
           subject={activeLesson.subject}
           teacherName={activeLesson.teacherName}
+          groupLabel={activeLesson.groupLabel}
           date={selectedDate}
           students={lessonStudents}
         />

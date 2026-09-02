@@ -21,6 +21,7 @@ import Link from "next/link";
 import { Icon } from "@/components/ui/Icon";
 import { ATTENDANCE_STATUS_LABELS, BILLING_TYPE_LABELS, DAY_OF_WEEK_LABELS } from "@/lib/constants";
 import { formatLessonHours } from "@/lib/lessons/hours";
+import { formatSubjectLessonLabel } from "@/lib/lessons/subject-label";
 
 interface Props {
   searchParams: {
@@ -42,6 +43,11 @@ interface Props {
 function one<T>(v: unknown): T | null {
   if (!v) return null;
   return (Array.isArray(v) ? v[0] : v) as T;
+}
+
+function lessonParentName(lesson: { subject: string; subjects?: unknown }): string {
+  const name = one<{ name: string }>(lesson.subjects)?.name;
+  return (name ?? "").trim() || lesson.subject;
 }
 
 function teacherFullName(ta: unknown): string {
@@ -157,17 +163,17 @@ export default async function ReportsPage({ searchParams }: Props) {
     supabase
       .from("lessons")
       .select(
-        `id, subject, class_id, track_id, specialization_id, teacher_teaching_assignment_id, day_of_week, lesson_number, period_count, billing_type,
-         teacher_teaching_assignments(teacher_id, teachers(full_name))`
+        `id, subject, subject_id, class_id, track_id, specialization_id, teacher_teaching_assignment_id, day_of_week, lesson_number, period_count, billing_type,
+         subjects(name), teacher_teaching_assignments(teacher_id, teachers(full_name))`
       )
       .eq("academic_year_id", activeYear.id),
     supabase.from("students").select("id, full_name").eq("is_active", true).order("full_name"),
     supabase.from("attendance_rules").select("id, name, max_allowed_absence_percent").order("name"),
   ]);
 
-  const subjects = [...new Set((yearLessons ?? []).map((l) => l.subject))].sort((a, b) =>
-    a.localeCompare(b, "he")
-  );
+  const subjects = [
+    ...new Set((yearLessons ?? []).map((l) => lessonParentName(l))),
+  ].sort((a, b) => a.localeCompare(b, "he"));
 
   const selectedRule = (rules ?? []).find((r) => r.id === params.ruleId);
   const threshold = selectedRule
@@ -244,7 +250,9 @@ export default async function ReportsPage({ searchParams }: Props) {
       l.id,
       {
         id: l.id,
-        subject: l.subject,
+        subjectId: (l as { subject_id?: string }).subject_id ?? l.id,
+        subject: lessonParentName(l),
+        lessonName: l.subject,
         teacherName: teacherFullName(l.teacher_teaching_assignments),
         dayOfWeek: l.day_of_week,
         lessonNumber: l.lesson_number,
@@ -267,7 +275,9 @@ export default async function ReportsPage({ searchParams }: Props) {
       });
     }
     if (params.subject) {
-      lessons = lessons.filter((l) => l.subject === params.subject);
+      lessons = lessons.filter(
+        (l) => lessonParentName(l) === params.subject || l.subject === params.subject
+      );
     }
     if (params.lessonId) {
       lessons = lessons.filter((l) => l.id === params.lessonId);
@@ -420,7 +430,9 @@ export default async function ReportsPage({ searchParams }: Props) {
                 ? BILLING_TYPE_LABELS[meta.billingType as keyof typeof BILLING_TYPE_LABELS]
                 : "";
             const extra = la.assignment_type === "manual" ? "חריג" : "";
-            return [meta.subject, billing, extra].filter(Boolean).join(" · ");
+            return [meta.subject, meta.lessonName !== meta.subject ? meta.lessonName : "", billing, extra]
+              .filter(Boolean)
+              .join(" · ");
           })
           .filter((v): v is string => Boolean(v))
           .join(" | ");
@@ -505,20 +517,49 @@ export default async function ReportsPage({ searchParams }: Props) {
       for (const l of lessons) lessonIdsToShow.add(l.id);
     }
 
+    const grouped = new Map<
+      string,
+      {
+        representativeId: string;
+        name: string;
+        lessonNames: Set<string>;
+        teachers: Set<string>;
+        dayOfWeek: number;
+        lessonCount: number;
+        items: EligibleOccurrence[];
+      }
+    >();
     for (const lessonId of lessonIdsToShow) {
       const meta = lessonCatalog.get(lessonId);
       if (!meta) continue;
-      const summary = summarizeAttendance(lessonItems.get(lessonId) ?? []);
+      const key = meta.subjectId;
+      const bucket = grouped.get(key) ?? {
+        representativeId: lessonId,
+        name: meta.subject,
+        lessonNames: new Set<string>(),
+        teachers: new Set<string>(),
+        dayOfWeek: meta.dayOfWeek,
+        lessonCount: 0,
+        items: [] as EligibleOccurrence[],
+      };
+      bucket.lessonCount += 1;
+      bucket.lessonNames.add(meta.lessonName);
+      if (meta.teacherName) bucket.teachers.add(meta.teacherName);
+      bucket.items.push(...(lessonItems.get(lessonId) ?? []));
+      grouped.set(key, bucket);
+    }
+
+    for (const bucket of grouped.values()) {
+      const summary = summarizeAttendance(bucket.items);
       const evaluated = evaluateAbsenceAgainstRule(summary.absencePercent, threshold);
+      const extra = [...bucket.lessonNames].filter((n) => n !== bucket.name);
       lessonRows.push({
-        lessonId,
-        subject: meta.subject,
-        teacherName: meta.teacherName,
-        dayLabel: dayLabel(meta.dayOfWeek),
-        billingLabel:
-          meta.billingType && meta.billingType in BILLING_TYPE_LABELS
-            ? BILLING_TYPE_LABELS[meta.billingType as keyof typeof BILLING_TYPE_LABELS]
-            : "",
+        lessonId: bucket.representativeId,
+        subject: bucket.name,
+        teacherName: [...bucket.teachers].join(" · "),
+        dayLabel:
+          bucket.lessonCount > 1 ? `${bucket.lessonCount} שיעורים` : dayLabel(bucket.dayOfWeek),
+        billingLabel: extra.join(", "),
         totalRequired: summary.totalRequired,
         presentOnlyCount: summary.presentOnlyCount,
         lateCount: summary.lateCount,
@@ -674,7 +715,7 @@ export default async function ReportsPage({ searchParams }: Props) {
           lessons={(yearLessons ?? []).map((l) => ({
             id: l.id,
             label: lessonOptionLabel(
-              l.subject,
+              formatSubjectLessonLabel(lessonParentName(l), l.subject),
               teacherFullName(l.teacher_teaching_assignments),
               l.day_of_week,
               l.lesson_number,
@@ -920,7 +961,7 @@ export default async function ReportsPage({ searchParams }: Props) {
               <Table
                 headers={[
                   "מקצוע",
-                  "סוג",
+                  "שיעורים",
                   "מורה",
                   "יום",
                   "מופעים",

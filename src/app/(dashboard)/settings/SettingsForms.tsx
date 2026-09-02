@@ -80,11 +80,14 @@ export function SettingsForms({ type, yearId, grades, createAction }: SettingsFo
           />
         ))}
 
-      {(type === "track" || type === "specialization") && (
+      {(type === "track" || type === "specialization" || type === "subject") && (
         <Input
-          label={type === "track" ? "שם מסלול" : "שם התמחות"}
+          label={
+            type === "track" ? "שם מסלול" : type === "subject" ? "שם מקצוע" : "שם התמחות"
+          }
           name="name"
           required
+          placeholder={type === "subject" ? "למשל יסודות הבית" : undefined}
         />
       )}
 

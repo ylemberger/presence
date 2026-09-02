@@ -27,6 +27,7 @@ import {
 import { applyStudentImportRows } from "@/lib/students/importApply";
 import type { AttendanceStatus, HolidayKind } from "@/types/database";
 import { todayIso } from "@/lib/dates/hebrew";
+import { resolveOrCreateSubject } from "@/lib/lessons/subjects";
 import {
   isError,
   parseLessonBilling,
@@ -136,6 +137,7 @@ async function createYearEntity(
     | "classes"
     | "tracks"
     | "specializations"
+    | "subjects"
     | "activity_ranges",
   data: Record<string, unknown>
 ) {
@@ -194,6 +196,19 @@ export async function createSpecializationAction(formData: FormData) {
     academic_year_id: formData.get("academic_year_id"),
     name: formData.get("name"),
   });
+}
+
+export async function createSubjectAction(formData: FormData) {
+  const name = String(formData.get("name") ?? "").trim();
+  if (!name) return { error: "יש להזין שם מקצוע" };
+  const result = await createYearEntity("subjects", {
+    academic_year_id: formData.get("academic_year_id"),
+    name,
+  });
+  if (!("error" in result && result.error)) {
+    revalidatePath("/lessons");
+  }
+  return result;
 }
 
 export async function createActivityRangeAction(formData: FormData) {
@@ -391,6 +406,7 @@ async function deleteEntityWithChecks(
     | "classes"
     | "tracks"
     | "specializations"
+    | "subjects"
     | "activity_ranges"
     | "attendance_rules",
   id: string,
@@ -462,6 +478,18 @@ export async function deleteSpecializationAction(id: string) {
       { table: "teacher_teaching_assignments", column: "specialization_id" },
     ],
     "התמחות"
+  );
+}
+
+export async function deleteSubjectAction(id: string) {
+  return deleteEntityWithChecks(
+    "subjects",
+    id,
+    [
+      { table: "lessons", column: "subject_id" },
+      { table: "makeup_exams", column: "subject_id" },
+    ],
+    "מקצוע"
   );
 }
 
@@ -566,6 +594,19 @@ export async function updateSpecializationAction(id: string, formData: FormData)
     .eq("id", id);
   if (error) return { error: error.message };
   revalidatePath("/settings");
+  return { success: true };
+}
+
+export async function updateSubjectAction(id: string, formData: FormData) {
+  const actionAuth = await createActionClient();
+  if ("error" in actionAuth) return { error: actionAuth.error };
+  const supabase = actionAuth.supabase;
+  const name = String(formData.get("name") ?? "").trim();
+  if (!name) return { error: "יש להזין שם מקצוע" };
+  const { error } = await supabase.from("subjects").update({ name }).eq("id", id);
+  if (error) return { error: error.message };
+  revalidatePath("/settings");
+  revalidatePath("/lessons");
   return { success: true };
 }
 
@@ -1031,7 +1072,10 @@ async function insertTeachingAssignmentFromForm(
   if (isError(teacherId)) return teacherId;
   const yearId = requireId(formData.get("academic_year_id"), "שנה אקדמית");
   if (isError(yearId)) return yearId;
-  const subject = requireText(formData.get("subject"), "מקצוע");
+  const subject = requireText(
+    formData.get("lesson_name") || formData.get("subject"),
+    "שם שיעור"
+  );
   if (isError(subject)) return subject;
   const gradeIds = parseLessonGradeIds(formData);
   if ("error" in gradeIds) return gradeIds;
@@ -1116,6 +1160,21 @@ async function buildLessonPayload(formData: FormData) {
   const actionAuth = await createActionClient();
   if ("error" in actionAuth) return { error: actionAuth.error };
   const supabase = actionAuth.supabase;
+
+  const lessonName = requireText(
+    formData.get("lesson_name") || formData.get("subject"),
+    "שם שיעור"
+  );
+  if (isError(lessonName)) return lessonName;
+
+  const subjectResolved = await resolveOrCreateSubject(
+    supabase,
+    yearId,
+    String(formData.get("subject_id") ?? ""),
+    String(formData.get("new_subject_name") ?? "")
+  );
+  if ("error" in subjectResolved) return subjectResolved;
+
   let teachingId = String(formData.get("teacher_teaching_assignment_id") ?? "").trim();
   let teaching: {
     subject: string;
@@ -1166,7 +1225,8 @@ async function buildLessonPayload(formData: FormData) {
   return {
     academic_year_id: yearId,
     teacher_teaching_assignment_id: teachingId,
-    subject: teaching.subject,
+    subject_id: subjectResolved.id,
+    subject: lessonName,
     grade_id: gradeId,
     class_id: teaching.class_id,
     track_id: teaching.track_id,
@@ -1287,6 +1347,7 @@ export async function createLessonAction(formData: FormData) {
   revalidatePath("/lessons");
   revalidatePath("/attendance");
   revalidatePath("/teachers");
+  revalidatePath("/settings");
   return { success: true };
 }
 
@@ -1451,15 +1512,28 @@ export async function upsertMakeupExamAction(formData: FormData) {
   const actionAuth = await createActionClient();
   if ("error" in actionAuth) return { error: actionAuth.error };
   const supabase = actionAuth.supabase;
+
+  let subjectId = String(formData.get("subject_id") ?? "").trim();
+  if (!subjectId) {
+    const { data: lesson } = await supabase
+      .from("lessons")
+      .select("subject_id")
+      .eq("id", lessonId)
+      .maybeSingle();
+    subjectId = lesson?.subject_id ?? "";
+  }
+  if (!subjectId) return { error: "לא נמצא מקצוע לשיעור שנבחר" };
+
   const { error } = await supabase.from("makeup_exams").upsert(
     {
       academic_year_id: yearId,
       student_id: studentId,
       lesson_id: lessonId,
+      subject_id: subjectId,
       required_exams: required,
       status: "open",
     },
-    { onConflict: "student_id,lesson_id" }
+    { onConflict: "student_id,subject_id" }
   );
   if (error) return { error: error.message };
   revalidatePath("/makeup");
@@ -1792,7 +1866,10 @@ export async function fillAttendanceToTargetAction(
 }
 
 /** Copy attendance statuses from the previous occurrence of the same lesson. */
-export async function copyPreviousAttendanceAction(occurrenceId: string) {
+export async function copyPreviousAttendanceAction(
+  occurrenceId: string,
+  alsoOccurrenceIds: string[] = []
+) {
   const actionAuth = await createActionClient();
   if ("error" in actionAuth) return { error: actionAuth.error };
   const supabase = actionAuth.supabase;
@@ -1845,12 +1922,19 @@ export async function copyPreviousAttendanceAction(occurrenceId: string) {
 
   if (records.length === 0) return { error: "אין תלמידות משותפות להעתקה" };
 
+  const targetIds = [...new Set([occurrenceId, ...alsoOccurrenceIds.filter(Boolean)])];
+  const mirrored = targetIds.flatMap((id) =>
+    records.map((r) => ({ ...r, lesson_occurrence_id: id }))
+  );
+
   const { error } = await supabase
     .from("attendance")
-    .upsert(records, { onConflict: "student_id,lesson_occurrence_id" });
+    .upsert(mirrored, { onConflict: "student_id,lesson_occurrence_id" });
   if (error) return { error: error.message };
 
-  await tryMarkOccurrenceComplete(supabase, occurrenceId);
+  for (const id of targetIds) {
+    await tryMarkOccurrenceComplete(supabase, id);
+  }
   revalidatePath("/attendance");
   return { success: true, copied: records.length };
 }

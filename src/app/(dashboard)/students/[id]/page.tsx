@@ -9,6 +9,7 @@ import { getActiveAcademicYear } from "@/lib/utils";
 import { filterFixedGrades } from "@/lib/years/grades";
 import { formatDate, isDateInRange } from "@/lib/dates/hebrew";
 import { summarizeAttendance, evaluateAbsenceAgainstRule } from "@/lib/attendance/calculator";
+import { formatSubjectLessonLabel } from "@/lib/lessons/subject-label";
 import { StudentDetailForms } from "./StudentDetailForms";
 import { StudentLessonAssignments } from "./StudentLessonAssignments";
 import { StudentPersonalNote } from "./StudentPersonalNote";
@@ -125,6 +126,7 @@ export default async function StudentDetailPage({ params }: Props) {
   }> = [];
   let subjectStats: Array<{
     subject: string;
+    lessonNames: string;
     totalRequired: number;
     absentCount: number;
     lateCount: number;
@@ -154,7 +156,7 @@ export default async function StudentDetailPage({ params }: Props) {
       supabase.from("specializations").select("*").eq("academic_year_id", activeYear.id),
       supabase
         .from("lessons")
-        .select("id, subject, day_of_week, lesson_number, period_count, billing_type")
+        .select("id, subject, subject_id, day_of_week, lesson_number, period_count, billing_type, subjects(name)")
         .eq("academic_year_id", activeYear.id)
         .order("subject"),
       supabase
@@ -162,7 +164,7 @@ export default async function StudentDetailPage({ params }: Props) {
         .select(
           "*, lessons!inner(" +
             "id, subject, academic_year_id, day_of_week, lesson_number, billing_type, for_psychology, " +
-            "class_id, track_id, specialization_id, " +
+            "class_id, track_id, specialization_id, subjects(name), " +
             "teacher_teaching_assignments(teacher_id, teachers(full_name)), " +
             "classes(name), tracks(name), specializations(name)" +
           ")"
@@ -179,7 +181,19 @@ export default async function StudentDetailPage({ params }: Props) {
       tracks: tracks.data ?? [],
       specializations: specializations.data ?? [],
     };
-    lessons = yearLessons.data ?? [];
+    lessons = (yearLessons.data ?? []).map((l) => {
+      const parent = Array.isArray(l.subjects)
+        ? l.subjects[0]?.name
+        : (l.subjects as { name?: string } | null)?.name;
+      return {
+        id: l.id,
+        subject: formatSubjectLessonLabel(parent, l.subject),
+        day_of_week: l.day_of_week,
+        lesson_number: l.lesson_number,
+        period_count: l.period_count,
+        billing_type: l.billing_type,
+      };
+    });
     const slaRows = (sla.data ?? []) as unknown as Array<{
       id: string;
       lesson_id: string;
@@ -189,6 +203,7 @@ export default async function StudentDetailPage({ params }: Props) {
       lessons: {
         id: string;
         subject: string;
+        subjects?: { name: string } | { name: string }[] | null;
         day_of_week: number;
         lesson_number: number;
         billing_type: string;
@@ -205,7 +220,12 @@ export default async function StudentDetailPage({ params }: Props) {
     lessonAssignments = slaRows.map((row) => ({
       id: row.id,
       lesson_id: row.lesson_id,
-      subject: row.lessons.subject,
+      subject: formatSubjectLessonLabel(
+        (Array.isArray(row.lessons.subjects)
+          ? row.lessons.subjects[0]?.name
+          : row.lessons.subjects?.name) ?? null,
+        row.lessons.subject
+      ),
       assignment_type: row.assignment_type,
       start_date: row.start_date,
       end_date: row.end_date,
@@ -225,7 +245,10 @@ export default async function StudentDetailPage({ params }: Props) {
 
       return {
         lessonId: l.id,
-        subject: l.subject,
+        subject: formatSubjectLessonLabel(
+          (Array.isArray(l.subjects) ? l.subjects[0]?.name : l.subjects?.name) ?? null,
+          l.subject
+        ),
         teacherName,
         teacherId: (l.teacher_teaching_assignments as any)?.teacher_id ?? null,
         dayOfWeek: l.day_of_week,
@@ -242,7 +265,7 @@ export default async function StudentDetailPage({ params }: Props) {
         supabase
           .from("lesson_occurrences")
           .select(
-            "id, occurrence_date, status, lesson_id, lessons!inner(id, subject, academic_year_id, attendance_rule_id, attendance_rules(name, max_allowed_absence_percent))"
+            "id, occurrence_date, status, lesson_id, lessons!inner(id, subject, subject_id, academic_year_id, attendance_rule_id, attendance_rules(name, max_allowed_absence_percent), subjects(name))"
           )
           .eq("lessons.academic_year_id", activeYear.id)
           .in("lesson_id", lessonIds)
@@ -257,6 +280,8 @@ export default async function StudentDetailPage({ params }: Props) {
       const bySubject = new Map<
         string,
         {
+          name: string;
+          lessonNames: Set<string>;
           rows: Array<{
             occurrenceId: string;
             occurrenceDate: string;
@@ -287,20 +312,29 @@ export default async function StudentDetailPage({ params }: Props) {
 
         const lesson = o.lessons as unknown as {
           subject: string;
+          subject_id: string | null;
+          subjects: { name: string } | { name: string }[] | null;
           attendance_rules: { name: string; max_allowed_absence_percent: number } | null;
         } | null;
-        const subject = lesson?.subject ?? "ללא";
+        const parentName = Array.isArray(lesson?.subjects)
+          ? lesson?.subjects[0]?.name
+          : lesson?.subjects?.name;
+        const key = lesson?.subject_id || `lesson:${o.lesson_id}`;
+        const displayName = parentName?.trim() || lesson?.subject || "ללא";
         const rule = lesson?.attendance_rules ?? null;
         const maxAllowed =
           rule?.max_allowed_absence_percent != null
             ? Number(rule.max_allowed_absence_percent)
             : null;
 
-        const bucket = bySubject.get(subject) ?? {
+        const bucket = bySubject.get(key) ?? {
+          name: displayName,
+          lessonNames: new Set<string>(),
           rows: [],
           maxAllowed: null,
           ruleName: null,
         };
+        if (lesson?.subject) bucket.lessonNames.add(lesson.subject);
         bucket.rows.push({
           occurrenceId: o.id,
           occurrenceDate: date,
@@ -313,14 +347,16 @@ export default async function StudentDetailPage({ params }: Props) {
             bucket.maxAllowed == null ? maxAllowed : Math.min(bucket.maxAllowed, maxAllowed);
           bucket.ruleName = rule?.name ?? bucket.ruleName;
         }
-        bySubject.set(subject, bucket);
+        bySubject.set(key, bucket);
       }
 
-      subjectStats = Array.from(bySubject.entries()).map(([subject, bucket]) => {
+      subjectStats = Array.from(bySubject.entries()).map(([, bucket]) => {
         const summary = summarizeAttendance(bucket.rows);
         const evaluated = evaluateAbsenceAgainstRule(summary.absencePercent, bucket.maxAllowed);
+        const extraLessons = [...bucket.lessonNames].filter((n) => n !== bucket.name);
         return {
-          subject,
+          subject: bucket.name,
+          lessonNames: extraLessons.join(", "),
           ...summary,
           maxAllowed: bucket.maxAllowed,
           ruleName: bucket.ruleName,
@@ -533,7 +569,12 @@ export default async function StudentDetailPage({ params }: Props) {
                 {subjectStats.map((row) => (
                   <TableRow key={row.subject}>
                     <TableCell className="font-semibold text-primary">
-                      {row.subject}
+                      <div>{row.subject}</div>
+                      {row.lessonNames ? (
+                        <div className="mt-0.5 font-caption text-caption font-normal text-on-surface-variant">
+                          {row.lessonNames}
+                        </div>
+                      ) : null}
                     </TableCell>
                     <TableCell className="text-on-surface-variant">
                       {row.totalRequired}

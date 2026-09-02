@@ -1,4 +1,5 @@
 import { BILLING_TYPE_LABELS, DAY_OF_WEEK_LABELS } from "@/lib/constants";
+import { formatSubjectLessonLabel } from "@/lib/lessons/subject-label";
 
 export function occupiedLessonNumbers(start: number, count = 1): number[] {
   const n = Math.max(1, count);
@@ -13,12 +14,13 @@ export function formatLessonHours(start: number, count = 1): string {
 
 export function formatLessonOptionLabel(lesson: {
   subject: string;
+  subjectName?: string | null;
   day_of_week?: number | null;
   lesson_number?: number | null;
   period_count?: number | null;
   billing_type?: string | null;
 }): string {
-  const parts = [lesson.subject];
+  const parts = [formatSubjectLessonLabel(lesson.subjectName, lesson.subject)];
   if (lesson.day_of_week != null) {
     const day = DAY_OF_WEEK_LABELS[lesson.day_of_week];
     if (day) parts.push(`יום ${day}`);

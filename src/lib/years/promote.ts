@@ -108,7 +108,7 @@ async function ensureClass(
  * - Grade א: copy class names from previous א (template for new first-years)
  * - Grade ב: classes from previous א with יג→יד
  * - Grade ג: single class "שנה ג"
- * - Tracks / specializations: copy by name
+ * - Tracks / specializations / subjects: copy by name
  */
 export async function copyYearStructure(
   fromYearId: string,
@@ -127,6 +127,8 @@ export async function copyYearStructure(
     { data: toTracks },
     { data: fromSpecs },
     { data: toSpecs },
+    { data: fromSubjects },
+    { data: toSubjects },
   ] = await Promise.all([
     supabase.from("grades").select("id, name").eq("academic_year_id", fromYearId),
     supabase.from("grades").select("id, name").eq("academic_year_id", toYearId),
@@ -136,6 +138,8 @@ export async function copyYearStructure(
     supabase.from("tracks").select("name").eq("academic_year_id", toYearId),
     supabase.from("specializations").select("name").eq("academic_year_id", fromYearId),
     supabase.from("specializations").select("name").eq("academic_year_id", toYearId),
+    supabase.from("subjects").select("name").eq("academic_year_id", fromYearId),
+    supabase.from("subjects").select("name").eq("academic_year_id", toYearId),
   ]);
 
   const fromGradeName = new Map((fromGrades ?? []).map((g) => [g.id, g.name]));
@@ -196,6 +200,12 @@ export async function copyYearStructure(
     .filter((s) => !haveSpec.has(s.name))
     .map((s) => ({ academic_year_id: toYearId, name: s.name }));
   if (specRows.length) await supabase.from("specializations").insert(specRows);
+
+  const haveSubject = new Set((toSubjects ?? []).map((s) => s.name));
+  const subjectRows = (fromSubjects ?? [])
+    .filter((s) => !haveSubject.has(s.name))
+    .map((s) => ({ academic_year_id: toYearId, name: s.name }));
+  if (subjectRows.length) await supabase.from("subjects").insert(subjectRows);
 }
 
 type PlacementRow = {

@@ -8,6 +8,7 @@ import {
   summarizeAttendance,
 } from "@/lib/attendance/calculator";
 import { getPendingAttendanceSummary, EMPTY_PENDING_SUMMARY } from "@/lib/attendance/pending";
+import { formatSubjectLessonLabel } from "@/lib/lessons/subject-label";
 import { AttendanceReminderBanner } from "@/components/attendance/AttendanceReminderBanner";
 import { cn } from "@/lib/cn";
 import { Icon } from "@/components/ui/Icon";
@@ -70,7 +71,7 @@ export default async function DashboardPage() {
           `id, lesson_id,
            lessons!inner(
              subject, academic_year_id, attendance_rule_id, class_id, lesson_number,
-             classes(name),
+             classes(name), subjects(name),
              teacher_teaching_assignments(teachers(full_name))
            )`
         )
@@ -107,10 +108,14 @@ export default async function DashboardPage() {
       todayLessons = todayRows.map((o) => {
         const lesson = o.lessons as unknown as {
           subject: string;
+          subjects?: { name: string } | { name: string }[] | null;
           lesson_number: number | null;
           teacher_teaching_assignments: { teachers: { full_name: string } | null } | null;
           classes: { name: string } | null;
         };
+        const parent = Array.isArray(lesson.subjects)
+          ? lesson.subjects[0]?.name
+          : lesson.subjects?.name;
         let total = 0;
         for (const link of links ?? []) {
           if (link.lesson_id !== o.lesson_id) continue;
@@ -122,7 +127,7 @@ export default async function DashboardPage() {
         const marked = (att ?? []).filter((a) => a.lesson_occurrence_id === o.id).length;
         return {
           id: o.id,
-          subject: lesson.subject,
+          subject: formatSubjectLessonLabel(parent, lesson.subject),
           teacherName: lesson.teacher_teaching_assignments?.teachers?.full_name ?? "",
           className: lesson.classes?.name ?? null,
           lessonNumber: lesson.lesson_number ?? null,

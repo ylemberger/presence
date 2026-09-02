@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
@@ -15,7 +15,7 @@ import {
   salarySearchKeywords,
   type SalaryDisplayFields,
 } from "@/lib/teachers/salary-display";
-import type { ActivityRange, AttendanceRule } from "@/types/database";
+import type { ActivityRange, AttendanceRule, Subject } from "@/types/database";
 import { Icon } from "@/components/ui/Icon";
 import { MultiSelect } from "@/components/ui/MultiSelect";
 
@@ -32,6 +32,7 @@ export interface LessonsFormProps {
   classes: { id: string; name: string; grade_id: string }[];
   tracks: { id: string; name: string }[];
   specializations: { id: string; name: string }[];
+  subjects: Pick<Subject, "id" | "name">[];
   ranges: ActivityRange[];
   rules: AttendanceRule[];
   onCreated?: () => void;
@@ -44,6 +45,7 @@ export function LessonsForm({
   classes,
   tracks,
   specializations,
+  subjects,
   ranges,
   rules,
   onCreated,
@@ -193,13 +195,14 @@ export function LessonsForm({
   }
 
   return (
-    <form key={formEpoch} onSubmit={handleSubmit} className="flex flex-col gap-4">
+    <form key={formEpoch} onSubmit={handleSubmit} className="flex flex-col gap-6">
       <div>
-        <p className="mb-2 font-label-md text-label-md text-primary">מורה ומקצוע</p>
-        <div className="grid grid-cols-1 items-start gap-3 lg:grid-cols-12">
-          <div className="flex flex-col gap-3 lg:col-span-5">
+        <p className="mb-3 font-headline-md text-headline-md text-primary">מורה, מקצוע ושיעור</p>
+        <div className="grid grid-cols-1 items-start gap-4 lg:grid-cols-12">
+          <div className="flex flex-col gap-4 lg:col-span-5">
             <input type="hidden" name="teacher_id" value={teacherId} />
             <Combobox
+              fieldSize="lg"
               label="מורה ושיבוץ שכר"
               value={assignmentKey}
               onChange={setAssignmentKey}
@@ -208,51 +211,71 @@ export function LessonsForm({
               placeholder="הקלידי שם מורה, מקצוע או מסלול…"
               maxSuggestions={12}
             />
-            <Input label="מקצוע" name="subject" required />
-            <p className="font-caption text-caption text-on-surface-variant">
-              השיבוץ מהשכר הוא לעיון בלבד — ממלאים את פרטי השיעור ידנית.
+            <Combobox
+              fieldSize="lg"
+              label="מקצוע"
+              name="subject_id"
+              options={subjects.map((s) => ({ value: s.id, label: s.name }))}
+              emptyLabel="בחרי מקצוע"
+              placeholder="למשל יסודות הבית"
+            />
+            <Input
+              fieldSize="lg"
+              label="מקצוע חדש (אם חסר ברשימה)"
+              name="new_subject_name"
+              placeholder="יוצר מקצוע חדש במקום הבחירה למעלה"
+            />
+            <Input
+              fieldSize="lg"
+              label="שם השיעור"
+              name="lesson_name"
+              required
+              placeholder="למשל בישול"
+            />
+            <p className="font-body-md text-body-md text-on-surface-variant">
+              כמה שיעורים תחת אותו מקצוע נספרים יחד בנוכחות. השיבוץ מהשכר הוא לעיון בלבד.
             </p>
           </div>
           <div className="min-w-0 lg:col-span-7">
             {!picked ? (
-              <div className="rounded-lg border border-dashed border-outline-variant/50 bg-surface-container-low/60 px-3 py-4">
-                <p className="font-label-md text-label-md text-on-surface">שיבוץ נבחר</p>
-                <p className="mt-1 font-caption text-caption text-on-surface-variant">
+              <div className="rounded-lg border border-dashed border-outline-variant/50 bg-surface-container-low/60 px-4 py-5">
+                <p className="font-title-lg text-title-lg text-on-surface">שיבוץ נבחר</p>
+                <p className="mt-2 font-body-md text-body-md text-on-surface-variant">
                   בחרי מורה ואת השיבוץ הספציפי שלה. הפרטים יופיעו כאן בצד, כדי לעזור למלא את
                   השיעור.
                 </p>
               </div>
             ) : (
-              <div className="flex flex-col gap-3">
-                <div className="rounded-lg border border-secondary/30 bg-secondary-container/40 p-3">
-                  <p className="font-label-md text-label-md text-primary">
+              <div className="flex flex-col gap-4">
+                <div className="rounded-lg border border-secondary/30 bg-secondary-container/40 p-4">
+                  <p className="font-title-lg text-title-lg text-primary">
                     השיבוץ שנבחר · {picked.teacher.full_name}
                   </p>
                   {selectedAssignment ? (
-                    <dl className="mt-2 grid grid-cols-2 gap-x-3 gap-y-1 sm:grid-cols-3">
+                    <dl className="mt-3 grid grid-cols-2 gap-x-4 gap-y-2 sm:grid-cols-3">
                       {salaryAssignmentEntries(selectedAssignment).map((item) => (
                         <div key={item.label} className="min-w-0">
-                          <dt className="font-caption text-caption text-on-surface-variant">
+                          <dt className="font-body-md text-body-md text-on-surface-variant">
                             {item.label}
                           </dt>
-                          <dd className="break-words font-body-sm text-body-sm text-on-surface">
+                          <dd className="break-words font-body-lg text-body-lg text-on-surface">
                             {item.value}
                           </dd>
                         </div>
                       ))}
                     </dl>
                   ) : (
-                    <p className="mt-2 font-caption text-caption text-on-surface-variant">
+                    <p className="mt-2 font-body-md text-body-md text-on-surface-variant">
                       אין שיבוצי שכר מיובאים למורה זו.
                     </p>
                   )}
                 </div>
                 {teacherSalary.length > 1 && (
                   <div>
-                    <p className="mb-1.5 font-caption text-caption text-on-surface-variant">
+                    <p className="mb-2 font-body-md text-body-md text-on-surface-variant">
                       כל השיבוצים של {picked.teacher.full_name} — לחצי כדי לבחור שיבוץ אחר
                     </p>
-                    <ul className="flex flex-col gap-1">
+                    <ul className="flex flex-col gap-1.5">
                       {teacherSalary.map((row, i) => {
                         const active = picked.index === i;
                         return (
@@ -262,15 +285,15 @@ export function LessonsForm({
                               onClick={() => setAssignmentKey(`${picked.teacherId}::${i}`)}
                               className={
                                 active
-                                  ? "w-full rounded-md border border-secondary bg-secondary-container/50 px-3 py-2 text-right"
-                                  : "w-full rounded-md border border-outline-variant/40 bg-surface-container-lowest px-3 py-2 text-right hover:border-secondary/40"
+                                  ? "w-full rounded-md border border-secondary bg-secondary-container/50 px-4 py-3 text-right"
+                                  : "w-full rounded-md border border-outline-variant/40 bg-surface-container-lowest px-4 py-3 text-right hover:border-secondary/40"
                               }
                             >
-                              <span className="block font-label-md text-label-md text-primary">
+                              <span className="block font-title-lg text-title-lg text-primary">
                                 {row.subject || "שיבוץ"}
                                 {active ? " · נבחר" : ""}
                               </span>
-                              <span className="mt-0.5 block break-words font-caption text-caption text-on-surface-variant">
+                              <span className="mt-1 block break-words font-body-md text-body-md text-on-surface-variant">
                                 {formatSalaryAssignment(row)}
                               </span>
                             </button>
@@ -287,10 +310,11 @@ export function LessonsForm({
       </div>
 
       <div>
-        <p className="mb-2 font-label-md text-label-md text-primary">קהל יעד</p>
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
+        <p className="mb-3 font-headline-md text-headline-md text-primary">קהל יעד</p>
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
           <div className="sm:col-span-2 xl:col-span-4">
             <MultiSelect
+              fieldSize="lg"
               label="שכבות"
               name="grade_ids"
               values={gradeIds}
@@ -308,6 +332,7 @@ export function LessonsForm({
             />
           </div>
           <Select
+            fieldSize="lg"
             label="סוג שיעור"
             name="billing_type_ui"
             required
@@ -321,6 +346,7 @@ export function LessonsForm({
           {billingType === "specialization" ? (
             <div className="sm:col-span-2 xl:col-span-3">
               <MultiSelect
+                fieldSize="lg"
                 label="התמחויות"
                 name="specialization_ids"
                 values={specializationIds}
@@ -331,7 +357,7 @@ export function LessonsForm({
             </div>
           ) : (
             <>
-              <label className="flex items-center gap-2 font-label-md text-label-md text-on-surface sm:col-span-2 xl:col-span-4">
+              <label className="flex items-center gap-3 font-title-lg text-title-lg text-on-surface sm:col-span-2 xl:col-span-4">
                 <input
                   type="checkbox"
                   checked={forPsychology}
@@ -344,13 +370,13 @@ export function LessonsForm({
                       setWholeGrade(false);
                     }
                   }}
-                  className="rounded border-outline-variant"
+                  className="h-5 w-5 rounded border-outline-variant"
                 />
                 מיועד לפסיכולוגיה
               </label>
               {!forPsychology && (
                 <>
-                  <label className="flex items-center gap-2 font-label-md text-label-md text-on-surface sm:col-span-2 xl:col-span-4">
+                  <label className="flex items-center gap-3 font-title-lg text-title-lg text-on-surface sm:col-span-2 xl:col-span-4">
                     <input
                       type="checkbox"
                       checked={wholeGrade}
@@ -362,13 +388,14 @@ export function LessonsForm({
                           setSpecializationIds([]);
                         }
                       }}
-                      className="rounded border-outline-variant"
+                      className="h-5 w-5 rounded border-outline-variant"
                     />
                     כל השכבות שנבחרו
                   </label>
                   {!wholeGrade && (
                     <>
                       <MultiSelect
+                        fieldSize="lg"
                         label="כיתות"
                         name="class_ids"
                         values={classIds}
@@ -383,6 +410,7 @@ export function LessonsForm({
                         hint="אופציונלי. אם נבחר — חייבת להיות באחת הכיתות."
                       />
                       <MultiSelect
+                        fieldSize="lg"
                         label="מסלולים"
                         name="track_ids"
                         values={trackIds}
@@ -392,6 +420,7 @@ export function LessonsForm({
                       />
                       <div className="sm:col-span-2 xl:col-span-2">
                         <MultiSelect
+                          fieldSize="lg"
                           label="התמחויות (רשות)"
                           name="specialization_ids"
                           values={specializationIds}
@@ -407,7 +436,7 @@ export function LessonsForm({
             </>
           )}
         </div>
-        <p className="mt-2 rounded-lg bg-surface-container-low px-3 py-2 font-caption text-caption text-on-surface-variant">
+        <p className="mt-3 rounded-lg bg-surface-container-low px-4 py-3 font-body-md text-body-md text-on-surface-variant">
           {forPsychology
             ? "ישויכו תלמידות המסומנות כפסיכולוגיה באחת השכבות שנבחרו."
             : billingType === "specialization"
@@ -420,15 +449,17 @@ export function LessonsForm({
       </div>
 
       <div>
-        <p className="mb-2 font-label-md text-label-md text-primary">לוח זמנים ונוכחות</p>
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-5">
+        <p className="mb-3 font-headline-md text-headline-md text-primary">לוח זמנים ונוכחות</p>
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-5">
           <Select
+            fieldSize="lg"
             label="יום בשבוע"
             name="day_of_week"
             required
             options={DAY_OF_WEEK_LABELS.map((l, i) => ({ value: String(i), label: l }))}
           />
           <Select
+            fieldSize="lg"
             label="שעת התחלה"
             name="lesson_number"
             required
@@ -440,6 +471,7 @@ export function LessonsForm({
             }))}
           />
           <Select
+            fieldSize="lg"
             label="מספר שעות רצופות"
             name="period_count"
             required
@@ -451,6 +483,7 @@ export function LessonsForm({
             }))}
           />
           <Combobox
+            fieldSize="lg"
             label="טווח פעילות"
             name="activity_range_id"
             required
@@ -458,6 +491,7 @@ export function LessonsForm({
             emptyLabel="בחרי טווח"
           />
           <Combobox
+            fieldSize="lg"
             label="כלל נוכחות"
             name="attendance_rule_id"
             required
@@ -468,14 +502,14 @@ export function LessonsForm({
             emptyLabel="בחרי כלל"
           />
         </div>
-        <p className="mt-2 font-caption text-caption text-on-surface-variant">
+        <p className="mt-3 font-body-md text-body-md text-on-surface-variant">
           שיעור של שעתיים רצופות: שעת התחלה 1 ומשך 2 ({formatLessonHours(1, 2)}). ימי חופשה
           מגדירים ב־הגדרות ← לשונית «לוח חופשות».
         </p>
       </div>
 
       {gradeIds.length > 0 && (
-        <div className="rounded-lg border border-secondary/20 bg-secondary-container/40 px-3 py-2 font-body-sm text-body-sm text-primary">
+        <div className="rounded-lg border border-secondary/20 bg-secondary-container/40 px-4 py-3 font-body-lg text-body-lg text-primary">
           <div className="font-semibold">סיכום</div>
           <div className="mt-1 text-on-surface-variant">קהל: {audienceSummary}</div>
           <div className="mt-1 text-on-surface-variant">
@@ -484,13 +518,13 @@ export function LessonsForm({
         </div>
       )}
 
-      <Button type="submit" disabled={loading} className="mt-1 w-full sm:w-auto">
-        <Icon name="save" className="text-[18px]" />
+      <Button type="submit" size="lg" disabled={loading} className="mt-1 w-full sm:w-auto">
+        <Icon name="save" className="text-[22px]" />
         {loading ? "יוצר שיעור ומופעים..." : "שמור שיעור"}
       </Button>
 
       {error && (
-        <p className="rounded-lg bg-error-container/60 px-3 py-2 font-body-sm text-body-sm text-on-error-container">
+        <p className="rounded-lg bg-error-container/60 px-4 py-3 font-body-lg text-body-lg text-on-error-container">
           {error}
         </p>
       )}

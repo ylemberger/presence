@@ -11,12 +11,15 @@ import {
   summarizeAttendance,
 } from "@/lib/attendance/calculator";
 import { getPendingAttendanceSummary } from "@/lib/attendance/pending";
+import { mergeAttendanceBlocks } from "@/lib/attendance/blocks";
 import { holidayDatesByKind } from "@/lib/lessons/holidays";
 import {
   audienceForLesson,
   audienceMapFromRows,
   lessonMatchesAudienceFilter,
 } from "@/lib/lessons/autoAssign";
+import { audienceKey, formatLessonGroupLabel } from "@/lib/lessons/group-label";
+import { formatSubjectLessonLabel } from "@/lib/lessons/subject-label";
 import { AttendanceReminderBanner } from "@/components/attendance/AttendanceReminderBanner";
 import {
   AttendanceBoard,
@@ -79,7 +82,9 @@ export default async function AttendancePage({ searchParams }: Props) {
       .select(
         `id, occurrence_date, lesson_id,
          lessons!inner(
-           id, subject, lesson_number, class_id, track_id, specialization_id, academic_year_id, attendance_rule_id,
+           id, subject, subject_id, lesson_number, period_count, billing_type, for_psychology, grade_id,
+           class_id, track_id, specialization_id, academic_year_id, attendance_rule_id,
+           subjects(name),
            teacher_teaching_assignments(teacher_id, teachers(full_name))
          )`
       )
@@ -95,7 +100,7 @@ export default async function AttendancePage({ searchParams }: Props) {
     supabase.from("lesson_audience").select("lesson_id, grade_id, class_id, track_id, specialization_id"),
     supabase
       .from("lessons")
-      .select("id, subject, day_of_week, lesson_number, period_count")
+      .select("id, subject, subject_id, day_of_week, lesson_number, period_count, subjects(name)")
       .eq("academic_year_id", activeYear.id)
       .order("subject"),
     params.studentId
@@ -109,7 +114,13 @@ export default async function AttendancePage({ searchParams }: Props) {
   type LessonJoin = {
     id: string;
     subject: string;
+    subject_id?: string | null;
+    subjects?: { name: string } | { name: string }[] | null;
     lesson_number: number | null;
+    period_count: number | null;
+    billing_type: string | null;
+    for_psychology: boolean | null;
+    grade_id: string | null;
     class_id: string | null;
     track_id: string | null;
     specialization_id: string | null;
@@ -120,21 +131,62 @@ export default async function AttendancePage({ searchParams }: Props) {
     } | null;
   };
 
+  const gradeNameById = new Map((catalog.grades ?? []).map((g) => [g.id, g.name]));
+  const classNameById = new Map(catalog.classes.map((c) => [c.id, c.name]));
+  const trackNameById = new Map(catalog.tracks.map((t) => [t.id, t.name]));
+  const specNameById = new Map(catalog.specializations.map((s) => [s.id, s.name]));
+
   function mapOccurrence(o: NonNullable<typeof monthOccurrencesRaw>[number]) {
     const lesson = o.lessons as unknown as LessonJoin;
     const teacher = lesson.teacher_teaching_assignments?.teachers;
+    const teacherId = lesson.teacher_teaching_assignments?.teacher_id ?? "";
+    const audience = audienceForLesson(
+      {
+        id: lesson.id,
+        grade_id: lesson.grade_id,
+        class_id: lesson.class_id,
+        track_id: lesson.track_id,
+        specialization_id: lesson.specialization_id,
+      },
+      audienceByLesson
+    );
+    const groupLabel = formatLessonGroupLabel({
+      billingType: lesson.billing_type,
+      forPsychology: Boolean(lesson.for_psychology),
+      gradeNames: audience.grade_ids.map((id) => gradeNameById.get(id) ?? "").filter(Boolean),
+      classNames: audience.class_ids.map((id) => classNameById.get(id) ?? "").filter(Boolean),
+      trackNames: audience.track_ids.map((id) => trackNameById.get(id) ?? "").filter(Boolean),
+      specializationNames: audience.specialization_ids
+        .map((id) => specNameById.get(id) ?? "")
+        .filter(Boolean),
+    });
+    const parentName = Array.isArray(lesson.subjects)
+      ? lesson.subjects[0]?.name
+      : lesson.subjects?.name;
     return {
       id: o.id,
       date: o.occurrence_date,
-      subject: lesson.subject,
+      subject: formatSubjectLessonLabel(parentName, lesson.subject),
+      subjectId: lesson.subject_id ?? lesson.id,
       lessonNumber: lesson.lesson_number ?? 0,
+      periodCount: lesson.period_count ?? 1,
       teacherName: teacher?.full_name ?? "",
-      teacherId: lesson.teacher_teaching_assignments?.teacher_id ?? "",
+      teacherId,
       lessonId: lesson.id,
       classId: lesson.class_id,
       trackId: lesson.track_id,
       specializationId: lesson.specialization_id,
       attendanceRuleId: lesson.attendance_rule_id,
+      groupLabel,
+      audienceKey: audienceKey({
+        teacherId,
+        subject: lesson.subject,
+        gradeIds: audience.grade_ids,
+        classIds: audience.class_ids,
+        trackIds: audience.track_ids,
+        specializationIds: audience.specialization_ids,
+        forPsychology: Boolean(lesson.for_psychology),
+      }),
     };
   }
 
@@ -160,7 +212,11 @@ export default async function AttendancePage({ searchParams }: Props) {
     )
   );
   if (params.teacherId) monthOccurrences = monthOccurrences.filter((o) => o.teacherId === params.teacherId);
-  if (params.subject) monthOccurrences = monthOccurrences.filter((o) => o.subject === params.subject);
+  if (params.subject) {
+    monthOccurrences = monthOccurrences.filter(
+      (o) => o.subject === params.subject || o.subject.startsWith(`${params.subject} ·`)
+    );
+  }
   if (params.lessonId) monthOccurrences = monthOccurrences.filter((o) => o.lessonId === params.lessonId);
   if (params.studentId) {
     const links = studentLinks ?? [];
@@ -185,7 +241,7 @@ export default async function AttendancePage({ searchParams }: Props) {
     a.full_name.localeCompare(b.full_name, "he")
   );
 
-  const selectedOcc =
+  const selectedRaw =
     params.occurrenceId && dayOccurrences.find((o) => o.id === params.occurrenceId)
       ? dayOccurrences.find((o) => o.id === params.occurrenceId)!
       : dayOccurrences.length === 1
@@ -213,27 +269,6 @@ export default async function AttendancePage({ searchParams }: Props) {
       : Promise.resolve({ data: [] as never[] }),
   ]);
 
-  if (selectedOcc) {
-    const map = new Map<string, { id: string; full_name: string }>();
-    for (const link of monthLinks ?? []) {
-      if (link.lesson_id !== selectedOcc.lessonId) continue;
-      if (link.start_date > selectedOcc.date) continue;
-      if (link.end_date && link.end_date < selectedOcc.date) continue;
-      const s = link.students as unknown as { id: string; full_name: string; is_active: boolean } | null;
-      if (s?.is_active) map.set(s.id, { id: s.id, full_name: s.full_name });
-    }
-    lessonStudents = [...map.values()].sort((a, b) => a.full_name.localeCompare(b.full_name, "he"));
-
-    if (params.studentId) {
-      lessonStudents = lessonStudents.filter((s) => s.id === params.studentId);
-    }
-  }
-
-  const dayOccIds = dayOccurrences.map((o) => o.id);
-  const attendanceRecords = (monthAttendance ?? []).filter((a) =>
-    selectedOcc ? a.lesson_occurrence_id === selectedOcc.id : dayOccIds.includes(a.lesson_occurrence_id)
-  );
-
   const studentCounts = new Map<string, number>();
   const markedCounts = new Map<string, number>();
   for (const occ of dayOccurrences) {
@@ -252,6 +287,44 @@ export default async function AttendancePage({ searchParams }: Props) {
       (monthAttendance ?? []).filter((a) => a.lesson_occurrence_id === occ.id).length
     );
   }
+
+  const dayBlocks = mergeAttendanceBlocks(
+    dayOccurrences.map((o) => ({
+      ...o,
+      studentCount: studentCounts.get(o.id) ?? 0,
+      markedCount: markedCounts.get(o.id) ?? 0,
+    }))
+  );
+
+  const wantedId = params.occurrenceId || selectedRaw?.id;
+  const selectedOcc =
+    (wantedId && dayBlocks.find((b) => b.linkedOccurrenceIds.includes(wantedId))) ||
+    (dayBlocks.length === 1 ? dayBlocks[0] : null);
+
+  if (selectedOcc) {
+    const lessonIds = new Set(selectedOcc.linkedLessonIds);
+    const map = new Map<string, { id: string; full_name: string }>();
+    for (const link of monthLinks ?? []) {
+      if (!lessonIds.has(link.lesson_id)) continue;
+      if (link.start_date > selectedOcc.date) continue;
+      if (link.end_date && link.end_date < selectedOcc.date) continue;
+      const s = link.students as unknown as { id: string; full_name: string; is_active: boolean } | null;
+      if (s?.is_active) map.set(s.id, { id: s.id, full_name: s.full_name });
+    }
+    lessonStudents = [...map.values()].sort((a, b) => a.full_name.localeCompare(b.full_name, "he"));
+
+    if (params.studentId) {
+      lessonStudents = lessonStudents.filter((s) => s.id === params.studentId);
+    }
+  }
+
+  const dayOccIds = dayOccurrences.map((o) => o.id);
+  const selectedOccIds = new Set(selectedOcc?.linkedOccurrenceIds ?? []);
+  const attendanceRecords = (monthAttendance ?? []).filter((a) =>
+    selectedOcc
+      ? selectedOccIds.has(a.lesson_occurrence_id)
+      : dayOccIds.includes(a.lesson_occurrence_id)
+  );
 
   // completeDates / partialDates for calendar colors
   const completeDates: string[] = [];
@@ -312,12 +385,21 @@ export default async function AttendancePage({ searchParams }: Props) {
       catalog.rules.find((r) => r.id === selectedOcc.attendanceRuleId) ?? catalog.rules[0];
     const maxPct = rule ? Number(rule.max_allowed_absence_percent) : null;
     const lessonOccs = monthOccurrences
-      .filter((o) => o.lessonId === selectedOcc.lessonId)
+      .filter((o) => o.subjectId === selectedOcc.subjectId)
       .sort((a, b) => a.date.localeCompare(b.date));
 
     for (const student of lessonStudents) {
       const eligible = lessonOccs
-        .filter((o) => o.date <= selectedOcc.date)
+        .filter((o) => {
+          if (o.date > selectedOcc.date) return false;
+          return (monthLinks ?? []).some(
+            (link) =>
+              link.lesson_id === o.lessonId &&
+              link.student_id === student.id &&
+              link.start_date <= o.date &&
+              (link.end_date === null || link.end_date >= o.date)
+          );
+        })
         .map((o) => {
           const att = (monthAttendance ?? []).find(
             (a) => a.lesson_occurrence_id === o.id && a.student_id === student.id
@@ -366,16 +448,26 @@ export default async function AttendancePage({ searchParams }: Props) {
     noteBody = note?.body ?? "";
   }
 
-  const subjects = [...new Set((yearLessonRows ?? []).map((l) => l.subject))].sort((a, b) =>
-    a.localeCompare(b, "he")
-  );
-  const lessonOptions = (yearLessonRows ?? []).map((l) => ({
-    id: l.id,
-    subject: l.subject,
-    day_of_week: l.day_of_week,
-    lesson_number: l.lesson_number,
-    period_count: l.period_count,
-  }));
+  const subjects = [
+    ...new Set(
+      (yearLessonRows ?? []).map((l) => {
+        const embedded = (l as { subjects?: { name: string } | { name: string }[] | null }).subjects;
+        const name = Array.isArray(embedded) ? embedded[0]?.name : embedded?.name;
+        return name?.trim() || l.subject;
+      })
+    ),
+  ].sort((a, b) => a.localeCompare(b, "he"));
+  const lessonOptions = (yearLessonRows ?? []).map((l) => {
+    const embedded = (l as { subjects?: { name: string } | { name: string }[] | null }).subjects;
+    const name = Array.isArray(embedded) ? embedded[0]?.name : embedded?.name;
+    return {
+      id: l.id,
+      subject: formatSubjectLessonLabel(name, l.subject),
+      day_of_week: l.day_of_week,
+      lesson_number: l.lesson_number,
+      period_count: l.period_count,
+    };
+  });
 
   const pendingSummary = await getPendingAttendanceSummary(activeYear.id);
   const holidaySets = holidayDatesByKind(holidayRows ?? []);
@@ -436,10 +528,18 @@ export default async function AttendancePage({ searchParams }: Props) {
         lessons={lessonOptions}
         allStudents={allStudents}
         monthOccurrences={monthOccurrences}
-        dayOccurrences={dayOccurrences.map((o) => ({
-          ...o,
-          studentCount: studentCounts.get(o.id) ?? 0,
-          markedCount: markedCounts.get(o.id) ?? 0,
+        dayOccurrences={dayBlocks.map((o) => ({
+          id: o.id,
+          date: o.date,
+          subject: o.subject,
+          teacherName: o.teacherName,
+          lessonId: o.lessonId,
+          lessonNumber: o.lessonNumber,
+          periodCount: o.periodCount,
+          groupLabel: o.groupLabel,
+          studentCount: o.studentCount,
+          markedCount: o.markedCount,
+          linkedOccurrenceIds: o.linkedOccurrenceIds,
         }))}
         lessonStudents={lessonStudents}
         attendance={attendanceRecords}

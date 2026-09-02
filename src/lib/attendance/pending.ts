@@ -1,6 +1,7 @@
 import { cache } from "react";
 import { createClient } from "@/lib/supabase/server";
 import { addDays, startOfWeekSunday, todayIso } from "@/lib/dates/hebrew";
+import { formatSubjectLessonLabel } from "@/lib/lessons/subject-label";
 
 export type PendingOccurrence = {
   id: string;
@@ -64,7 +65,7 @@ export const getPendingAttendanceSummary = cache(
       .from("lesson_occurrences")
       .select(
         `id, occurrence_date, lesson_id, gap_handling,
-         lessons!inner(id, subject, academic_year_id)`
+         lessons!inner(id, subject, academic_year_id, subjects(name))`
       )
       .eq("lessons.academic_year_id", academicYearId)
       .gte("occurrence_date", from)
@@ -111,7 +112,11 @@ export const getPendingAttendanceSummary = cache(
       const marked = markedByOcc.get(o.id) ?? 0;
       if (marked >= total) continue;
 
-      const lesson = o.lessons as unknown as { subject: string };
+      const lesson = o.lessons as unknown as {
+        subject: string;
+        subjects?: { name: string } | { name: string }[] | null;
+      };
+      const parent = Array.isArray(lesson.subjects) ? lesson.subjects[0]?.name : lesson.subjects?.name;
       const gap =
         o.gap_handling === "in_treatment" || o.gap_handling === "continued"
           ? o.gap_handling
@@ -119,7 +124,7 @@ export const getPendingAttendanceSummary = cache(
       items.push({
         id: o.id,
         date: o.occurrence_date,
-        subject: lesson.subject,
+        subject: formatSubjectLessonLabel(parent, lesson.subject),
         lessonId: o.lesson_id,
         marked,
         total,

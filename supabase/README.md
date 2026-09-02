@@ -13,6 +13,7 @@
 
 | מצב | מה להריץ |
 |-----|----------|
+| **מקצועות (הורה לשיעורים)** | [`patches/014_subjects.sql`](patches/014_subjects.sql) |
 | **שכבות מרובות בשיעור** | [`patches/013_lesson_audience_grades.sql`](patches/013_lesson_audience_grades.sql) |
 | **רק שדות תלמידה חדשים** | [`patches/010_student_roster_fields.sql`](patches/010_student_roster_fields.sql) |
 | **מחיקת כל התלמידות** (בלי seed) | [`patches/012_wipe_all_students.sql`](patches/012_wipe_all_students.sql) |
@@ -44,5 +45,5 @@
 - **שנה:** `academic_years`, `grades`, `classes`, `tracks`, `specializations`, `activity_ranges`, `holiday_periods`
 - **תלמידות:** `students`, `student_assignments`, `student_lesson_assignments`
 - **מורות:** `teachers`, `teacher_teaching_assignments`, `teacher_source_records`
-- **שיעורים:** `lessons`, `lesson_audience`, `lesson_occurrences`
+- **שיעורים:** `subjects`, `lessons`, `lesson_audience`, `lesson_occurrences`
 - **נוכחות:** `attendance`, `attendance_change_log`, `attendance_rules`, `attendance_notes`, `makeup_exams`

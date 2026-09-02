@@ -37,6 +37,12 @@ export interface Specialization {
   name: string;
 }
 
+export interface Subject {
+  id: string;
+  academic_year_id: string;
+  name: string;
+}
+
 export interface ActivityRange {
   id: string;
   academic_year_id: string;
@@ -144,6 +150,7 @@ export interface Lesson {
   id: string;
   academic_year_id: string;
   teacher_teaching_assignment_id: string;
+  subject_id: string;
   subject: string;
   grade_id: string;
   class_id: string | null;
@@ -182,6 +189,7 @@ export interface MakeupExam {
   academic_year_id: string;
   student_id: string;
   lesson_id: string;
+  subject_id: string;
   required_exams: number;
   completed_exams: number;
   status: "open" | "done" | "blocked";
@@ -234,6 +242,7 @@ export interface Database {
       classes: { Row: Class; Insert: Omit<Class, "id"> & { id?: string }; Update: Partial<Class> };
       tracks: { Row: Track; Insert: Omit<Track, "id"> & { id?: string }; Update: Partial<Track> };
       specializations: { Row: Specialization; Insert: Omit<Specialization, "id"> & { id?: string }; Update: Partial<Specialization> };
+      subjects: { Row: Subject; Insert: Omit<Subject, "id"> & { id?: string }; Update: Partial<Subject> };
       activity_ranges: { Row: ActivityRange; Insert: Omit<ActivityRange, "id"> & { id?: string }; Update: Partial<ActivityRange> };
       holiday_periods: { Row: HolidayPeriod; Insert: Omit<HolidayPeriod, "id"> & { id?: string }; Update: Partial<HolidayPeriod> };
       attendance_rules: { Row: AttendanceRule; Insert: Omit<AttendanceRule, "id"> & { id?: string }; Update: Partial<AttendanceRule> };

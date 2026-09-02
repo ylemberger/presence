@@ -32,6 +32,13 @@ create table specializations (
   name text not null
 );
 
+create table subjects (
+  id uuid primary key default gen_random_uuid(),
+  academic_year_id uuid not null references academic_years(id) on delete cascade,
+  name text not null,
+  unique (academic_year_id, name)
+);
+
 create table activity_ranges (
   id uuid primary key default gen_random_uuid(),
   academic_year_id uuid references academic_years(id) on delete cascade,
@@ -138,6 +145,7 @@ create table lessons (
   id uuid primary key default gen_random_uuid(),
   academic_year_id uuid references academic_years(id) on delete cascade,
   teacher_teaching_assignment_id uuid references teacher_teaching_assignments(id) on delete cascade,
+  subject_id uuid not null references subjects(id),
   subject text not null,
   grade_id uuid references grades(id) on delete cascade,
   class_id uuid references classes(id),
@@ -279,6 +287,7 @@ alter table grades enable row level security;
 alter table classes enable row level security;
 alter table tracks enable row level security;
 alter table specializations enable row level security;
+alter table subjects enable row level security;
 alter table activity_ranges enable row level security;
 alter table holiday_periods enable row level security;
 alter table attendance_rules enable row level security;
@@ -299,7 +308,7 @@ declare
   tbl text;
 begin
   foreach tbl in array array[
-    'academic_years', 'grades', 'classes', 'tracks', 'specializations',
+    'academic_years', 'grades', 'classes', 'tracks', 'specializations', 'subjects',
     'activity_ranges', 'holiday_periods', 'attendance_rules', 'students', 'student_assignments',
     'teachers', 'teacher_source_records', 'teacher_teaching_assignments',
     'lessons', 'lesson_audience', 'lesson_occurrences', 'student_lesson_assignments',
@@ -401,6 +410,12 @@ create index if not exists idx_lessons_activity_range
 create index if not exists idx_lessons_attendance_rule
   on lessons (attendance_rule_id)
   where attendance_rule_id is not null;
+
+create index if not exists idx_lessons_subject_id
+  on lessons (subject_id);
+
+create index if not exists idx_subjects_academic_year
+  on subjects (academic_year_id);
 
 create index if not exists idx_lessons_teacher_assignment
   on lessons (teacher_teaching_assignment_id);
@@ -840,13 +855,14 @@ create table if not exists makeup_exams (
   academic_year_id uuid not null references academic_years(id) on delete cascade,
   student_id uuid not null references students(id) on delete cascade,
   lesson_id uuid not null references lessons(id) on delete cascade,
+  subject_id uuid not null references subjects(id),
   required_exams smallint not null default 1 check (required_exams between 0 and 4),
   completed_exams smallint not null default 0 check (completed_exams >= 0),
   status text not null default 'open'
     check (status in ('open', 'done', 'blocked')),
   notes text,
   created_at timestamptz default now(),
-  unique (student_id, lesson_id)
+  unique (student_id, subject_id)
 );
 
 alter table makeup_exams enable row level security;
@@ -903,6 +919,7 @@ end $$;
 
 create index if not exists idx_makeup_exams_year on makeup_exams (academic_year_id);
 create index if not exists idx_makeup_exams_student on makeup_exams (student_id);
+create index if not exists idx_makeup_exams_subject on makeup_exams (subject_id);
 create index if not exists idx_lo_gap_handling on lesson_occurrences (gap_handling);
 
 
