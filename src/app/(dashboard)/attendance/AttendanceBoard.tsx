@@ -304,6 +304,32 @@ export function AttendanceBoard({
     return { thisWeekPartial };
   }, [selectedDate, partialDates]);
 
+  const teacherLessonOptions = useMemo(() => {
+    return lessons
+      .filter((l) => l.teacherId && l.teacherName)
+      .slice()
+      .sort((a, b) => {
+        const byTeacher = (a.teacherName ?? "").localeCompare(b.teacherName ?? "", "he");
+        if (byTeacher) return byTeacher;
+        return a.subject.localeCompare(b.subject, "he");
+      })
+      .map((l) => {
+        const day =
+          l.day_of_week != null ? `יום ${DAY_OF_WEEK_LABELS[l.day_of_week] ?? ""}` : "";
+        const hours = l.lesson_number
+          ? formatLessonHours(l.lesson_number, l.period_count ?? 1)
+          : "";
+        const group = l.groupLabel || "ללא קבוצה";
+        return {
+          value: l.id,
+          label: `${l.teacherName} · ${l.subject}`,
+          description: [group, day, hours].filter(Boolean).join(" · "),
+          selectedLabel: [l.teacherName, l.subject, group].filter(Boolean).join(" · "),
+          keywords: [l.teacherName, l.subject, group, day, hours].filter(Boolean).join(" "),
+        };
+      });
+  }, [lessons]);
+
   function buildParams(patch: Record<string, string | undefined>) {
     const params = new URLSearchParams();
     params.set("date", patch.date ?? selectedDate);
@@ -359,9 +385,16 @@ export function AttendanceBoard({
 
   useEffect(() => {
     try {
-      const saved = window.localStorage.getItem("presence.attendance.teacherId");
-      if (!teacherId && saved && teachers.some((t) => t.id === saved)) {
-        navigate(buildParams({ teacherId: saved, occurrenceId: undefined }));
+      const saved = window.localStorage.getItem("presence.attendance.lessonId");
+      const match = saved ? lessons.find((l) => l.id === saved && l.teacherId) : undefined;
+      if (!lessonId && match?.teacherId) {
+        navigate(
+          buildParams({
+            teacherId: match.teacherId,
+            lessonId: match.id,
+            occurrenceId: undefined,
+          })
+        );
       }
     } catch {
       /* ignore */
@@ -371,12 +404,12 @@ export function AttendanceBoard({
 
   useEffect(() => {
     try {
-      if (teacherId) window.localStorage.setItem("presence.attendance.teacherId", teacherId);
-      else window.localStorage.removeItem("presence.attendance.teacherId");
+      if (lessonId) window.localStorage.setItem("presence.attendance.lessonId", lessonId);
+      else window.localStorage.removeItem("presence.attendance.lessonId");
     } catch {
       /* ignore */
     }
-  }, [teacherId]);
+  }, [lessonId]);
 
   function bumpMarkedCount(occurrenceId: string, delta: number) {
     setDayOccurrences((prev) =>
@@ -704,9 +737,6 @@ export function AttendanceBoard({
     : 0;
   const unmarkedCount = Math.max(0, lessonStudents.length - markedInLesson);
 
-  const teacherLessons = teacherId
-    ? lessons.filter((l) => l.teacherId === teacherId)
-    : [];
   const selectedLessonMeta = lessons.find((l) => l.id === lessonId);
 
   const filtersPanel = (
@@ -813,38 +843,38 @@ export function AttendanceBoard({
       )}
 
       <div className="flex flex-wrap items-center gap-2 font-body-md text-body-md text-on-surface-variant print:hidden">
-        <span className={cn(!teacherId && "font-bold text-primary")}>שלב 1: מורה</span>
-        <Icon name="arrow_back" className="text-[16px]" />
-        <span className={cn(Boolean(teacherId && !lessonId) && "font-bold text-primary")}>
-          שלב 2: שיעור
-        </span>
+        <span className={cn(!lessonId && "font-bold text-primary")}>שלב 1: מורה ושיעור</span>
         <Icon name="arrow_back" className="text-[16px]" />
         <span className={cn(Boolean(lessonId && !activeOccurrenceId) && "font-bold text-primary")}>
-          שלב 3: מופע
+          שלב 2: מופע
         </span>
         <Icon name="arrow_back" className="text-[16px]" />
         <span className={cn(Boolean(activeOccurrenceId) && "font-bold text-primary")}>
-          שלב 4: רישום
+          שלב 3: רישום
         </span>
       </div>
 
       <div className="rounded-xl border border-secondary/30 bg-secondary-container/30 p-4 print:hidden">
-        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-          <Combobox
-            label="חיפוש מורה"
-            value={teacherId ?? ""}
-            onChange={(v) =>
-              navigate(
-                buildParams({
-                  teacherId: v || undefined,
-                  lessonId: undefined,
-                  occurrenceId: undefined,
-                })
-              )
-            }
-            options={teachers.map((t) => ({ value: t.id, label: t.name }))}
-            emptyLabel="בחרי מורה"
-          />
+        <div className="grid gap-3 lg:grid-cols-3">
+          <div className="lg:col-span-2">
+            <Combobox
+              label="מורה ושיעור"
+              value={lessonId ?? ""}
+              onChange={(v) => {
+                const picked = lessons.find((l) => l.id === v);
+                navigate(
+                  buildParams({
+                    teacherId: picked?.teacherId || undefined,
+                    lessonId: v || undefined,
+                    occurrenceId: undefined,
+                  })
+                );
+              }}
+              options={teacherLessonOptions}
+              emptyLabel="בחרי מורה ושיעור"
+              maxSuggestions={24}
+            />
+          </div>
           <div className="flex items-end">
             <Button
               type="button"
@@ -857,68 +887,22 @@ export function AttendanceBoard({
             </Button>
           </div>
         </div>
-
-        {!teacherId && (
-          <p className="mt-3 font-body-sm text-body-sm text-on-surface-variant">
-            חפשי מורה — יופיעו השיעורים שלה, ואז בוחרים שיעור ומופע לסימון.
-          </p>
-        )}
-
-        {teacherId && (
-          <div className="mt-4">
-            <p className="mb-2 font-label-md text-label-md text-primary">
-              שיעורים של {teachers.find((t) => t.id === teacherId)?.name ?? "המורה"}
-            </p>
-            {teacherLessons.length === 0 ? (
-              <p className="font-caption text-caption text-on-surface-variant">
-                אין שיעורים למורה זו בשנה הפעילה.
-              </p>
-            ) : (
-              <div className="grid grid-cols-1 gap-1.5 sm:grid-cols-2">
-                {teacherLessons.map((l) => {
-                  const selected = l.id === lessonId;
-                  return (
-                    <button
-                      key={l.id}
-                      type="button"
-                      onClick={() =>
-                        navigate(
-                          buildParams({
-                            lessonId: l.id,
-                            occurrenceId: undefined,
-                          })
-                        )
-                      }
-                      className={cn(
-                        "rounded-md border px-3 py-2 text-right",
-                        selected
-                          ? "border-secondary bg-secondary-container/50"
-                          : "border-outline-variant/50 bg-surface-container-lowest hover:border-secondary/50"
-                      )}
-                    >
-                      <span className="block truncate font-label-md text-label-md text-primary">
-                        {formatLessonOptionLabel(l)}
-                      </span>
-                      <span className="mt-0.5 block font-caption text-caption text-on-surface-variant">
-                        {l.groupLabel || "ללא קבוצה"}
-                        {l.day_of_week != null ? ` · יום ${DAY_OF_WEEK_LABELS[l.day_of_week] ?? ""}` : ""}
-                      </span>
-                    </button>
-                  );
-                })}
-              </div>
-            )}
-          </div>
-        )}
+        <p className="mt-3 font-body-sm text-body-sm text-on-surface-variant">
+          רק מורות עם שיעורים בשנה הפעילה. אותה מורה יכולה להופיע כמה פעמים — ליד כל שורה כתובים השיעור והקבוצה.
+        </p>
       </div>
 
       {(classId || trackId || specializationId || teacherId || subject || studentId || lessonId) && (
         <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-primary/20 bg-primary/5 px-4 py-2.5 print:hidden">
           <p className="font-body-sm text-body-sm text-primary">
             היומן מציג רק שיעורים לפי הסינון הפעיל
-            {teacherId
-              ? ` · מורה: ${teachers.find((t) => t.id === teacherId)?.name ?? ""}`
-              : ""}
+            {selectedLessonMeta?.teacherName
+              ? ` · ${selectedLessonMeta.teacherName}`
+              : teacherId
+                ? ` · מורה: ${teachers.find((t) => t.id === teacherId)?.name ?? ""}`
+                : ""}
+            {selectedLessonMeta?.subject ? ` · ${selectedLessonMeta.subject}` : ""}
+            {selectedLessonMeta?.groupLabel ? ` · ${selectedLessonMeta.groupLabel}` : ""}
             .
           </p>
           <Button
