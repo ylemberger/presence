@@ -21,6 +21,10 @@ alwaysApply: true
 - רק `.select(...)` (למשל מ-`salary_records` עם `is_approved = true`) כמו ב-`src/lib/sync/teachers.ts`
 - כתיבה **רק** למסד הנוכחות: `teachers`, `teacher_source_records` (וטבלאות presence אחרות)
 
+## שנה חדשה
+
+שיבוצי מורות **לא** מגיעים מהשנה הקודמת. כל שנה: סנכרון מחדש ממערכת השכר (`is_approved = true`). אסור להעתיק `teacher_source_records` / `teacher_teaching_assignments` בקידום שנה.
+
 ## משתני סביבה (presence)
 
 | משתנה | משמעות |

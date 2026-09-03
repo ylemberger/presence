@@ -4,11 +4,14 @@ import { useCallback, useEffect, useId, useMemo, useRef, useState } from "react"
 import { createPortal } from "react-dom";
 import { cn } from "@/lib/cn";
 import { Icon } from "@/components/ui/Icon";
+import {
+  fieldClass,
+  fieldSizeClass,
+  labelSizeClass,
+  type FieldSize,
+} from "@/components/ui/Input";
 
 const MAX_SUGGESTIONS = 8;
-
-const fieldClass =
-  "w-full rounded-lg border border-outline-variant bg-surface-container-lowest px-3.5 py-2.5 pe-9 text-body-md text-on-surface shadow-tactile-sm transition-colors placeholder:text-on-surface-variant/70 focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary";
 
 export type ComboboxOption = {
   value: string;
@@ -29,6 +32,7 @@ interface ComboboxProps {
   emptyLabel?: string;
   required?: boolean;
   maxSuggestions?: number;
+  fieldSize?: FieldSize;
 }
 
 function optionMatches(opt: ComboboxOption, q: string) {
@@ -60,6 +64,7 @@ export function Combobox({
   emptyLabel = "הכל",
   required = false,
   maxSuggestions = MAX_SUGGESTIONS,
+  fieldSize = "md",
 }: ComboboxProps) {
   const autoId = useId();
   const listId = `${autoId}-list`;
@@ -187,7 +192,14 @@ export function Combobox({
             }}
           >
             {matches.shown.length === 0 ? (
-              <li className="px-3 py-2 font-caption text-caption text-on-surface-variant">
+              <li
+                className={cn(
+                  "px-3 py-2 text-on-surface-variant",
+                  fieldSize === "lg"
+                    ? "font-body-md text-body-md"
+                    : "font-caption text-caption"
+                )}
+              >
                 אין התאמה — המשיכי לכתוב
               </li>
             ) : (
@@ -196,7 +208,10 @@ export function Combobox({
                   <button
                     type="button"
                     className={cn(
-                      "w-full px-3 py-2 text-right font-body-md text-body-md transition-colors",
+                      "w-full px-3 py-2.5 text-right transition-colors",
+                      fieldSize === "lg"
+                        ? "font-body-lg text-body-lg"
+                        : "font-body-md text-body-md",
                       i === highlight
                         ? "bg-secondary-container/60 text-primary"
                         : "text-on-surface hover:bg-surface-container"
@@ -207,7 +222,14 @@ export function Combobox({
                   >
                     <span className="block whitespace-normal">{opt.label}</span>
                     {opt.description ? (
-                      <span className="mt-0.5 block whitespace-normal font-caption text-caption text-on-surface-variant">
+                      <span
+                        className={cn(
+                          "mt-0.5 block whitespace-normal text-on-surface-variant",
+                          fieldSize === "lg"
+                            ? "font-body-md text-body-md"
+                            : "font-caption text-caption"
+                        )}
+                      >
                         {opt.description}
                       </span>
                     ) : null}
@@ -216,7 +238,14 @@ export function Combobox({
               ))
             )}
             {matches.extra > 0 && (
-              <li className="border-t border-outline-variant/40 px-3 py-1.5 font-caption text-caption text-on-surface-variant">
+              <li
+                className={cn(
+                  "border-t border-outline-variant/40 px-3 py-1.5 text-on-surface-variant",
+                  fieldSize === "lg"
+                    ? "font-body-md text-body-md"
+                    : "font-caption text-caption"
+                )}
+              >
                 עוד {matches.extra} — המשיכי לכתוב לצמצום
               </li>
             )}
@@ -228,7 +257,7 @@ export function Combobox({
   return (
     <div ref={rootRef} className="relative flex flex-col gap-1.5">
       {label && (
-        <label htmlFor={inputId} className="block font-label-md text-label-md text-on-surface">
+        <label htmlFor={inputId} className={cn("block text-on-surface", labelSizeClass[fieldSize])}>
           {label}
         </label>
       )}
@@ -245,6 +274,8 @@ export function Combobox({
           aria-autocomplete="list"
           className={cn(
             fieldClass,
+            fieldSizeClass[fieldSize],
+            "w-full pe-9",
             selected && !query && "font-medium",
             !selected && !open && "text-on-surface-variant"
           )}

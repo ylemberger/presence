@@ -184,6 +184,17 @@ export interface LessonOccurrence {
   gap_handling: "in_treatment" | "continued" | null;
 }
 
+export interface AttendancePool {
+  id: string;
+  academic_year_id: string;
+  name: string;
+}
+
+export interface AttendancePoolMember {
+  pool_id: string;
+  lesson_id: string;
+}
+
 export interface MakeupExam {
   id: string;
   academic_year_id: string;
@@ -259,6 +270,8 @@ export interface Database {
       attendance_change_log: { Row: AttendanceChangeLog; Insert: Omit<AttendanceChangeLog, "id" | "changed_at"> & { id?: string; changed_at?: string }; Update: Partial<AttendanceChangeLog> };
       makeup_exams: { Row: MakeupExam; Insert: Omit<MakeupExam, "id" | "created_at"> & { id?: string; created_at?: string }; Update: Partial<MakeupExam> };
       attendance_notes: { Row: AttendanceNote; Insert: Omit<AttendanceNote, "id" | "updated_at"> & { id?: string; updated_at?: string }; Update: Partial<AttendanceNote> };
+      attendance_pools: { Row: AttendancePool; Insert: Omit<AttendancePool, "id"> & { id?: string }; Update: Partial<AttendancePool> };
+      attendance_pool_members: { Row: AttendancePoolMember; Insert: AttendancePoolMember; Update: Partial<AttendancePoolMember> };
     };
   };
 }

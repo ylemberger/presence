@@ -9,6 +9,7 @@ import { getActiveAcademicYear } from "@/lib/utils";
 import { filterFixedGrades } from "@/lib/years/grades";
 import { formatDate, isDateInRange } from "@/lib/dates/hebrew";
 import { summarizeAttendance, evaluateAbsenceAgainstRule } from "@/lib/attendance/calculator";
+import { fetchAttendancePools, calcUnitForLesson } from "@/lib/attendance/pools";
 import { formatSubjectLessonLabel } from "@/lib/lessons/subject-label";
 import { StudentDetailForms } from "./StudentDetailForms";
 import { StudentLessonAssignments } from "./StudentLessonAssignments";
@@ -125,6 +126,7 @@ export default async function StudentDetailPage({ params }: Props) {
     end_date: string | null;
   }> = [];
   let subjectStats: Array<{
+    unitKey: string;
     subject: string;
     lessonNames: string;
     totalRequired: number;
@@ -261,7 +263,7 @@ export default async function StudentDetailPage({ params }: Props) {
 
     const lessonIds = lessons.map((l) => l.id);
     if (lessonIds.length > 0) {
-      const [{ data: occurrences }, { data: attendanceRecords }] = await Promise.all([
+      const [{ data: occurrences }, { data: attendanceRecords }, poolCatalog] = await Promise.all([
         supabase
           .from("lesson_occurrences")
           .select(
@@ -271,13 +273,14 @@ export default async function StudentDetailPage({ params }: Props) {
           .in("lesson_id", lessonIds)
           .neq("status", "cancelled"),
         supabase.from("attendance").select("*").eq("student_id", id),
+        fetchAttendancePools(supabase, activeYear.id),
       ]);
 
       const yearAssignments = (assignments ?? []).filter(
         (a) => a.academic_year_id === activeYear.id
       );
 
-      const bySubject = new Map<
+      const byUnit = new Map<
         string,
         {
           name: string;
@@ -319,15 +322,16 @@ export default async function StudentDetailPage({ params }: Props) {
         const parentName = Array.isArray(lesson?.subjects)
           ? lesson?.subjects[0]?.name
           : lesson?.subjects?.name;
-        const key = lesson?.subject_id || `lesson:${o.lesson_id}`;
-        const displayName = parentName?.trim() || lesson?.subject || "ללא";
+        const unit = calcUnitForLesson(o.lesson_id, poolCatalog.byLesson);
+        const displayName =
+          unit.poolName || parentName?.trim() || lesson?.subject || "ללא";
         const rule = lesson?.attendance_rules ?? null;
         const maxAllowed =
           rule?.max_allowed_absence_percent != null
             ? Number(rule.max_allowed_absence_percent)
             : null;
 
-        const bucket = bySubject.get(key) ?? {
+        const bucket = byUnit.get(unit.key) ?? {
           name: displayName,
           lessonNames: new Set<string>(),
           rows: [],
@@ -347,14 +351,15 @@ export default async function StudentDetailPage({ params }: Props) {
             bucket.maxAllowed == null ? maxAllowed : Math.min(bucket.maxAllowed, maxAllowed);
           bucket.ruleName = rule?.name ?? bucket.ruleName;
         }
-        bySubject.set(key, bucket);
+        byUnit.set(unit.key, bucket);
       }
 
-      subjectStats = Array.from(bySubject.entries()).map(([, bucket]) => {
+      subjectStats = Array.from(byUnit.entries()).map(([unitKey, bucket]) => {
         const summary = summarizeAttendance(bucket.rows);
         const evaluated = evaluateAbsenceAgainstRule(summary.absencePercent, bucket.maxAllowed);
         const extraLessons = [...bucket.lessonNames].filter((n) => n !== bucket.name);
         return {
+          unitKey,
           subject: bucket.name,
           lessonNames: extraLessons.join(", "),
           ...summary,
@@ -546,7 +551,7 @@ export default async function StudentDetailPage({ params }: Props) {
       <div className="grid grid-cols-1 gap-gutter xl:grid-cols-3">
         {/* Left column — wider tables */}
         <div className="flex flex-col gap-gutter xl:col-span-2">
-          <Section icon="donut_large" title="אחוזי נוכחות לפי מקצוע">
+          <Section icon="donut_large" title="אחוזי נוכחות">
             {subjectStats.length === 0 ? (
               <div className="rounded-xl border border-dashed border-outline-variant/50 bg-surface-container-low/60 px-4 py-8 text-center">
                 <Icon name="insights" className="mb-2 block text-[36px] text-secondary" />
@@ -555,9 +560,13 @@ export default async function StudentDetailPage({ params }: Props) {
                 </p>
               </div>
             ) : (
+              <>
+              <p className="mb-3 font-caption text-caption text-on-surface-variant">
+                כל שני איחורים = חיסור אחד. איחור בודד שנשאר נספר כנוכחות. שיעורים מחושבים לחוד, אלא אם קובצו ידנית.
+              </p>
               <Table
                 headers={[
-                  "מקצוע",
+                  "נוכחות",
                   "שיעורים",
                   "נוכחת",
                   "איחור",
@@ -567,7 +576,7 @@ export default async function StudentDetailPage({ params }: Props) {
                 ]}
               >
                 {subjectStats.map((row) => (
-                  <TableRow key={row.subject}>
+                  <TableRow key={row.unitKey}>
                     <TableCell className="font-semibold text-primary">
                       <div>{row.subject}</div>
                       {row.lessonNames ? (
@@ -616,6 +625,7 @@ export default async function StudentDetailPage({ params }: Props) {
                   </TableRow>
                 ))}
               </Table>
+              </>
             )}
           </Section>
 

@@ -3,11 +3,13 @@ import { formatGregorianDate, formatHebrewDate } from "@/lib/dates/hebrew";
 export function AttendanceBlankSheet({
   subject,
   teacherName,
+  groupLabel,
   date,
   students,
 }: {
   subject: string;
   teacherName?: string;
+  groupLabel?: string;
   date: string;
   students: { id: string; full_name: string }[];
 }) {
@@ -21,6 +23,7 @@ export function AttendanceBlankSheet({
           <span className="mx-1 text-outline">·</span>
           {formatGregorianDate(date)}
           {teacherName ? ` · המורה ${teacherName}` : ""}
+          {groupLabel ? ` · ${groupLabel}` : ""}
         </p>
       </header>
       <table className="w-full border-collapse text-right">

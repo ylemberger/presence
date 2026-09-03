@@ -13,6 +13,7 @@
 
 | מצב | מה להריץ |
 |-----|----------|
+| **קיבוץ נוכחות ידני** | [`patches/015_attendance_pools.sql`](patches/015_attendance_pools.sql) |
 | **מקצועות (הורה לשיעורים)** | [`patches/014_subjects.sql`](patches/014_subjects.sql) |
 | **שכבות מרובות בשיעור** | [`patches/013_lesson_audience_grades.sql`](patches/013_lesson_audience_grades.sql) |
 | **רק שדות תלמידה חדשים** | [`patches/010_student_roster_fields.sql`](patches/010_student_roster_fields.sql) |

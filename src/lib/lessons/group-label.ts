@@ -36,6 +36,27 @@ export function formatLessonGroupLabel(opts: {
   return parts.join(" · ");
 }
 
+function sortJoin(ids: string[]): string {
+  return [...new Set(ids.filter(Boolean))].sort().join(",");
+}
+
+/** קבוצת קהל בלבד — בלי מורה ובלי שם מקצוע. לקיבוץ נוכחות ידני. */
+export function audienceFingerprint(opts: {
+  gradeIds: string[];
+  classIds: string[];
+  trackIds: string[];
+  specializationIds: string[];
+  forPsychology: boolean;
+}): string {
+  return [
+    opts.forPsychology ? "psy" : "",
+    sortJoin(opts.gradeIds),
+    sortJoin(opts.classIds),
+    sortJoin(opts.trackIds),
+    sortJoin(opts.specializationIds),
+  ].join("|");
+}
+
 export function audienceKey(opts: {
   teacherId: string;
   subject: string;
@@ -45,15 +66,10 @@ export function audienceKey(opts: {
   specializationIds: string[];
   forPsychology: boolean;
 }): string {
-  const sortJoin = (ids: string[]) => [...new Set(ids)].sort().join(",");
   return [
     opts.teacherId,
     opts.subject.trim(),
-    opts.forPsychology ? "psy" : "",
-    sortJoin(opts.gradeIds),
-    sortJoin(opts.classIds),
-    sortJoin(opts.trackIds),
-    sortJoin(opts.specializationIds),
+    audienceFingerprint(opts),
   ].join("|");
 }
 

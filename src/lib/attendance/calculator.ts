@@ -18,6 +18,11 @@ export function countsAsAbsent(status: AttendanceStatus): boolean {
   return status === "absent";
 }
 
+/** שני איחורים = חיסור אחד; איחור בודד שנשאר נספר כנוכחות. */
+export function effectiveAbsentCount(absentCount: number, lateCount: number): number {
+  return absentCount + Math.floor(Math.max(0, lateCount) / 2);
+}
+
 export interface EligibleOccurrence {
   occurrenceId: string;
   occurrenceDate: string;
@@ -34,19 +39,53 @@ export function summarizeAttendance(occurrences: EligibleOccurrence[]) {
     (o) => o.attendanceStatus && countsAsPresent(o.attendanceStatus)
   ).length;
   const unmarked = required.filter((o) => !o.attendanceStatus).length;
+  const effectiveAbsent = effectiveAbsentCount(absentCount, lateCount);
 
   return {
     totalRequired: required.length,
     absentCount,
     lateCount,
+    leftoverLate: lateCount % 2,
+    effectiveAbsentCount: effectiveAbsent,
     presentOnlyCount,
     presentCount,
     unmarked,
-    absencePercent: calculateAbsencePercent({ totalRequired: required.length, absentCount }),
+    absencePercent: calculateAbsencePercent({
+      totalRequired: required.length,
+      absentCount: effectiveAbsent,
+    }),
   };
 }
 
-/** איחור נספר כנוכחות; רק `absent` נכנס לאחוז היעדרות. */
+export type AttendanceSummary = ReturnType<typeof summarizeAttendance>;
+
+/** מאחד יחידות חישוב נפרדות — איחור עודף בשיעור אחד לא מזווג עם איחור בשיעור אחר. */
+export function combineAttendanceSummaries(parts: AttendanceSummary[]): AttendanceSummary {
+  const totalRequired = parts.reduce((s, p) => s + p.totalRequired, 0);
+  const absentCount = parts.reduce((s, p) => s + p.absentCount, 0);
+  const lateCount = parts.reduce((s, p) => s + p.lateCount, 0);
+  const leftoverLate = parts.reduce((s, p) => s + p.leftoverLate, 0);
+  const effectiveAbsent = parts.reduce((s, p) => s + p.effectiveAbsentCount, 0);
+  const presentOnlyCount = parts.reduce((s, p) => s + p.presentOnlyCount, 0);
+  const presentCount = parts.reduce((s, p) => s + p.presentCount, 0);
+  const unmarked = parts.reduce((s, p) => s + p.unmarked, 0);
+  return {
+    totalRequired,
+    absentCount,
+    lateCount,
+    leftoverLate,
+    effectiveAbsentCount: effectiveAbsent,
+    presentOnlyCount,
+    presentCount,
+    unmarked,
+    absencePercent: calculateAbsencePercent({
+      totalRequired,
+      absentCount: effectiveAbsent,
+    }),
+  };
+}
+
+/** איחור: כל זוג = חיסור; איחור יחיד שנשאר = נוכחות. */
 export type AbsenceRuleLevel = "ok" | "warning" | "blocked";
 
 export function evaluateAbsenceAgainstRule(

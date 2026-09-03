@@ -6,9 +6,11 @@ import { getActiveAcademicYear } from "@/lib/utils";
 import { isDateInRange, formatHebrewDate, formatGregorianDate } from "@/lib/dates/hebrew";
 import {
   summarizeAttendance,
+  combineAttendanceSummaries,
   evaluateAbsenceAgainstRule,
   type EligibleOccurrence,
 } from "@/lib/attendance/calculator";
+import { fetchAttendancePools, calcUnitForLesson } from "@/lib/attendance/pools";
 import { ReportsFilter } from "./ReportsFilter";
 import { PrintButton } from "@/components/ui/PrintButton";
 import { ExportCsvButton } from "./ExportCsvButton";
@@ -170,6 +172,8 @@ export default async function ReportsPage({ searchParams }: Props) {
     supabase.from("students").select("id, full_name").eq("is_active", true).order("full_name"),
     supabase.from("attendance_rules").select("id, name, max_allowed_absence_percent").order("name"),
   ]);
+
+  const poolCatalog = await fetchAttendancePools(supabase, activeYear.id);
 
   const subjects = [
     ...new Set((yearLessons ?? []).map((l) => lessonParentName(l))),
@@ -407,7 +411,16 @@ export default async function ReportsPage({ searchParams }: Props) {
             ?.status as AttendanceStatus | undefined,
         }));
 
-        const summary = summarizeAttendance(eligibleWithAttendance);
+        const byUnit = new Map<string, typeof eligibleWithAttendance>();
+        for (const e of eligibleWithAttendance) {
+          const key = calcUnitForLesson(e.lessonId, poolCatalog.byLesson).key;
+          const list = byUnit.get(key) ?? [];
+          list.push(e);
+          byUnit.set(key, list);
+        }
+        const summary = combineAttendanceSummaries(
+          [...byUnit.values()].map((rows) => summarizeAttendance(rows))
+        );
         const currentAssignment =
           studentAssignments.find((a) => !a.end_date) ?? studentAssignments[0];
         const className =
@@ -532,10 +545,11 @@ export default async function ReportsPage({ searchParams }: Props) {
     for (const lessonId of lessonIdsToShow) {
       const meta = lessonCatalog.get(lessonId);
       if (!meta) continue;
-      const key = meta.subjectId;
+      const key = calcUnitForLesson(lessonId, poolCatalog.byLesson).key;
+      const unit = poolCatalog.byLesson.get(lessonId);
       const bucket = grouped.get(key) ?? {
         representativeId: lessonId,
-        name: meta.subject,
+        name: unit?.poolName || meta.subject,
         lessonNames: new Set<string>(),
         teachers: new Set<string>(),
         dayOfWeek: meta.dayOfWeek,
@@ -764,6 +778,9 @@ export default async function ReportsPage({ searchParams }: Props) {
         </Section>
       ) : (
         <>
+          <p className="print:hidden font-caption text-caption text-on-surface-variant">
+            אחוז היעדרות: כל שני איחורים = חיסור אחד; איחור בודד שנשאר נספר כנוכחות. שיעורים מחושבים לחוד, אלא אם קובצו ידנית ביומן השיעורים.
+          </p>
           {/* KPI Grid + Top Absentees + Trend Chart */}
           <div className="grid grid-cols-1 gap-gutter lg:grid-cols-3 print:grid-cols-1 print:gap-4">
             <div className="flex flex-col gap-gutter lg:col-span-1 print:col-span-1">

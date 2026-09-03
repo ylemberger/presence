@@ -6,7 +6,9 @@ import { todayIso, formatHebrewDate, addDays } from "@/lib/dates/hebrew";
 import {
   evaluateAbsenceAgainstRule,
   summarizeAttendance,
+  combineAttendanceSummaries,
 } from "@/lib/attendance/calculator";
+import { fetchAttendancePools, calcUnitForLesson } from "@/lib/attendance/pools";
 import { getPendingAttendanceSummary, EMPTY_PENDING_SUMMARY } from "@/lib/attendance/pending";
 import { formatSubjectLessonLabel } from "@/lib/lessons/subject-label";
 import { AttendanceReminderBanner } from "@/components/attendance/AttendanceReminderBanner";
@@ -159,7 +161,7 @@ export default async function DashboardPage() {
 
     if (studentIds.length > 0) {
       const ids = studentIds.map((s) => s.id);
-      const [{ data: lessonLinks }, { data: occs }, { data: attRows }] = await Promise.all([
+      const [{ data: lessonLinks }, { data: occs }, { data: attRows }, poolCatalog] = await Promise.all([
         supabase
           .from("student_lesson_assignments")
           .select("student_id, lesson_id, start_date, end_date, lessons!inner(academic_year_id)")
@@ -174,6 +176,7 @@ export default async function DashboardPage() {
           .lte("occurrence_date", today)
           .neq("status", "cancelled"),
         supabase.from("attendance").select("student_id, lesson_occurrence_id, status").in("student_id", ids),
+        fetchAttendancePools(supabase, activeYear.id),
       ]);
 
       const riskList: typeof atRisk = [];
@@ -186,13 +189,23 @@ export default async function DashboardPage() {
           .map((o) => ({
             occurrenceId: o.id,
             occurrenceDate: o.occurrence_date,
+            lessonId: o.lesson_id,
             status: o.status,
             attendanceStatus: (attRows ?? []).find(
               (a) => a.student_id === st.id && a.lesson_occurrence_id === o.id
             )?.status as "present" | "absent" | "late" | undefined,
           }));
         if (eligible.length < 3) continue;
-        const summary = summarizeAttendance(eligible);
+        const byUnit = new Map<string, typeof eligible>();
+        for (const e of eligible) {
+          const key = calcUnitForLesson(e.lessonId, poolCatalog.byLesson).key;
+          const list = byUnit.get(key) ?? [];
+          list.push(e);
+          byUnit.set(key, list);
+        }
+        const summary = combineAttendanceSummaries(
+          [...byUnit.values()].map((rows) => summarizeAttendance(rows))
+        );
         const ev = evaluateAbsenceAgainstRule(summary.absencePercent, threshold);
         if (ev.level === "warning" || ev.level === "blocked") {
           riskList.push({

@@ -7,6 +7,10 @@ import { TeachersDirectory, type TeacherDirectoryRow } from "./TeachersDirectory
 import { TeachersLessons, type TeacherLessonRow } from "./TeachersLessons";
 import { Icon } from "@/components/ui/Icon";
 import { salaryDisplayFields } from "@/lib/teachers/salary-display";
+import {
+  fetchTeacherSourceRecords,
+  groupSourceRowsByTeacher,
+} from "@/lib/teachers/source-records";
 
 type AssignmentRow = {
   id: string;
@@ -18,18 +22,6 @@ type AssignmentRow = {
   classes: { name: string } | null;
   tracks: { name: string } | null;
   specializations: { name: string } | null;
-};
-
-type SourceRow = {
-  teacher_id?: string | null;
-  teacher_identity_number?: string | null;
-  salary_subject?: string | null;
-  salary_track?: string | null;
-  salary_grade_year?: string | null;
-  salary_semester?: string | null;
-  salary_meetings?: number | null;
-  subject: string | null;
-  payload?: unknown;
 };
 
 function uniqueJoined(values: Array<string | null | undefined>): string {
@@ -49,26 +41,12 @@ export default async function TeachersPage() {
 
   const { data: teachers } = await supabase.from("teachers").select("*").order("full_name");
 
-  const { data: sourceRows } = await supabase
-    .from("teacher_source_records")
-    .select("teacher_identity_number, subject, payload");
+  const sourceRows = await fetchTeacherSourceRecords(supabase);
 
   const identityToTeacherId = new Map(
     (teachers ?? []).map((t) => [t.identity_number, t.id])
   );
-
-  const sourcesByTeacher = new Map<string, SourceRow[]>();
-  for (const row of (sourceRows ?? []) as SourceRow[]) {
-    const teacherId =
-      row.teacher_id ||
-      (row.teacher_identity_number
-        ? identityToTeacherId.get(row.teacher_identity_number)
-        : undefined);
-    if (!teacherId) continue;
-    const list = sourcesByTeacher.get(teacherId) ?? [];
-    list.push(row);
-    sourcesByTeacher.set(teacherId, list);
-  }
+  const sourcesByTeacher = groupSourceRowsByTeacher(sourceRows, identityToTeacherId);
 
   const directoryRows: TeacherDirectoryRow[] = (teachers ?? []).map((t) => {
     const sources = sourcesByTeacher.get(t.id) ?? [];

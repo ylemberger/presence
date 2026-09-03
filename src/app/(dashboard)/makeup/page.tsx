@@ -12,6 +12,7 @@ import {
 import { isDateInRange } from "@/lib/dates/hebrew";
 import type { AttendanceStatus } from "@/types/database";
 import { formatSubjectLessonLabel } from "@/lib/lessons/subject-label";
+import { fetchAttendancePools, calcUnitForLesson } from "@/lib/attendance/pools";
 import { MakeupForms } from "./MakeupForms";
 import { MakeupFilters, type MakeupFilterStatus } from "./MakeupFilters";
 import { Icon } from "@/components/ui/Icon";
@@ -111,6 +112,8 @@ export default async function MakeupPage({ searchParams }: Props) {
     supabase.from("attendance").select("student_id, lesson_occurrence_id, status"),
   ]);
 
+  const poolCatalog = await fetchAttendancePools(supabase, activeYear.id);
+
   function parentName(lesson: {
     subject: string;
     subjects?: unknown;
@@ -137,7 +140,10 @@ export default async function MakeupPage({ searchParams }: Props) {
   }> = [];
 
   const existingKeys = new Set(
-    (existing ?? []).map((e) => `${e.student_id}::${(e as { subject_id?: string }).subject_id || e.lesson_id}`)
+    (existing ?? []).map((e) => {
+      const unit = calcUnitForLesson(e.lesson_id, poolCatalog.byLesson);
+      return `${e.student_id}::${unit.key}`;
+    })
   );
   const studentName = new Map((students ?? []).map((s) => [s.id, s.full_name]));
   const attendanceByStudent = new Map<string, typeof attendance>();
@@ -151,7 +157,7 @@ export default async function MakeupPage({ searchParams }: Props) {
     string,
     {
       studentId: string;
-      subjectId: string;
+      unitKey: string;
       links: NonNullable<typeof lessonLinks>;
       lessonsInGroup: NonNullable<typeof lessons>;
     }
@@ -159,11 +165,11 @@ export default async function MakeupPage({ searchParams }: Props) {
   for (const link of lessonLinks ?? []) {
     const lesson = (lessons ?? []).find((l) => l.id === link.lesson_id);
     if (!lesson) continue;
-    const subjectId = (lesson as { subject_id?: string }).subject_id || lesson.id;
-    const key = `${link.student_id}::${subjectId}`;
+    const unit = calcUnitForLesson(lesson.id, poolCatalog.byLesson);
+    const key = `${link.student_id}::${unit.key}`;
     const g = groups.get(key) ?? {
       studentId: link.student_id,
-      subjectId,
+      unitKey: unit.key,
       links: [] as NonNullable<typeof lessonLinks>,
       lessonsInGroup: [] as NonNullable<typeof lessons>,
     };
@@ -214,15 +220,17 @@ export default async function MakeupPage({ searchParams }: Props) {
     if (makeup.tier === "none") continue;
     if (makeup.requiredExams === 0 && makeup.tier !== "blocked") continue;
 
-    const key = `${g.studentId}::${g.subjectId}`;
+    const key = `${g.studentId}::${g.unitKey}`;
     if (existingKeys.has(key)) continue;
 
     const lesson = g.lessonsInGroup[0];
+    const unit = calcUnitForLesson(lesson.id, poolCatalog.byLesson);
+    const names = g.lessonsInGroup.map((l) => parentName(l));
     suggestions.push({
       studentId: g.studentId,
       studentName: studentName.get(g.studentId) ?? "תלמידה",
       lessonId: lesson.id,
-      subject: parentName(lesson),
+      subject: unit.poolName || [...new Set(names)].join(" · "),
       classId: (lesson as unknown as { class_id: string | null }).class_id ?? null,
       trackId: (lesson as unknown as { track_id: string | null }).track_id ?? null,
       specializationId: (lesson as unknown as { specialization_id: string | null }).specialization_id ?? null,

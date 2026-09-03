@@ -22,6 +22,7 @@ alwaysApply: true
 - דריסת `student_assignments` קיים במקום סגירה+פתיחה — אסור.
 - כתיבה למסד השכר — אסור (קריאה בלבד).
 - דריסת `teachers.is_local = true` בסנכרון — אסור.
+- העתקת מורות/שיבוצי שכר/שיעורים מהשנה שעברה בקידום שנה — אסור (כל שנה מהשכר מחדש).
 - שינוי סכימה בלי patch ב-`supabase/patches/` — אסור.
 - שימוש ב-`createClient()` במקום `createActionClient()` ב-Server Action — אסור.
 

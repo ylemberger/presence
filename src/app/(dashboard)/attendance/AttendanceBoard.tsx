@@ -17,13 +17,15 @@ import type { AttendanceStatus } from "@/types/database";
 import { cn } from "@/lib/cn";
 import {
   addDays,
+  buildHebrewMonth,
   expandIsoRange,
   formatGregorianDate,
   formatHebrewDate,
+  hebrewMonthFromIso,
   startOfWeekSunday,
-  todayIso,
 } from "@/lib/dates/hebrew";
 import { formatLessonHours, formatLessonOptionLabel } from "@/lib/lessons/hours";
+import { DAY_OF_WEEK_LABELS } from "@/lib/constants";
 import { ABSENCE_REASONS, type AbsenceReason } from "@/lib/attendance/reasons";
 import { Icon } from "@/components/ui/Icon";
 import { PrintButton } from "@/components/ui/PrintButton";
@@ -95,6 +97,9 @@ interface Props {
   lessons?: Array<{
     id: string;
     subject: string;
+    teacherId?: string;
+    teacherName?: string;
+    groupLabel?: string;
     day_of_week?: number;
     lesson_number?: number;
     period_count?: number;
@@ -102,6 +107,14 @@ interface Props {
   allStudents: AttendanceStudent[];
   monthOccurrences: Array<{ id: string; date: string }>;
   dayOccurrences: DayLessonRow[];
+  selectedLessonOccurrences?: Array<{
+    id: string;
+    date: string;
+    studentCount: number;
+    markedCount: number;
+  }>;
+  prevWeekBlocked?: boolean;
+  prevWeekIncomplete?: Array<{ id: string; date: string }>;
   lessonStudents: AttendanceStudent[];
   attendance: {
     student_id: string;
@@ -163,6 +176,9 @@ export function AttendanceBoard({
   allStudents,
   monthOccurrences,
   dayOccurrences: dayOccurrencesProp,
+  selectedLessonOccurrences = [],
+  prevWeekBlocked = false,
+  prevWeekIncomplete = [],
   lessonStudents,
   attendance,
   noteBody = "",
@@ -282,29 +298,11 @@ export function AttendanceBoard({
 
   const completeDateSet = useMemo(() => new Set(completeDates), [completeDates]);
   const weekWarning = useMemo(() => {
-    const today = todayIso();
     const weekStart = startOfWeekSunday(selectedDate);
     const weekDays = expandIsoRange(weekStart, addDays(weekStart, 6));
-    const prevStart = addDays(weekStart, -7);
-    const prevDays = expandIsoRange(prevStart, addDays(prevStart, 6));
-    const occDates = new Set(monthOccurrences.map((o) => o.date));
-    const partialSet = new Set(partialDates);
-    const completeSet = new Set(completeDates);
-    const holidaySet = new Set(holidayDates);
-
-    function incompleteIn(days: string[], onlyPast: boolean) {
-      return days.filter((d) => {
-        if (onlyPast && d >= today) return false;
-        if (holidaySet.has(d)) return false;
-        if (!occDates.has(d)) return false;
-        return partialSet.has(d) || !completeSet.has(d);
-      });
-    }
-
-    const thisWeekPartial = weekDays.filter((d) => partialSet.has(d));
-    const prevIncomplete = incompleteIn(prevDays, true);
-    return { thisWeekPartial, prevIncomplete, weekStart, prevStart };
-  }, [selectedDate, monthOccurrences, partialDates, completeDates, holidayDates]);
+    const thisWeekPartial = weekDays.filter((d) => partialDates.includes(d));
+    return { thisWeekPartial };
+  }, [selectedDate, partialDates]);
 
   function buildParams(patch: Record<string, string | undefined>) {
     const params = new URLSearchParams();
@@ -339,6 +337,20 @@ export function AttendanceBoard({
 
   function selectLesson(occurrenceId: string) {
     navigate(buildParams({ occurrenceId }));
+  }
+
+  function selectOccurrence(occurrenceId: string, date: string) {
+    const seed = hebrewMonthFromIso(date);
+    const month = buildHebrewMonth(seed.year, seed.month);
+    navigate(
+      buildParams({
+        date,
+        from: month.rangeStart,
+        to: month.rangeEnd,
+        occurrenceId,
+        lessonId: lessonId ?? undefined,
+      })
+    );
   }
 
   function updateFilter(key: string, value: string | undefined) {
@@ -394,12 +406,22 @@ export function AttendanceBoard({
       const previousReason = reasons[k] ?? null;
       const studentName = lessonStudents.find((s) => s.id === sid)?.full_name ?? "";
 
+      if (prevWeekBlocked) {
+        setMessage("יש להשלים קודם את נוכחות השבוע הקודם של השיעור הזה.");
+        return;
+      }
+
       setDraft((prev) => ({ ...prev, [k]: status }));
       if (status !== "absent") {
         setReasons((prev) => ({ ...prev, [k]: null }));
       }
       setCellPhase((prev) => ({ ...prev, [k]: "saving" }));
       setMessage(null);
+
+      if (prevWeekBlocked) {
+        setMessage("יש להשלים קודם את נוכחות השבוע הקודם של השיעור הזה.");
+        return;
+      }
 
       if (previous === null) bumpMarkedCount(occurrenceId, 1);
 
@@ -449,7 +471,7 @@ export function AttendanceBoard({
       }
     },
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [draft, reasons, lessonStudents, dayOccurrences]
+    [draft, reasons, lessonStudents, dayOccurrences, prevWeekBlocked]
   );
 
   async function undoLast() {
@@ -673,13 +695,19 @@ export function AttendanceBoard({
     updateFilter("studentId", ids[nextIdx]);
   }
 
-  const canMark = Boolean(activeOccurrenceId) && lessonStudents.length > 0;
+  const canMark =
+    Boolean(activeOccurrenceId) && lessonStudents.length > 0 && !prevWeekBlocked;
   const markedInLesson = activeOccurrenceId
     ? Object.keys(draft).filter(
         (k) => k.endsWith(`::${activeOccurrenceId}`) && draft[k] !== null
       ).length
     : 0;
   const unmarkedCount = Math.max(0, lessonStudents.length - markedInLesson);
+
+  const teacherLessons = teacherId
+    ? lessons.filter((l) => l.teacherId === teacherId)
+    : [];
+  const selectedLessonMeta = lessons.find((l) => l.id === lessonId);
 
   const filtersPanel = (
     <div className="space-y-3">
@@ -785,36 +813,37 @@ export function AttendanceBoard({
       )}
 
       <div className="flex flex-wrap items-center gap-2 font-body-md text-body-md text-on-surface-variant print:hidden">
-        <span className={cn(!activeOccurrenceId && "font-bold text-primary")}>
-          שלב 1: מורה ותאריך
+        <span className={cn(!teacherId && "font-bold text-primary")}>שלב 1: מורה</span>
+        <Icon name="arrow_back" className="text-[16px]" />
+        <span className={cn(Boolean(teacherId && !lessonId) && "font-bold text-primary")}>
+          שלב 2: שיעור
         </span>
         <Icon name="arrow_back" className="text-[16px]" />
-        <span className={cn(!activeOccurrenceId && "font-bold text-primary")}>
-          שלב 2: בחירת שיעור
+        <span className={cn(Boolean(lessonId && !activeOccurrenceId) && "font-bold text-primary")}>
+          שלב 3: מופע
         </span>
         <Icon name="arrow_back" className="text-[16px]" />
-        <span className={cn(activeOccurrenceId && "font-bold text-primary")}>שלב 3: רישום</span>
+        <span className={cn(Boolean(activeOccurrenceId) && "font-bold text-primary")}>
+          שלב 4: רישום
+        </span>
       </div>
 
-      {/* Teacher-first strip */}
       <div className="rounded-xl border border-secondary/30 bg-secondary-container/30 p-4 print:hidden">
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
           <Combobox
-            label="מורה (סינון ראשי)"
+            label="חיפוש מורה"
             value={teacherId ?? ""}
-            onChange={(v) => updateFilter("teacherId", v || undefined)}
+            onChange={(v) =>
+              navigate(
+                buildParams({
+                  teacherId: v || undefined,
+                  lessonId: undefined,
+                  occurrenceId: undefined,
+                })
+              )
+            }
             options={teachers.map((t) => ({ value: t.id, label: t.name }))}
-            emptyLabel="כל המורות"
-          />
-          <Combobox
-            label="שיעור"
-            value={lessonId ?? ""}
-            onChange={(v) => updateFilter("lessonId", v || undefined)}
-            options={lessons.map((l) => ({
-              value: l.id,
-              label: formatLessonOptionLabel(l),
-            }))}
-            emptyLabel="כל השיעורים"
+            emptyLabel="בחרי מורה"
           />
           <div className="flex items-end">
             <Button
@@ -828,6 +857,59 @@ export function AttendanceBoard({
             </Button>
           </div>
         </div>
+
+        {!teacherId && (
+          <p className="mt-3 font-body-sm text-body-sm text-on-surface-variant">
+            חפשי מורה — יופיעו השיעורים שלה, ואז בוחרים שיעור ומופע לסימון.
+          </p>
+        )}
+
+        {teacherId && (
+          <div className="mt-4">
+            <p className="mb-2 font-label-md text-label-md text-primary">
+              שיעורים של {teachers.find((t) => t.id === teacherId)?.name ?? "המורה"}
+            </p>
+            {teacherLessons.length === 0 ? (
+              <p className="font-caption text-caption text-on-surface-variant">
+                אין שיעורים למורה זו בשנה הפעילה.
+              </p>
+            ) : (
+              <div className="grid grid-cols-1 gap-1.5 sm:grid-cols-2">
+                {teacherLessons.map((l) => {
+                  const selected = l.id === lessonId;
+                  return (
+                    <button
+                      key={l.id}
+                      type="button"
+                      onClick={() =>
+                        navigate(
+                          buildParams({
+                            lessonId: l.id,
+                            occurrenceId: undefined,
+                          })
+                        )
+                      }
+                      className={cn(
+                        "rounded-md border px-3 py-2 text-right",
+                        selected
+                          ? "border-secondary bg-secondary-container/50"
+                          : "border-outline-variant/50 bg-surface-container-lowest hover:border-secondary/50"
+                      )}
+                    >
+                      <span className="block truncate font-label-md text-label-md text-primary">
+                        {formatLessonOptionLabel(l)}
+                      </span>
+                      <span className="mt-0.5 block font-caption text-caption text-on-surface-variant">
+                        {l.groupLabel || "ללא קבוצה"}
+                        {l.day_of_week != null ? ` · יום ${DAY_OF_WEEK_LABELS[l.day_of_week] ?? ""}` : ""}
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        )}
       </div>
 
       {(classId || trackId || specializationId || teacherId || subject || studentId || lessonId) && (
@@ -878,6 +960,44 @@ export function AttendanceBoard({
 
       <div className="grid grid-cols-1 items-start gap-gutter print:hidden xl:grid-cols-12">
         <section className="order-2 rounded-xl border border-outline-variant/30 bg-surface-container-lowest p-3 shadow-tactile-md xl:order-1 xl:col-span-7">
+          {lessonId && selectedLessonOccurrences.length > 0 && (
+            <div className="mb-3 rounded-md border border-outline-variant/40 bg-surface-container-low/40 p-2">
+              <p className="mb-1 font-label-md text-label-md text-primary">
+                מופעים של {selectedLessonMeta?.subject ?? "השיעור"}
+                {selectedLessonMeta?.groupLabel ? ` · ${selectedLessonMeta.groupLabel}` : ""}
+              </p>
+              <div className="flex max-h-48 flex-col gap-1 overflow-y-auto">
+                {selectedLessonOccurrences.map((o) => {
+                  const complete = o.studentCount > 0 && o.markedCount >= o.studentCount;
+                  const selected = o.id === activeOccurrenceId;
+                  return (
+                    <button
+                      key={o.id}
+                      type="button"
+                      onClick={() => selectOccurrence(o.id, o.date)}
+                      className={cn(
+                        "flex items-center justify-between gap-2 rounded-md border px-2 py-1.5 text-right",
+                        selected
+                          ? "border-secondary bg-secondary-container/40"
+                          : "border-outline-variant/40 hover:border-secondary/50"
+                      )}
+                    >
+                      <span className="font-body-sm text-body-sm text-on-surface">
+                        {formatHebrewDate(o.date)}
+                        <span className="ms-1 font-caption text-caption text-on-surface-variant">
+                          ({formatGregorianDate(o.date)})
+                        </span>
+                      </span>
+                      <span className="font-caption text-caption text-on-surface-variant">
+                        {o.markedCount}/{o.studentCount}
+                        {complete ? " ✓" : ""}
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          )}
           <div className="mb-2 flex flex-wrap items-center gap-2 border-b border-outline-variant/30 pb-2">
             <h3 className="flex flex-wrap items-center gap-1.5 font-label-md text-label-md text-primary">
               <Icon name="today" className="text-[16px] text-secondary" />
@@ -893,15 +1013,32 @@ export function AttendanceBoard({
               </span>
             )}
           </div>
+          {prevWeekBlocked && (
+            <div className="mb-2 rounded-md bg-error-container/70 px-3 py-2 font-body-sm text-body-sm text-on-error-container">
+              <p className="font-semibold">לא ניתן לסמן נוכחות למופע זה עדיין.</p>
+              <p className="mt-1">
+                יש להשלים קודם את נוכחות השבוע הקודם של השיעור הזה
+                {prevWeekIncomplete[0]
+                  ? ` (${formatHebrewDate(prevWeekIncomplete[0].date)}).`
+                  : "."}
+              </p>
+              {prevWeekIncomplete[0] && (
+                <Button
+                  type="button"
+                  size="sm"
+                  className="mt-2"
+                  onClick={() =>
+                    selectOccurrence(prevWeekIncomplete[0].id, prevWeekIncomplete[0].date)
+                  }
+                >
+                  עבור למופע שחסר
+                </Button>
+              )}
+            </div>
+          )}
           {weekWarning.thisWeekPartial.length > 0 && (
             <p className="mb-2 rounded-md bg-attendance-late/10 px-2 py-1 font-caption text-caption text-attendance-late">
               בשבוע זה יש שיעורים שסומנו רק חלקית.
-            </p>
-          )}
-          {weekWarning.prevIncomplete.length > 0 && (
-            <p className="mb-2 rounded-md bg-error-container/50 px-2 py-1 font-caption text-caption text-on-error-container">
-              לא מולאה נוכחות מלאה לשבוע {formatHebrewDate(weekWarning.prevStart)} –{" "}
-              {formatHebrewDate(addDays(weekWarning.prevStart, 6))}.
             </p>
           )}
 
@@ -981,16 +1118,27 @@ export function AttendanceBoard({
           <div className="sticky top-0 z-10 border-b border-outline-variant/30 bg-surface-container-lowest px-3 py-2">
             <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
               <div className="min-w-0 flex-1">
+                <p className="font-caption text-caption text-on-surface-variant">מסמנים נוכחות עבור</p>
                 <h3 className="truncate font-title-lg text-title-lg text-primary">
                   {activeLesson.subject}
-                  {activeLesson.lessonNumber
-                    ? ` · ${formatLessonHours(activeLesson.lessonNumber, activeLesson.periodCount ?? 1)}`
-                    : ""}
                 </h3>
-                <p className="mt-0.5 truncate font-body-md text-body-md text-on-surface-variant">
-                  {activeLesson.teacherName || "ללא מורה"}
-                  {activeLesson.groupLabel ? ` · ${activeLesson.groupLabel}` : ""}
-                </p>
+                <dl className="mt-1 grid gap-0.5 font-body-md text-body-md text-on-surface">
+                  <div>
+                    <span className="text-on-surface-variant">קבוצה: </span>
+                    {activeLesson.groupLabel || "—"}
+                  </div>
+                  <div>
+                    <span className="text-on-surface-variant">מורה: </span>
+                    {activeLesson.teacherName || "ללא מורה"}
+                  </div>
+                  <div>
+                    <span className="text-on-surface-variant">תאריך: </span>
+                    {formatHebrewDate(selectedDate)}
+                    {activeLesson.lessonNumber
+                      ? ` · ${formatLessonHours(activeLesson.lessonNumber, activeLesson.periodCount ?? 1)}`
+                      : ""}
+                  </div>
+                </dl>
                 <div className="mt-1 max-w-[14rem]">
                   <HebrewDateInput
                     name="attendance_sheet_date"
@@ -1129,6 +1277,7 @@ export function AttendanceBoard({
                       <AttendanceStatusPicker
                         value={draft[k] ?? null}
                         phase={cellPhase[k] ?? "idle"}
+                        disabled={prevWeekBlocked}
                         onPick={(s) => pickStatus(student.id, activeOccurrenceId!, s, reasons[k])}
                       />
                       {draft[k] === "absent" && (

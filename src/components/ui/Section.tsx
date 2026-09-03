@@ -18,6 +18,7 @@ interface SectionProps {
    * - "none" (default): plain card with subtle border and shadow.
    */
   accent?: "featured" | "danger" | "info" | "none";
+  titleClassName?: string;
   /** Removes the default outer padding of the body area (useful for tables). */
   bodyBleed?: boolean;
   className?: string;
@@ -45,6 +46,7 @@ export function Section({
   bodyBleed,
   className,
   headerClassName,
+  titleClassName,
   children,
 }: SectionProps) {
   const hasHeader = Boolean(title || actions);
@@ -66,7 +68,12 @@ export function Section({
         >
           <div className="min-w-0">
             {title && (
-              <h3 className="flex items-center gap-2 font-title-lg text-title-lg text-primary">
+              <h3
+                className={cn(
+                  "flex items-center gap-2 font-title-lg text-title-lg text-primary",
+                  titleClassName
+                )}
+              >
                 {icon && (
                   <Icon name={icon} className="text-secondary" />
                 )}

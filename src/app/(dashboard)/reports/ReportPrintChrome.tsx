@@ -63,7 +63,7 @@ export function ReportPrintFooter({ studentCount }: ReportPrintFooterProps) {
   return (
     <footer className="mt-8 hidden break-inside-avoid print:block">
       <p className="text-caption text-on-surface-variant">
-        {studentCount.toLocaleString("he-IL")} תלמידות בדוח · איחור נספר כנוכחות
+        {studentCount.toLocaleString("he-IL")} תלמידות בדוח · כל שני איחורים = חיסור אחד
       </p>
       <div className="mt-10 grid grid-cols-2 gap-16 text-body-md text-on-surface">
         <p>חתימת רכזת: ________________________</p>

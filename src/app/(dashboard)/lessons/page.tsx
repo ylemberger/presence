@@ -19,8 +19,11 @@ import {
   lessonMatchesAudienceFilter,
 } from "@/lib/lessons/autoAssign";
 import { describeAudienceScope } from "@/lib/validation";
-import { formatLessonHours } from "@/lib/lessons/hours";
+import { formatLessonHours, formatLessonOptionLabel } from "@/lib/lessons/hours";
 import { formatSubjectLessonLabel } from "@/lib/lessons/subject-label";
+import { fetchAttendancePools, fingerprintForLesson } from "@/lib/attendance/pools";
+import { formatLessonGroupLabel } from "@/lib/lessons/group-label";
+import { AttendancePoolsPanel } from "./AttendancePoolsPanel";
 import {
   salaryDisplayFields,
   uniqueSalaryAssignments,
@@ -170,6 +173,47 @@ export default async function LessonsPage({ searchParams }: Props) {
   const trackById = new Map((tracks.data ?? []).map((t) => [t.id, t.name]));
   const specById = new Map((specializations.data ?? []).map((s) => [s.id, s.name]));
   const rangeById = new Map((ranges.data ?? []).map((r) => [r.id, r.name]));
+
+  const poolCatalog = await fetchAttendancePools(supabase, activeYear.id);
+  const poolViews = poolCatalog.pools.map((p) => ({
+    id: p.id,
+    name: p.name,
+    lessonIds: poolCatalog.members.filter((m) => m.pool_id === p.id).map((m) => m.lesson_id),
+  }));
+  const poolLessonOptions = allLessons.map((l) => {
+    const assignment = one<{ teachers?: unknown }>(l.teacher_teaching_assignments);
+    const teacherName = one<{ full_name: string }>(assignment?.teachers)?.full_name ?? "";
+    const audience = audienceForLesson(l, audienceByLesson);
+    const groupLabel = formatLessonGroupLabel({
+      billingType: l.billing_type,
+      forPsychology: Boolean(l.for_psychology),
+      gradeNames: audience.grade_ids.map((id) => gradeById.get(id) ?? "").filter(Boolean),
+      classNames: audience.class_ids.map((id) => classById.get(id) ?? "").filter(Boolean),
+      trackNames: audience.track_ids.map((id) => trackById.get(id) ?? "").filter(Boolean),
+      specializationNames: audience.specialization_ids
+        .map((id) => specById.get(id) ?? "")
+        .filter(Boolean),
+    });
+    const unit = poolCatalog.byLesson.get(l.id);
+    return {
+      id: l.id,
+      label: [
+        formatLessonOptionLabel({
+          subject: formatSubjectLessonLabel(one<{ name: string }>(l.subjects)?.name, l.subject),
+          day_of_week: l.day_of_week,
+          lesson_number: l.lesson_number,
+          period_count: l.period_count,
+        }),
+        groupLabel,
+        teacherName,
+      ]
+        .filter(Boolean)
+        .join(" · "),
+      fingerprint: fingerprintForLesson(audience, Boolean(l.for_psychology)),
+      poolId: unit?.poolId ?? null,
+      poolName: unit?.poolName ?? null,
+    };
+  });
 
   const yearStudents = [...new Map(
     (yearStudentsRes.data ?? [])
@@ -339,6 +383,12 @@ export default async function LessonsPage({ searchParams }: Props) {
         )}
         <LessonsForm {...formProps} />
       </Section>
+
+      <AttendancePoolsPanel
+        yearId={activeYear.id}
+        pools={poolViews}
+        lessons={poolLessonOptions}
+      />
 
       <LessonsCalendar
         initialMonthIso={from}

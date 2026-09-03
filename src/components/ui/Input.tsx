@@ -1,28 +1,60 @@
 import { cn } from "@/lib/cn";
 
-const fieldClass =
-  "rounded-lg border border-outline-variant bg-surface-container-lowest px-3.5 py-2.5 text-body-md text-on-surface shadow-tactile-sm transition-colors placeholder:text-on-surface-variant/70 focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary";
+export type FieldSize = "md" | "lg";
 
-interface InputProps extends React.InputHTMLAttributes<HTMLInputElement> {
+export const fieldClass =
+  "rounded-lg border border-outline-variant bg-surface-container-lowest text-on-surface shadow-tactile-sm transition-colors placeholder:text-on-surface-variant/70 focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary";
+
+export const fieldSizeClass: Record<FieldSize, string> = {
+  md: "px-3.5 py-2.5 text-body-md",
+  lg: "px-4 py-3.5 text-body-lg",
+};
+
+export const labelSizeClass: Record<FieldSize, string> = {
+  md: "font-label-md text-label-md",
+  lg: "font-title-lg text-title-lg",
+};
+
+interface InputProps extends Omit<React.InputHTMLAttributes<HTMLInputElement>, "size"> {
   label?: string;
   error?: string;
+  fieldSize?: FieldSize;
 }
 
-export function Input({ label, error, className, id, ...props }: InputProps) {
+export function Input({
+  label,
+  error,
+  className,
+  id,
+  fieldSize = "md",
+  ...props
+}: InputProps) {
   const inputId = id || props.name;
   return (
     <div className="flex flex-col gap-1.5">
       {label && (
-        <label htmlFor={inputId} className="block font-label-md text-label-md text-on-surface">
+        <label
+          htmlFor={inputId}
+          className={cn("block text-on-surface", labelSizeClass[fieldSize])}
+        >
           {label}
         </label>
       )}
       <input
         id={inputId}
-        className={cn(fieldClass, error && "border-error focus:ring-error", className)}
+        className={cn(
+          fieldClass,
+          fieldSizeClass[fieldSize],
+          error && "border-error focus:ring-error",
+          className
+        )}
         {...props}
       />
-      {error && <span className="text-caption text-error">{error}</span>}
+      {error && (
+        <span className={cn(fieldSize === "lg" ? "text-body-md" : "text-caption", "text-error")}>
+          {error}
+        </span>
+      )}
     </div>
   );
 }
@@ -30,15 +62,27 @@ export function Input({ label, error, className, id, ...props }: InputProps) {
 interface SelectProps extends React.SelectHTMLAttributes<HTMLSelectElement> {
   label?: string;
   error?: string;
+  fieldSize?: FieldSize;
   options: { value: string; label: string }[];
 }
 
-export function Select({ label, error, options, className, id, ...props }: SelectProps) {
+export function Select({
+  label,
+  error,
+  options,
+  className,
+  id,
+  fieldSize = "md",
+  ...props
+}: SelectProps) {
   const selectId = id || props.name;
   return (
     <div className="flex flex-col gap-1.5">
       {label && (
-        <label htmlFor={selectId} className="block font-label-md text-label-md text-on-surface">
+        <label
+          htmlFor={selectId}
+          className={cn("block text-on-surface", labelSizeClass[fieldSize])}
+        >
           {label}
         </label>
       )}
@@ -46,6 +90,7 @@ export function Select({ label, error, options, className, id, ...props }: Selec
         id={selectId}
         className={cn(
           fieldClass,
+          fieldSizeClass[fieldSize],
           "appearance-none bg-[length:1rem] bg-[left_0.85rem_center] bg-no-repeat pe-9 ps-3.5",
           error && "border-error focus:ring-error",
           className
@@ -61,7 +106,11 @@ export function Select({ label, error, options, className, id, ...props }: Selec
           </option>
         ))}
       </select>
-      {error && <span className="text-caption text-error">{error}</span>}
+      {error && (
+        <span className={cn(fieldSize === "lg" ? "text-body-md" : "text-caption", "text-error")}>
+          {error}
+        </span>
+      )}
     </div>
   );
 }

@@ -28,6 +28,8 @@ import { applyStudentImportRows } from "@/lib/students/importApply";
 import type { AttendanceStatus, HolidayKind } from "@/types/database";
 import { todayIso } from "@/lib/dates/hebrew";
 import { resolveOrCreateSubject } from "@/lib/lessons/subjects";
+import { fingerprintForLesson } from "@/lib/attendance/pools";
+import { previousWeekBlockMessage } from "@/lib/attendance/previous-week";
 import {
   isError,
   parseLessonBilling,
@@ -1646,6 +1648,122 @@ export async function syncLessonStudentsAction(lessonId: string, academicYearId:
   }
 }
 
+export async function saveAttendancePoolAction(input: {
+  yearId: string;
+  poolId?: string | null;
+  name: string;
+  lessonIds: string[];
+}) {
+  const yearId = requireId(input.yearId, "שנה");
+  if (isError(yearId)) return yearId;
+  const name = requireText(input.name, "שם הקיבוץ");
+  if (isError(name)) return name;
+  const lessonIds = [...new Set((input.lessonIds ?? []).filter(Boolean))];
+  if (lessonIds.length < 2) {
+    return { error: "יש לבחור לפחות שני שיעורים לאותה קבוצה" };
+  }
+
+  const actionAuth = await createActionClient();
+  if ("error" in actionAuth) return { error: actionAuth.error };
+  const supabase = actionAuth.supabase;
+
+  const { data: lessons, error: lessonError } = await supabase
+    .from("lessons")
+    .select("id, academic_year_id, grade_id, class_id, track_id, specialization_id, for_psychology")
+    .in("id", lessonIds);
+  if (lessonError) return { error: "לא ניתן לטעון את השיעורים שנבחרו" };
+  if ((lessons ?? []).length !== lessonIds.length) {
+    return { error: "חלק מהשיעורים שנבחרו לא נמצאו" };
+  }
+  if ((lessons ?? []).some((l) => l.academic_year_id !== yearId)) {
+    return { error: "כל השיעורים חייבים להיות מאותה שנה אקדמית" };
+  }
+
+  const { data: audienceRows } = await supabase
+    .from("lesson_audience")
+    .select("lesson_id, grade_id, class_id, track_id, specialization_id")
+    .in("lesson_id", lessonIds);
+  const audienceMap = audienceMapFromRows(audienceRows ?? []);
+  const fingerprints = (lessons ?? []).map((l) =>
+    fingerprintForLesson(audienceForLesson(l, audienceMap), Boolean(l.for_psychology))
+  );
+  if (new Set(fingerprints).size > 1) {
+    return { error: "אפשר לקבץ רק שיעורים של אותה קבוצה (אותן שכבות / כיתות / מסלולים / התמחויות)" };
+  }
+
+  const { data: taken } = await supabase
+    .from("attendance_pool_members")
+    .select("lesson_id, pool_id")
+    .in("lesson_id", lessonIds);
+  const conflict = (taken ?? []).find(
+    (row) => !input.poolId || row.pool_id !== input.poolId
+  );
+  if (conflict) {
+    return { error: "אחד השיעורים כבר שייך לקיבוץ נוכחות אחר" };
+  }
+
+  let poolId = input.poolId ?? null;
+  if (poolId) {
+    const { error } = await supabase
+      .from("attendance_pools")
+      .update({ name })
+      .eq("id", poolId)
+      .eq("academic_year_id", yearId);
+    if (error) {
+      if (error.message.includes("attendance_pools") && error.message.toLowerCase().includes("unique")) {
+        return { error: "כבר קיים קיבוץ בשם זה בשנה הנוכחית" };
+      }
+      return { error: "שמירת הקיבוץ נכשלה" };
+    }
+    const { error: delError } = await supabase
+      .from("attendance_pool_members")
+      .delete()
+      .eq("pool_id", poolId);
+    if (delError) return { error: "עדכון השיעורים בקיבוץ נכשל" };
+  } else {
+    const { data: created, error } = await supabase
+      .from("attendance_pools")
+      .insert({ academic_year_id: yearId, name })
+      .select("id")
+      .single();
+    if (error || !created) {
+      if (error?.message.toLowerCase().includes("unique")) {
+        return { error: "כבר קיים קיבוץ בשם זה בשנה הנוכחית" };
+      }
+      return { error: "יצירת הקיבוץ נכשלה. אם זו הפעם הראשונה — הריצי את 015_attendance_pools.sql" };
+    }
+    poolId = created.id;
+  }
+
+  const { error: memberError } = await supabase.from("attendance_pool_members").insert(
+    lessonIds.map((lesson_id) => ({ pool_id: poolId, lesson_id }))
+  );
+  if (memberError) return { error: "צירוף השיעורים לקיבוץ נכשל" };
+
+  revalidatePath("/lessons");
+  revalidatePath("/attendance");
+  revalidatePath("/students");
+  revalidatePath("/reports");
+  revalidatePath("/makeup");
+  return { success: true };
+}
+
+export async function deleteAttendancePoolAction(poolId: string) {
+  const id = requireId(poolId, "קיבוץ");
+  if (isError(id)) return id;
+  const actionAuth = await createActionClient();
+  if ("error" in actionAuth) return { error: actionAuth.error };
+  const supabase = actionAuth.supabase;
+  const { error } = await supabase.from("attendance_pools").delete().eq("id", id);
+  if (error) return { error: "פירוק הקיבוץ נכשל" };
+  revalidatePath("/lessons");
+  revalidatePath("/attendance");
+  revalidatePath("/students");
+  revalidatePath("/reports");
+  revalidatePath("/makeup");
+  return { success: true };
+}
+
 export async function upsertAttendanceAction(
   studentId: string,
   occurrenceId: string,
@@ -1655,6 +1773,8 @@ export async function upsertAttendanceAction(
   const actionAuth = await createActionClient();
   if ("error" in actionAuth) return { error: actionAuth.error };
   const supabase = actionAuth.supabase;
+  const blocked = await previousWeekBlockMessage(supabase, [occurrenceId]);
+  if (blocked) return { error: blocked };
   const payload: {
     student_id: string;
     lesson_occurrence_id: string;
@@ -1688,6 +1808,11 @@ export async function bulkAttendanceAction(
   const actionAuth = await createActionClient();
   if ("error" in actionAuth) return { error: actionAuth.error };
   const supabase = actionAuth.supabase;
+  const blocked = await previousWeekBlockMessage(
+    supabase,
+    updates.map((u) => u.occurrenceId)
+  );
+  if (blocked) return { error: blocked };
   const records = updates.map((u) => ({
     student_id: u.studentId,
     lesson_occurrence_id: u.occurrenceId,
@@ -1880,6 +2005,12 @@ export async function copyPreviousAttendanceAction(
     .eq("id", occurrenceId)
     .single();
   if (!current) return { error: "מופע לא נמצא" };
+
+  const blocked = await previousWeekBlockMessage(supabase, [
+    occurrenceId,
+    ...alsoOccurrenceIds,
+  ]);
+  if (blocked) return { error: blocked };
 
   const { data: previous } = await supabase
     .from("lesson_occurrences")
