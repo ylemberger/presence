@@ -9,7 +9,6 @@ import {
   createClassAction,
   createTrackAction,
   createSpecializationAction,
-  createSubjectAction,
   createActivityRangeAction,
   createAttendanceRuleAction,
   deleteAcademicYearAction,
@@ -17,7 +16,6 @@ import {
   deleteClassAction,
   deleteTrackAction,
   deleteSpecializationAction,
-  deleteSubjectAction,
   deleteActivityRangeAction,
   deleteAttendanceRuleAction,
   updateAcademicYearAction,
@@ -25,7 +23,6 @@ import {
   updateClassAction,
   updateTrackAction,
   updateSpecializationAction,
-  updateSubjectAction,
   updateActivityRangeAction,
   updateAttendanceRuleAction,
 } from "../actions";
@@ -72,7 +69,7 @@ export default async function SettingsPage() {
     await ensureFixedGrades(yearId);
   }
 
-  const [grades, classes, tracks, specializations, subjects, ranges, holidays, rules] = yearId
+  const [grades, classes, tracks, specializations, ranges, holidays, rules] = yearId
     ? await Promise.all([
         supabase.from("grades").select("*").eq("academic_year_id", yearId).order("name"),
         supabase
@@ -86,7 +83,6 @@ export default async function SettingsPage() {
           .select("*")
           .eq("academic_year_id", yearId)
           .order("name"),
-        supabase.from("subjects").select("*").eq("academic_year_id", yearId).order("name"),
         supabase
           .from("activity_ranges")
           .select("*")
@@ -100,7 +96,6 @@ export default async function SettingsPage() {
         supabase.from("attendance_rules").select("*").order("name"),
       ])
     : [
-        { data: [] },
         { data: [] },
         { data: [] },
         { data: [] },
@@ -265,29 +260,6 @@ export default async function SettingsPage() {
           </table>
         </div>
       </Section>
-      <Section icon="menu_book" title="מקצועות">
-        <p className="mb-3 font-caption text-caption text-on-surface-variant">
-          מקצוע הוא הרמה שמעל השיעור: למשל «יסודות הבית» ותחתיו שיעורי בישול, כביסה
-          וגיהוץ. אחוז הנוכחות מחושב לכל השיעורים שתחת אותו מקצוע יחד.
-        </p>
-        <SettingsForms type="subject" yearId={yearId} createAction={createSubjectAction} />
-        <div className="mt-4 overflow-x-auto">
-          <table className="w-full text-body-md">
-            <SettingsTableHead columns={["שם", "פעולות"]} />
-            <tbody className="divide-y divide-outline-variant/25">
-              {(subjects.data ?? []).map((s) => (
-                <EditableNameRow
-                  key={s.id}
-                  id={s.id}
-                  name={s.name}
-                  updateAction={updateSubjectAction}
-                  deleteAction={deleteSubjectAction}
-                />
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </Section>
     </div>
   ) : (
     <Section>
@@ -399,7 +371,7 @@ export default async function SettingsPage() {
     <div className="flex flex-col gap-stack_lg">
       <PageHeader
         title="הגדרות מוסד"
-        description="ניהול תצורת המערכת, שנות לימוד, שכבות, מקצועות, מסלולים, טווחי פעילות, לוח חופשות וכללי נוכחות."
+        description="ניהול תצורת המערכת, שנות לימוד, שכבות, מסלולים, טווחי פעילות, לוח חופשות וכללי נוכחות."
         size="headline"
       />
       <Tabs

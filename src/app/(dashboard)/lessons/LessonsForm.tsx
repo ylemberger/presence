@@ -233,7 +233,7 @@ export function LessonsForm({
               placeholder="למשל בישול"
             />
             <p className="font-body-md text-body-md text-on-surface-variant">
-              כמה שיעורים תחת אותו מקצוע נספרים יחד בנוכחות. השיבוץ מהשכר הוא לעיון בלבד.
+              שם המקצוע הוא רק תווית. נוכחות משותפת נקבעת בקיבוץ ידני ביומן השיעורים, לא לפי השם. השיבוץ מהשכר הוא לעיון בלבד.
             </p>
           </div>
           <div className="min-w-0 lg:col-span-7">

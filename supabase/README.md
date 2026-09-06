@@ -17,7 +17,8 @@
 | **מקצועות (הורה לשיעורים)** | [`patches/014_subjects.sql`](patches/014_subjects.sql) |
 | **שכבות מרובות בשיעור** | [`patches/013_lesson_audience_grades.sql`](patches/013_lesson_audience_grades.sql) |
 | **רק שדות תלמידה חדשים** | [`patches/010_student_roster_fields.sql`](patches/010_student_roster_fields.sql) |
-| **מחיקת כל התלמידות** (בלי seed) | [`patches/012_wipe_all_students.sql`](patches/012_wipe_all_students.sql) |
+| **ניקוי ניסוי: תלמידות + שיעורים** (בלי שנים/כיתות/מורות) | [`patches/016_wipe_experimental_lessons_and_students.sql`](patches/016_wipe_experimental_lessons_and_students.sql) |
+| **מחיקת כל התלמידות** (בלי seed, בלי שיעורים) | [`patches/012_wipe_all_students.sql`](patches/012_wipe_all_students.sql) |
 | **מחיקה + 35 לבדיקת קידום** | [`patches/011_wipe_and_seed_35_promo_test.sql`](patches/011_wipe_and_seed_35_promo_test.sql) |
 | **לא בטוחה מה חסר** | כל [`RUN_ME.sql`](RUN_ME.sql) |
 | **RLS קריאה בלבד במסד השכר** (פרויקט אחר) | [`salary_read_only_rls.sql`](salary_read_only_rls.sql) — לא על מסד הנוכחות |
