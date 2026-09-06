@@ -178,27 +178,66 @@ function parseOptionalFlag(raw: string, fieldLabel: string): boolean | { error: 
   if (!value) return false;
   const normalized = value.replace(/\s+/g, "").toLowerCase();
   if (["v", "✓", "✔", "√", "כן", "yes", "true", "1"].includes(normalized)) return true;
-  if (["לא", "no", "false", "0", "-", "x"].includes(normalized)) return false;
-  return { error: `בשדה ${fieldLabel}: ריק = לא, V = כן` };
+  if (["לא", "ללא", "בלי", "אין", "no", "false", "0", "-", "x"].includes(normalized)) return false;
+  return { error: `בשדה ${fieldLabel}: ריק או ללא = לא, V = כן` };
 }
 
-function parseStartDate(raw: string): string | { error: string } {
-  const value = raw.trim();
-  if (!value) return { error: "חסר תאריך תחילה" };
-  if (/^\d{4}-\d{2}-\d{2}$/.test(value)) return value;
-  const dotted = value.match(/^(\d{1,2})[./](\d{1,2})[./](\d{4})$/);
-  if (dotted) {
-    const day = dotted[1].padStart(2, "0");
-    const month = dotted[2].padStart(2, "0");
-    return `${dotted[3]}-${month}-${day}`;
+function toIsoDate(year: number, month: number, day: number): string | { error: string } {
+  if (!Number.isInteger(year) || year < 1900 || year > 2100) {
+    return { error: "תאריך לא תקין" };
   }
-  if (/^\d{5}$/.test(value)) {
-    const parsed = XLSX.SSF.parse_date_code(Number(value));
+  const dt = new Date(Date.UTC(year, month - 1, day));
+  if (dt.getUTCFullYear() !== year || dt.getUTCMonth() !== month - 1 || dt.getUTCDate() !== day) {
+    return { error: "תאריך לא תקין" };
+  }
+  return `${year}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
+}
+
+function expandTwoDigitYear(yy: number): number {
+  return yy <= 29 ? 2000 + yy : 1900 + yy;
+}
+
+/** Accepts Israeli/Excel date variants and returns YYYY-MM-DD. */
+function parseFlexibleIsoDate(raw: string): string | { error: string } {
+  const value = raw.trim().replace(/[\u200e\u200f\u202a-\u202e]/g, "");
+  if (!value) return { error: "חסר תאריך" };
+
+  const withoutTime = value.replace(/[T\s]\d{1,2}:\d{2}(?::\d{2}(?:\.\d+)?)?(?:Z|[+-]\d{2}:?\d{2})?$/i, "").trim();
+
+  const iso = withoutTime.match(/^(\d{4})-(\d{1,2})-(\d{1,2})$/);
+  if (iso) return toIsoDate(Number(iso[1]), Number(iso[2]), Number(iso[3]));
+
+  const ymd = withoutTime.match(/^(\d{4})[./](\d{1,2})[./](\d{1,2})$/);
+  if (ymd) return toIsoDate(Number(ymd[1]), Number(ymd[2]), Number(ymd[3]));
+
+  const dmy = withoutTime.match(/^(\d{1,2})[./-](\d{1,2})[./-](\d{4})$/);
+  if (dmy) return toIsoDate(Number(dmy[3]), Number(dmy[2]), Number(dmy[1]));
+
+  const dmy2 = withoutTime.match(/^(\d{1,2})[./-](\d{1,2})[./-](\d{2})$/);
+  if (dmy2) {
+    return toIsoDate(expandTwoDigitYear(Number(dmy2[3])), Number(dmy2[2]), Number(dmy2[1]));
+  }
+
+  const compact = withoutTime.match(/^(\d{4})(\d{2})(\d{2})$/);
+  if (compact) return toIsoDate(Number(compact[1]), Number(compact[2]), Number(compact[3]));
+
+  if (/^\d{4,6}(?:\.\d+)?$/.test(withoutTime)) {
+    const parsed = XLSX.SSF.parse_date_code(Number(withoutTime));
     if (parsed?.y && parsed.m && parsed.d) {
-      return `${parsed.y}-${String(parsed.m).padStart(2, "0")}-${String(parsed.d).padStart(2, "0")}`;
+      return toIsoDate(parsed.y, parsed.m, parsed.d);
     }
   }
-  return { error: "תאריך חייב להיות YYYY-MM-DD או DD.MM.YYYY" };
+
+  return { error: "תאריך לא מזוהה — אפשר YYYY-MM-DD, DD.MM.YYYY, DD/MM/YYYY ועוד" };
+}
+
+function normalizePhoneList(raw: string): string | null {
+  const parts = raw
+    .split(/[,;]/)
+    .map((part) => part.trim())
+    .filter(Boolean);
+  if (parts.length === 0) return null;
+  return parts.join(", ");
 }
 
 export function parseStudentImportWorkbook(
@@ -306,10 +345,10 @@ export function parseStudentImportWorkbook(
     const birthGregorianRaw = get("birthGregorian");
     const address = get("address") || null;
     const city = get("city") || null;
-    const phone = get("phone").trim() || null;
-    const fatherPhone = get("fatherPhone").trim() || null;
-    const motherPhone = get("motherPhone").trim() || null;
-    const studentPhone = get("studentPhone").trim() || null;
+    const phone = normalizePhoneList(get("phone"));
+    const fatherPhone = normalizePhoneList(get("fatherPhone"));
+    const motherPhone = normalizePhoneList(get("motherPhone"));
+    const studentPhone = normalizePhoneList(get("studentPhone"));
     const highSchool = get("highSchool") || null;
     const chetzRaw = get("chetz");
 
@@ -400,14 +439,14 @@ export function parseStudentImportWorkbook(
     let birthDate: string | null = null;
     const birthGregorian = birthGregorianRaw.trim();
     if (birthGregorian) {
-      const parsedBirth = parseStartDate(birthGregorian);
+      const parsedBirth = parseFlexibleIsoDate(birthGregorian);
       if (typeof parsedBirth === "string") birthDate = parsedBirth;
       else rowErrors.push(`ת.ל. לועזי: ${parsedBirth.error}`);
     }
     const birthHebrew = (get("birthHebrew") || "").trim() || null;
 
     const startDate = startDateRaw
-      ? parseStartDate(startDateRaw)
+      ? parseFlexibleIsoDate(startDateRaw)
       : defaultStartDate;
     if (typeof startDate !== "string") rowErrors.push(startDate.error);
 
@@ -507,9 +546,9 @@ export function buildStudentImportTemplate(catalogs: StudentImportCatalogs): Uin
     ["1. מחקי את שורת הדוגמה ומלאי תלמידות אמיתיות."],
     ["2. אם מ.ז. כבר קיימת — הפרטים והשיבוץ יעודכנו (לא כפילות)."],
     ["3. כיתה/מסלול/התמחות חייבים להתאים להגדרות השנה. שכבה מומלצת אם יש כיתות באותו שם."],
-    ["4. ת.ל. עברי ות.ל. לועזי — רשות. אפשר להשאיר ריק. לועזי אם ממלאים: YYYY-MM-DD או DD.MM.YYYY."],
-    ["5. פסיכולוגיה ותוכנית חץ — רשות. ריק = לא, V = כן (גם כן/לא מתקבל)."],
-    ["6. טל, פל אב, פל אם, פל תלמידה — רשות. אפשר להשאיר ריק."],
+    ["4. ת.ל. עברי ות.ל. לועזי — רשות. אפשר להשאיר ריק. לועזי: YYYY-MM-DD, DD.MM.YYYY, DD/MM/YYYY, DD-MM-YYYY, גם עם שנה בת שתי ספרות."],
+    ["5. פסיכולוגיה ותוכנית חץ — רשות. ריק או ללא = לא, V = כן (גם כן/לא מתקבל)."],
+    ["6. טל, פל אב, פל אם, פל תלמידה — רשות. אפשר כמה מספרים מופרדים בפסיק."],
     ["7. מחזור ובתוקף מתאריך — רשות (ברירת מחדל: מחזור 1, היום)."],
     [],
     ["ערכים מותרים בשנה הפעילה"],
