@@ -197,38 +197,147 @@ function expandTwoDigitYear(yy: number): number {
   return yy <= 29 ? 2000 + yy : 1900 + yy;
 }
 
-/** Accepts Israeli/Excel date variants and returns YYYY-MM-DD. */
+const MONTH_NAME_TO_NUMBER: Record<string, number> = {
+  january: 1,
+  jan: 1,
+  february: 2,
+  feb: 2,
+  march: 3,
+  mar: 3,
+  april: 4,
+  apr: 4,
+  may: 5,
+  june: 6,
+  jun: 6,
+  july: 7,
+  jul: 7,
+  august: 8,
+  aug: 8,
+  september: 9,
+  sept: 9,
+  sep: 9,
+  october: 10,
+  oct: 10,
+  november: 11,
+  nov: 11,
+  december: 12,
+  dec: 12,
+  ינואר: 1,
+  פברואר: 2,
+  מרץ: 3,
+  מרס: 3,
+  אפריל: 4,
+  מאי: 5,
+  יוני: 6,
+  יולי: 7,
+  אוגוסט: 8,
+  ספטמבר: 9,
+  אוקטובר: 10,
+  נובמבר: 11,
+  דצמבר: 12,
+};
+
+function replaceMonthNames(raw: string): string {
+  let text = raw;
+  const names = Object.keys(MONTH_NAME_TO_NUMBER).sort((a, b) => b.length - a.length);
+  for (const name of names) {
+    const month = MONTH_NAME_TO_NUMBER[name];
+    text = text.replace(new RegExp(name, "gi"), ` ${month} `);
+  }
+  return text;
+}
+
+function interpretThreeNumbers(a: number, b: number, c: number): string | { error: string } {
+  if (a >= 1900 && a <= 2100) {
+    const ymd = toIsoDate(a, b, c);
+    if (typeof ymd === "string") return ymd;
+    return toIsoDate(a, c, b);
+  }
+  const year = c >= 100 ? c : expandTwoDigitYear(c);
+  const dmy = toIsoDate(year, b, a);
+  if (typeof dmy === "string") return dmy;
+  return toIsoDate(year, a, b);
+}
+
+function parseExcelSerial(raw: string): string | { error: string } | null {
+  if (!/^\d{4,6}(?:\.\d+)?$/.test(raw)) return null;
+  const parsed = XLSX.SSF.parse_date_code(Number(raw));
+  if (!parsed?.y || !parsed.m || !parsed.d) return null;
+  const iso = toIsoDate(parsed.y, parsed.m, parsed.d);
+  return typeof iso === "string" ? iso : null;
+}
+
+function parseCompactDigits(digits: string): string | { error: string } | null {
+  if (digits.length === 8) {
+    const ymd = toIsoDate(Number(digits.slice(0, 4)), Number(digits.slice(4, 6)), Number(digits.slice(6, 8)));
+    if (typeof ymd === "string") return ymd;
+    const dmy = toIsoDate(Number(digits.slice(4, 8)), Number(digits.slice(2, 4)), Number(digits.slice(0, 2)));
+    if (typeof dmy === "string") return dmy;
+    return null;
+  }
+  if (digits.length === 6) {
+    const dmy = interpretThreeNumbers(
+      Number(digits.slice(0, 2)),
+      Number(digits.slice(2, 4)),
+      Number(digits.slice(4, 6))
+    );
+    if (typeof dmy === "string") return dmy;
+  }
+  return null;
+}
+
+/** Accepts messy Israeli/Excel date text and returns YYYY-MM-DD. */
 function parseFlexibleIsoDate(raw: string): string | { error: string } {
   const value = raw.trim().replace(/[\u200e\u200f\u202a-\u202e]/g, "");
   if (!value) return { error: "חסר תאריך" };
 
-  const withoutTime = value.replace(/[T\s]\d{1,2}:\d{2}(?::\d{2}(?:\.\d+)?)?(?:Z|[+-]\d{2}:?\d{2})?$/i, "").trim();
+  const withoutTime = value.replace(
+    /[T\s,]\d{1,2}:\d{2}(?::\d{2}(?:\.\d+)?)?(?:Z|[+-]\d{2}:?\d{2})?.*$/i,
+    ""
+  ).trim();
+  const withMonths = replaceMonthNames(withoutTime);
+  const normalized = withMonths.replace(/[–—−]/g, "-").replace(/[\\]/g, "/").trim();
 
-  const iso = withoutTime.match(/^(\d{4})-(\d{1,2})-(\d{1,2})$/);
-  if (iso) return toIsoDate(Number(iso[1]), Number(iso[2]), Number(iso[3]));
+  const serial = parseExcelSerial(normalized.replace(/\s+/g, ""));
+  if (serial) return serial;
 
-  const ymd = withoutTime.match(/^(\d{4})[./](\d{1,2})[./](\d{1,2})$/);
-  if (ymd) return toIsoDate(Number(ymd[1]), Number(ymd[2]), Number(ymd[3]));
-
-  const dmy = withoutTime.match(/^(\d{1,2})[./-](\d{1,2})[./-](\d{4})$/);
-  if (dmy) return toIsoDate(Number(dmy[3]), Number(dmy[2]), Number(dmy[1]));
-
-  const dmy2 = withoutTime.match(/^(\d{1,2})[./-](\d{1,2})[./-](\d{2})$/);
-  if (dmy2) {
-    return toIsoDate(expandTwoDigitYear(Number(dmy2[3])), Number(dmy2[2]), Number(dmy2[1]));
+  const compact = normalized.replace(/\D/g, "");
+  if (/^\d{6,8}$/.test(compact) && !/\d+\D+\d+/.test(normalized)) {
+    const parsedCompact = parseCompactDigits(compact);
+    if (parsedCompact) return parsedCompact;
   }
 
-  const compact = withoutTime.match(/^(\d{4})(\d{2})(\d{2})$/);
-  if (compact) return toIsoDate(Number(compact[1]), Number(compact[2]), Number(compact[3]));
-
-  if (/^\d{4,6}(?:\.\d+)?$/.test(withoutTime)) {
-    const parsed = XLSX.SSF.parse_date_code(Number(withoutTime));
-    if (parsed?.y && parsed.m && parsed.d) {
-      return toIsoDate(parsed.y, parsed.m, parsed.d);
+  const numbers = (normalized.match(/\d+/g) ?? []).map((part) => Number(part));
+  const yearIndex = numbers.findIndex((n) => n >= 1900 && n <= 2100);
+  if (yearIndex >= 0 && numbers.length >= 3) {
+    const triple =
+      yearIndex === 0
+        ? [numbers[0], numbers[1], numbers[2]]
+        : [numbers[yearIndex - 2], numbers[yearIndex - 1], numbers[yearIndex]];
+    if (triple.every((n) => Number.isFinite(n))) {
+      const parsed = interpretThreeNumbers(triple[0], triple[1], triple[2]);
+      if (typeof parsed === "string") return parsed;
     }
   }
+  if (numbers.length >= 3) {
+    const parsed = interpretThreeNumbers(numbers[0], numbers[1], numbers[2]);
+    if (typeof parsed === "string") return parsed;
+  }
 
-  return { error: "תאריך לא מזוהה — אפשר YYYY-MM-DD, DD.MM.YYYY, DD/MM/YYYY ועוד" };
+  if (numbers.length === 1) {
+    const one = String(numbers[0]);
+    const asSerial = parseExcelSerial(one);
+    if (asSerial) return asSerial;
+    const asCompact = parseCompactDigits(one);
+    if (asCompact) return asCompact;
+  }
+
+  if (compact.length === 8 || compact.length === 6) {
+    const parsedCompact = parseCompactDigits(compact);
+    if (parsedCompact) return parsedCompact;
+  }
+
+  return { error: "תאריך לא מזוהה" };
 }
 
 function normalizePhoneList(raw: string): string | null {
@@ -546,7 +655,7 @@ export function buildStudentImportTemplate(catalogs: StudentImportCatalogs): Uin
     ["1. מחקי את שורת הדוגמה ומלאי תלמידות אמיתיות."],
     ["2. אם מ.ז. כבר קיימת — הפרטים והשיבוץ יעודכנו (לא כפילות)."],
     ["3. כיתה/מסלול/התמחות חייבים להתאים להגדרות השנה. שכבה מומלצת אם יש כיתות באותו שם."],
-    ["4. ת.ל. עברי ות.ל. לועזי — רשות. אפשר להשאיר ריק. לועזי: YYYY-MM-DD, DD.MM.YYYY, DD/MM/YYYY, DD-MM-YYYY, גם עם שנה בת שתי ספרות."],
+    ["4. ת.ל. עברי ות.ל. לועזי — רשות. אפשר להשאיר ריק. לועזי מזוהה גם בפורמט לא אחיד (נקודות, קווים, סלאש, שמות חודשים, שנה קצרה, מספר אקסל)."],
     ["5. פסיכולוגיה ותוכנית חץ — רשות. ריק או ללא = לא, V = כן (גם כן/לא מתקבל)."],
     ["6. טל, פל אב, פל אם, פל תלמידה — רשות. אפשר כמה מספרים מופרדים בפסיק."],
     ["7. מחזור ובתוקף מתאריך — רשות (ברירת מחדל: מחזור 1, היום)."],
