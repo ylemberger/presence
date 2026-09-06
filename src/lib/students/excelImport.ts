@@ -173,13 +173,13 @@ function lookupByName<T extends { id: string; name: string }>(
   return items.find((item) => item.name.trim().replace(/\s+/g, " ") === needle);
 }
 
-function parsePsychology(raw: string): boolean | { error: string } {
-  const value = raw.trim();
+function parseOptionalFlag(raw: string, fieldLabel: string): boolean | { error: string } {
+  const value = raw.trim().replace(/[\u200e\u200f\u202a-\u202e]/g, "");
   if (!value) return false;
   const normalized = value.replace(/\s+/g, "").toLowerCase();
-  if (["כן", "yes", "true", "1", "v", "✓"].includes(normalized)) return true;
-  if (["לא", "no", "false", "0"].includes(normalized)) return false;
-  return { error: 'בשדה פסיכולוגיה יש למלא "כן" או "לא"' };
+  if (["v", "✓", "✔", "√", "כן", "yes", "true", "1"].includes(normalized)) return true;
+  if (["לא", "no", "false", "0", "-", "x"].includes(normalized)) return false;
+  return { error: `בשדה ${fieldLabel}: ריק = לא, V = כן` };
 }
 
 function parseStartDate(raw: string): string | { error: string } {
@@ -303,7 +303,6 @@ export function parseStudentImportWorkbook(
     const psychologyRaw = get("psychology");
     const startDateRaw = get("startDate");
     const mi = get("mi") || null;
-    const birthHebrew = get("birthHebrew") || null;
     const birthGregorianRaw = get("birthGregorian");
     const address = get("address") || null;
     const city = get("city") || null;
@@ -392,18 +391,20 @@ export function parseStudentImportWorkbook(
       } else secondarySpecializationId = spec.id;
     }
 
-    const psychology = parsePsychology(psychologyRaw || "לא");
+    const psychology = parseOptionalFlag(psychologyRaw, "פסיכולוגיה");
     if (typeof psychology !== "boolean") rowErrors.push(psychology.error);
 
-    const chetz = parsePsychology(chetzRaw || "לא");
-    if (typeof chetz !== "boolean") rowErrors.push('בשדה תוכנית חץ יש למלא "כן" או "לא"');
+    const chetz = parseOptionalFlag(chetzRaw, "תוכנית חץ");
+    if (typeof chetz !== "boolean") rowErrors.push(chetz.error);
 
     let birthDate: string | null = null;
-    if (birthGregorianRaw) {
-      const parsedBirth = parseStartDate(birthGregorianRaw);
+    const birthGregorian = birthGregorianRaw.trim();
+    if (birthGregorian) {
+      const parsedBirth = parseStartDate(birthGregorian);
       if (typeof parsedBirth === "string") birthDate = parsedBirth;
       else rowErrors.push(`ת.ל. לועזי: ${parsedBirth.error}`);
     }
+    const birthHebrew = (get("birthHebrew") || "").trim() || null;
 
     const startDate = startDateRaw
       ? parseStartDate(startDateRaw)
@@ -486,11 +487,11 @@ export function buildStudentImportTemplate(catalogs: StudentImportCatalogs): Uin
       "",
       "",
       "",
-      "לא",
+      "",
       exampleGrade,
       exampleTrack,
       exampleSpec,
-      "לא",
+      "",
       "",
       1,
       todayIso(),
@@ -506,8 +507,9 @@ export function buildStudentImportTemplate(catalogs: StudentImportCatalogs): Uin
     ["1. מחקי את שורת הדוגמה ומלאי תלמידות אמיתיות."],
     ["2. אם מ.ז. כבר קיימת — הפרטים והשיבוץ יעודכנו (לא כפילות)."],
     ["3. כיתה/מסלול/התמחות חייבים להתאים להגדרות השנה. שכבה מומלצת אם יש כיתות באותו שם."],
-    ["4. תוכנית חץ / פסיכולוגיה: כן או לא. תאריכים: YYYY-MM-DD או DD.MM.YYYY."],
-    ["5. מחזור ובתוקף מתאריך — רשות (ברירת מחדל: מחזור 1, היום)."],
+    ["4. ת.ל. עברי ות.ל. לועזי — רשות. אפשר להשאיר ריק. לועזי אם ממלאים: YYYY-MM-DD או DD.MM.YYYY."],
+    ["5. פסיכולוגיה ותוכנית חץ — רשות. ריק = לא, V = כן (גם כן/לא מתקבל)."],
+    ["6. מחזור ובתוקף מתאריך — רשות (ברירת מחדל: מחזור 1, היום)."],
     [],
     ["ערכים מותרים בשנה הפעילה"],
     ["שכבות", catalogs.grades.map((g) => g.name).join(" | ") || "אין"],
