@@ -306,10 +306,10 @@ export function parseStudentImportWorkbook(
     const birthGregorianRaw = get("birthGregorian");
     const address = get("address") || null;
     const city = get("city") || null;
-    const phone = get("phone") || null;
-    const fatherPhone = get("fatherPhone") || null;
-    const motherPhone = get("motherPhone") || null;
-    const studentPhone = get("studentPhone") || null;
+    const phone = get("phone").trim() || null;
+    const fatherPhone = get("fatherPhone").trim() || null;
+    const motherPhone = get("motherPhone").trim() || null;
+    const studentPhone = get("studentPhone").trim() || null;
     const highSchool = get("highSchool") || null;
     const chetzRaw = get("chetz");
 
@@ -509,7 +509,8 @@ export function buildStudentImportTemplate(catalogs: StudentImportCatalogs): Uin
     ["3. כיתה/מסלול/התמחות חייבים להתאים להגדרות השנה. שכבה מומלצת אם יש כיתות באותו שם."],
     ["4. ת.ל. עברי ות.ל. לועזי — רשות. אפשר להשאיר ריק. לועזי אם ממלאים: YYYY-MM-DD או DD.MM.YYYY."],
     ["5. פסיכולוגיה ותוכנית חץ — רשות. ריק = לא, V = כן (גם כן/לא מתקבל)."],
-    ["6. מחזור ובתוקף מתאריך — רשות (ברירת מחדל: מחזור 1, היום)."],
+    ["6. טל, פל אב, פל אם, פל תלמידה — רשות. אפשר להשאיר ריק."],
+    ["7. מחזור ובתוקף מתאריך — רשות (ברירת מחדל: מחזור 1, היום)."],
     [],
     ["ערכים מותרים בשנה הפעילה"],
     ["שכבות", catalogs.grades.map((g) => g.name).join(" | ") || "אין"],
