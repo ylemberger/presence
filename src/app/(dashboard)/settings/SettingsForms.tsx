@@ -56,9 +56,12 @@ export function SettingsForms({ type, yearId, grades, createAction }: SettingsFo
             <input type="checkbox" name="is_active" />
             שנה פעילה
           </label>
+          <p className="basis-full text-body-sm text-on-surface-variant">
+            כיתות, מסלולים, התמחויות, טווחי פעילות ולוח חופשות מועתקים מהשנה הקודמת. אחרי היצירה אפשר לערוך אותם בהגדרות לפי השנה החדשה.
+          </p>
           <label className="flex items-center gap-2 text-sm">
             <input type="checkbox" name="promote_students" defaultChecked />
-            קדם תלמידות מהשנה הקודמת (מעתיק גם כיתות/מסלולים; א→ב, ב→ג, ג יוצאות)
+            קדם תלמידות מהשנה הקודמת (א→ב, ב→ג, ג יוצאות)
           </label>
         </>
       )}

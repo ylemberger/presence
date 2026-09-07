@@ -228,12 +228,49 @@ function withAudience(
   };
 }
 
+function isMissingExclusionTable(error: { message?: string; code?: string } | null): boolean {
+  if (!error) return false;
+  const msg = `${error.message ?? ""} ${error.code ?? ""}`;
+  return /student_lesson_exclusions|schema cache|PGRST205|42P01/i.test(msg);
+}
+
+async function excludedStudentIdsForLesson(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  lessonId: string
+): Promise<Set<string>> {
+  const { data, error } = await supabase
+    .from("student_lesson_exclusions")
+    .select("student_id")
+    .eq("lesson_id", lessonId);
+  if (error) {
+    if (isMissingExclusionTable(error)) return new Set();
+    throw error;
+  }
+  return new Set((data ?? []).map((row) => row.student_id));
+}
+
+async function excludedLessonIdsForStudent(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  studentId: string
+): Promise<Set<string>> {
+  const { data, error } = await supabase
+    .from("student_lesson_exclusions")
+    .select("lesson_id")
+    .eq("student_id", studentId);
+  if (error) {
+    if (isMissingExclusionTable(error)) return new Set();
+    throw error;
+  }
+  return new Set((data ?? []).map((row) => row.lesson_id));
+}
+
 export async function autoAssignStudentsToLesson(
   lessonId: string,
   academicYearId: string,
   startDate?: string
 ) {
   const supabase = await createClient();
+  const excludedStudents = await excludedStudentIdsForLesson(supabase, lessonId);
 
   const [{ data: lesson }, { data: placements }, { data: existingLinks }, { data: audience }] =
     await Promise.all([
@@ -276,6 +313,7 @@ export async function autoAssignStudentsToLesson(
   const rows = (placements ?? [])
     .filter((p) => studentMatchesLesson(placementFromRow(p), scoped))
     .filter((p) => !already.has(p.student_id))
+    .filter((p) => !excludedStudents.has(p.student_id))
     .map((p) => ({
       student_id: p.student_id,
       lesson_id: lessonId,
@@ -314,6 +352,7 @@ export async function refreshAutomaticLessonAssignmentsForStudent(
 ) {
   const supabase = await createClient();
   const closeDate = addDays(effectiveFrom, -1);
+  const excludedLessons = await excludedLessonIdsForStudent(supabase, studentId);
 
   const [{ data: currentAutos }, { data: lessons }, { data: audience }] = await Promise.all([
     supabase
@@ -345,6 +384,7 @@ export async function refreshAutomaticLessonAssignmentsForStudent(
 
   const rows = (lessons ?? [])
     .map((lesson) => withAudience(lesson, audience ?? []))
+    .filter((lesson) => !excludedLessons.has(lesson.id))
     .filter((lesson) => studentMatchesLesson(placement, lesson))
     .map((lesson) => ({
       student_id: studentId,

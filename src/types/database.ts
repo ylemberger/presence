@@ -272,6 +272,11 @@ export interface Database {
       attendance_notes: { Row: AttendanceNote; Insert: Omit<AttendanceNote, "id" | "updated_at"> & { id?: string; updated_at?: string }; Update: Partial<AttendanceNote> };
       attendance_pools: { Row: AttendancePool; Insert: Omit<AttendancePool, "id"> & { id?: string }; Update: Partial<AttendancePool> };
       attendance_pool_members: { Row: AttendancePoolMember; Insert: AttendancePoolMember; Update: Partial<AttendancePoolMember> };
+      student_lesson_exclusions: {
+        Row: { student_id: string; lesson_id: string; created_at: string };
+        Insert: { student_id: string; lesson_id: string; created_at?: string };
+        Update: Partial<{ student_id: string; lesson_id: string; created_at: string }>;
+      };
     };
   };
 }

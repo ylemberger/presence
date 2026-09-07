@@ -104,11 +104,11 @@ async function ensureClass(
 }
 
 /**
- * Build catalog for the new year:
- * - Grade א: copy class names from previous א (template for new first-years)
- * - Grade ב: classes from previous א with יג→יד
- * - Grade ג: single class "שנה ג"
+ * Build catalog for the new year (editable afterwards in Settings):
+ * - Copy classes by the same grade name (א/ב/ג) from the previous year
+ * - Also apply promotion templates: א classes → ב with יג→יד, and grade ג gets «שנה ג»
  * - Tracks / specializations / subjects: copy by name
+ * - Activity ranges and holiday periods: copy as-is (dates can be edited for the new year)
  */
 export async function copyYearStructure(
   fromYearId: string,
@@ -127,8 +127,6 @@ export async function copyYearStructure(
     { data: toTracks },
     { data: fromSpecs },
     { data: toSpecs },
-    { data: fromSubjects },
-    { data: toSubjects },
   ] = await Promise.all([
     supabase.from("grades").select("id, name").eq("academic_year_id", fromYearId),
     supabase.from("grades").select("id, name").eq("academic_year_id", toYearId),
@@ -138,15 +136,12 @@ export async function copyYearStructure(
     supabase.from("tracks").select("name").eq("academic_year_id", toYearId),
     supabase.from("specializations").select("name").eq("academic_year_id", fromYearId),
     supabase.from("specializations").select("name").eq("academic_year_id", toYearId),
-    supabase.from("subjects").select("name").eq("academic_year_id", fromYearId),
-    supabase.from("subjects").select("name").eq("academic_year_id", toYearId),
   ]);
 
   const fromGradeName = new Map((fromGrades ?? []).map((g) => [g.id, g.name]));
   const toGradeByName = new Map((toGrades ?? []).map((g) => [g.name, g.id]));
   const haveClass = new Set((toClasses ?? []).map((c) => `${c.grade_id}::${c.name}`));
 
-  const gradeAId = toGradeByName.get("א");
   const gradeBId = toGradeByName.get("ב");
   const gradeCId = toGradeByName.get("ג");
 
@@ -156,36 +151,27 @@ export async function copyYearStructure(
 
   const classRows: Array<{ academic_year_id: string; grade_id: string; name: string }> = [];
 
-  if (gradeAId) {
-    for (const c of fromGradeAClasses) {
-      const key = `${gradeAId}::${c.name}`;
-      if (haveClass.has(key)) continue;
-      haveClass.add(key);
-      classRows.push({ academic_year_id: toYearId, grade_id: gradeAId, name: c.name });
-    }
+  const addClass = (gradeId: string | undefined, name: string) => {
+    if (!gradeId || !name.trim()) return;
+    const key = `${gradeId}::${name}`;
+    if (haveClass.has(key)) return;
+    haveClass.add(key);
+    classRows.push({ academic_year_id: toYearId, grade_id: gradeId, name });
+  };
+
+  for (const c of fromClasses ?? []) {
+    const gradeName = fromGradeName.get(c.grade_id);
+    if (!gradeName) continue;
+    addClass(toGradeByName.get(gradeName), c.name);
   }
 
   if (gradeBId) {
     for (const c of fromGradeAClasses) {
-      const nextName = mapPromotedClassName("א", "ב", c.name);
-      const key = `${gradeBId}::${nextName}`;
-      if (haveClass.has(key)) continue;
-      haveClass.add(key);
-      classRows.push({ academic_year_id: toYearId, grade_id: gradeBId, name: nextName });
+      addClass(gradeBId, mapPromotedClassName("א", "ב", c.name));
     }
   }
 
-  if (gradeCId) {
-    const key = `${gradeCId}::${YEAR_G_CLASS_NAME}`;
-    if (!haveClass.has(key)) {
-      haveClass.add(key);
-      classRows.push({
-        academic_year_id: toYearId,
-        grade_id: gradeCId,
-        name: YEAR_G_CLASS_NAME,
-      });
-    }
-  }
+  addClass(gradeCId, YEAR_G_CLASS_NAME);
 
   if (classRows.length) await supabase.from("classes").insert(classRows);
 
@@ -201,11 +187,69 @@ export async function copyYearStructure(
     .map((s) => ({ academic_year_id: toYearId, name: s.name }));
   if (specRows.length) await supabase.from("specializations").insert(specRows);
 
-  const haveSubject = new Set((toSubjects ?? []).map((s) => s.name));
-  const subjectRows = (fromSubjects ?? [])
-    .filter((s) => !haveSubject.has(s.name))
-    .map((s) => ({ academic_year_id: toYearId, name: s.name }));
-  if (subjectRows.length) await supabase.from("subjects").insert(subjectRows);
+  const { data: fromSubjects, error: subjectsError } = await supabase
+    .from("subjects")
+    .select("name")
+    .eq("academic_year_id", fromYearId);
+  if (!subjectsError) {
+    const { data: toSubjects } = await supabase
+      .from("subjects")
+      .select("name")
+      .eq("academic_year_id", toYearId);
+    const haveSubject = new Set((toSubjects ?? []).map((s) => s.name));
+    const subjectRows = (fromSubjects ?? [])
+      .filter((s) => !haveSubject.has(s.name))
+      .map((s) => ({ academic_year_id: toYearId, name: s.name }));
+    if (subjectRows.length) await supabase.from("subjects").insert(subjectRows);
+  }
+
+  const { data: fromRanges } = await supabase
+    .from("activity_ranges")
+    .select("name, start_date, end_date, range_type")
+    .eq("academic_year_id", fromYearId);
+  const { data: toRanges } = await supabase
+    .from("activity_ranges")
+    .select("name, start_date, end_date, range_type")
+    .eq("academic_year_id", toYearId);
+  const haveRange = new Set(
+    (toRanges ?? []).map((r) => `${r.name}|${r.start_date}|${r.end_date}|${r.range_type ?? ""}`)
+  );
+  const rangeRows = (fromRanges ?? [])
+    .filter((r) => !haveRange.has(`${r.name}|${r.start_date}|${r.end_date}|${r.range_type ?? ""}`))
+    .map((r) => ({
+      academic_year_id: toYearId,
+      name: r.name,
+      start_date: r.start_date,
+      end_date: r.end_date,
+      range_type: r.range_type,
+    }));
+  if (rangeRows.length) await supabase.from("activity_ranges").insert(rangeRows);
+
+  const { data: fromHolidays, error: holidayError } = await supabase
+    .from("holiday_periods")
+    .select("name, start_date, end_date, kind")
+    .eq("academic_year_id", fromYearId);
+  if (!holidayError) {
+    const { data: toHolidays } = await supabase
+      .from("holiday_periods")
+      .select("name, start_date, end_date, kind")
+      .eq("academic_year_id", toYearId);
+    const haveHoliday = new Set(
+      (toHolidays ?? []).map((h) => `${h.name}|${h.start_date}|${h.end_date}|${h.kind ?? ""}`)
+    );
+    const holidayRows = (fromHolidays ?? [])
+      .filter(
+        (h) => !haveHoliday.has(`${h.name}|${h.start_date}|${h.end_date}|${h.kind ?? ""}`)
+      )
+      .map((h) => ({
+        academic_year_id: toYearId,
+        name: h.name,
+        start_date: h.start_date,
+        end_date: h.end_date,
+        kind: h.kind || "vacation",
+      }));
+    if (holidayRows.length) await supabase.from("holiday_periods").insert(holidayRows);
+  }
 }
 
 type PlacementRow = {

@@ -328,7 +328,6 @@ export default async function LessonsPage({ searchParams }: Props) {
     classes: classes.data ?? [],
     tracks: tracks.data ?? [],
     specializations: specializations.data ?? [],
-    subjects: yearSubjects,
     ranges: ranges.data ?? [],
     rules: rules.data ?? [],
   };

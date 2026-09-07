@@ -41,8 +41,9 @@ export function RepairPromotionsButton({
   return (
     <div className="space-y-2">
       <p className="text-body-sm text-on-surface-variant">
-        אם בקידום שנה נעלמו שכבה/כיתה/מסלול/התמחות — השחזור בונה אותם מחדש מהשנה
-        הקודמת לפי הכללים (א→ב יג→יד, ב→ג לכיתה «שנה ג»).
+        אם בקידום שנה חסרות הגדרות או שיבוצים — השחזור מעתיק כיתות/מסלולים/התמחויות/טווחים/חופשות מהשנה
+        הקודמת, ואז משחזר שיבוצי תלמידות לפי הכללים (א→ב יג→יד, ב→ג לכיתה «שנה ג»).
+        אחרי זה אפשר לערוך את ההגדרות לשנה החדשה.
         {previousYearName ? ` מקור: ${previousYearName}.` : ""}
         {typeof missingCount === "number" ? ` חסרים כעת כ־${missingCount}.` : ""}
       </p>

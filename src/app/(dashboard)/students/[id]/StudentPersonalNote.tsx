@@ -50,7 +50,7 @@ export function StudentPersonalNote({
       <div className="mt-2 max-w-xl">
         {note ? (
           <p className="rounded-lg border border-secondary/25 bg-secondary-container/40 px-3 py-2 font-body-sm text-body-sm text-on-surface">
-            <Icon name="sticky_note_2" className="me-1 inline align-text-bottom text-[16px] text-secondary" />
+            <Icon name="edit_note" className="me-1 inline align-text-bottom text-[16px] text-secondary" />
             {note}
           </p>
         ) : (

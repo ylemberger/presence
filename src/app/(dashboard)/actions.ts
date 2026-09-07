@@ -16,6 +16,7 @@ import {
 import {
   ensureFixedGrades,
   promoteStudentsToYear,
+  copyYearStructure,
   repairMissingPromotions,
 } from "@/lib/years/promote";
 import { filterFixedGrades, FIXED_GRADE_NAMES } from "@/lib/years/grades";
@@ -23,6 +24,8 @@ import {
   buildStudentImportTemplate,
   MAX_STUDENT_IMPORT_BYTES,
   parseStudentImportWorkbook,
+  type StudentImportCatalogs,
+  type StudentImportParseResult,
 } from "@/lib/students/excelImport";
 import { applyStudentImportRows } from "@/lib/students/importApply";
 import type { AttendanceStatus, HolidayKind } from "@/types/database";
@@ -83,6 +86,10 @@ export async function createAcademicYearAction(formData: FormData) {
   if (error || !created) return { error: error?.message ?? "יצירת שנה נכשלה" };
 
   await ensureFixedGrades(created.id);
+
+  if (previousActive?.id) {
+    await copyYearStructure(previousActive.id, created.id, supabase);
+  }
 
   let promoteResult = null;
   if (shouldPromote && previousActive?.id) {
@@ -470,17 +477,86 @@ export async function deleteTrackAction(id: string) {
 }
 
 export async function deleteSpecializationAction(id: string) {
-  return deleteEntityWithChecks(
-    "specializations",
-    id,
-    [
-      { table: "student_assignments", column: "specialization_id" },
-      { table: "student_assignments", column: "secondary_specialization_id" },
-      { table: "lessons", column: "specialization_id" },
-      { table: "teacher_teaching_assignments", column: "specialization_id" },
-    ],
-    "התמחות"
+  const actionAuth = await createActionClient();
+  if ("error" in actionAuth) return { error: actionAuth.error };
+  const supabase = actionAuth.supabase;
+  const result = await tryDeleteUnusedSpecialization(supabase, id);
+  if (result.error) return { error: result.error };
+  revalidatePath("/settings");
+  return {};
+}
+
+export async function deleteUnusedSpecializationsAction(yearId: string) {
+  const actionAuth = await createActionClient();
+  if ("error" in actionAuth) return { error: actionAuth.error };
+  const supabase = actionAuth.supabase;
+  const year = requireId(yearId, "שנה");
+  if (isError(year)) return { error: year.error };
+
+  const { data: specs, error } = await supabase
+    .from("specializations")
+    .select("id")
+    .eq("academic_year_id", year);
+  if (error) return { error: "טעינת ההתמחויות נכשלה" };
+
+  let deleted = 0;
+  let skipped = 0;
+  for (const spec of specs ?? []) {
+    const result = await tryDeleteUnusedSpecialization(supabase, spec.id);
+    if (result.error) skipped += 1;
+    else deleted += 1;
+  }
+  revalidatePath("/settings");
+  if (deleted === 0 && skipped > 0) {
+    return { error: "אין התמחויות למחיקה בלי תלמידות או שיעורים" };
+  }
+  return { success: true, deleted, skipped };
+}
+
+async function tryDeleteUnusedSpecialization(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  id: string
+): Promise<{ error?: string }> {
+  const studentPrimary = await countRefs(supabase, "student_assignments", "specialization_id", id);
+  const studentSecondary = await countRefs(
+    supabase,
+    "student_assignments",
+    "secondary_specialization_id",
+    id
   );
+  if (studentPrimary + studentSecondary > 0) {
+    return { error: "לא ניתן למחוק — יש תלמידות משובצות להתמחות זו" };
+  }
+
+  const lessonRefs = await countRefs(supabase, "lessons", "specialization_id", id);
+  const audienceRefs = await countRefs(supabase, "lesson_audience", "specialization_id", id);
+  if (lessonRefs + audienceRefs > 0) {
+    return { error: "לא ניתן למחוק — יש שיעורים בהתמחות זו" };
+  }
+
+  const { data: teaching } = await supabase
+    .from("teacher_teaching_assignments")
+    .select("id")
+    .eq("specialization_id", id);
+  const teachingIds = (teaching ?? []).map((row) => row.id);
+  if (teachingIds.length > 0) {
+    const { count: teachingLessons } = await supabase
+      .from("lessons")
+      .select("id", { count: "exact", head: true })
+      .in("teacher_teaching_assignment_id", teachingIds);
+    if ((teachingLessons ?? 0) > 0) {
+      return { error: "לא ניתן למחוק — יש שיעורים המשויכים לשיבוץ הוראה של התמחות זו" };
+    }
+    const { error: teachingError } = await supabase
+      .from("teacher_teaching_assignments")
+      .delete()
+      .in("id", teachingIds);
+    if (teachingError) return { error: "לא ניתן לשחרר שיבוצי הוראה לא בשימוש" };
+  }
+
+  const { error } = await supabase.from("specializations").delete().eq("id", id);
+  if (error) return { error: error.message };
+  return {};
 }
 
 export async function deleteSubjectAction(id: string) {
@@ -895,6 +971,11 @@ export async function createStudentLessonAssignmentAction(formData: FormData) {
     end_date: (formData.get("end_date") as string) || null,
   });
   if (error) return { error: error.message };
+  await supabase
+    .from("student_lesson_exclusions")
+    .delete()
+    .eq("student_id", studentId)
+    .eq("lesson_id", lessonId);
   revalidatePath(`/students/${studentId}`);
   revalidatePath("/attendance");
   revalidatePath("/reports");
@@ -909,6 +990,41 @@ export async function deleteStudentLessonAssignmentAction(id: string, studentId:
   const { error } = await supabase.from("student_lesson_assignments").delete().eq("id", id);
   if (error) return { error: error.message };
   revalidatePath(`/students/${studentId}`);
+  revalidatePath("/attendance");
+  revalidatePath("/reports");
+  revalidatePath("/lessons");
+  return { success: true };
+}
+
+export async function excludeStudentFromLessonAction(studentId: string, lessonId: string) {
+  const actionAuth = await createActionClient();
+  if ("error" in actionAuth) return { error: actionAuth.error };
+  const supabase = actionAuth.supabase;
+  const sid = requireId(studentId, "תלמידה");
+  if (isError(sid)) return sid;
+  const lid = requireId(lessonId, "שיעור");
+  if (isError(lid)) return lid;
+
+  const { error: exclusionError } = await supabase.from("student_lesson_exclusions").upsert({
+    student_id: sid,
+    lesson_id: lid,
+  });
+  if (exclusionError) {
+    if (/student_lesson_exclusions|schema cache|PGRST205|42P01/i.test(exclusionError.message)) {
+      return { error: "יש להריץ ב-Supabase את הקובץ supabase/patches/018_student_lesson_exclusions.sql" };
+    }
+    return { error: "הסרת השיוך נכשלה" };
+  }
+
+  const { error } = await supabase
+    .from("student_lesson_assignments")
+    .update({ end_date: todayIso() })
+    .eq("student_id", sid)
+    .eq("lesson_id", lid)
+    .is("end_date", null);
+  if (error) return { error: error.message };
+
+  revalidatePath(`/students/${sid}`);
   revalidatePath("/attendance");
   revalidatePath("/reports");
   revalidatePath("/lessons");
@@ -1172,8 +1288,8 @@ async function buildLessonPayload(formData: FormData) {
   const subjectResolved = await resolveOrCreateSubject(
     supabase,
     yearId,
-    String(formData.get("subject_id") ?? ""),
-    String(formData.get("new_subject_name") ?? "")
+    "",
+    lessonName
   );
   if ("error" in subjectResolved) return subjectResolved;
 
@@ -2124,19 +2240,118 @@ export async function importStudentsFromExcelAction(formData: FormData) {
     return { error: "יש להעלות קובץ בפורמט Excel (.xlsx) או CSV." };
   }
 
+  const loaded = await loadStudentImportParse(supabase, file, activeYear.id);
+  if (!loaded.parsed) return { error: loaded.error ?? "קריאת הקובץ נכשלה" };
+
+  const parsed = loaded.parsed;
+  if (parsed.errors.length > 0) {
+    return {
+      error: "הקובץ לא יובא. יש לתקן את כל השגיאות קודם — אף תלמידה לא נשמרה.",
+      errors: parsed.errors,
+      created: 0,
+      updated: 0,
+      unchanged: 0,
+    };
+  }
+  if (parsed.rows.length === 0) {
+    return {
+      error: "לא נמצאו שורות תקינות לייבוא.",
+      errors: parsed.errors,
+      created: 0,
+      updated: 0,
+      unchanged: 0,
+    };
+  }
+
+  const applied = await applyStudentImportRows(supabase, activeYear.id, parsed.rows);
+  if (applied.errors.length > 0) {
+    return {
+      error: applied.errors[0]?.message ?? "הייבוא בוטל — אף תלמידה לא נשמרה.",
+      errors: applied.errors,
+      created: 0,
+      updated: 0,
+      unchanged: 0,
+    };
+  }
+
+  revalidatePath("/students");
+  revalidatePath("/attendance");
+  return {
+    success: true as const,
+    created: applied.created,
+    updated: applied.updated,
+    unchanged: applied.unchanged,
+    errors: [] as { rowNumber: number; message: string }[],
+  };
+}
+
+export async function previewStudentsExcelAction(formData: FormData) {
+  const actionAuth = await createActionClient();
+  if ("error" in actionAuth) return { error: actionAuth.error };
+  const supabase = actionAuth.supabase;
+  const activeYear = await getActiveAcademicYear();
+  if (!activeYear) return { error: "יש להגדיר שנה אקדמית פעילה לפני ייבוא." };
+
+  const file = formData.get("file");
+  if (!(file instanceof File) || file.size === 0) {
+    return { error: "יש לבחור קובץ אקסל או CSV." };
+  }
+  if (file.size > MAX_STUDENT_IMPORT_BYTES) {
+    return { error: "הקובץ גדול מדי. הגודל המרבי הוא 3MB." };
+  }
+  const name = file.name.toLowerCase();
+  if (!name.endsWith(".xlsx") && !name.endsWith(".xls") && !name.endsWith(".csv")) {
+    return { error: "יש להעלות קובץ בפורמט Excel (.xlsx) או CSV." };
+  }
+
+  const loaded = await loadStudentImportParse(supabase, file, activeYear.id);
+  if (!loaded.parsed || !loaded.catalogs) {
+    return { error: loaded.error ?? "קריאת הקובץ נכשלה" };
+  }
+
+  const catalogs = loaded.catalogs;
+  const parsed = loaded.parsed;
+  const classById = new Map(catalogs.classes.map((item) => [item.id, item.name]));
+  const trackById = new Map(catalogs.tracks.map((item) => [item.id, item.name]));
+  const specById = new Map(catalogs.specializations.map((item) => [item.id, item.name]));
+
+  return {
+    ok: parsed.errors.length === 0 && parsed.rows.length > 0,
+    fileName: file.name,
+    count: parsed.rows.length,
+    errors: parsed.errors,
+    rows: parsed.rows.map((row) => ({
+      rowNumber: row.rowNumber,
+      fullName: row.fullName,
+      identityNumber: row.identityNumber,
+      className: classById.get(row.classId) ?? "",
+      trackName: trackById.get(row.trackId) ?? "",
+      specializationName: specById.get(row.specializationId) ?? "",
+    })),
+  };
+}
+
+async function loadStudentImportParse(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  file: File,
+  yearId: string
+): Promise<
+  | { error: string; catalogs?: undefined; parsed?: undefined }
+  | { error?: undefined; catalogs: StudentImportCatalogs; parsed: StudentImportParseResult }
+> {
   const [{ data: grades }, { data: classes }, { data: tracks }, { data: specializations }] =
     await Promise.all([
-      supabase.from("grades").select("id, name").eq("academic_year_id", activeYear.id).order("name"),
+      supabase.from("grades").select("id, name").eq("academic_year_id", yearId).order("name"),
       supabase
         .from("classes")
         .select("id, name, grade_id")
-        .eq("academic_year_id", activeYear.id)
+        .eq("academic_year_id", yearId)
         .order("name"),
-      supabase.from("tracks").select("id, name").eq("academic_year_id", activeYear.id).order("name"),
+      supabase.from("tracks").select("id, name").eq("academic_year_id", yearId).order("name"),
       supabase
         .from("specializations")
         .select("id, name")
-        .eq("academic_year_id", activeYear.id)
+        .eq("academic_year_id", yearId)
         .order("name"),
     ]);
 
@@ -2156,25 +2371,6 @@ export async function importStudentsFromExcelAction(formData: FormData) {
   }
 
   const parsed = parseStudentImportWorkbook(await file.arrayBuffer(), file.name, catalogs);
-  if (parsed.rows.length === 0) {
-    return {
-      error: parsed.errors[0]?.message ?? "לא נמצאו שורות תקינות לייבוא.",
-      errors: parsed.errors,
-      created: 0,
-      updated: 0,
-      unchanged: 0,
-    };
-  }
-
-  const applied = await applyStudentImportRows(supabase, activeYear.id, parsed.rows);
-  revalidatePath("/students");
-  revalidatePath("/attendance");
-  return {
-    success: true as const,
-    created: applied.created,
-    updated: applied.updated,
-    unchanged: applied.unchanged,
-    errors: [...parsed.errors, ...applied.errors],
-  };
+  return { catalogs, parsed };
 }
 

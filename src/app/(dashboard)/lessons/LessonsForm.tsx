@@ -15,7 +15,7 @@ import {
   salarySearchKeywords,
   type SalaryDisplayFields,
 } from "@/lib/teachers/salary-display";
-import type { ActivityRange, AttendanceRule, Subject } from "@/types/database";
+import type { ActivityRange, AttendanceRule } from "@/types/database";
 import { Icon } from "@/components/ui/Icon";
 import { MultiSelect } from "@/components/ui/MultiSelect";
 
@@ -32,7 +32,6 @@ export interface LessonsFormProps {
   classes: { id: string; name: string; grade_id: string }[];
   tracks: { id: string; name: string }[];
   specializations: { id: string; name: string }[];
-  subjects: Pick<Subject, "id" | "name">[];
   ranges: ActivityRange[];
   rules: AttendanceRule[];
   onCreated?: () => void;
@@ -45,7 +44,6 @@ export function LessonsForm({
   classes,
   tracks,
   specializations,
-  subjects,
   ranges,
   rules,
   onCreated,
@@ -197,7 +195,7 @@ export function LessonsForm({
   return (
     <form key={formEpoch} onSubmit={handleSubmit} className="flex flex-col gap-6">
       <div>
-        <p className="mb-3 font-headline-md text-headline-md text-primary">מורה, מקצוע ושיעור</p>
+        <p className="mb-3 font-headline-md text-headline-md text-primary">מורה ושיעור</p>
         <div className="grid grid-cols-1 items-start gap-4 lg:grid-cols-12">
           <div className="flex flex-col gap-4 lg:col-span-5">
             <input type="hidden" name="teacher_id" value={teacherId} />
@@ -211,20 +209,6 @@ export function LessonsForm({
               placeholder="הקלידי שם מורה, מקצוע או מסלול…"
               maxSuggestions={12}
             />
-            <Combobox
-              fieldSize="lg"
-              label="מקצוע"
-              name="subject_id"
-              options={subjects.map((s) => ({ value: s.id, label: s.name }))}
-              emptyLabel="בחרי מקצוע"
-              placeholder="למשל יסודות הבית"
-            />
-            <Input
-              fieldSize="lg"
-              label="מקצוע חדש (אם חסר ברשימה)"
-              name="new_subject_name"
-              placeholder="יוצר מקצוע חדש במקום הבחירה למעלה"
-            />
             <Input
               fieldSize="lg"
               label="שם השיעור"
@@ -233,7 +217,7 @@ export function LessonsForm({
               placeholder="למשל בישול"
             />
             <p className="font-body-md text-body-md text-on-surface-variant">
-              שם המקצוע הוא רק תווית. נוכחות משותפת נקבעת בקיבוץ ידני ביומן השיעורים, לא לפי השם. השיבוץ מהשכר הוא לעיון בלבד.
+              כל שיעור נספר לבד בנוכחות, גם אם יש כמה שיעורים באותו שם. קיבוץ לנוכחות אחת נעשה ידנית ביומן השיעורים.
             </p>
           </div>
           <div className="min-w-0 lg:col-span-7">

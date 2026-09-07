@@ -8,7 +8,7 @@ import { HebrewDateInput } from "@/components/ui/HebrewDateInput";
 import { DeleteButton } from "@/components/ui/DeleteButton";
 import {
   createStudentLessonAssignmentAction,
-  deleteStudentLessonAssignmentAction,
+  excludeStudentFromLessonAction,
 } from "../../actions";
 import { formatDate } from "@/lib/dates/hebrew";
 import { formatLessonOptionLabel } from "@/lib/lessons/hours";
@@ -45,6 +45,10 @@ export function StudentLessonAssignments({
   const [error, setError] = useState<string | null>(null);
   const [mismatchWarning, setMismatchWarning] = useState<string | null>(null);
   const [pendingForm, setPendingForm] = useState<FormData | null>(null);
+  const [removeLessonId, setRemoveLessonId] = useState("");
+
+  const openAssignments = assignments.filter((a) => !a.end_date);
+  const closedAssignments = assignments.filter((a) => a.end_date);
 
   async function submit(fd: FormData, force: boolean) {
     if (force) fd.set("force_mismatch", "1");
@@ -80,15 +84,31 @@ export function StudentLessonAssignments({
     if (ok) form.reset();
   }
 
+  async function handleRemove(e: React.FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    if (!removeLessonId) {
+      setError("יש לבחור שיעור להסרה");
+      return;
+    }
+    setError(null);
+    const result = await excludeStudentFromLessonAction(studentId, removeLessonId);
+    if (result?.error) {
+      setError(result.error);
+      return;
+    }
+    setRemoveLessonId("");
+    router.refresh();
+  }
+
   return (
     <div className="flex flex-col gap-4">
       <p className="font-caption text-caption text-on-surface-variant">
-        שיוך אוטומטי נוצר כשפותחים שיעור לקבוצה של התלמידה. כאן אפשר להוסיף שיוך ידני גם לשיעור
-        שאינו בכיתה/מסלול שלה — תופיע אזהרה, והשיעור ייספר כחיוב שלה בדוח.
+        אפשר לשייך לשיעור ספציפי, ואפשר גם להסיר שיוך לשיעור ספציפי. הסרה לא מוחקת נוכחות מהעבר, והשיוך
+        האוטומטי לא יחזיר את התלמידה לשיעור הזה.
       </p>
       <form onSubmit={handleSubmit} className="flex flex-col gap-3">
         <Combobox
-          label="שיעור"
+          label="הוספת שיוך לשיעור"
           name="lesson_id"
           required
           options={lessons.map((l) => ({ value: l.id, label: formatLessonOptionLabel(l) }))}
@@ -103,6 +123,26 @@ export function StudentLessonAssignments({
           שיוך לשיעור
         </Button>
       </form>
+
+      {openAssignments.length > 0 && (
+        <form
+          onSubmit={handleRemove}
+          className="flex flex-col gap-3 rounded-lg border border-outline-variant/40 bg-surface-container-low p-3"
+        >
+          <Combobox
+            label="הסרת שיוך משיעור"
+            name="remove_lesson_id"
+            value={removeLessonId}
+            onChange={setRemoveLessonId}
+            options={openAssignments.map((a) => ({ value: a.lesson_id, label: a.subject }))}
+            emptyLabel="בחרי שיעור להסרה"
+          />
+          <Button type="submit" variant="danger" className="w-full">
+            הסר שיוך לשיעור זה
+          </Button>
+        </form>
+      )}
+
       {error && (
         <p className="rounded-lg bg-error-container/60 px-3 py-2 font-body-sm text-body-sm text-on-error-container">
           {error}
@@ -127,23 +167,33 @@ export function StudentLessonAssignments({
         </div>
       ) : (
         <ul className="flex flex-col gap-2 font-body-md text-body-md">
-          {assignments.map((a) => (
+          {openAssignments.map((a) => (
             <li
               key={a.id}
-              className="group flex items-center justify-between gap-3 rounded-lg border border-outline-variant/30 bg-surface-container-low p-3 transition-colors hover:border-secondary/50"
+              className="flex items-center justify-between gap-3 rounded-lg border border-outline-variant/30 bg-surface-container-low p-3"
             >
               <div className="min-w-0">
                 <div className="font-semibold text-on-surface">{a.subject}</div>
                 <div className="font-caption text-caption text-on-surface-variant">
-                  {a.assignment_type === "manual" ? "ידני" : "אוטומטי"} ·{" "}
-                  {formatDate(a.start_date)} →{" "}
-                  {a.end_date ? formatDate(a.end_date) : "פתוח"}
+                  {a.assignment_type === "manual" ? "ידני" : "אוטומטי"} · {formatDate(a.start_date)} →
+                  פתוח
                 </div>
               </div>
-              <div className="opacity-0 transition-opacity group-hover:opacity-100">
-                <DeleteButton
-                  onDelete={() => deleteStudentLessonAssignmentAction(a.id, studentId)}
-                />
+              <DeleteButton
+                label="הסר שיוך"
+                onDelete={() => excludeStudentFromLessonAction(studentId, a.lesson_id)}
+              />
+            </li>
+          ))}
+          {closedAssignments.map((a) => (
+            <li
+              key={a.id}
+              className="rounded-lg border border-outline-variant/20 bg-surface-container-lowest p-3 text-on-surface-variant"
+            >
+              <div className="font-semibold">{a.subject}</div>
+              <div className="font-caption text-caption">
+                {a.assignment_type === "manual" ? "ידני" : "אוטומטי"} · {formatDate(a.start_date)} →{" "}
+                {a.end_date ? formatDate(a.end_date) : "פתוח"}
               </div>
             </li>
           ))}

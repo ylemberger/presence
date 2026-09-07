@@ -40,6 +40,7 @@ import {
 import { ensureFixedGrades } from "@/lib/years/promote";
 import { filterFixedGrades, isFixedGradeName } from "@/lib/years/grades";
 import { isMissingHolidayTable } from "@/lib/lessons/holidays";
+import { DeleteUnusedSpecializationsButton } from "./DeleteUnusedSpecializationsButton";
 
 /** Shared thead row for the inline editable tables — matches Stitch table headers. */
 function SettingsTableHead({ columns }: { columns: string[] }) {
@@ -243,6 +244,7 @@ export default async function SettingsPage() {
           yearId={yearId}
           createAction={createSpecializationAction}
         />
+        <DeleteUnusedSpecializationsButton yearId={yearId} />
         <div className="mt-4 overflow-x-auto">
           <table className="w-full text-body-md">
             <SettingsTableHead columns={["שם", "פעולות"]} />
