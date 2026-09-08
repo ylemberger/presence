@@ -344,6 +344,66 @@ export async function autoAssignStudentsToLesson(
   return { assigned: rows.length, backfilled: toBackfill.length };
 }
 
+/** Close automatic links that no longer match the lesson audience, then add missing ones. */
+export async function refreshAutomaticAssignmentsForLesson(
+  lessonId: string,
+  academicYearId: string
+) {
+  const supabase = await createClient();
+  const result = await autoAssignStudentsToLesson(lessonId, academicYearId);
+
+  const [{ data: lesson }, { data: placements }, { data: existingLinks }, { data: audience }] =
+    await Promise.all([
+      supabase
+        .from("lessons")
+        .select("id, class_id, track_id, specialization_id, billing_type, grade_id, for_psychology")
+        .eq("id", lessonId)
+        .maybeSingle(),
+      supabase
+        .from("student_assignments")
+        .select(
+          "student_id, class_id, track_id, specialization_id, secondary_specialization_id, grade_id, is_psychology"
+        )
+        .eq("academic_year_id", academicYearId)
+        .is("end_date", null),
+      supabase
+        .from("student_lesson_assignments")
+        .select("id, student_id, start_date, assignment_type")
+        .eq("lesson_id", lessonId)
+        .eq("assignment_type", "automatic")
+        .is("end_date", null),
+      supabase
+        .from("lesson_audience")
+        .select("lesson_id, grade_id, class_id, track_id, specialization_id")
+        .eq("lesson_id", lessonId),
+    ]);
+
+  if (!lesson) return { ...result, closed: 0 };
+
+  const scoped = withAudience(lesson, audience ?? []);
+  const matching = new Set(
+    (placements ?? [])
+      .filter((p) => studentMatchesLesson(placementFromRow(p), scoped))
+      .map((p) => p.student_id)
+  );
+
+  const toClose = (existingLinks ?? []).filter((row) => !matching.has(row.student_id));
+  if (toClose.length === 0) return { ...result, closed: 0 };
+
+  const today = todayIso();
+  for (const row of toClose) {
+    const start = row.start_date.slice(0, 10);
+    const endDate = start > addDays(today, -1) ? start : addDays(today, -1);
+    const { error } = await supabase
+      .from("student_lesson_assignments")
+      .update({ end_date: endDate })
+      .eq("id", row.id);
+    if (error) throw new Error(error.message);
+  }
+
+  return { ...result, closed: toClose.length };
+}
+
 export async function refreshAutomaticLessonAssignmentsForStudent(
   studentId: string,
   academicYearId: string,

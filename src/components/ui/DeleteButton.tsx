@@ -7,15 +7,20 @@ import { Button } from "@/components/ui/Button";
 interface DeleteButtonProps {
   onDelete: () => Promise<{ error?: string }>;
   label?: string;
+  confirmMessage?: string;
 }
 
-export function DeleteButton({ onDelete, label = "מחק" }: DeleteButtonProps) {
+export function DeleteButton({
+  onDelete,
+  label = "מחק",
+  confirmMessage = "האם את בטוחה שברצונך למחוק?",
+}: DeleteButtonProps) {
   const router = useRouter();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   async function handleDelete() {
-    if (!confirm("האם את בטוחה שברצונך למחוק?")) return;
+    if (!confirm(confirmMessage)) return;
     setLoading(true);
     setError(null);
     try {

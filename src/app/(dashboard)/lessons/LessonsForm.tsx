@@ -1,14 +1,14 @@
 ﻿"use client";
 
-import { useEffect, useId, useMemo, useState } from "react";
+import { useEffect, useId, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/Button";
 import { Combobox } from "@/components/ui/Combobox";
 import { Input, Select } from "@/components/ui/Input";
 import { DAY_OF_WEEK_LABELS, BILLING_TYPE_LABELS } from "@/lib/constants";
-import { createLessonAction } from "../actions";
+import { createLessonAction, updateLessonAction } from "../actions";
 import { describeAudienceScope } from "@/lib/validation";
-import { formatLessonHours } from "@/lib/lessons/hours";
+import { formatLessonHours, MAX_LESSON_NUMBER } from "@/lib/lessons/hours";
 import {
   formatSalaryAssignment,
   salaryAssignmentEntries,
@@ -25,6 +25,25 @@ export type LessonFormTeacher = {
   salaryAssignments: SalaryDisplayFields[];
 };
 
+export type LessonFormDraft = {
+  id: string;
+  lessonName: string;
+  subjectName: string;
+  teacherId: string;
+  billingType: "mandatory" | "specialization";
+  forPsychology: boolean;
+  gradeIds: string[];
+  classIds: string[];
+  trackIds: string[];
+  specializationIds: string[];
+  wholeGrade: boolean;
+  dayOfWeek: number;
+  lessonNumber: number;
+  periodCount: number;
+  activityRangeId: string;
+  attendanceRuleId: string;
+};
+
 export interface LessonsFormProps {
   yearId: string;
   teachers: LessonFormTeacher[];
@@ -35,6 +54,8 @@ export interface LessonsFormProps {
   ranges: ActivityRange[];
   rules: AttendanceRule[];
   subjects: { id: string; name: string }[];
+  initial?: LessonFormDraft | null;
+  cancelHref?: string;
   onCreated?: () => void;
 }
 
@@ -48,23 +69,36 @@ export function LessonsForm({
   ranges,
   rules,
   subjects,
+  initial,
+  cancelHref,
   onCreated,
 }: LessonsFormProps) {
+  const editing = Boolean(initial?.id);
   const router = useRouter();
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [formEpoch, setFormEpoch] = useState(0);
-  const [billingType, setBillingType] = useState<"mandatory" | "specialization">("mandatory");
-  const [forPsychology, setForPsychology] = useState(false);
-  const [gradeIds, setGradeIds] = useState<string[]>([]);
-  const [classIds, setClassIds] = useState<string[]>([]);
-  const [trackIds, setTrackIds] = useState<string[]>([]);
-  const [specializationIds, setSpecializationIds] = useState<string[]>([]);
-  const [wholeGrade, setWholeGrade] = useState(false);
-  const [lessonNumber, setLessonNumber] = useState("1");
-  const [periodCount, setPeriodCount] = useState("1");
-  const [assignmentKey, setAssignmentKey] = useState("");
-  const [subjectName, setSubjectName] = useState("");
+  const [billingType, setBillingType] = useState<"mandatory" | "specialization">(
+    initial?.billingType ?? "mandatory"
+  );
+  const [forPsychology, setForPsychology] = useState(initial?.forPsychology ?? false);
+  const [gradeIds, setGradeIds] = useState<string[]>(initial?.gradeIds ?? []);
+  const [classIds, setClassIds] = useState<string[]>(initial?.classIds ?? []);
+  const [trackIds, setTrackIds] = useState<string[]>(initial?.trackIds ?? []);
+  const [specializationIds, setSpecializationIds] = useState<string[]>(
+    initial?.specializationIds ?? []
+  );
+  const [wholeGrade, setWholeGrade] = useState(initial?.wholeGrade ?? false);
+  const [lessonNumber, setLessonNumber] = useState(String(initial?.lessonNumber ?? 1));
+  const [periodCount, setPeriodCount] = useState(String(initial?.periodCount ?? 1));
+  const [assignmentKey, setAssignmentKey] = useState(() => {
+    if (!initial?.teacherId) return "";
+    const teacher = teachers.find((t) => t.id === initial.teacherId);
+    if (teacher && teacher.salaryAssignments.length > 0) return `${initial.teacherId}::0`;
+    return `${initial.teacherId}::`;
+  });
+  const [subjectName, setSubjectName] = useState(initial?.subjectName ?? "");
+  const skipSalarySubject = useRef(Boolean(initial));
   const subjectListId = useId();
 
   const filteredClasses = useMemo(
@@ -118,6 +152,10 @@ export function LessonsForm({
   const selectedAssignment = picked?.selectedAssignment ?? null;
 
   useEffect(() => {
+    if (skipSalarySubject.current) {
+      skipSalarySubject.current = false;
+      return;
+    }
     const fromSalary = selectedAssignment?.subject?.trim() ?? "";
     if (fromSalary) setSubjectName(fromSalary);
   }, [assignmentKey, selectedAssignment?.subject]);
@@ -173,10 +211,18 @@ export function LessonsForm({
         fd.set("for_psychology", "");
       }
 
-      const result = await createLessonAction(fd);
+      if (editing) fd.set("lesson_id", initial!.id);
+      const result = editing ? await updateLessonAction(fd) : await createLessonAction(fd);
 
       if (result && "error" in result && result.error) {
         setError(result.error);
+        return;
+      }
+
+      if (editing) {
+        if (cancelHref) router.push(cancelHref);
+        else router.refresh();
+        onCreated?.();
         return;
       }
 
@@ -203,11 +249,12 @@ export function LessonsForm({
   }
 
   return (
-    <form key={formEpoch} onSubmit={handleSubmit} className="flex flex-col gap-6">
+    <form key={`${initial?.id ?? "new"}-${formEpoch}`} onSubmit={handleSubmit} className="flex flex-col gap-6">
       <div>
         <p className="mb-3 font-headline-md text-headline-md text-primary">מורה ושיעור</p>
         <div className="grid grid-cols-1 items-start gap-4 lg:grid-cols-12">
           <div className="flex flex-col gap-4 lg:col-span-5">
+            {editing ? <input type="hidden" name="lesson_id" value={initial!.id} /> : null}
             <input type="hidden" name="teacher_id" value={teacherId} />
             <Combobox
               fieldSize="lg"
@@ -239,6 +286,7 @@ export function LessonsForm({
               label="שם השיעור"
               name="lesson_name"
               required
+              defaultValue={initial?.lessonName ?? ""}
               placeholder="למשל בישול — קבוצה א"
             />
             <p className="font-body-md text-body-md text-on-surface-variant">
@@ -465,6 +513,7 @@ export function LessonsForm({
             label="יום בשבוע"
             name="day_of_week"
             required
+            defaultValue={String(initial?.dayOfWeek ?? 0)}
             options={DAY_OF_WEEK_LABELS.map((l, i) => ({ value: String(i), label: l }))}
           />
           <Select
@@ -474,7 +523,7 @@ export function LessonsForm({
             required
             value={lessonNumber}
             onChange={(e) => setLessonNumber(e.target.value)}
-            options={Array.from({ length: 9 }, (_, i) => ({
+            options={Array.from({ length: MAX_LESSON_NUMBER }, (_, i) => ({
               value: String(i + 1),
               label: `שיעור ${i + 1}`,
             }))}
@@ -486,7 +535,7 @@ export function LessonsForm({
             required
             value={periodCount}
             onChange={(e) => setPeriodCount(e.target.value)}
-            options={Array.from({ length: 9 }, (_, i) => ({
+            options={Array.from({ length: MAX_LESSON_NUMBER }, (_, i) => ({
               value: String(i + 1),
               label: i === 0 ? "שעה אחת" : `${i + 1} שעות`,
             }))}
@@ -496,6 +545,7 @@ export function LessonsForm({
             label="טווח פעילות"
             name="activity_range_id"
             required
+            defaultValue={initial?.activityRangeId ?? ""}
             options={ranges.map((r) => ({ value: r.id, label: r.name }))}
             emptyLabel="בחרי טווח"
           />
@@ -504,6 +554,7 @@ export function LessonsForm({
             label="כלל נוכחות"
             name="attendance_rule_id"
             required
+            defaultValue={initial?.attendanceRuleId ?? ""}
             options={rules.map((r) => ({
               value: r.id,
               label: `${r.name} (${r.max_allowed_absence_percent}%)`,
@@ -527,10 +578,28 @@ export function LessonsForm({
         </div>
       )}
 
-      <Button type="submit" size="lg" disabled={loading} className="mt-1 w-full sm:w-auto">
-        <Icon name="save" className="text-[22px]" />
-        {loading ? "יוצר שיעור ומופעים..." : "שמור שיעור"}
-      </Button>
+      <div className="mt-1 flex flex-wrap items-center gap-3">
+        <Button type="submit" size="lg" disabled={loading} className="w-full sm:w-auto">
+          <Icon name="save" className="text-[22px]" />
+          {loading
+            ? editing
+              ? "שומר שיעור..."
+              : "יוצר שיעור ומופעים..."
+            : editing
+              ? "שמור שינויים"
+              : "שמור שיעור"}
+        </Button>
+        {editing && cancelHref ? (
+          <Button
+            type="button"
+            variant="outline"
+            size="lg"
+            onClick={() => router.push(cancelHref)}
+          >
+            ביטול עריכה
+          </Button>
+        ) : null}
+      </div>
 
       {error && (
         <p className="rounded-lg bg-error-container/60 px-4 py-3 font-body-lg text-body-lg text-on-error-container">

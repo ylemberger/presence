@@ -13,6 +13,7 @@
 
 | מצב | מה להריץ |
 |-----|----------|
+| **שיעור 10** | [`patches/020_lesson_number_10.sql`](patches/020_lesson_number_10.sql) |
 | **לוח חופשות/טווחים משותף** | [`patches/019_shared_activity_and_holiday_calendar.sql`](patches/019_shared_activity_and_holiday_calendar.sql) |
 | **קיבוץ נוכחות ידני** | [`patches/015_attendance_pools.sql`](patches/015_attendance_pools.sql) |
 | **מקצועות (הורה לשיעורים)** | [`patches/014_subjects.sql`](patches/014_subjects.sql) |

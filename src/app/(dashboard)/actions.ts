@@ -4,7 +4,7 @@ import { revalidatePath } from "next/cache";
 import { createActionClient, createClient } from "@/lib/supabase/server";
 import { setActiveAcademicYear, getActiveAcademicYear } from "@/lib/utils";
 import { syncTeacherSourceRecords } from "@/lib/sync/teachers";
-import { generateLessonOccurrences, applyHolidaysToAllOccurrences } from "@/lib/lessons/occurrences";
+import { generateLessonOccurrences, applyHolidaysToAllOccurrences, syncLessonOccurrences } from "@/lib/lessons/occurrences";
 import { toggleHolidayDate, isMissingHolidayKind } from "@/lib/lessons/holidays";
 import {
   audienceForLesson,
@@ -12,6 +12,7 @@ import {
   autoAssignStudentsToLesson,
   lessonMismatchMessage,
   refreshAutomaticLessonAssignmentsForStudent,
+  refreshAutomaticAssignmentsForLesson,
 } from "@/lib/lessons/autoAssign";
 import {
   ensureFixedGrades,
@@ -31,6 +32,7 @@ import { applyStudentImportRows } from "@/lib/students/importApply";
 import type { AttendanceStatus, HolidayKind } from "@/types/database";
 import { todayIso } from "@/lib/dates/hebrew";
 import { resolveOrCreateSubject } from "@/lib/lessons/subjects";
+import { MAX_LESSON_NUMBER } from "@/lib/lessons/hours";
 import { fingerprintForLesson } from "@/lib/attendance/pools";
 import { previousWeekBlockMessage } from "@/lib/attendance/previous-week";
 import {
@@ -1265,15 +1267,15 @@ async function buildLessonPayload(formData: FormData) {
     return { error: "יש לבחור יום בשבוע" };
   }
   const lessonNumber = parseInt(String(formData.get("lesson_number") ?? ""), 10);
-  if (Number.isNaN(lessonNumber) || lessonNumber < 1 || lessonNumber > 9) {
-    return { error: "מספר שיעור חייב להיות בין 1 ל-9" };
+  if (Number.isNaN(lessonNumber) || lessonNumber < 1 || lessonNumber > MAX_LESSON_NUMBER) {
+    return { error: `מספר שיעור חייב להיות בין 1 ל-${MAX_LESSON_NUMBER}` };
   }
   const periodCount = parseInt(String(formData.get("period_count") ?? "1"), 10);
-  if (Number.isNaN(periodCount) || periodCount < 1 || periodCount > 9) {
-    return { error: "מספר השעות הרצופות חייב להיות בין 1 ל-9" };
+  if (Number.isNaN(periodCount) || periodCount < 1 || periodCount > MAX_LESSON_NUMBER) {
+    return { error: `מספר השעות הרצופות חייב להיות בין 1 ל-${MAX_LESSON_NUMBER}` };
   }
-  if (lessonNumber + periodCount - 1 > 9) {
-    return { error: "השעות הרצופות חורגות משיעור 9. בחרי התחלה מוקדמת יותר או משך קצר יותר." };
+  if (lessonNumber + periodCount - 1 > MAX_LESSON_NUMBER) {
+    return { error: `השעות הרצופות חורגות משיעור ${MAX_LESSON_NUMBER}. בחרי התחלה מוקדמת יותר או משך קצר יותר.` };
   }
 
   const actionAuth = await createActionClient();
@@ -1292,7 +1294,7 @@ async function buildLessonPayload(formData: FormData) {
   const subjectResolved = await resolveOrCreateSubject(
     supabase,
     yearId,
-    formData.get("subject_id"),
+    String(formData.get("subject_id") ?? ""),
     subjectName || lessonName
   );
   if ("error" in subjectResolved) return subjectResolved;
@@ -1363,7 +1365,64 @@ async function buildLessonPayload(formData: FormData) {
   };
 }
 
-// --- Lessons ---
+function lessonAudienceRows(
+  lessonId: string,
+  gradeId: string,
+  formData: FormData
+): Array<{
+  lesson_id: string;
+  grade_id: string | null;
+  class_id: string | null;
+  track_id: string | null;
+  specialization_id: string | null;
+}> | { error: string } {
+  const billing = parseLessonBilling(formData);
+  const gradeIdsParsed = parseLessonGradeIds(formData);
+  if ("error" in billing) return billing;
+  if ("error" in gradeIdsParsed) return gradeIdsParsed;
+  const gradeIdsForAudience = gradeIdsParsed.length > 0 ? gradeIdsParsed : [gradeId];
+  return [
+    ...gradeIdsForAudience.map((grade_id) => ({
+      lesson_id: lessonId,
+      grade_id,
+      class_id: null as string | null,
+      track_id: null as string | null,
+      specialization_id: null as string | null,
+    })),
+    ...billing.class_ids.map((class_id) => ({
+      lesson_id: lessonId,
+      grade_id: null as string | null,
+      class_id,
+      track_id: null as string | null,
+      specialization_id: null as string | null,
+    })),
+    ...billing.track_ids.map((track_id) => ({
+      lesson_id: lessonId,
+      grade_id: null as string | null,
+      class_id: null as string | null,
+      track_id,
+      specialization_id: null as string | null,
+    })),
+    ...billing.specialization_ids.map((specialization_id) => ({
+      lesson_id: lessonId,
+      grade_id: null as string | null,
+      class_id: null as string | null,
+      track_id: null as string | null,
+      specialization_id,
+    })),
+  ];
+}
+
+function revalidateLessonPaths() {
+  revalidatePath("/lessons");
+  revalidatePath("/attendance");
+  revalidatePath("/teachers");
+  revalidatePath("/settings");
+  revalidatePath("/timetable");
+  revalidatePath("/reports");
+  revalidatePath("/makeup");
+}
+
 async function rollbackFailedLessonCreate(
   supabase: Awaited<ReturnType<typeof createClient>>,
   opts: { lessonId?: string; assignmentId?: string; removeAssignment?: boolean }
@@ -1402,54 +1461,24 @@ export async function createLessonAction(formData: FormData) {
     return { error: error?.message ?? "יצירת שיעור נכשלה" };
   }
 
-  const billing = parseLessonBilling(formData);
-  const gradeIdsParsed = parseLessonGradeIds(formData);
-  const gradeIdsForAudience =
-    !("error" in gradeIdsParsed) && gradeIdsParsed.length > 0
-      ? gradeIdsParsed
-      : [payload.grade_id];
-
-  if (!("error" in billing)) {
-    const audienceRows = [
-      ...gradeIdsForAudience.map((grade_id) => ({
-        lesson_id: lesson.id,
-        grade_id,
-        class_id: null as string | null,
-        track_id: null as string | null,
-        specialization_id: null as string | null,
-      })),
-      ...billing.class_ids.map((class_id) => ({
-        lesson_id: lesson.id,
-        grade_id: null as string | null,
-        class_id,
-        track_id: null as string | null,
-        specialization_id: null as string | null,
-      })),
-      ...billing.track_ids.map((track_id) => ({
-        lesson_id: lesson.id,
-        grade_id: null as string | null,
-        class_id: null as string | null,
-        track_id,
-        specialization_id: null as string | null,
-      })),
-      ...billing.specialization_ids.map((specialization_id) => ({
-        lesson_id: lesson.id,
-        grade_id: null as string | null,
-        class_id: null as string | null,
-        track_id: null as string | null,
-        specialization_id,
-      })),
-    ];
-    if (audienceRows.length > 0) {
-      const { error: audienceError } = await supabase.from("lesson_audience").insert(audienceRows);
-      if (audienceError) {
-        await rollbackFailedLessonCreate(supabase, {
-          lessonId: lesson.id,
-          assignmentId,
-          removeAssignment: isNewAssignment,
-        });
-        return { error: audienceError.message };
-      }
+  const audienceRows = lessonAudienceRows(lesson.id, payload.grade_id, formData);
+  if ("error" in audienceRows) {
+    await rollbackFailedLessonCreate(supabase, {
+      lessonId: lesson.id,
+      assignmentId,
+      removeAssignment: isNewAssignment,
+    });
+    return audienceRows;
+  }
+  if (audienceRows.length > 0) {
+    const { error: audienceError } = await supabase.from("lesson_audience").insert(audienceRows);
+    if (audienceError) {
+      await rollbackFailedLessonCreate(supabase, {
+        lessonId: lesson.id,
+        assignmentId,
+        removeAssignment: isNewAssignment,
+      });
+      return { error: audienceError.message };
     }
   }
 
@@ -1466,10 +1495,139 @@ export async function createLessonAction(formData: FormData) {
 
   await autoAssignStudentsToLesson(lesson.id, payload.academic_year_id);
 
-  revalidatePath("/lessons");
-  revalidatePath("/attendance");
-  revalidatePath("/teachers");
-  revalidatePath("/settings");
+  revalidateLessonPaths();
+  return { success: true };
+}
+
+export async function updateLessonAction(formData: FormData) {
+  const lessonId = requireId(formData.get("lesson_id"), "שיעור");
+  if (isError(lessonId)) return lessonId;
+
+  const actionAuth = await createActionClient();
+  if ("error" in actionAuth) return { error: actionAuth.error };
+  const supabase = actionAuth.supabase;
+
+  const { data: existing, error: loadError } = await supabase
+    .from("lessons")
+    .select("id, academic_year_id, teacher_teaching_assignment_id")
+    .eq("id", lessonId)
+    .maybeSingle();
+  if (loadError) return { error: "טעינת השיעור נכשלה" };
+  if (!existing) return { error: "השיעור לא נמצא" };
+
+  formData.set("teacher_teaching_assignment_id", existing.teacher_teaching_assignment_id);
+
+  const teacherId = requireId(formData.get("teacher_id"), "מורה");
+  if (isError(teacherId)) return teacherId;
+  const lessonName = requireText(
+    formData.get("lesson_name") || formData.get("subject"),
+    "שם שיעור"
+  );
+  if (isError(lessonName)) return lessonName;
+  const billing = parseLessonBilling(formData);
+  if ("error" in billing) return billing;
+  const gradeIds = parseLessonGradeIds(formData);
+  if ("error" in gradeIds) return gradeIds;
+
+  const { error: ttaError } = await supabase
+    .from("teacher_teaching_assignments")
+    .update({
+      teacher_id: teacherId,
+      subject: lessonName,
+      billing_type: billing.billing_type,
+      grade_id: gradeIds[0],
+      class_id: billing.class_id,
+      track_id: billing.track_id,
+      specialization_id: billing.specialization_id,
+      for_psychology: billing.for_psychology,
+    })
+    .eq("id", existing.teacher_teaching_assignment_id);
+  if (ttaError) return { error: "עדכון שיבוץ ההוראה נכשל" };
+
+  const payload = await buildLessonPayload(formData);
+  if ("error" in payload) return payload;
+
+  const { error: updateError } = await supabase
+    .from("lessons")
+    .update({
+      subject_id: payload.subject_id,
+      subject: payload.subject,
+      grade_id: payload.grade_id,
+      class_id: payload.class_id,
+      track_id: payload.track_id,
+      specialization_id: payload.specialization_id,
+      billing_type: payload.billing_type,
+      for_psychology: payload.for_psychology,
+      day_of_week: payload.day_of_week,
+      lesson_number: payload.lesson_number,
+      period_count: payload.period_count,
+      activity_range_id: payload.activity_range_id,
+      attendance_rule_id: payload.attendance_rule_id,
+    })
+    .eq("id", lessonId);
+  if (updateError) return { error: updateError.message };
+
+  const { error: clearAudienceError } = await supabase
+    .from("lesson_audience")
+    .delete()
+    .eq("lesson_id", lessonId);
+  if (clearAudienceError) return { error: "עדכון קהל היעד נכשל" };
+
+  const audienceRows = lessonAudienceRows(lessonId, payload.grade_id, formData);
+  if ("error" in audienceRows) return audienceRows;
+  if (audienceRows.length > 0) {
+    const { error: audienceError } = await supabase.from("lesson_audience").insert(audienceRows);
+    if (audienceError) return { error: audienceError.message };
+  }
+
+  try {
+    await syncLessonOccurrences(lessonId, supabase);
+  } catch (e) {
+    return { error: (e as Error).message };
+  }
+
+  try {
+    await refreshAutomaticAssignmentsForLesson(lessonId, payload.academic_year_id);
+  } catch (e) {
+    return { error: (e as Error).message };
+  }
+
+  revalidateLessonPaths();
+  return { success: true };
+}
+
+export async function deleteLessonAction(id: string) {
+  const lessonId = requireId(id, "שיעור");
+  if (isError(lessonId)) return lessonId;
+
+  const actionAuth = await createActionClient();
+  if ("error" in actionAuth) return { error: actionAuth.error };
+  const supabase = actionAuth.supabase;
+
+  const { data: existing, error: loadError } = await supabase
+    .from("lessons")
+    .select("id, teacher_teaching_assignment_id")
+    .eq("id", lessonId)
+    .maybeSingle();
+  if (loadError) return { error: "טעינת השיעור נכשלה" };
+  if (!existing) return { error: "השיעור לא נמצא" };
+
+  const teachingId = existing.teacher_teaching_assignment_id;
+
+  const { error } = await supabase.from("lessons").delete().eq("id", lessonId);
+  if (error) return { error: "מחיקת השיעור נכשלה" };
+
+  if (teachingId) {
+    const { count } = await supabase
+      .from("lessons")
+      .select("id", { count: "exact", head: true })
+      .eq("teacher_teaching_assignment_id", teachingId);
+    if ((count ?? 0) === 0) {
+      await supabase.from("teacher_teaching_assignments").delete().eq("id", teachingId);
+    }
+  }
+
+  revalidateLessonPaths();
   return { success: true };
 }
 

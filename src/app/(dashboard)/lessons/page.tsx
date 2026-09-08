@@ -3,7 +3,7 @@ import { getActiveAcademicYear } from "@/lib/utils";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { Section } from "@/components/ui/Section";
 import { LessonsCalendar } from "./LessonsCalendar";
-import { LessonsForm } from "./LessonsForm";
+import { LessonsForm, type LessonFormDraft } from "./LessonsForm";
 import { LessonsFilters } from "./LessonsFilters";
 import { filterFixedGrades } from "@/lib/years/grades";
 import {
@@ -44,6 +44,7 @@ interface Props {
     specializationId?: string;
     teacherId?: string;
     subject?: string;
+    edit?: string;
   };
 }
 
@@ -339,6 +340,53 @@ export default async function LessonsPage({ searchParams }: Props) {
   }
   if (searchParams.teacherId) filterQuery.set("teacherId", searchParams.teacherId);
   if (searchParams.subject) filterQuery.set("subject", searchParams.subject);
+  if (searchParams.from) filterQuery.set("from", searchParams.from);
+  if (searchParams.to) filterQuery.set("to", searchParams.to);
+  if (searchParams.edit) filterQuery.set("edit", searchParams.edit);
+
+  const editingLesson = searchParams.edit
+    ? allLessons.find((l) => l.id === searchParams.edit)
+    : undefined;
+  const editingAudience = editingLesson
+    ? audienceForLesson(editingLesson, audienceByLesson)
+    : null;
+  const editingTeacherId = editingLesson
+    ? one<{ teacher_id: string }>(editingLesson.teacher_teaching_assignments)?.teacher_id ?? ""
+    : "";
+  const editingDraft: LessonFormDraft | null = editingLesson
+    ? {
+        id: editingLesson.id,
+        lessonName: editingLesson.subject,
+        subjectName: one<{ name: string }>(editingLesson.subjects)?.name ?? "",
+        teacherId: editingTeacherId,
+        billingType: editingLesson.billing_type,
+        forPsychology: Boolean(editingLesson.for_psychology),
+        gradeIds:
+          editingAudience && editingAudience.grade_ids.length > 0
+            ? editingAudience.grade_ids
+            : editingLesson.grade_id
+              ? [editingLesson.grade_id]
+              : [],
+        classIds: editingAudience?.class_ids ?? [],
+        trackIds: editingAudience?.track_ids ?? [],
+        specializationIds: editingAudience?.specialization_ids ?? [],
+        wholeGrade:
+          editingLesson.billing_type === "mandatory" &&
+          !editingLesson.for_psychology &&
+          (editingAudience?.class_ids.length ?? 0) === 0 &&
+          (editingAudience?.track_ids.length ?? 0) === 0 &&
+          (editingAudience?.specialization_ids.length ?? 0) === 0,
+        dayOfWeek: editingLesson.day_of_week,
+        lessonNumber: editingLesson.lesson_number,
+        periodCount: editingLesson.period_count ?? 1,
+        activityRangeId: editingLesson.activity_range_id,
+        attendanceRuleId: editingLesson.attendance_rule_id,
+      }
+    : null;
+
+  const cancelQuery = new URLSearchParams(filterQuery);
+  cancelQuery.delete("edit");
+  const cancelHref = cancelQuery.toString() ? `/lessons?${cancelQuery.toString()}` : "/lessons";
 
   return (
     <div className="flex flex-col gap-stack_lg">
@@ -366,7 +414,7 @@ export default async function LessonsPage({ searchParams }: Props) {
 
       <Section
         icon="edit_note"
-        title="יצירת שיעור חדש"
+        title={editingDraft ? "עריכת שיעור" : "יצירת שיעור חדש"}
         accent="featured"
         titleClassName="font-headline-md text-headline-md"
       >
@@ -379,7 +427,17 @@ export default async function LessonsPage({ searchParams }: Props) {
             לפני יצירת שיעור.
           </p>
         )}
-        <LessonsForm {...formProps} />
+        {searchParams.edit && !editingDraft ? (
+          <p className="mb-3 rounded-lg bg-error-container/60 px-4 py-3 font-body-md text-body-md text-on-error-container">
+            השיעור לעריכה לא נמצא.
+          </p>
+        ) : null}
+        <LessonsForm
+          key={editingDraft?.id ?? "create"}
+          {...formProps}
+          initial={editingDraft}
+          cancelHref={editingDraft ? cancelHref : undefined}
+        />
       </Section>
 
       <AttendancePoolsPanel
@@ -396,6 +454,7 @@ export default async function LessonsPage({ searchParams }: Props) {
         holidayDates={holidayDatesByKind(holidays.data ?? []).vacation}
         cancelledDates={holidayDatesByKind(holidays.data ?? []).cancelled}
         students={yearStudents}
+        editingId={editingDraft?.id}
       />
     </div>
   );

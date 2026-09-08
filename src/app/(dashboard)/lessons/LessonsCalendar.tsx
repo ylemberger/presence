@@ -17,11 +17,13 @@ import {
 import { BILLING_TYPE_LABELS, DAY_OF_WEEK_LABELS, OCCURRENCE_STATUS_LABELS } from "@/lib/constants";
 import { formatLessonHours } from "@/lib/lessons/hours";
 import { cn } from "@/lib/cn";
-import { completeOccurrenceAction } from "../actions";
+import { completeOccurrenceAction, deleteLessonAction } from "../actions";
 import type { Lesson } from "@/types/database";
 import { Icon } from "@/components/ui/Icon";
 import { AssignStudentToLesson } from "./AssignStudentToLesson";
 import { AddOccurrenceDate } from "../attendance/AddOccurrenceDate";
+import { DeleteButton } from "@/components/ui/DeleteButton";
+import Link from "next/link";
 
 export type LessonTemplateCard = Lesson & {
   teacherName: string;
@@ -51,6 +53,7 @@ interface LessonsCalendarProps {
   holidayDates?: string[];
   cancelledDates?: string[];
   students?: { id: string; full_name: string }[];
+  editingId?: string;
 }
 
 const STATUS_META: Record<string, { pillClass: string; icon: string; label: string }> = {
@@ -74,6 +77,7 @@ export function LessonsCalendar({
   holidayDates = [],
   cancelledDates = [],
   students = [],
+  editingId,
 }: LessonsCalendarProps) {
   const router = useRouter();
   const seed = hebrewMonthFromIso(initialMonthIso || todayIso());
@@ -381,7 +385,11 @@ export function LessonsCalendar({
                 return (
                   <li
                     key={l.id}
-                    className="rounded-lg border border-outline-variant/30 bg-surface-container-low px-3 py-3 transition-colors hover:border-secondary/40"
+                    className={
+                      editingId === l.id
+                        ? "rounded-lg border border-secondary bg-secondary-container/30 px-3 py-3"
+                        : "rounded-lg border border-outline-variant/30 bg-surface-container-low px-3 py-3 transition-colors hover:border-secondary/40"
+                    }
                   >
                     <div className="flex items-start justify-between gap-2">
                         <div className="min-w-0">
@@ -413,6 +421,32 @@ export function LessonsCalendar({
                             ? "אין מופעים בחודש זה"
                             : `${monthOccCount} מופעים בחודש`}
                         </p>
+                      </div>
+                      <div className="flex shrink-0 flex-col items-stretch gap-1">
+                        <Link
+                          href={`/lessons?${new URLSearchParams({
+                            ...(monthQuery ? Object.fromEntries(new URLSearchParams(monthQuery)) : {}),
+                            edit: l.id,
+                          }).toString()}`}
+                          className="inline-flex items-center justify-center gap-1 rounded-lg border border-outline-variant bg-surface-container-lowest px-3 py-1.5 font-semibold text-caption text-primary hover:bg-surface-container-low"
+                        >
+                          <Icon name="edit" className="text-[16px]" />
+                          עריכה
+                        </Link>
+                        <DeleteButton
+                          label="מחק שיעור"
+                          confirmMessage="יימחקו השיעור, שיבוצי התלמידות לשיעור, המופעים והנוכחות שלהם. התלמידות עצמן לא יימחקו. להמשיך?"
+                          onDelete={async () => {
+                            const result = await deleteLessonAction(l.id);
+                            if (!result?.error && editingId === l.id) {
+                              const params = new URLSearchParams(monthQuery);
+                              params.delete("edit");
+                              const q = params.toString();
+                              router.push(q ? `/lessons?${q}` : "/lessons");
+                            }
+                            return result;
+                          }}
+                        />
                       </div>
                     </div>
                     {students.length > 0 && (

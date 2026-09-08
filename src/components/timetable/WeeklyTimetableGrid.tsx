@@ -2,7 +2,7 @@
 
 import { useMemo } from "react";
 import { hebrewWeekdayLabels } from "@/lib/dates/hebrew";
-import { formatLessonHours, occupiedLessonNumbers } from "@/lib/lessons/hours";
+import { formatLessonHours, occupiedLessonNumbers, MAX_LESSON_NUMBER } from "@/lib/lessons/hours";
 import { cn } from "@/lib/cn";
 
 export type TimetableBillingType = "mandatory" | "specialization";
@@ -13,7 +13,7 @@ export interface TimetableEntry {
   teacherName?: string;
   teacherId?: string | null;
   dayOfWeek: number; // 0-6 (ראשון-שבת)
-  lessonNumber: number; // 1-9
+  lessonNumber: number; // 1–10
   periodCount?: number;
   billingType: TimetableBillingType;
   forPsychology?: boolean;
@@ -22,7 +22,7 @@ export interface TimetableEntry {
 
 export function WeeklyTimetableGrid({
   entries,
-  maxLessonNumber = 9,
+  maxLessonNumber = MAX_LESSON_NUMBER,
   onCellClick,
 }: {
   entries: TimetableEntry[];

@@ -133,6 +133,83 @@ export async function generateLessonOccurrences(
   return result;
 }
 
+/** After editing a lesson: create missing dates, then drop/cancel dates that no longer belong. */
+export async function syncLessonOccurrences(
+  lessonId: string,
+  supabaseClient?: SupabaseClient
+) {
+  const supabase = supabaseClient ?? (await createClient());
+  const gen = await generateLessonOccurrences(lessonId, undefined, supabase);
+
+  const { data: lesson, error: lessonError } = await supabase
+    .from("lessons")
+    .select("id, day_of_week, academic_year_id, activity_ranges(start_date, end_date)")
+    .eq("id", lessonId)
+    .maybeSingle();
+  if (lessonError) throw lessonError;
+  if (!lesson) return { ...gen, removed: 0, cancelled: 0 };
+
+  const rawRange = lesson.activity_ranges as unknown;
+  const range = (Array.isArray(rawRange) ? rawRange[0] : rawRange) as {
+    start_date: string;
+    end_date: string;
+  } | null;
+  if (!range) return { ...gen, removed: 0, cancelled: 0 };
+
+  const holidaysByYear = await fetchHolidayDateSet(supabase, [lesson.academic_year_id]);
+  const holidays = holidaysByYear.get(lesson.academic_year_id) ?? new Set<string>();
+  const expected = new Set(
+    getDatesForDayOfWeek(range.start_date, range.end_date, lesson.day_of_week).filter(
+      (date) => !holidays.has(date)
+    )
+  );
+
+  const { data: occs, error: occError } = await supabase
+    .from("lesson_occurrences")
+    .select("id, occurrence_date, status")
+    .eq("lesson_id", lessonId);
+  if (occError) throw occError;
+
+  const stale = (occs ?? []).filter(
+    (o) => !expected.has(o.occurrence_date) && o.status !== "cancelled"
+  );
+  if (stale.length === 0) {
+    return { created: gen.created, skipped: gen.skipped, removed: 0, cancelled: 0 };
+  }
+
+  const ids = stale.map((o) => o.id);
+  const attended = new Set<string>();
+  await chunkedIn(ids, 200, async (chunk) => {
+    const { data: att, error } = await supabase
+      .from("attendance")
+      .select("lesson_occurrence_id")
+      .in("lesson_occurrence_id", chunk);
+    if (error) throw error;
+    for (const row of att ?? []) attended.add(row.lesson_occurrence_id);
+  });
+
+  const toDelete = ids.filter((id) => !attended.has(id));
+  const toCancel = ids.filter((id) => attended.has(id));
+  let removed = 0;
+  let cancelled = 0;
+
+  await chunkedIn(toDelete, 200, async (chunk) => {
+    const { error } = await supabase.from("lesson_occurrences").delete().in("id", chunk);
+    if (error) throw error;
+    removed += chunk.length;
+  });
+  await chunkedIn(toCancel, 200, async (chunk) => {
+    const { error } = await supabase
+      .from("lesson_occurrences")
+      .update({ status: "cancelled" })
+      .in("id", chunk);
+    if (error) throw error;
+    cancelled += chunk.length;
+  });
+
+  return { created: gen.created, skipped: gen.skipped, removed, cancelled };
+}
+
 async function chunkedIn<T>(
   ids: string[],
   chunkSize: number,

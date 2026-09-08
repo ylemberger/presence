@@ -12,6 +12,7 @@
 --   • שדות תלמידה מורחבים (שם פרטי/משפחה, טלפונים, כתובת, ת.ל., תיכון, חץ…)
 --   • מקצועות (הורה לשיעורים)
 --   • לוח חופשות וטווחי פעילות משותפים לכל השנים (לא נמחקים עם שנה)
+--   • שיעור 10 (שעת התחלה ומשך רצוף עד 10)
 --
 -- חשוב ללוגיקה:
 --   כיתה / מסלול / התמחות / פסיכולוגיה נשארים ב-student_assignments (לפי שנה).
@@ -113,7 +114,7 @@ update lessons set period_count = 1 where period_count is null;
 alter table lessons alter column period_count set default 1;
 alter table lessons alter column period_count set not null;
 alter table lessons drop constraint if exists lessons_period_count_check;
-alter table lessons add constraint lessons_period_count_check check (period_count >= 1 and period_count <= 9);
+alter table lessons add constraint lessons_period_count_check check (period_count >= 1 and period_count <= 10);
 
 -- ========== סיבת היעדרות ==========
 alter table attendance drop constraint if exists attendance_reason_check;
@@ -440,6 +441,19 @@ alter table activity_ranges
 alter table holiday_periods
   add constraint holiday_periods_academic_year_id_fkey
   foreign key (academic_year_id) references academic_years(id) on delete set null;
+
+-- ========== שיעור 10 ==========
+alter table lessons drop constraint if exists lessons_lesson_number_check;
+alter table lessons add constraint lessons_lesson_number_check
+  check (lesson_number between 1 and 10);
+
+alter table lessons drop constraint if exists lessons_period_count_check;
+alter table lessons add constraint lessons_period_count_check
+  check (period_count between 1 and 10);
+
+alter table lessons drop constraint if exists lessons_period_span_check;
+alter table lessons add constraint lessons_period_span_check
+  check (lesson_number + period_count - 1 between 1 and 10);
 
 -- Presence project only (never the salary database).
 notify pgrst, 'reload schema';
