@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import Script from "next/script";
 import { Heebo } from "next/font/google";
 import "./globals.css";
 
@@ -21,6 +22,9 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="he" dir="rtl" className={`${heebo.variable} h-full`}>
+      <Script id="sidebar-collapsed" strategy="beforeInteractive">
+        {`try{if(localStorage.getItem("presence-sidebar-collapsed")==="1"){document.documentElement.dataset.sidebar="collapsed"}}catch(e){}`}
+      </Script>
       <body
         className={`${heebo.className} font-body-md min-h-full antialiased text-on-background`}
       >
