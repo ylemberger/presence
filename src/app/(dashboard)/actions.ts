@@ -30,11 +30,15 @@ import {
 } from "@/lib/students/excelImport";
 import { applyStudentImportRows } from "@/lib/students/importApply";
 import type { AttendanceStatus, HolidayKind } from "@/types/database";
-import { todayIso } from "@/lib/dates/hebrew";
+import { todayIso, formatHebrewDate } from "@/lib/dates/hebrew";
 import { resolveOrCreateSubject } from "@/lib/lessons/subjects";
 import { MAX_LESSON_NUMBER } from "@/lib/lessons/hours";
 import { fingerprintForLesson } from "@/lib/attendance/pools";
 import { previousWeekBlockMessage } from "@/lib/attendance/previous-week";
+import {
+  FLEXIBLE_RANGE_FORM_VALUE,
+  isFlexibleActivityRange,
+} from "@/lib/lessons/flexible-range";
 import {
   isError,
   parseLessonBilling,
@@ -1254,11 +1258,91 @@ export async function createTeachingAssignmentAction(formData: FormData) {
   return { success: true };
 }
 
+async function maybeDeleteUnusedFlexibleRange(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  rangeId: string | null | undefined
+) {
+  if (!rangeId) return;
+  const { data: range } = await supabase
+    .from("activity_ranges")
+    .select("id, range_type")
+    .eq("id", rangeId)
+    .maybeSingle();
+  if (!isFlexibleActivityRange(range)) return;
+  const { count } = await supabase
+    .from("lessons")
+    .select("id", { count: "exact", head: true })
+    .eq("activity_range_id", rangeId);
+  if ((count ?? 0) > 0) return;
+  await supabase.from("activity_ranges").delete().eq("id", rangeId);
+}
+
+async function resolveOrCreateFlexibleRange(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  startDate: string,
+  endDate: string,
+  yearId: string
+) {
+  const { data: existing } = await supabase
+    .from("activity_ranges")
+    .select("id")
+    .eq("range_type", "flexible")
+    .eq("start_date", startDate)
+    .eq("end_date", endDate)
+    .limit(1)
+    .maybeSingle();
+  if (existing?.id) return existing.id;
+
+  const name =
+    startDate === endDate
+      ? `גמיש · ${formatHebrewDate(startDate)}`
+      : `גמיש · ${formatHebrewDate(startDate)} – ${formatHebrewDate(endDate)}`;
+  const { data: created, error } = await supabase
+    .from("activity_ranges")
+    .insert({
+      academic_year_id: yearId,
+      name,
+      start_date: startDate,
+      end_date: endDate,
+      range_type: "flexible",
+    })
+    .select("id")
+    .single();
+  if (error || !created) {
+    const msg = error?.message ?? "";
+    if (msg.toLowerCase().includes("range_type") || msg.toLowerCase().includes("check")) {
+      return {
+        error: "יש להריץ ב-Supabase את הקובץ supabase/patches/021_flexible_activity_range.sql",
+      };
+    }
+    return { error: "יצירת טווח גמיש נכשלה" };
+  }
+  return created.id;
+}
+
+async function resolveLessonActivityRangeId(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  formData: FormData,
+  yearId: string
+) {
+  const raw = String(formData.get("activity_range_id") ?? "").trim();
+  if (raw === FLEXIBLE_RANGE_FORM_VALUE) {
+    const start = requireIsoDate(formData.get("flexible_start_date"), "תחילת הטווח הגמיש");
+    if (isError(start)) return start;
+    const endRaw = String(formData.get("flexible_end_date") ?? "").trim();
+    const end = requireIsoDate(endRaw || start, "סיום הטווח הגמיש");
+    if (isError(end)) return end;
+    if (end < start) {
+      return { error: "תאריך הסיום חייב להיות באותו יום או אחרי תאריך ההתחלה" };
+    }
+    return resolveOrCreateFlexibleRange(supabase, start, end, yearId);
+  }
+  return requireId(raw, "טווח פעילות");
+}
+
 async function buildLessonPayload(formData: FormData) {
   const yearId = requireId(formData.get("academic_year_id"), "שנה אקדמית");
   if (isError(yearId)) return yearId;
-  const rangeId = requireId(formData.get("activity_range_id"), "טווח פעילות");
-  if (isError(rangeId)) return rangeId;
   const ruleId = requireId(formData.get("attendance_rule_id"), "כלל נוכחות");
   if (isError(ruleId)) return ruleId;
 
@@ -1281,6 +1365,8 @@ async function buildLessonPayload(formData: FormData) {
   const actionAuth = await createActionClient();
   if ("error" in actionAuth) return { error: actionAuth.error };
   const supabase = actionAuth.supabase;
+  const rangeId = await resolveLessonActivityRangeId(supabase, formData, yearId);
+  if (isError(rangeId)) return rangeId;
 
   const lessonName = requireText(
     formData.get("lesson_name") || formData.get("subject"),
@@ -1509,7 +1595,7 @@ export async function updateLessonAction(formData: FormData) {
 
   const { data: existing, error: loadError } = await supabase
     .from("lessons")
-    .select("id, academic_year_id, teacher_teaching_assignment_id")
+    .select("id, academic_year_id, teacher_teaching_assignment_id, activity_range_id")
     .eq("id", lessonId)
     .maybeSingle();
   if (loadError) return { error: "טעינת השיעור נכשלה" };
@@ -1592,6 +1678,10 @@ export async function updateLessonAction(formData: FormData) {
     return { error: (e as Error).message };
   }
 
+  if (existing.activity_range_id && existing.activity_range_id !== payload.activity_range_id) {
+    await maybeDeleteUnusedFlexibleRange(supabase, existing.activity_range_id);
+  }
+
   revalidateLessonPaths();
   return { success: true };
 }
@@ -1606,7 +1696,7 @@ export async function deleteLessonAction(id: string) {
 
   const { data: existing, error: loadError } = await supabase
     .from("lessons")
-    .select("id, teacher_teaching_assignment_id")
+    .select("id, teacher_teaching_assignment_id, activity_range_id")
     .eq("id", lessonId)
     .maybeSingle();
   if (loadError) return { error: "טעינת השיעור נכשלה" };
@@ -1616,6 +1706,8 @@ export async function deleteLessonAction(id: string) {
 
   const { error } = await supabase.from("lessons").delete().eq("id", lessonId);
   if (error) return { error: "מחיקת השיעור נכשלה" };
+
+  await maybeDeleteUnusedFlexibleRange(supabase, existing.activity_range_id);
 
   if (teachingId) {
     const { count } = await supabase

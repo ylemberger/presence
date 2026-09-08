@@ -38,6 +38,7 @@ import {
   EditableYearRow,
 } from "./EditableRows";
 import { ensureFixedGrades } from "@/lib/years/promote";
+import { isFlexibleActivityRange } from "@/lib/lessons/flexible-range";
 import { filterFixedGrades, isFixedGradeName } from "@/lib/years/grades";
 import { isMissingHolidayTable } from "@/lib/lessons/holidays";
 import { DeleteUnusedSpecializationsButton } from "./DeleteUnusedSpecializationsButton";
@@ -270,7 +271,8 @@ export default async function SettingsPage() {
           טווח הפעילות של השיעור — שנתי, סמסטר או קורס קצר. זה אותו לוח לכל השנים:
           מה שמולא בשנה הקודמת מופיע גם בשנה החדשה. אפשר לבחור יום אחד בלבד
           (לחיצה פעמיים על אותו תאריך, או «יום אחד בלבד»). מופעים נוצרים מתוך השיעור
-          והטווח; ימי חופשה בלוח החופשות לא נכללים.
+          והטווח; ימי חופשה בלוח החופשות לא נכללים. בטופס שיעור אפשר גם לבחור
+          «גמישה» ולבחור תאריכים בלוח — בלי להוסיף כאן טווח קבוע.
         </p>
         <SettingsForms
           type="activity_range"
@@ -284,7 +286,9 @@ export default async function SettingsPage() {
             columns={["שם", "סוג", "מתאריך", "עד תאריך", "פעולות"]}
           />
           <tbody className="divide-y divide-outline-variant/25">
-            {(ranges.data ?? []).map((r) => (
+            {(ranges.data ?? [])
+              .filter((r) => !isFlexibleActivityRange(r))
+              .map((r) => (
               <EditableActivityRangeRow
                 key={r.id}
                 id={r.id}

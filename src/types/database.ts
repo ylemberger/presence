@@ -1,7 +1,7 @@
 export type AttendanceStatus = "present" | "absent" | "late";
 export type OccurrenceStatus = "scheduled" | "completed" | "cancelled";
 export type BillingType = "mandatory" | "specialization";
-export type RangeType = "annual" | "semester_a" | "semester_b" | "course";
+export type RangeType = "annual" | "semester_a" | "semester_b" | "course" | "flexible";
 export type AssignmentType = "automatic" | "manual";
 export type HolidayKind = "vacation" | "cancelled_studies";
 

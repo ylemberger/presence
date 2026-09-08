@@ -18,6 +18,11 @@ import {
 import type { ActivityRange, AttendanceRule } from "@/types/database";
 import { Icon } from "@/components/ui/Icon";
 import { MultiSelect } from "@/components/ui/MultiSelect";
+import { HebrewDateRangePicker } from "@/components/ui/HebrewDateRangePicker";
+import {
+  FLEXIBLE_RANGE_FORM_VALUE,
+  isFlexibleActivityRange,
+} from "@/lib/lessons/flexible-range";
 
 export type LessonFormTeacher = {
   id: string;
@@ -100,6 +105,19 @@ export function LessonsForm({
   const [subjectName, setSubjectName] = useState(initial?.subjectName ?? "");
   const skipSalarySubject = useRef(Boolean(initial));
   const subjectListId = useId();
+  const initialRange = ranges.find((r) => r.id === initial?.activityRangeId);
+  const [rangeChoice, setRangeChoice] = useState(() =>
+    isFlexibleActivityRange(initialRange)
+      ? FLEXIBLE_RANGE_FORM_VALUE
+      : (initial?.activityRangeId ?? "")
+  );
+  const namedRanges = useMemo(
+    () => ranges.filter((r) => !isFlexibleActivityRange(r)),
+    [ranges]
+  );
+  const flexibleDefaults = isFlexibleActivityRange(initialRange)
+    ? { start: initialRange?.start_date, end: initialRange?.end_date }
+    : { start: undefined, end: undefined };
 
   const filteredClasses = useMemo(
     () =>
@@ -238,6 +256,7 @@ export function LessonsForm({
       setPeriodCount("1");
       setAssignmentKey("");
       setSubjectName("");
+      setRangeChoice("");
       setFormEpoch((n) => n + 1);
       onCreated?.();
       router.refresh();
@@ -545,8 +564,17 @@ export function LessonsForm({
             label="טווח פעילות"
             name="activity_range_id"
             required
-            defaultValue={initial?.activityRangeId ?? ""}
-            options={ranges.map((r) => ({ value: r.id, label: r.name }))}
+            value={rangeChoice}
+            onChange={setRangeChoice}
+            maxSuggestions={Math.max(12, namedRanges.length + 1)}
+            options={[
+              {
+                value: FLEXIBLE_RANGE_FORM_VALUE,
+                label: "גמישה",
+                description: "בחירת טווח תאריכים בלוח",
+              },
+              ...namedRanges.map((r) => ({ value: r.id, label: r.name })),
+            ]}
             emptyLabel="בחרי טווח"
           />
           <Combobox
@@ -562,6 +590,23 @@ export function LessonsForm({
             emptyLabel="בחרי כלל"
           />
         </div>
+        {rangeChoice === FLEXIBLE_RANGE_FORM_VALUE && (
+          <div className="mt-4 rounded-xl border border-outline-variant/40 bg-surface-container-low/60 p-4">
+            <p className="mb-3 font-label-md text-label-md text-primary">טווח גמיש</p>
+            <p className="mb-3 font-caption text-caption text-on-surface-variant">
+              בחרי בלוח תאריך התחלה ואז תאריך סיום. ליום אחד — לחצי פעמיים על אותו תאריך,
+              או «יום אחד בלבד».
+            </p>
+            <HebrewDateRangePicker
+              key={`${formEpoch}-${flexibleDefaults.start ?? ""}-${flexibleDefaults.end ?? ""}`}
+              startName="flexible_start_date"
+              endName="flexible_end_date"
+              defaultStart={flexibleDefaults.start}
+              defaultEnd={flexibleDefaults.end}
+              required
+            />
+          </div>
+        )}
         <p className="mt-3 font-body-md text-body-md text-on-surface-variant">
           שיעור של שעתיים רצופות: שעת התחלה 1 ומשך 2 ({formatLessonHours(1, 2)}). ימי חופשה
           מגדירים ב־הגדרות ← לשונית «לוח חופשות».

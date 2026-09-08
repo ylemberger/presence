@@ -47,7 +47,7 @@ create table activity_ranges (
   name text not null,
   start_date date not null,
   end_date date not null,
-  range_type text check (range_type in ('annual', 'semester_a', 'semester_b', 'course')),
+  range_type text check (range_type in ('annual', 'semester_a', 'semester_b', 'course', 'flexible')),
   constraint activity_ranges_dates_check check (end_date >= start_date)
 );
 

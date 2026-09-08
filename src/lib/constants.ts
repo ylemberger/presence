@@ -17,7 +17,7 @@ export const HOLIDAY_KIND_LABELS = {
   cancelled_studies: "ביטול לימודים",
 } as const;
 
-export const RANGE_TYPE_LABELS: Record<RangeType, string> = {
+export const RANGE_TYPE_LABELS: Record<Exclude<RangeType, "flexible">, string> = {
   annual: "שנתי",
   semester_a: "מחצית א'",
   semester_b: "מחצית ב'",

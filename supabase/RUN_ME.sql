@@ -13,6 +13,7 @@
 --   • מקצועות (הורה לשיעורים)
 --   • לוח חופשות וטווחי פעילות משותפים לכל השנים (לא נמחקים עם שנה)
 --   • שיעור 10 (שעת התחלה ומשך רצוף עד 10)
+--   • טווח פעילות גמיש (בחירת תאריכים בלוח בעת יצירת שיעור)
 --
 -- חשוב ללוגיקה:
 --   כיתה / מסלול / התמחות / פסיכולוגיה נשארים ב-student_assignments (לפי שנה).
@@ -454,6 +455,11 @@ alter table lessons add constraint lessons_period_count_check
 alter table lessons drop constraint if exists lessons_period_span_check;
 alter table lessons add constraint lessons_period_span_check
   check (lesson_number + period_count - 1 between 1 and 10);
+
+-- טווח פעילות גמיש (שיעור בודד, תאריכים מהלוח)
+alter table activity_ranges drop constraint if exists activity_ranges_range_type_check;
+alter table activity_ranges add constraint activity_ranges_range_type_check
+  check (range_type in ('annual', 'semester_a', 'semester_b', 'course', 'flexible'));
 
 -- Presence project only (never the salary database).
 notify pgrst, 'reload schema';
