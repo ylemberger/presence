@@ -132,7 +132,7 @@ export default async function ReportsPage({ searchParams }: Props) {
   }
 
   const [{ data: yearRanges }] = await Promise.all([
-    supabase.from("activity_ranges").select("start_date, end_date").eq("academic_year_id", activeYear.id),
+    supabase.from("activity_ranges").select("start_date, end_date"),
   ]);
   const rangeStarts = (yearRanges ?? []).map((r) => r.start_date).sort();
   const rangeEnds = (yearRanges ?? []).map((r) => r.end_date).sort();

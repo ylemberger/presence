@@ -103,12 +103,9 @@ export default async function LessonsPage({ searchParams }: Props) {
         .eq("academic_year_id", activeYear.id)
         .order("name"),
       supabase.from("subjects").select("id, name").eq("academic_year_id", activeYear.id).order("name"),
-      supabase.from("activity_ranges").select("*").eq("academic_year_id", activeYear.id),
+      supabase.from("activity_ranges").select("*"),
       supabase.from("attendance_rules").select("*"),
-      supabase
-        .from("holiday_periods")
-        .select("start_date, end_date, kind")
-        .eq("academic_year_id", activeYear.id),
+      supabase.from("holiday_periods").select("start_date, end_date, kind"),
       supabase.from("lesson_audience").select("lesson_id, grade_id, class_id, track_id, specialization_id"),
       supabase
         .from("student_assignments")
@@ -250,7 +247,8 @@ export default async function LessonsPage({ searchParams }: Props) {
     });
     return {
       ...l,
-      subject: formatSubjectLessonLabel(one<{ name: string }>(l.subjects)?.name, l.subject),
+      subject: l.subject,
+      subjectParentName: one<{ name: string }>(l.subjects)?.name ?? "",
       teacherName,
       gradeName: gradeNames.join(" / ") || (gradeById.get(l.grade_id) ?? ""),
       audienceLabel,
@@ -330,6 +328,7 @@ export default async function LessonsPage({ searchParams }: Props) {
     specializations: specializations.data ?? [],
     ranges: ranges.data ?? [],
     rules: rules.data ?? [],
+    subjects: yearSubjects,
   };
 
   const filterQuery = new URLSearchParams();

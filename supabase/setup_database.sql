@@ -39,9 +39,11 @@ create table subjects (
   unique (academic_year_id, name)
 );
 
+-- טווחי פעילות ולוח חופשות הם לוח מוסדי משותף (לא לפי שנה).
+-- academic_year_id נשמר לתאימות; מחיקת שנה לא מוחקת את הלוח.
 create table activity_ranges (
   id uuid primary key default gen_random_uuid(),
-  academic_year_id uuid references academic_years(id) on delete cascade,
+  academic_year_id uuid references academic_years(id) on delete set null,
   name text not null,
   start_date date not null,
   end_date date not null,
@@ -52,7 +54,7 @@ create table activity_ranges (
 -- ימי חופשה / ימים ללא לימודים. לא נוצרים בהם מופעי שיעור, ולכן לא נספרת נוכחות.
 create table holiday_periods (
   id uuid primary key default gen_random_uuid(),
-  academic_year_id uuid not null references academic_years(id) on delete cascade,
+  academic_year_id uuid references academic_years(id) on delete set null,
   name text not null,
   start_date date not null,
   end_date date not null,

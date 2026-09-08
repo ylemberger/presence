@@ -1,6 +1,6 @@
 ﻿"use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useId, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/Button";
 import { Combobox } from "@/components/ui/Combobox";
@@ -34,6 +34,7 @@ export interface LessonsFormProps {
   specializations: { id: string; name: string }[];
   ranges: ActivityRange[];
   rules: AttendanceRule[];
+  subjects: { id: string; name: string }[];
   onCreated?: () => void;
 }
 
@@ -46,6 +47,7 @@ export function LessonsForm({
   specializations,
   ranges,
   rules,
+  subjects,
   onCreated,
 }: LessonsFormProps) {
   const router = useRouter();
@@ -62,6 +64,8 @@ export function LessonsForm({
   const [lessonNumber, setLessonNumber] = useState("1");
   const [periodCount, setPeriodCount] = useState("1");
   const [assignmentKey, setAssignmentKey] = useState("");
+  const [subjectName, setSubjectName] = useState("");
+  const subjectListId = useId();
 
   const filteredClasses = useMemo(
     () =>
@@ -112,6 +116,11 @@ export function LessonsForm({
   const teacherId = picked?.teacherId ?? "";
   const teacherSalary = picked?.teacher.salaryAssignments ?? [];
   const selectedAssignment = picked?.selectedAssignment ?? null;
+
+  useEffect(() => {
+    const fromSalary = selectedAssignment?.subject?.trim() ?? "";
+    if (fromSalary) setSubjectName(fromSalary);
+  }, [assignmentKey, selectedAssignment?.subject]);
 
   const gradeNames = grades.filter((g) => gradeIds.includes(g.id)).map((g) => g.name);
   const classNames = classes.filter((c) => classIds.includes(c.id)).map((c) => c.name);
@@ -182,6 +191,7 @@ export function LessonsForm({
       setLessonNumber("1");
       setPeriodCount("1");
       setAssignmentKey("");
+      setSubjectName("");
       setFormEpoch((n) => n + 1);
       onCreated?.();
       router.refresh();
@@ -211,10 +221,25 @@ export function LessonsForm({
             />
             <Input
               fieldSize="lg"
+              label="שם מקצוע"
+              name="subject_name"
+              required
+              list={subjectListId}
+              value={subjectName}
+              onChange={(e) => setSubjectName(e.target.value)}
+              placeholder="למשל בישול"
+            />
+            <datalist id={subjectListId}>
+              {subjects.map((s) => (
+                <option key={s.id} value={s.name} />
+              ))}
+            </datalist>
+            <Input
+              fieldSize="lg"
               label="שם השיעור"
               name="lesson_name"
               required
-              placeholder="למשל בישול"
+              placeholder="למשל בישול — קבוצה א"
             />
             <p className="font-body-md text-body-md text-on-surface-variant">
               כל שיעור נספר לבד בנוכחות, גם אם יש כמה שיעורים באותו שם. קיבוץ לנוכחות אחת נעשה ידנית ביומן השיעורים.

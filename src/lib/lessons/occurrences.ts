@@ -157,8 +157,7 @@ export async function applyHolidaysToYearOccurrences(
 
   const { data: periods, error: periodError } = await supabase
     .from("holiday_periods")
-    .select("start_date, end_date")
-    .eq("academic_year_id", academicYearId);
+    .select("start_date, end_date");
   if (periodError) {
     if (isMissingHolidayTable(periodError)) {
       return { created: gen.created, skipped: gen.skipped, removed: 0, cancelled: 0 };
@@ -215,4 +214,22 @@ export async function applyHolidaysToYearOccurrences(
   });
 
   return { created: gen.created, skipped: gen.skipped, removed, cancelled };
+}
+
+/** Shared holiday calendar — refresh occurrences for every academic year. */
+export async function applyHolidaysToAllOccurrences(supabase: SupabaseClient) {
+  const { data: years, error } = await supabase.from("academic_years").select("id");
+  if (error) throw error;
+  let created = 0;
+  let skipped = 0;
+  let removed = 0;
+  let cancelled = 0;
+  for (const year of years ?? []) {
+    const result = await applyHolidaysToYearOccurrences(year.id, supabase);
+    created += result.created;
+    skipped += result.skipped;
+    removed += result.removed;
+    cancelled += result.cancelled;
+  }
+  return { created, skipped, removed, cancelled };
 }

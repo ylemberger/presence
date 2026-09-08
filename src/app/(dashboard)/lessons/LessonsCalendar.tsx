@@ -29,6 +29,7 @@ export type LessonTemplateCard = Lesson & {
   audienceLabel: string;
   rangeName: string;
   studentCount: number;
+  subjectParentName?: string;
 };
 
 interface OccurrenceRow {
@@ -383,7 +384,12 @@ export function LessonsCalendar({
                     className="rounded-lg border border-outline-variant/30 bg-surface-container-low px-3 py-3 transition-colors hover:border-secondary/40"
                   >
                     <div className="flex items-start justify-between gap-2">
-                      <div className="min-w-0">
+                        <div className="min-w-0">
+                        {l.subjectParentName ? (
+                          <div className="font-caption text-caption text-on-surface-variant">
+                            מקצוע: {l.subjectParentName}
+                          </div>
+                        ) : null}
                         <div className="font-semibold text-on-surface">{l.subject}</div>
                         <p className="mt-0.5 font-caption text-caption text-on-surface-variant">
                           {[

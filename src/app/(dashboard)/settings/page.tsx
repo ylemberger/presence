@@ -84,16 +84,8 @@ export default async function SettingsPage() {
           .select("*")
           .eq("academic_year_id", yearId)
           .order("name"),
-        supabase
-          .from("activity_ranges")
-          .select("*")
-          .eq("academic_year_id", yearId)
-          .order("start_date"),
-        supabase
-          .from("holiday_periods")
-          .select("*")
-          .eq("academic_year_id", yearId)
-          .order("start_date"),
+        supabase.from("activity_ranges").select("*").order("start_date"),
+        supabase.from("holiday_periods").select("*").order("start_date"),
         supabase.from("attendance_rules").select("*").order("name"),
       ])
     : [
@@ -275,7 +267,8 @@ export default async function SettingsPage() {
     <Section icon="date_range" title="טווחי פעילות" bodyBleed>
       <div className="p-6">
         <p className="mb-4 font-caption text-caption text-on-surface-variant">
-          טווח הפעילות של השיעור — שנתי, סמסטר או קורס קצר. אפשר לבחור יום אחד בלבד
+          טווח הפעילות של השיעור — שנתי, סמסטר או קורס קצר. זה אותו לוח לכל השנים:
+          מה שמולא בשנה הקודמת מופיע גם בשנה החדשה. אפשר לבחור יום אחד בלבד
           (לחיצה פעמיים על אותו תאריך, או «יום אחד בלבד»). מופעים נוצרים מתוך השיעור
           והטווח; ימי חופשה בלוח החופשות לא נכללים.
         </p>
@@ -331,7 +324,13 @@ export default async function SettingsPage() {
           </p>
         </div>
       ) : (
-        <HolidayCalendar yearId={yearId} periods={holidays.data ?? []} />
+        <>
+          <p className="px-6 pt-6 font-caption text-caption text-on-surface-variant">
+            זה אותו לוח לכל השנים. ימים שמולאו בשנה הקודמת מופיעים גם כאן, ומשפיעים
+            על מופעי שיעור בכל שנה.
+          </p>
+          <HolidayCalendar yearId={yearId} periods={holidays.data ?? []} />
+        </>
       )}
     </Section>
   ) : (

@@ -47,36 +47,36 @@ export function isMissingHolidayKind(error: { message?: string; code?: string } 
   return /holiday_periods.*kind|column.*kind|PGRST204/i.test(msg);
 }
 
+/** Institution-wide holiday dates. Every academic year sees the same calendar. */
 export async function fetchHolidayDateSet(
   supabase: SupabaseClient,
   academicYearIds: string[]
 ): Promise<Map<string, Set<string>>> {
   const map = new Map<string, Set<string>>();
   const ids = [...new Set(academicYearIds.filter(Boolean))];
-  for (const id of ids) map.set(id, new Set());
+  const shared = new Set<string>();
+  for (const id of ids) map.set(id, shared);
   if (ids.length === 0) return map;
 
   const { data, error } = await supabase
     .from("holiday_periods")
-    .select("academic_year_id, start_date, end_date")
-    .in("academic_year_id", ids);
+    .select("start_date, end_date");
   if (error) {
     if (isMissingHolidayTable(error)) return map;
     throw error;
   }
 
   for (const row of data ?? []) {
-    const set = map.get(row.academic_year_id) ?? new Set<string>();
     for (const date of expandIsoRange(row.start_date, row.end_date)) {
-      set.add(date);
+      shared.add(date);
     }
-    map.set(row.academic_year_id, set);
   }
   return map;
 }
 
 type PeriodRow = {
   id: string;
+  academic_year_id: string | null;
   name: string;
   start_date: string;
   end_date: string;
@@ -97,8 +97,7 @@ export async function toggleHolidayDate(
 ): Promise<{ error?: string }> {
   const { data, error } = await supabase
     .from("holiday_periods")
-    .select("id, name, start_date, end_date, kind")
-    .eq("academic_year_id", academicYearId);
+    .select("id, academic_year_id, name, start_date, end_date, kind");
   if (error) {
     if (isMissingHolidayTable(error)) {
       return { error: "טבלת החופשות עדיין לא קיימת. הריצי את patch 005 ואז 009." };
@@ -176,7 +175,7 @@ async function removeDateFromPeriod(
   if (updateError) return { error: "עדכון הטווח נכשל" };
 
   const { error: insertError } = await supabase.from("holiday_periods").insert({
-    academic_year_id: academicYearId,
+    academic_year_id: period.academic_year_id ?? academicYearId,
     name: period.name,
     start_date: addDays(iso, 1),
     end_date: period.end_date,

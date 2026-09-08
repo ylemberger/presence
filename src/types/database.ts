@@ -45,7 +45,7 @@ export interface Subject {
 
 export interface ActivityRange {
   id: string;
-  academic_year_id: string;
+  academic_year_id: string | null;
   name: string;
   start_date: string;
   end_date: string;
@@ -54,7 +54,7 @@ export interface ActivityRange {
 
 export interface HolidayPeriod {
   id: string;
-  academic_year_id: string;
+  academic_year_id: string | null;
   name: string;
   start_date: string;
   end_date: string;

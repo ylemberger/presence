@@ -4,7 +4,7 @@ import { revalidatePath } from "next/cache";
 import { createActionClient, createClient } from "@/lib/supabase/server";
 import { setActiveAcademicYear, getActiveAcademicYear } from "@/lib/utils";
 import { syncTeacherSourceRecords } from "@/lib/sync/teachers";
-import { generateLessonOccurrences, applyHolidaysToYearOccurrences } from "@/lib/lessons/occurrences";
+import { generateLessonOccurrences, applyHolidaysToAllOccurrences } from "@/lib/lessons/occurrences";
 import { toggleHolidayDate, isMissingHolidayKind } from "@/lib/lessons/holidays";
 import {
   audienceForLesson,
@@ -286,7 +286,7 @@ export async function createHolidayPeriodAction(formData: FormData) {
   if (error) return { error: holidayWriteError(error) };
 
   try {
-    await applyHolidaysToYearOccurrences(payload.academic_year_id, supabase);
+    await applyHolidaysToAllOccurrences(supabase);
   } catch (e) {
     return { error: (e as Error).message };
   }
@@ -311,12 +311,11 @@ export async function updateHolidayPeriodAction(id: string, formData: FormData) 
       start_date: payload.start_date,
       end_date: payload.end_date,
     })
-    .eq("id", id)
-    .eq("academic_year_id", payload.academic_year_id);
+    .eq("id", id);
   if (error) return { error: holidayWriteError(error) };
 
   try {
-    await applyHolidaysToYearOccurrences(payload.academic_year_id, supabase);
+    await applyHolidaysToAllOccurrences(supabase);
   } catch (e) {
     return { error: (e as Error).message };
   }
@@ -342,7 +341,7 @@ export async function deleteHolidayPeriodAction(id: string) {
   if (error) return { error: error.message };
 
   try {
-    await applyHolidaysToYearOccurrences(existing.academic_year_id, supabase);
+    await applyHolidaysToAllOccurrences(supabase);
   } catch (e) {
     return { error: (e as Error).message };
   }
@@ -374,7 +373,7 @@ export async function toggleHolidayDayAction(
   if (toggled.error) return toggled;
 
   try {
-    await applyHolidaysToYearOccurrences(year, actionAuth.supabase);
+    await applyHolidaysToAllOccurrences(actionAuth.supabase);
   } catch {
     return { error: "היום נשמר, אך רענון מופעי השיעור נכשל" };
   }
@@ -703,6 +702,8 @@ export async function updateActivityRangeAction(id: string, formData: FormData) 
     .eq("id", id);
   if (error) return { error: error.message };
   revalidatePath("/settings");
+  revalidatePath("/lessons");
+  revalidatePath("/attendance");
   return { success: true };
 }
 
@@ -1285,11 +1286,14 @@ async function buildLessonPayload(formData: FormData) {
   );
   if (isError(lessonName)) return lessonName;
 
+  const subjectName = String(
+    formData.get("subject_name") ?? formData.get("new_subject_name") ?? ""
+  ).trim();
   const subjectResolved = await resolveOrCreateSubject(
     supabase,
     yearId,
-    "",
-    lessonName
+    formData.get("subject_id"),
+    subjectName || lessonName
   );
   if ("error" in subjectResolved) return subjectResolved;
 

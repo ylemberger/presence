@@ -13,6 +13,7 @@
 
 | מצב | מה להריץ |
 |-----|----------|
+| **לוח חופשות/טווחים משותף** | [`patches/019_shared_activity_and_holiday_calendar.sql`](patches/019_shared_activity_and_holiday_calendar.sql) |
 | **קיבוץ נוכחות ידני** | [`patches/015_attendance_pools.sql`](patches/015_attendance_pools.sql) |
 | **מקצועות (הורה לשיעורים)** | [`patches/014_subjects.sql`](patches/014_subjects.sql) |
 | **שכבות מרובות בשיעור** | [`patches/013_lesson_audience_grades.sql`](patches/013_lesson_audience_grades.sql) |
@@ -44,7 +45,8 @@
 
 ## טבלאות עיקריות
 
-- **שנה:** `academic_years`, `grades`, `classes`, `tracks`, `specializations`, `activity_ranges`, `holiday_periods`
+- **שנה:** `academic_years`, `grades`, `classes`, `tracks`, `specializations`
+- **לוח מוסדי (כל השנים):** `activity_ranges`, `holiday_periods`
 - **תלמידות:** `students`, `student_assignments`, `student_lesson_assignments`
 - **מורות:** `teachers`, `teacher_teaching_assignments`, `teacher_source_records`
 - **שיעורים:** `subjects`, `lessons`, `lesson_audience`, `lesson_occurrences`

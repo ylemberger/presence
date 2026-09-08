@@ -57,7 +57,8 @@ export function SettingsForms({ type, yearId, grades, createAction }: SettingsFo
             שנה פעילה
           </label>
           <p className="basis-full text-body-sm text-on-surface-variant">
-            כיתות, מסלולים, התמחויות, טווחי פעילות ולוח חופשות מועתקים מהשנה הקודמת. אחרי היצירה אפשר לערוך אותם בהגדרות לפי השנה החדשה.
+            כיתות, מסלולים והתמחויות מועתקים מהשנה הקודמת. טווחי פעילות ולוח
+            חופשות הם אותו לוח לכל השנים — מה שמולא בשנה שעברה יופיע גם כאן.
           </p>
           <label className="flex items-center gap-2 text-sm">
             <input type="checkbox" name="promote_students" defaultChecked />

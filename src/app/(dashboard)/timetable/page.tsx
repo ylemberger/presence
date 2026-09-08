@@ -80,7 +80,6 @@ export default async function TimetablePage({ searchParams }: Props) {
     supabase
       .from("activity_ranges")
       .select("id, name")
-      .eq("academic_year_id", activeYear.id)
       .order("start_date"),
     supabase.from("subjects").select("name").eq("academic_year_id", activeYear.id).order("name"),
   ]);
