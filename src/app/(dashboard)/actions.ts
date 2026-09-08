@@ -1854,20 +1854,31 @@ export async function completeOccurrenceAction(occurrenceId: string) {
   if (error) return { error: error.message };
   revalidatePath("/lessons");
   revalidatePath("/attendance");
+  revalidatePath("/");
   return { success: true };
 }
 
 export async function restoreOccurrenceAction(occurrenceId: string) {
+  return restoreOccurrencesAction([occurrenceId]);
+}
+
+/** Reopen completed occurrences so attendance can be finished or corrected. Existing marks are kept. */
+export async function restoreOccurrencesAction(occurrenceIds: string[]) {
+  const ids = [...new Set(occurrenceIds.map((id) => String(id ?? "").trim()).filter(Boolean))];
+  if (ids.length === 0) return { error: "חסר מופע" };
+
   const actionAuth = await createActionClient();
   if ("error" in actionAuth) return { error: actionAuth.error };
   const supabase = actionAuth.supabase;
   const { error } = await supabase
     .from("lesson_occurrences")
-    .update({ status: "scheduled" })
-    .eq("id", occurrenceId);
-  if (error) return { error: error.message };
+    .update({ status: "scheduled", gap_handling: null })
+    .in("id", ids)
+    .eq("status", "completed");
+  if (error) return { error: "לא ניתן להחזיר את השיעור לעריכה" };
   revalidatePath("/lessons");
   revalidatePath("/attendance");
+  revalidatePath("/");
   return { success: true };
 }
 

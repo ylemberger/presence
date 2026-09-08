@@ -9,6 +9,7 @@ import { HebrewMonthCalendar } from "@/components/ui/HebrewMonthCalendar";
 import {
   bulkAttendanceAction,
   copyPreviousAttendanceAction,
+  restoreOccurrencesAction,
   syncLessonStudentsAction,
   upsertAttendanceAction,
   upsertAttendanceNoteAction,
@@ -53,6 +54,7 @@ export interface AttendanceStudent {
 export interface DayLessonRow {
   id: string;
   date: string;
+  status?: string;
   subject: string;
   teacherName: string;
   lessonId: string;
@@ -199,6 +201,7 @@ export function AttendanceBoard({
   const [bulkSaving, setBulkSaving] = useState(false);
   const [syncing, setSyncing] = useState(false);
   const [copying, setCopying] = useState(false);
+  const [reopening, setReopening] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [note, setNote] = useState(noteBody);
   const [noteSaving, setNoteSaving] = useState(false);
@@ -612,6 +615,26 @@ export function AttendanceBoard({
       router.refresh();
     }
     setCopying(false);
+  }
+
+  async function reopenForEdits() {
+    if (!activeLesson || reopening) return;
+    const ids = linkedOccurrenceIds(activeLesson, activeOccurrenceId);
+    setReopening(true);
+    setMessage(null);
+    const result = await restoreOccurrencesAction(ids);
+    if (result && "error" in result && result.error) {
+      setMessage(result.error);
+    } else {
+      setDayOccurrences((prev) =>
+        prev.map((o) =>
+          ids.includes(o.id) || o.id === activeLesson.id ? { ...o, status: "scheduled" } : o
+        )
+      );
+      setMessage("השיעור חזר לעריכה. הסימונים הקיימים נשמרו — אפשר להמשיך למלא.");
+      router.refresh();
+    }
+    setReopening(false);
   }
 
   async function syncStudents() {
@@ -1149,8 +1172,25 @@ export function AttendanceBoard({
                   disabled={lessonStudents.length === 0}
                 />
                 <AddOccurrenceDate lessonId={activeLesson.lessonId} />
+                {activeLesson.status === "completed" && (
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="secondary"
+                    disabled={reopening}
+                    onClick={() => void reopenForEdits()}
+                  >
+                    <Icon name="undo" className="text-[16px]" />
+                    {reopening ? "מחזירה…" : "החזירי לעריכה"}
+                  </Button>
+                )}
               </div>
             </div>
+            {activeLesson.status === "completed" && (
+              <p className="mb-2 font-caption text-caption text-on-surface-variant">
+                השיעור סומן כהושלם. אפשר להמשיך לתקן סימונים, או להחזיר לעריכה אם עוד לא סיימת — הסימונים הקיימים נשמרים.
+              </p>
+            )}
             <div className="flex flex-wrap items-center gap-1.5">
               <button
                 type="button"

@@ -83,7 +83,7 @@ export default async function AttendancePage({ searchParams }: Props) {
     supabase
       .from("lesson_occurrences")
       .select(
-        `id, occurrence_date, lesson_id,
+        `id, occurrence_date, status, lesson_id,
          lessons!inner(
            id, subject, subject_id, lesson_number, period_count, billing_type, for_psychology, grade_id,
            class_id, track_id, specialization_id, academic_year_id, attendance_rule_id,
@@ -180,6 +180,7 @@ export default async function AttendancePage({ searchParams }: Props) {
     return {
       id: o.id,
       date: o.occurrence_date,
+      status: o.status,
       subject: formatSubjectLessonLabel(parentName, lesson.subject),
       subjectId: lesson.subject_id ?? lesson.id,
       lessonNumber: lesson.lesson_number ?? 0,
@@ -617,6 +618,7 @@ export default async function AttendancePage({ searchParams }: Props) {
         dayOccurrences={dayBlocks.map((o) => ({
           id: o.id,
           date: o.date,
+          status: o.status,
           subject: o.subject,
           teacherName: o.teacherName,
           lessonId: o.lessonId,

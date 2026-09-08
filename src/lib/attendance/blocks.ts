@@ -14,6 +14,7 @@ export type AttendanceBlockInput = {
   audienceKey: string;
   studentCount: number;
   markedCount: number;
+  status?: string;
 };
 
 export type AttendanceBlock = AttendanceBlockInput & {
@@ -47,6 +48,7 @@ function collapse(rows: AttendanceBlockInput[]): AttendanceBlock {
     periodCount: end - start + 1,
     studentCount: Math.max(...sorted.map((r) => r.studentCount)),
     markedCount: Math.max(...sorted.map((r) => r.markedCount)),
+    status: sorted.some((r) => r.status === "completed") ? "completed" : (first.status ?? "scheduled"),
     linkedOccurrenceIds: sorted.map((r) => r.id),
     linkedLessonIds: [...new Set(sorted.map((r) => r.lessonId))],
   };

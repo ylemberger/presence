@@ -17,7 +17,7 @@ import {
 import { BILLING_TYPE_LABELS, DAY_OF_WEEK_LABELS, OCCURRENCE_STATUS_LABELS } from "@/lib/constants";
 import { formatLessonHours } from "@/lib/lessons/hours";
 import { cn } from "@/lib/cn";
-import { completeOccurrenceAction, deleteLessonAction } from "../actions";
+import { completeOccurrenceAction, deleteLessonAction, restoreOccurrenceAction } from "../actions";
 import type { Lesson } from "@/types/database";
 import { Icon } from "@/components/ui/Icon";
 import { AssignStudentToLesson } from "./AssignStudentToLesson";
@@ -83,6 +83,7 @@ export function LessonsCalendar({
   const seed = hebrewMonthFromIso(initialMonthIso || todayIso());
   const [cursor, setCursor] = useState(seed);
   const [selectedIso, setSelectedIso] = useState<string | null>(todayIso());
+  const [statusBusyId, setStatusBusyId] = useState<string | null>(null);
 
   const month = useMemo(
     () => buildHebrewMonth(cursor.year, cursor.month),
@@ -126,8 +127,19 @@ export function LessonsCalendar({
   }
 
   async function markComplete(id: string) {
+    if (statusBusyId) return;
+    setStatusBusyId(id);
     await completeOccurrenceAction(id);
+    setStatusBusyId(null);
     router.refresh();
+  }
+
+  async function restoreForEdits(id: string) {
+    if (statusBusyId) return;
+    setStatusBusyId(id);
+    const result = await restoreOccurrenceAction(id);
+    setStatusBusyId(null);
+    if (!result || !("error" in result)) router.refresh();
   }
 
   return (
@@ -349,16 +361,37 @@ export function LessonsCalendar({
                       )}
                     </div>
                   </div>
-                  {o.status === "scheduled" && (
-                    <button
-                      type="button"
-                      onClick={() => markComplete(o.id)}
-                      className="inline-flex items-center gap-1 rounded-lg bg-primary-container px-3 py-1.5 font-label-md text-label-md text-white transition-colors hover:bg-primary hover:text-white"
+                  <div className="flex flex-wrap items-center gap-2">
+                    {o.status === "scheduled" && (
+                      <button
+                        type="button"
+                        disabled={statusBusyId === o.id}
+                        onClick={() => markComplete(o.id)}
+                        className="inline-flex items-center gap-1 rounded-lg bg-primary-container px-3 py-1.5 font-label-md text-label-md text-white transition-colors hover:bg-primary hover:text-white disabled:opacity-50"
+                      >
+                        <Icon name="done_all" className="text-[18px]" />
+                        {statusBusyId === o.id ? "מעדכנת…" : "השלמה"}
+                      </button>
+                    )}
+                    {o.status === "completed" && (
+                      <button
+                        type="button"
+                        disabled={statusBusyId === o.id}
+                        onClick={() => restoreForEdits(o.id)}
+                        className="inline-flex items-center gap-1 rounded-lg border border-outline px-3 py-1.5 font-label-md text-label-md text-primary transition-colors hover:bg-surface-container disabled:opacity-50"
+                      >
+                        <Icon name="undo" className="text-[18px]" />
+                        {statusBusyId === o.id ? "מחזירה…" : "החזר לעריכה"}
+                      </button>
+                    )}
+                    <Link
+                      href={`/attendance?date=${o.occurrence_date}&occurrenceId=${o.id}`}
+                      className="inline-flex items-center gap-1 rounded-lg px-3 py-1.5 font-label-md text-label-md text-secondary transition-colors hover:bg-secondary/10"
                     >
-                      <Icon name="done_all" className="text-[18px]" />
-                      השלמה
-                    </button>
-                  )}
+                      <Icon name="edit_note" className="text-[18px]" />
+                      מילוי נוכחות
+                    </Link>
+                  </div>
                 </div>
               );
             })}

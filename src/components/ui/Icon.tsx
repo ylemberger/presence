@@ -72,6 +72,7 @@ const ICONS: Record<string, string> = {
   download: "M12 5v10M8 11l4 4 4-4M4 19h16",
   report: "M12 3l9 16H3L12 3zM12 10v4M12 16v.5",
   restore: "M4 12a8 8 0 1 0 2.4-5.7L4 9M12 8v5l3 2",
+  undo: "M7 8H3l4-4M3 8c2-4 7-6 11-4.5A8 8 0 1 1 4 14",
   route: "M6 6h4v4H6zM14 14h4v4h-4zM10 8h4l2 6",
   rule: "M5 7h14M5 12h10M5 17h14M16 11l2 2 4-4",
   save: "M5 4h11l3 3v13H5zM8 4v5h8M8 16h8",
