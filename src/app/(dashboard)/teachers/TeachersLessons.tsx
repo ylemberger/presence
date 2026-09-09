@@ -18,15 +18,15 @@ export function TeachersLessons({ rows }: { rows: TeacherLessonRow[] }) {
   const [open, setOpen] = useState(false);
 
   const filtered = useMemo(() => {
-    const q = query.trim();
+    const q = query.trim().toLowerCase();
     if (!q) return rows;
-    return rows.filter(
-      (r) =>
-        r.teacherName.includes(q) ||
-        r.subject.includes(q) ||
-        r.grade.includes(q) ||
-        r.audience.includes(q)
-    );
+    const tokens = q.split(/\s+/).filter(Boolean);
+    return rows.filter((r) => {
+      const hay = [r.teacherName, r.subject, r.grade, r.audience, r.typeLabel]
+        .join(" ")
+        .toLowerCase();
+      return tokens.every((tok) => hay.includes(tok));
+    });
   }, [rows, query]);
 
   return (
@@ -61,14 +61,18 @@ export function TeachersLessons({ rows }: { rows: TeacherLessonRow[] }) {
       {filtered.length === 0 ? (
         <div className="rounded-lg border border-dashed border-outline-variant/50 px-4 py-8 text-center">
           <p className="font-body-md text-body-md text-on-surface-variant">
-            עדיין אין שיעורים בשנה זו.
+            {rows.length === 0
+              ? "עדיין אין שיעורים בשנה זו."
+              : "לא נמצאו שיעורים לפי הסינון."}
           </p>
-          <Link
-            href="/lessons"
-            className="mt-2 inline-block font-label-md text-label-md text-secondary hover:underline"
-          >
-            מעבר ליצירת שיעור
-          </Link>
+          {rows.length === 0 && (
+            <Link
+              href="/lessons"
+              className="mt-2 inline-block font-label-md text-label-md text-secondary hover:underline"
+            >
+              מעבר ליצירת שיעור
+            </Link>
+          )}
         </div>
       ) : (
         <div className="min-w-0 overflow-x-hidden">

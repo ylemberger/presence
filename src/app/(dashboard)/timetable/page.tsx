@@ -9,6 +9,7 @@ import { TimetableFilters } from "./TimetableFilters";
 import { formatSubjectLessonLabel } from "@/lib/lessons/subject-label";
 import { Section } from "@/components/ui/Section";
 import { Icon } from "@/components/ui/Icon";
+import { embeddedTeacher, embedOne } from "@/lib/supabase/embed";
 
 interface Props {
   searchParams: {
@@ -179,21 +180,19 @@ export default async function TimetablePage({ searchParams }: Props) {
   const entries: TimetableEntry[] = (lessonsRows ?? [])
     .filter((l: any) => {
       if (params.teacherId) {
-        const teacherId = (l.teacher_teaching_assignments as any)?.teacher_id ?? null;
+        const teacherId = embeddedTeacher(l.teacher_teaching_assignments)?.id ?? null;
         if (teacherId !== params.teacherId) return false;
       }
       if (params.subject) {
-        const parent = Array.isArray(l.subjects) ? l.subjects[0]?.name : l.subjects?.name;
+        const parent = embedOne<{ name: string }>(l.subjects)?.name;
         if (parent !== params.subject && l.subject !== params.subject) return false;
       }
       return true;
     })
     .map((l: any) => {
-      const teacher = (l.teacher_teaching_assignments as any)?.teachers as
-        | { full_name: string }
-        | null;
-      const teacherId = (l.teacher_teaching_assignments as any)?.teacher_id ?? null;
-      const parent = Array.isArray(l.subjects) ? l.subjects[0]?.name : l.subjects?.name;
+      const teacher = embeddedTeacher(l.teacher_teaching_assignments);
+      const teacherId = teacher?.id ?? null;
+      const parent = embedOne<{ name: string }>(l.subjects)?.name;
 
       let audienceLabel = "";
       if (l.billing_type === "specialization") {
@@ -208,7 +207,7 @@ export default async function TimetablePage({ searchParams }: Props) {
       return {
         lessonId: l.id,
         subject: formatSubjectLessonLabel(parent, l.subject),
-        teacherName: teacher?.full_name ?? "",
+        teacherName: teacher?.fullName ?? "",
         teacherId,
         dayOfWeek: l.day_of_week,
         lessonNumber: l.lesson_number,

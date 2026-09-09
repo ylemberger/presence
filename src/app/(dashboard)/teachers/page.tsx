@@ -11,6 +11,7 @@ import {
   fetchTeacherSourceRecords,
   groupSourceRowsByTeacher,
 } from "@/lib/teachers/source-records";
+import { embedOne } from "@/lib/supabase/embed";
 
 type AssignmentRow = {
   id: string;
@@ -85,15 +86,19 @@ export default async function TeachersPage() {
 
     lessonRows = ((asg ?? []) as unknown as AssignmentRow[]).map((a) => ({
       id: a.id,
-      teacherName: a.teachers?.full_name ?? "—",
+      teacherName: embedOne<{ full_name: string }>(a.teachers)?.full_name ?? "—",
       subject: a.subject,
       typeLabel: a.for_psychology
         ? "פסיכולוגיה"
         : BILLING_TYPE_LABELS[a.billing_type] ?? a.billing_type,
-      grade: a.grades?.name ?? "—",
+      grade: embedOne<{ name: string }>(a.grades)?.name ?? "—",
       audience: a.for_psychology
         ? "תלמידות פסיכולוגיה"
-        : [a.classes?.name, a.tracks?.name, a.specializations?.name]
+        : [
+            embedOne<{ name: string }>(a.classes)?.name,
+            embedOne<{ name: string }>(a.tracks)?.name,
+            embedOne<{ name: string }>(a.specializations)?.name,
+          ]
             .filter(Boolean)
             .join(" · ") || "—",
     }));

@@ -23,6 +23,7 @@ import { formatSubjectLessonLabel } from "@/lib/lessons/subject-label";
 import { fetchAttendancePools, calcUnitForLesson } from "@/lib/attendance/pools";
 import { findIncompletePreviousWeekOccurrences } from "@/lib/attendance/previous-week";
 import { AttendanceReminderBanner } from "@/components/attendance/AttendanceReminderBanner";
+import { embedOne, embeddedTeacher } from "@/lib/supabase/embed";
 import {
   AttendanceBoard,
   type AttendanceMode,
@@ -139,10 +140,7 @@ export default async function AttendancePage({ searchParams }: Props) {
     track_id: string | null;
     specialization_id: string | null;
     attendance_rule_id: string | null;
-    teacher_teaching_assignments: {
-      teacher_id: string;
-      teachers: { full_name: string } | null;
-    } | null;
+    teacher_teaching_assignments: unknown;
   };
 
   const gradeNameById = new Map((catalog.grades ?? []).map((g) => [g.id, g.name]));
@@ -152,8 +150,8 @@ export default async function AttendancePage({ searchParams }: Props) {
 
   function mapOccurrence(o: NonNullable<typeof monthOccurrencesRaw>[number]) {
     const lesson = o.lessons as unknown as LessonJoin;
-    const teacher = lesson.teacher_teaching_assignments?.teachers;
-    const teacherId = lesson.teacher_teaching_assignments?.teacher_id ?? "";
+    const teacher = embeddedTeacher(lesson.teacher_teaching_assignments);
+    const teacherId = teacher?.id ?? "";
     const audience = audienceForLesson(
       {
         id: lesson.id,
@@ -185,7 +183,7 @@ export default async function AttendancePage({ searchParams }: Props) {
       subjectId: lesson.subject_id ?? lesson.id,
       lessonNumber: lesson.lesson_number ?? 0,
       periodCount: lesson.period_count ?? 1,
-      teacherName: teacher?.full_name ?? "",
+      teacherName: teacher?.fullName ?? "",
       teacherId,
       lessonId: lesson.id,
       classId: lesson.class_id,
@@ -475,12 +473,11 @@ export default async function AttendancePage({ searchParams }: Props) {
     ),
   ].sort((a, b) => a.localeCompare(b, "he"));
   const lessonOptions = (yearLessonRows ?? []).map((l) => {
-    const embedded = (l as { subjects?: { name: string } | { name: string }[] | null }).subjects;
-    const name = Array.isArray(embedded) ? embedded[0]?.name : embedded?.name;
-    const ta = l.teacher_teaching_assignments as unknown as {
-      teacher_id?: string;
-      teachers?: { full_name: string } | null;
-    } | null;
+    const embedded = embedOne<{ name: string }>(
+      (l as { subjects?: { name: string } | { name: string }[] | null }).subjects
+    );
+    const name = embedded?.name;
+    const teacher = embeddedTeacher(l.teacher_teaching_assignments);
     const audience = audienceForLesson(
       {
         id: l.id,
@@ -494,8 +491,8 @@ export default async function AttendancePage({ searchParams }: Props) {
     return {
       id: l.id,
       subject: formatSubjectLessonLabel(name, l.subject),
-      teacherId: ta?.teacher_id ?? "",
-      teacherName: ta?.teachers?.full_name ?? "",
+      teacherId: teacher?.id ?? "",
+      teacherName: teacher?.fullName ?? "",
       groupLabel: formatLessonGroupLabel({
         billingType: l.billing_type,
         forPsychology: Boolean(l.for_psychology),

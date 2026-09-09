@@ -96,6 +96,7 @@ export function MakeupFilters({
         defaultValue={defaults.teacherId ?? ""}
         options={teachers.map((t) => ({ value: t.id, label: t.name }))}
         emptyLabel="כל המורות"
+        maxSuggestions={40}
       />
 
       <Combobox

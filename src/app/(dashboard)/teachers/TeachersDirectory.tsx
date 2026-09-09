@@ -28,19 +28,25 @@ export function TeachersDirectory({ teachers }: { teachers: TeacherDirectoryRow[
   const [showAll, setShowAll] = useState(false);
 
   const filtered = useMemo(() => {
-    const q = query.trim();
+    const q = query.trim().toLowerCase();
     if (!q) return teachers;
-    return teachers.filter(
-      (t) =>
-        t.full_name.includes(q) ||
-        t.identity_number.includes(q) ||
-        (t.phone ?? "").includes(q) ||
-        (t.email ?? "").includes(q) ||
-        t.salarySubjects.includes(q) ||
-        t.salaryTracks.includes(q) ||
-        t.salaryGradeYears.includes(q) ||
-        t.salarySemesters.includes(q)
-    );
+    const tokens = q.split(/\s+/).filter(Boolean);
+    return teachers.filter((t) => {
+      const hay = [
+        t.full_name,
+        t.identity_number,
+        t.phone ?? "",
+        t.email ?? "",
+        t.salarySubjects,
+        t.salaryTracks,
+        t.salaryGradeYears,
+        t.salarySemesters,
+        t.salaryMeetings,
+      ]
+        .join(" ")
+        .toLowerCase();
+      return tokens.every((tok) => hay.includes(tok));
+    });
   }, [teachers, query]);
 
   const visible = showAll ? filtered : filtered.slice(0, PREVIEW_LIMIT);

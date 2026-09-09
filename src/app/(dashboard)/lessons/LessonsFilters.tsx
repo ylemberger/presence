@@ -79,6 +79,7 @@ export function LessonsFilters({
           name="teacherId"
           defaultValue={defaults.teacherId ?? ""}
           options={teachers.map((t) => ({ value: t.id, label: t.name }))}
+          maxSuggestions={40}
         />
         <Combobox
           label="מקצוע"

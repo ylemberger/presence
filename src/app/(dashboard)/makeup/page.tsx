@@ -13,6 +13,7 @@ import { isDateInRange } from "@/lib/dates/hebrew";
 import type { AttendanceStatus } from "@/types/database";
 import { formatSubjectLessonLabel } from "@/lib/lessons/subject-label";
 import { fetchAttendancePools, calcUnitForLesson } from "@/lib/attendance/pools";
+import { embeddedTeacher } from "@/lib/supabase/embed";
 import { MakeupForms } from "./MakeupForms";
 import { MakeupFilters, type MakeupFilterStatus } from "./MakeupFilters";
 import { Icon } from "@/components/ui/Icon";
@@ -234,10 +235,9 @@ export default async function MakeupPage({ searchParams }: Props) {
       classId: (lesson as unknown as { class_id: string | null }).class_id ?? null,
       trackId: (lesson as unknown as { track_id: string | null }).track_id ?? null,
       specializationId: (lesson as unknown as { specialization_id: string | null }).specialization_id ?? null,
-      teacherId:
-        (lesson as unknown as {
-          teacher_teaching_assignments: { teacher_id: string } | null;
-        }).teacher_teaching_assignments?.teacher_id ?? null,
+      teacherId: embeddedTeacher(
+        (lesson as unknown as { teacher_teaching_assignments?: unknown }).teacher_teaching_assignments
+      )?.id ?? null,
       absencePercent: summary.absencePercent,
       maxAllowed: max,
       requiredExams: makeup.requiredExams,
@@ -303,7 +303,7 @@ export default async function MakeupPage({ searchParams }: Props) {
     )
       return false;
     if (params.teacherId) {
-      const teacherId = (lesson?.teacher_teaching_assignments as any)?.teacher_id ?? null;
+      const teacherId = embeddedTeacher(lesson?.teacher_teaching_assignments)?.id ?? null;
       if (teacherId !== params.teacherId) return false;
     }
     if (params.subject) {

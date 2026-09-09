@@ -11,7 +11,7 @@ import {
   type FieldSize,
 } from "@/components/ui/Input";
 
-const MAX_SUGGESTIONS = 8;
+const MAX_SUGGESTIONS = 24;
 
 export type ComboboxOption = {
   value: string;
@@ -35,11 +35,19 @@ interface ComboboxProps {
   fieldSize?: FieldSize;
 }
 
-function optionMatches(opt: ComboboxOption, q: string) {
-  if (!q) return true;
+function searchableText(opt: ComboboxOption) {
   return [opt.label, opt.description, opt.keywords]
     .filter(Boolean)
-    .some((part) => part!.toLowerCase().includes(q));
+    .join(" ")
+    .toLowerCase();
+}
+
+function optionMatches(opt: ComboboxOption, q: string) {
+  if (!q) return true;
+  const hay = searchableText(opt);
+  const tokens = q.split(/\s+/).filter(Boolean);
+  if (tokens.length === 0) return true;
+  return tokens.every((tok) => hay.includes(tok));
 }
 
 function labelOf(

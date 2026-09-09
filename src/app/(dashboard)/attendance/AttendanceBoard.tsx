@@ -309,7 +309,7 @@ export function AttendanceBoard({
 
   const teacherLessonOptions = useMemo(() => {
     return lessons
-      .filter((l) => l.teacherId && l.teacherName)
+      .filter((l) => l.teacherId)
       .slice()
       .sort((a, b) => {
         const byTeacher = (a.teacherName ?? "").localeCompare(b.teacherName ?? "", "he");
@@ -325,7 +325,7 @@ export function AttendanceBoard({
         const group = l.groupLabel || "ללא קבוצה";
         return {
           value: l.id,
-          label: `${l.teacherName} · ${l.subject}`,
+          label: `${l.teacherName || "ללא מורה"} · ${l.subject}`,
           description: [group, day, hours].filter(Boolean).join(" · "),
           selectedLabel: [l.teacherName, l.subject, group].filter(Boolean).join(" · "),
           keywords: [l.teacherName, l.subject, group, day, hours].filter(Boolean).join(" "),
@@ -830,6 +830,29 @@ export function AttendanceBoard({
           options={specializations.map((s) => ({ value: s.id, label: s.name }))}
         />
         <Combobox
+          label="מורה"
+          value={teacherId ?? ""}
+          onChange={(v) => {
+            const nextTeacher = v || undefined;
+            const keepLesson =
+              nextTeacher &&
+              lessonId &&
+              lessons.find((l) => l.id === lessonId)?.teacherId === nextTeacher
+                ? lessonId
+                : undefined;
+            navigate(
+              buildParams({
+                teacherId: nextTeacher,
+                lessonId: keepLesson,
+                occurrenceId: undefined,
+              })
+            );
+          }}
+          options={teachers.map((t) => ({ value: t.id, label: t.name }))}
+          emptyLabel="כל המורות"
+          maxSuggestions={40}
+        />
+        <Combobox
           label="מקצוע"
           value={subject ?? ""}
           onChange={(v) => updateFilter("subject", v || undefined)}
@@ -895,7 +918,8 @@ export function AttendanceBoard({
               }}
               options={teacherLessonOptions}
               emptyLabel="בחרי מורה ושיעור"
-              maxSuggestions={24}
+              placeholder="הקלידי שם מורה או שיעור…"
+              maxSuggestions={40}
             />
           </div>
           <div className="flex items-end">

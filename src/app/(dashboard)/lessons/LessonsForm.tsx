@@ -283,7 +283,7 @@ export function LessonsForm({
               options={assignmentOptions}
               emptyLabel="בחרי מורה ושיבוץ"
               placeholder="הקלידי שם מורה, מקצוע או מסלול…"
-              maxSuggestions={12}
+              maxSuggestions={40}
             />
             <Input
               fieldSize="lg"
