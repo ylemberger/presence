@@ -120,15 +120,27 @@ const HEADER_ALIASES: Record<string, CanonicalStudentImportKey> = {
   תז: "identity",
   "ת.ל. עברי": "birthHebrew",
   "תל עברי": "birthHebrew",
+  "תאריך לידה עברי": "birthHebrew",
   "ת.ל. לועזי": "birthGregorian",
   "תל לועזי": "birthGregorian",
+  "תאריך לידה": "birthGregorian",
+  "תאריך לידה לועזי": "birthGregorian",
   כתובת: "address",
   עיר: "city",
   טל: "phone",
   טלפון: "phone",
   "פל אב": "fatherPhone",
+  "טל אב": "fatherPhone",
+  "טלפון אב": "fatherPhone",
+  "טל אבא": "fatherPhone",
   "פל אם": "motherPhone",
+  "טל אם": "motherPhone",
+  "טלפון אם": "motherPhone",
+  "טל אמא": "motherPhone",
   "פל תלמידה": "studentPhone",
+  "טל תלמידה": "studentPhone",
+  "טלפון תלמידה": "studentPhone",
+  נייד: "studentPhone",
   תיכון: "highSchool",
   "תוכנית חץ": "chetz",
   חץ: "chetz",
@@ -144,11 +156,101 @@ const HEADER_ALIASES: Record<string, CanonicalStudentImportKey> = {
   "תאריך התחלה": "startDate",
 };
 
-function normalizeHeader(raw: string): string {
+function foldHeader(raw: string): string {
   return raw
-    .replace(/["״׳']/g, "")
+    .replace(/[\u200e\u200f\u202a-\u202e\u2066-\u2069\u00a0\u200b-\u200d\ufeff]/g, "")
+    .replace(/["״׳'`‘’]/g, "")
+    .replace(/[.:]/g, "")
     .replace(/\s+/g, " ")
     .trim();
+}
+
+const ALIAS_BY_FOLDED = new Map<string, CanonicalStudentImportKey>();
+for (const [label, key] of Object.entries(HEADER_ALIASES)) {
+  const folded = foldHeader(label);
+  if (folded && !ALIAS_BY_FOLDED.has(folded)) ALIAS_BY_FOLDED.set(folded, key);
+}
+
+function mapHeaderColumns(
+  headerCells: (string | number | Date | null)[]
+): Map<CanonicalStudentImportKey, number> {
+  const columnIndex = new Map<CanonicalStudentImportKey, number>();
+  for (let i = 0; i < headerCells.length; i++) {
+    const folded = foldHeader(cellToString(headerCells[i]));
+    if (!folded) continue;
+    const key = ALIAS_BY_FOLDED.get(folded);
+    if (key && !columnIndex.has(key)) columnIndex.set(key, i);
+  }
+  return columnIndex;
+}
+
+function headerScore(columnIndex: Map<CanonicalStudentImportKey, number>): number {
+  let score = 0;
+  if (columnIndex.has("identity")) score += 4;
+  if (columnIndex.has("firstName") && columnIndex.has("lastName")) score += 4;
+  else if (columnIndex.has("fullName")) score += 3;
+  if (columnIndex.has("className")) score += 3;
+  if (columnIndex.has("track")) score += 1;
+  if (columnIndex.has("specialization")) score += 1;
+  if (columnIndex.has("grade")) score += 1;
+  return score;
+}
+
+function hasRequiredImportColumns(columnIndex: Map<CanonicalStudentImportKey, number>): boolean {
+  const hasName =
+    columnIndex.has("fullName") ||
+    (columnIndex.has("firstName") && columnIndex.has("lastName"));
+  return hasName && columnIndex.has("identity") && columnIndex.has("className");
+}
+
+function sheetToTable(sheet: XLSX.WorkSheet) {
+  return XLSX.utils.sheet_to_json<(string | number | Date | null)[]>(sheet, {
+    header: 1,
+    raw: true,
+    defval: "",
+    blankrows: false,
+  });
+}
+
+function describeHeaders(row: (string | number | Date | null)[] | undefined): string {
+  const labels = (row ?? [])
+    .map((cell) => foldHeader(cellToString(cell)))
+    .filter(Boolean)
+    .slice(0, 25);
+  return labels.join(" | ") || "אין כותרות";
+}
+
+function locateHeaderRow(table: (string | number | Date | null)[][]): {
+  headerRowIndex: number;
+  columnIndex: Map<CanonicalStudentImportKey, number>;
+} | { error: string } {
+  let best: {
+    row: number;
+    score: number;
+    usable: boolean;
+    columnIndex: Map<CanonicalStudentImportKey, number>;
+  } | null = null;
+  const limit = Math.min(table.length, 20);
+  for (let row = 0; row < limit; row++) {
+    const columnIndex = mapHeaderColumns(table[row] ?? []);
+    const score = headerScore(columnIndex);
+    const usable = hasRequiredImportColumns(columnIndex);
+    if (
+      !best ||
+      score > best.score ||
+      (score === best.score && usable && !best.usable)
+    ) {
+      best = { row, score, usable, columnIndex };
+    }
+  }
+  if (best?.usable) {
+    return { headerRowIndex: best.row, columnIndex: best.columnIndex };
+  }
+  return {
+    error:
+      "חסרות עמודות חובה: שם פרטי+משפחה (או שם מלא), מ.ז./ת.ז., כיתה. מומלץ גם מסלול, התמחות, שכבה. " +
+      `בקובץ זוהו: ${describeHeaders(table[best?.row ?? 0])}.`,
+  };
 }
 
 function cellToString(value: unknown): string {
@@ -360,48 +462,47 @@ export function parseStudentImportWorkbook(
     ? XLSX.read(new TextDecoder("utf-8").decode(bytes), { type: "string" })
     : XLSX.read(bytes, { type: "array", cellDates: true });
 
-  const preferred =
-    workbook.SheetNames.find((name) => name.includes("תלמידות")) ?? workbook.SheetNames[0];
-  if (!preferred) {
+  const preferredName = workbook.SheetNames.find((name) => name.includes("תלמידות"));
+  const otherSheets = workbook.SheetNames.filter((name) => name !== preferredName);
+  const sheetOrder = [
+    ...(preferredName ? [preferredName] : []),
+    ...otherSheets.filter((name) => !name.includes("הנחיות")),
+    ...otherSheets.filter((name) => name.includes("הנחיות")),
+  ];
+
+  let chosenTable: (string | number | Date | null)[][] | null = null;
+  let chosenHeader: {
+    headerRowIndex: number;
+    columnIndex: Map<CanonicalStudentImportKey, number>;
+  } | { error: string } | null = null;
+
+  for (const name of sheetOrder) {
+    const table = sheetToTable(workbook.Sheets[name]);
+    if (table.length === 0) continue;
+    const located = locateHeaderRow(table);
+    if ("error" in located) {
+      if (!chosenTable) {
+        chosenTable = table;
+        chosenHeader = located;
+      }
+      continue;
+    }
+    chosenTable = table;
+    chosenHeader = located;
+    break;
+  }
+
+  if (!chosenTable || !chosenHeader) {
     return { rows: [], errors: [{ rowNumber: 0, message: "הקובץ ריק" }] };
   }
-
-  const sheet = workbook.Sheets[preferred];
-  const table = XLSX.utils.sheet_to_json<(string | number | Date | null)[]>(sheet, {
-    header: 1,
-    raw: true,
-    defval: "",
-    blankrows: false,
-  });
-
-  if (table.length === 0) {
-    return { rows: [], errors: [{ rowNumber: 0, message: "לא נמצאו שורות בקובץ" }] };
+  if ("error" in chosenHeader) {
+    return { rows: [], errors: [{ rowNumber: 1, message: chosenHeader.error }] };
   }
 
-  const headerRow = (table[0] ?? []).map((cell) => normalizeHeader(cellToString(cell)));
-  const columnIndex = new Map<CanonicalStudentImportKey, number>();
-  for (let i = 0; i < headerRow.length; i++) {
-    const key = HEADER_ALIASES[headerRow[i]];
-    if (key && !columnIndex.has(key)) columnIndex.set(key, i);
-  }
+  const table = chosenTable;
+  const { headerRowIndex, columnIndex } = chosenHeader;
 
-  const hasName =
-    columnIndex.has("fullName") ||
-    (columnIndex.has("firstName") && columnIndex.has("lastName"));
-  if (!hasName || !columnIndex.has("identity") || !columnIndex.has("className")) {
-    return {
-      rows: [],
-      errors: [
-        {
-          rowNumber: 1,
-          message:
-            "חסרות עמודות חובה: שם פרטי+משפחה (או שם מלא), מ.ז., כיתה. מומלץ גם מסלול, התמחות, שכבה.",
-        },
-      ],
-    };
-  }
-
-  const dataRows = table.slice(1);
+  const dataRows = table.slice(headerRowIndex + 1);
   if (dataRows.length > MAX_STUDENT_IMPORT_ROWS) {
     return {
       rows: [],
@@ -420,7 +521,7 @@ export function parseStudentImportWorkbook(
 
   for (let i = 0; i < dataRows.length; i++) {
     const rawRow = dataRows[i] ?? [];
-    const rowNumber = i + 2;
+    const rowNumber = headerRowIndex + i + 2;
     const get = (key: CanonicalStudentImportKey) => {
       const index = columnIndex.get(key);
       return index == null ? "" : cellToString(rawRow[index]);
@@ -546,13 +647,17 @@ export function parseStudentImportWorkbook(
     if (typeof chetz !== "boolean") rowErrors.push(chetz.error);
 
     let birthDate: string | null = null;
+    let birthHebrew = (get("birthHebrew") || "").trim() || null;
     const birthGregorian = birthGregorianRaw.trim();
     if (birthGregorian) {
       const parsedBirth = parseFlexibleIsoDate(birthGregorian);
       if (typeof parsedBirth === "string") birthDate = parsedBirth;
-      else rowErrors.push(`ת.ל. לועזי: ${parsedBirth.error}`);
+      else if (/[\u0590-\u05FF]/.test(birthGregorian)) {
+        birthHebrew = birthHebrew || birthGregorian;
+      } else {
+        rowErrors.push(`תאריך לידה: ${parsedBirth.error}`);
+      }
     }
-    const birthHebrew = (get("birthHebrew") || "").trim() || null;
 
     const startDate = startDateRaw
       ? parseFlexibleIsoDate(startDateRaw)
