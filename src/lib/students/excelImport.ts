@@ -160,7 +160,9 @@ function foldHeader(raw: string): string {
   return raw
     .replace(/[\u200e\u200f\u202a-\u202e\u2066-\u2069\u00a0\u200b-\u200d\ufeff]/g, "")
     .replace(/["״׳'`‘’]/g, "")
-    .replace(/[.:]/g, "")
+    // Normalize common separator characters from Excel headers
+    // (e.g. "מ/ז/" instead of "מ.ז." and "ת/ל/ עברי" instead of "ת.ל. עברי")
+    .replace(/[.:/]/g, "")
     .replace(/\s+/g, " ")
     .trim();
 }
