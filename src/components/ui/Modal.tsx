@@ -44,7 +44,7 @@ export function Modal({
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center p-4 animate-[fadeIn_160ms_ease-out] sm:p-6"
+      className="fixed inset-0 z-[70] flex items-center justify-center p-4 animate-[fadeIn_160ms_ease-out] sm:p-6"
       role="dialog"
       aria-modal="true"
     >
@@ -56,8 +56,8 @@ export function Modal({
       />
       <div
         className={cn(
-          "relative z-10 flex max-h-[92vh] w-full max-w-2xl flex-col overflow-hidden rounded-xl bg-surface shadow-tactile-lg animate-[scaleIn_180ms_ease-out]",
-          className
+          "relative z-10 flex max-h-[92vh] w-full flex-col overflow-hidden rounded-xl bg-surface shadow-tactile-lg animate-[scaleIn_180ms_ease-out]",
+          className ?? "max-w-2xl"
         )}
       >
         <div className="flex items-center justify-between gap-4 rounded-t-xl border-b border-outline-variant/30 bg-surface-container-low px-6 py-4">

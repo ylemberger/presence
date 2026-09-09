@@ -405,7 +405,7 @@ export function LessonsCalendar({
           </h3>
           {lessons.length === 0 ? (
             <p className="font-body-md text-body-md text-on-surface-variant">
-              אין תבניות לפי הסינון. הוסיפי שיעור חדש בטופס.
+              אין תבניות לפי הסינון. לחצי על יצירת שיעור כדי להוסיף.
             </p>
           ) : (
             <ul className="flex flex-col gap-2 font-body-md text-body-md">

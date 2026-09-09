@@ -1,9 +1,9 @@
 import { createClient } from "@/lib/supabase/server";
 import { getActiveAcademicYear } from "@/lib/utils";
 import { PageHeader } from "@/components/ui/PageHeader";
-import { Section } from "@/components/ui/Section";
 import { LessonsCalendar } from "./LessonsCalendar";
-import { LessonsForm, type LessonFormDraft } from "./LessonsForm";
+import { type LessonFormDraft } from "./LessonsForm";
+import { LessonsFormDialog } from "./LessonsFormDialog";
 import { LessonsFilters } from "./LessonsFilters";
 import { filterFixedGrades } from "@/lib/years/grades";
 import {
@@ -393,6 +393,16 @@ export default async function LessonsPage({ searchParams }: Props) {
       <PageHeader
         title="יומן שיעורים עברי"
         description="יצירת שיעור פותחת אוטומטית את המופעים בטווח שנבחר. אין יצירת מופע בודד — ליום אחד מגדירים טווח של יום אחד. ימי חופשה לא נכללים."
+        actions={
+          <LessonsFormDialog
+            startOpen={Boolean(searchParams.edit)}
+            noTeachers={formProps.teachers.length === 0}
+            editNotFound={Boolean(searchParams.edit && !editingDraft)}
+            {...formProps}
+            initial={editingDraft}
+            cancelHref={cancelHref}
+          />
+        }
       />
 
       <LessonsFilters
@@ -412,40 +422,6 @@ export default async function LessonsPage({ searchParams }: Props) {
         }}
       />
 
-      <Section
-        icon="edit_note"
-        title={editingDraft ? "עריכת שיעור" : "יצירת שיעור חדש"}
-        accent="featured"
-        titleClassName="font-headline-md text-headline-md"
-      >
-        {formProps.teachers.length === 0 && (
-          <p className="mb-3 rounded-lg bg-attendance-late/10 px-4 py-3 font-body-lg text-body-lg text-attendance-late">
-            אין מורות במערכת.{" "}
-            <a href="/teachers" className="font-semibold underline">
-              הוסיפי מורה
-            </a>{" "}
-            לפני יצירת שיעור.
-          </p>
-        )}
-        {searchParams.edit && !editingDraft ? (
-          <p className="mb-3 rounded-lg bg-error-container/60 px-4 py-3 font-body-md text-body-md text-on-error-container">
-            השיעור לעריכה לא נמצא.
-          </p>
-        ) : null}
-        <LessonsForm
-          key={editingDraft?.id ?? "create"}
-          {...formProps}
-          initial={editingDraft}
-          cancelHref={editingDraft ? cancelHref : undefined}
-        />
-      </Section>
-
-      <AttendancePoolsPanel
-        yearId={activeYear.id}
-        pools={poolViews}
-        lessons={poolLessonOptions}
-      />
-
       <LessonsCalendar
         initialMonthIso={from}
         occurrences={occurrenceRows}
@@ -455,6 +431,12 @@ export default async function LessonsPage({ searchParams }: Props) {
         cancelledDates={holidayDatesByKind(holidays.data ?? []).cancelled}
         students={yearStudents}
         editingId={editingDraft?.id}
+      />
+
+      <AttendancePoolsPanel
+        yearId={activeYear.id}
+        pools={poolViews}
+        lessons={poolLessonOptions}
       />
     </div>
   );

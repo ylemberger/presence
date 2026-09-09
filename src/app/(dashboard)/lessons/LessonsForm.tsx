@@ -62,6 +62,7 @@ export interface LessonsFormProps {
   initial?: LessonFormDraft | null;
   cancelHref?: string;
   onCreated?: () => void;
+  onCancel?: () => void;
 }
 
 export function LessonsForm({
@@ -77,6 +78,7 @@ export function LessonsForm({
   initial,
   cancelHref,
   onCreated,
+  onCancel,
 }: LessonsFormProps) {
   const editing = Boolean(initial?.id);
   const router = useRouter();
@@ -639,9 +641,16 @@ export function LessonsForm({
             type="button"
             variant="outline"
             size="lg"
-            onClick={() => router.push(cancelHref)}
+            onClick={() => {
+              router.push(cancelHref);
+              onCancel?.();
+            }}
           >
             ביטול עריכה
+          </Button>
+        ) : onCancel ? (
+          <Button type="button" variant="outline" size="lg" onClick={onCancel}>
+            ביטול
           </Button>
         ) : null}
       </div>
