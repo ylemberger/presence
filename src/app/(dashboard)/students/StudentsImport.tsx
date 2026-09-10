@@ -16,6 +16,8 @@ interface ImportSummary {
   updated: number;
   unchanged: number;
   errors: { rowNumber: number; message: string }[];
+  expectedCount: number;
+  success: boolean;
 }
 
 interface PreviewRow {
@@ -40,6 +42,19 @@ function downloadBase64File(filename: string, base64: string) {
   URL.revokeObjectURL(url);
 }
 
+function formatImportSuccess(summary: ImportSummary): string {
+  const saved = summary.created + summary.updated + summary.unchanged;
+  if (summary.success && saved === summary.expectedCount && summary.expectedCount > 0) {
+    return `הייבוא הצליח במלואו: נשמרו כל ${saved} התלמידות מהקובץ (נוצרו ${summary.created}, עודכנו ${summary.updated}).`;
+  }
+  if (summary.success) {
+    return `הייבוא הצליח: נשמרו ${saved} תלמידות (נוצרו ${summary.created}, עודכנו ${summary.updated}${
+      summary.unchanged ? `, ללא שינוי ${summary.unchanged}` : ""
+    }).`;
+  }
+  return `הייבוא לא הושלם. נשמרו ${saved} תלמידות.`;
+}
+
 export function StudentsImport({ disabledReason }: { disabledReason?: string }) {
   const router = useRouter();
   const inputRef = useRef<HTMLInputElement>(null);
@@ -48,6 +63,7 @@ export function StudentsImport({ disabledReason }: { disabledReason?: string }) 
   const [loading, setLoading] = useState<"template" | "preview" | "import" | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [summary, setSummary] = useState<ImportSummary | null>(null);
+  const [lastNotice, setLastNotice] = useState<string | null>(null);
   const [preview, setPreview] = useState<{
     ok: boolean;
     count: number;
@@ -55,7 +71,7 @@ export function StudentsImport({ disabledReason }: { disabledReason?: string }) 
     errors: { rowNumber: number; message: string }[];
   } | null>(null);
 
-  function resetState() {
+  function resetModalFields() {
     setFileName(null);
     setError(null);
     setSummary(null);
@@ -66,8 +82,13 @@ export function StudentsImport({ disabledReason }: { disabledReason?: string }) 
 
   function openModal() {
     if (disabledReason) return;
-    resetState();
+    resetModalFields();
     setOpen(true);
+  }
+
+  function closeModal() {
+    if (loading !== null) return;
+    setOpen(false);
   }
 
   async function handleTemplate() {
@@ -150,6 +171,7 @@ export function StudentsImport({ disabledReason }: { disabledReason?: string }) 
       setError("יש לבחור קובץ אקסל או CSV.");
       return;
     }
+    const expectedCount = preview?.count ?? 0;
     setLoading("import");
     setError(null);
     setSummary(null);
@@ -165,14 +187,18 @@ export function StudentsImport({ disabledReason }: { disabledReason?: string }) 
         return;
       }
       if ("created" in result) {
-        setSummary({
+        const nextSummary: ImportSummary = {
           created: result.created ?? 0,
           updated: result.updated ?? 0,
           unchanged: result.unchanged ?? 0,
           errors: result.errors ?? [],
-        });
-        if ("success" in result && result.success) {
+          expectedCount,
+          success: Boolean("success" in result && result.success),
+        };
+        setSummary(nextSummary);
+        if (nextSummary.success) {
           setPreview(null);
+          setLastNotice(formatImportSuccess(nextSummary));
           router.refresh();
         }
         if ("error" in result && result.error) {
@@ -189,67 +215,87 @@ export function StudentsImport({ disabledReason }: { disabledReason?: string }) 
   }
 
   const canConfirm = Boolean(preview?.ok && !summary && loading === null);
+  const importDone = Boolean(summary?.success);
 
   return (
     <>
-      <Button
-        type="button"
-        variant="outline"
-        onClick={openModal}
-        disabled={Boolean(disabledReason)}
-        title={disabledReason}
-      >
-        <Icon name="upload" className="text-[18px]" />
-        ייבוא מאקסל
-      </Button>
+      <div className="flex flex-wrap items-center gap-2">
+        <Button
+          type="button"
+          variant="outline"
+          onClick={openModal}
+          disabled={Boolean(disabledReason)}
+          title={disabledReason}
+        >
+          <Icon name="upload" className="text-[18px]" />
+          ייבוא מאקסל
+        </Button>
+        {lastNotice && !open && (
+          <p className="max-w-xl rounded-lg border border-attendance-present/30 bg-attendance-present/10 px-3 py-1.5 text-caption text-attendance-present">
+            {lastNotice}
+          </p>
+        )}
+      </div>
 
       <Modal
         open={open}
-        onClose={() => setOpen(false)}
+        onClose={closeModal}
+        dismissible={loading === null}
         title="ייבוא תלמידות מאקסל"
         description="מעלים קובץ, בודקים, ואז מאשרים. אם יש שגיאה אחת — לא נשמרת אף תלמידה."
         className="max-w-2xl"
       >
         <div className="flex flex-col gap-5">
-          <ol className="list-decimal space-y-1 pe-5 text-body-md text-on-surface-variant">
-            <li>הורידי את קובץ הדוגמה — כולל שמות השכבות, הכיתות, המסלולים וההתמחויות של השנה הפעילה.</li>
-            <li>
-              חובה: שם פרטי ומשפחה (או שם מלא), ת.ז./מ.ז., כיתה, מסלול, התמחות. עמודת תעודת זהות עדיף כטקסט.
-            </li>
-            <li>
-              רשות: תאריך לידה / ת.ל. לועזי, ת.ל. עברי, טל / טל' אם / טל' אב / טל' תלמידה (או פל אם/אב), פסיכולוגיה, תוכנית חץ, כתובת ועוד. טלפונים: אפשר כמה מספרים בפסיק. חץ/פסיכולוגיה: ריק או ללא = לא, V = כן. תאריך לידה מזוהה גם אם הפורמט לא אחיד.
-            </li>
-            <li>אחרי בחירת הקובץ יוצג סיכום. ייבוא רק באישור. ביטול לא שומר כלום.</li>
-          </ol>
+          {!importDone && (
+            <ol className="list-decimal space-y-1 pe-5 text-body-md text-on-surface-variant">
+              <li>הורידי את קובץ הדוגמה — כולל שמות השכבות, הכיתות, המסלולים וההתמחויות של השנה הפעילה.</li>
+              <li>
+                חובה: שם פרטי ומשפחה (או שם מלא), ת.ז./מ.ז., כיתה, מסלול, התמחות. עמודת תעודת זהות עדיף כטקסט.
+              </li>
+              <li>
+                רשות: תאריך לידה / ת.ל. לועזי, ת.ל. עברי, טל / טל' אם / טל' אב / טל' תלמידה (או פל אם/אב), פסיכולוגיה, תוכנית חץ, כתובת ועוד.
+              </li>
+              <li>אחרי בחירת הקובץ יוצג סיכום. ייבוא רק באישור. סגירה לפני אישור לא שומרת כלום.</li>
+            </ol>
+          )}
 
-          <div className="flex flex-wrap gap-2">
-            <Button
-              type="button"
-              variant="secondary"
-              onClick={handleTemplate}
-              disabled={loading !== null}
-            >
-              <Icon name="download" className="text-[18px]" />
-              {loading === "template" ? "מכין דוגמה..." : "הורדת דוגמה"}
-            </Button>
-          </div>
+          {!importDone && (
+            <div className="flex flex-wrap gap-2">
+              <Button
+                type="button"
+                variant="secondary"
+                onClick={handleTemplate}
+                disabled={loading !== null}
+              >
+                <Icon name="download" className="text-[18px]" />
+                {loading === "template" ? "מכין דוגמה..." : "הורדת דוגמה"}
+              </Button>
+            </div>
+          )}
 
-          <label className="flex flex-col gap-1.5">
-            <span className="font-label-md text-label-md text-on-surface">קובץ אקסל</span>
-            <input
-              ref={inputRef}
-              type="file"
-              name="file"
-              accept=".xlsx,.xls,.csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,text/csv"
-              disabled={loading !== null}
-              onChange={(e) => void handlePreview(e.target.files)}
-              className="block w-full rounded-lg border border-dashed border-outline-variant bg-surface-container-low px-3 py-3 text-body-md file:me-3 file:rounded-md file:border-0 file:bg-secondary file:px-3 file:py-1.5 file:font-label-md file:text-on-secondary"
-            />
-            {fileName && <span className="text-caption text-on-surface-variant">{fileName}</span>}
-            {loading === "preview" && (
-              <span className="text-caption text-on-surface-variant">בודק את הקובץ...</span>
-            )}
-          </label>
+          {!importDone && (
+            <label className="flex flex-col gap-1.5">
+              <span className="font-label-md text-label-md text-on-surface">קובץ אקסל</span>
+              <input
+                ref={inputRef}
+                type="file"
+                name="file"
+                accept=".xlsx,.xls,.csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,text/csv"
+                disabled={loading !== null}
+                onChange={(e) => void handlePreview(e.target.files)}
+                className="block w-full rounded-lg border border-dashed border-outline-variant bg-surface-container-low px-3 py-3 text-body-md file:me-3 file:rounded-md file:border-0 file:bg-secondary file:px-3 file:py-1.5 file:font-label-md file:text-on-secondary"
+              />
+              {fileName && <span className="text-caption text-on-surface-variant">{fileName}</span>}
+              {loading === "preview" && (
+                <span className="text-caption text-on-surface-variant">בודק את הקובץ...</span>
+              )}
+              {loading === "import" && (
+                <span className="text-caption text-on-surface-variant">
+                  מייבא תלמידות… אל תסגרי את החלון עד שיופיע סיכום.
+                </span>
+              )}
+            </label>
+          )}
 
           {error && (
             <p className="rounded-lg border border-error/30 bg-error-container/40 px-3 py-2 text-body-md text-on-error-container">
@@ -304,8 +350,17 @@ export function StudentsImport({ disabledReason }: { disabledReason?: string }) 
           )}
 
           {summary && (
-            <div className="rounded-lg border border-outline-variant/40 bg-surface-container-low px-3 py-3 text-body-md">
-              <p className="font-label-md text-primary">סיכום ייבוא</p>
+            <div
+              className={
+                summary.success
+                  ? "rounded-lg border border-attendance-present/30 bg-attendance-present/10 px-3 py-3 text-body-md"
+                  : "rounded-lg border border-outline-variant/40 bg-surface-container-low px-3 py-3 text-body-md"
+              }
+            >
+              <p className="font-label-md text-primary">
+                {summary.success ? "הייבוא הסתיים" : "סיכום ייבוא"}
+              </p>
+              <p className="mt-2 text-on-surface">{formatImportSuccess(summary)}</p>
               <ul className="mt-2 grid gap-1 text-on-surface-variant sm:grid-cols-3">
                 <li>נוצרו: {summary.created}</li>
                 <li>עודכנו: {summary.updated}</li>
@@ -327,18 +382,17 @@ export function StudentsImport({ disabledReason }: { disabledReason?: string }) 
           <div className="flex justify-end gap-2">
             <Button
               type="button"
-              variant="ghost"
-              onClick={() => {
-                resetState();
-                setOpen(false);
-              }}
+              variant={importDone ? "primary" : "ghost"}
+              onClick={closeModal}
               disabled={loading !== null}
             >
-              ביטול
+              {importDone ? "סגירה" : "ביטול"}
             </Button>
-            <Button type="button" onClick={() => void handleConfirm()} disabled={!canConfirm}>
-              {loading === "import" ? "מייבא..." : "אישור ייבוא"}
-            </Button>
+            {!importDone && (
+              <Button type="button" onClick={() => void handleConfirm()} disabled={!canConfirm}>
+                {loading === "import" ? "מייבא..." : "אישור ייבוא"}
+              </Button>
+            )}
           </div>
         </div>
       </Modal>
