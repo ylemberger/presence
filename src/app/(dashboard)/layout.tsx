@@ -3,7 +3,9 @@ import { Sidebar } from "@/components/layout/Sidebar";
 import { YearSelector } from "@/components/layout/YearSelector";
 import { NavigationProgress } from "@/components/layout/NavigationProgress";
 import { AttendanceReminderBanner } from "@/components/attendance/AttendanceReminderBanner";
+import { UserAvatar } from "@/components/layout/UserAvatar";
 import { requireAuthenticatedUser } from "@/lib/supabase/server";
+import { authUserProfile } from "@/lib/auth/user-profile";
 import { getActiveAcademicYear, getAllAcademicYears } from "@/lib/utils";
 import { getPendingAttendanceSummary, EMPTY_PENDING_SUMMARY } from "@/lib/attendance/pending";
 import { Icon } from "@/components/ui/Icon";
@@ -14,6 +16,7 @@ export default async function DashboardLayout({
   children: React.ReactNode;
 }) {
   const { user } = await requireAuthenticatedUser();
+  const profile = authUserProfile(user);
 
   const [activeYear, years] = await Promise.all([
     getActiveAcademicYear(),
@@ -32,7 +35,9 @@ export default async function DashboardLayout({
       <Sidebar
         activeYearName={activeYear?.name}
         attendancePendingCount={pending.pendingCount}
-        userEmail={user.email}
+        userEmail={profile.email}
+        userName={profile.displayName}
+        userAvatarUrl={profile.avatarUrl}
       />
       {/* Main Content Area — offset right by the fixed sidebar width */}
       <main className="relative mr-[var(--sidebar-width)] flex min-h-screen w-[calc(100%-var(--sidebar-width))] min-w-0 flex-1 flex-col transition-[margin,width] duration-200 print:mr-0 print:w-full">
@@ -57,13 +62,20 @@ export default async function DashboardLayout({
             >
               <Icon name="notifications" />
             </button>
-            <button
-              type="button"
-              className="text-on-surface-variant transition-colors hover:text-secondary"
-              aria-label="פרופיל"
+            <div
+              className="flex items-center gap-2 rounded-full py-0.5 pe-1"
+              title={profile.email ?? profile.displayName}
             >
-              <Icon name="account_circle" />
-            </button>
+              <span className="hidden max-w-[9rem] truncate text-label-md font-semibold text-primary sm:inline">
+                {profile.displayName}
+              </span>
+              <UserAvatar
+                name={profile.displayName}
+                email={profile.email}
+                imageUrl={profile.avatarUrl}
+                size="sm"
+              />
+            </div>
             <div className="mx-2 hidden h-6 w-px bg-outline-variant md:block" />
             <YearSelector years={years} activeYearId={activeYear?.id} />
           </div>

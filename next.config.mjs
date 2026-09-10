@@ -27,7 +27,7 @@ const nextConfig = {
         value: [
           "default-src 'self'",
           `connect-src 'self' https://${supabaseHost} https://accounts.google.com`,
-          "img-src 'self' data: blob:",
+          "img-src 'self' data: blob: https://*.googleusercontent.com https://lh3.googleusercontent.com",
           "style-src 'self' 'unsafe-inline'",
           "script-src 'self' 'unsafe-inline'",
           "frame-ancestors 'none'",

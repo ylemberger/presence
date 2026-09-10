@@ -7,11 +7,14 @@ import { NAV_ITEMS } from "@/lib/constants";
 import { cn } from "@/lib/cn";
 import { createClient } from "@/lib/supabase/client";
 import { Icon } from "@/components/ui/Icon";
+import { UserAvatar } from "@/components/layout/UserAvatar";
 
 interface SidebarProps {
   activeYearName?: string;
   attendancePendingCount?: number;
   userEmail?: string | null;
+  userName?: string | null;
+  userAvatarUrl?: string | null;
 }
 
 const ICON_MAP: Record<string, string> = {
@@ -49,6 +52,8 @@ export function Sidebar({
   activeYearName,
   attendancePendingCount = 0,
   userEmail,
+  userName,
+  userAvatarUrl,
 }: SidebarProps) {
   const pathname = usePathname();
   const router = useRouter();
@@ -190,14 +195,40 @@ export function Sidebar({
 
       <div className="sidebar-footer border-t border-white/15 p-4">
         <div className="sidebar-footer-row flex items-center gap-2">
-          {userEmail && (
-            <p
-              className="sidebar-expanded-only min-w-0 flex-1 truncate text-right font-caption text-[11px] text-white/70"
-              dir="ltr"
-              title={userEmail}
-            >
-              {userEmail}
-            </p>
+          {(userName || userEmail) && (
+            <>
+              <div className="sidebar-expanded-only flex min-w-0 flex-1 items-center gap-2">
+                <UserAvatar
+                  name={userName || userEmail || "?"}
+                  email={userEmail}
+                  imageUrl={userAvatarUrl}
+                  size="sm"
+                  onDark
+                />
+                <div className="min-w-0 text-right">
+                  <p className="truncate font-label-md text-[12px] font-semibold text-white">
+                    {userName || "משתמשת"}
+                  </p>
+                  {userEmail && (
+                    <p
+                      className="truncate font-caption text-[10px] text-white/55"
+                      dir="ltr"
+                      title={userEmail}
+                    >
+                      {userEmail}
+                    </p>
+                  )}
+                </div>
+              </div>
+              <UserAvatar
+                name={userName || userEmail || "?"}
+                email={userEmail}
+                imageUrl={userAvatarUrl}
+                size="sm"
+                onDark
+                className="sidebar-collapsed-only"
+              />
+            </>
           )}
           <button
             type="button"

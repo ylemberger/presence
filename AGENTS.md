@@ -33,6 +33,7 @@
 - Server Actions ב-`src/app/(dashboard)/actions.ts` לכתיבה.
 - טיפוסים ב-`src/types/database.ts` — עדכן יחד עם מיגרציה.
 - רכיבי UI משותפים ב-`src/components/ui/`.
+- **יציבות UI:** שינוי עיצוב/חלון לא ישבור זרימות קיימות (יצירה/עריכה/סגירה). פירוט: [`.cursor/rules/ui-stability.mdc`](.cursor/rules/ui-stability.mdc).
 
 ## לפני שינוי
 
