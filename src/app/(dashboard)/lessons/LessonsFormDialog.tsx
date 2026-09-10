@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useLayoutEffect, useState } from "react";
 import { createPortal } from "react-dom";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/Button";
@@ -23,17 +23,19 @@ export function LessonsFormDialog({
   ...formProps
 }: LessonsFormDialogProps) {
   const router = useRouter();
+  const editToken = initial?.id ?? (startOpen ? "missing" : "create");
   const [open, setOpen] = useState(startOpen);
   const [mounted, setMounted] = useState(false);
   const editing = Boolean(initial);
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     setMounted(true);
   }, []);
 
-  useEffect(() => {
+  // Re-open whenever the URL asks to edit (including switching between lessons).
+  useLayoutEffect(() => {
     if (startOpen) setOpen(true);
-  }, [startOpen]);
+  }, [startOpen, editToken]);
 
   function close() {
     setOpen(false);
@@ -69,7 +71,7 @@ export function LessonsFormDialog({
         </p>
       ) : (
         <LessonsForm
-          key={initial?.id ?? "create"}
+          key={editToken}
           {...formProps}
           initial={initial}
           cancelHref={editing ? cancelHref : undefined}
@@ -83,7 +85,7 @@ export function LessonsFormDialog({
   return (
     <>
       <Button type="button" onClick={() => setOpen(true)}>
-        <Icon name="add" className="text-[18px]" />
+        <Icon name={editing ? "edit" : "add"} className="text-[18px]" />
         {editing ? "עריכת שיעור" : "יצירת שיעור"}
       </Button>
       {mounted ? createPortal(modal, document.body) : null}

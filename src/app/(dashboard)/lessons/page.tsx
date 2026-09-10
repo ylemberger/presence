@@ -388,6 +388,9 @@ export default async function LessonsPage({ searchParams }: Props) {
   cancelQuery.delete("edit");
   const cancelHref = cancelQuery.toString() ? `/lessons?${cancelQuery.toString()}` : "/lessons";
 
+  const calendarQuery = new URLSearchParams(filterQuery);
+  calendarQuery.delete("edit");
+
   return (
     <div className="flex flex-col gap-stack_lg">
       <PageHeader
@@ -395,6 +398,7 @@ export default async function LessonsPage({ searchParams }: Props) {
         description="יצירת שיעור פותחת אוטומטית את המופעים בטווח שנבחר. אין יצירת מופע בודד — ליום אחד מגדירים טווח של יום אחד. ימי חופשה לא נכללים."
         actions={
           <LessonsFormDialog
+            key={searchParams.edit ?? "create"}
             startOpen={Boolean(searchParams.edit)}
             noTeachers={formProps.teachers.length === 0}
             editNotFound={Boolean(searchParams.edit && !editingDraft)}
@@ -426,7 +430,7 @@ export default async function LessonsPage({ searchParams }: Props) {
         initialMonthIso={from}
         occurrences={occurrenceRows}
         lessons={lessonCards}
-        monthQuery={filterQuery.toString()}
+        monthQuery={calendarQuery.toString()}
         holidayDates={holidayDatesByKind(holidays.data ?? []).vacation}
         cancelledDates={holidayDatesByKind(holidays.data ?? []).cancelled}
         students={yearStudents}
