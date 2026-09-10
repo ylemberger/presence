@@ -207,6 +207,8 @@ export function AttendanceBoard({
   const [noteSaving, setNoteSaving] = useState(false);
   const [noteModalOpen, setNoteModalOpen] = useState(false);
   const [gapQueue, setGapQueue] = useState<GapItem[]>([]);
+  /** Session-local: after the user acts on a gap, do not re-open it until attendance is filled. */
+  const [suppressedGapIds, setSuppressedGapIds] = useState<string[]>([]);
   const [filtersOpen, setFiltersOpen] = useState(
     Boolean(classId || trackId || specializationId || subject || studentId || lessonId)
   );
@@ -232,10 +234,20 @@ export function AttendanceBoard({
   }, [noteBody]);
 
   useEffect(() => {
-    const hard = pastGaps.filter((g) => !g.gapHandling);
-    const soft = pastGaps.filter((g) => g.gapHandling === "in_treatment");
+    const suppressed = new Set(suppressedGapIds);
+    // Never block the occurrence the user is already filling right now.
+    if (selectedOccurrenceId) suppressed.add(selectedOccurrenceId);
+
+    const hard = pastGaps.filter(
+      (g) => !g.gapHandling && !suppressed.has(g.occurrenceId)
+    );
+    const soft = pastGaps.filter(
+      (g) =>
+        g.gapHandling === "in_treatment" &&
+        !suppressed.has(g.occurrenceId)
+    );
     setGapQueue(hard.length ? hard : soft.slice(0, 1));
-  }, [pastGaps]);
+  }, [pastGaps, selectedOccurrenceId, suppressedGapIds]);
 
   const activeGap = gapQueue[0] ?? null;
 
@@ -874,9 +886,17 @@ export function AttendanceBoard({
         <AttendanceGapModal
           gap={activeGap}
           soft={Boolean(activeGap.gapHandling)}
-          onResolved={() => setGapQueue((q) => q.slice(1))}
+          onResolved={(occurrenceId) => {
+            setSuppressedGapIds((ids) =>
+              ids.includes(occurrenceId) ? ids : [...ids, occurrenceId]
+            );
+            setGapQueue((q) => q.filter((g) => g.occurrenceId !== occurrenceId));
+          }}
           onMarkAttendance={(gap) => {
-            setGapQueue((q) => q.slice(1));
+            setSuppressedGapIds((ids) =>
+              ids.includes(gap.occurrenceId) ? ids : [...ids, gap.occurrenceId]
+            );
+            setGapQueue((q) => q.filter((g) => g.occurrenceId !== gap.occurrenceId));
             navigate(
               buildParams({
                 date: gap.date,

@@ -18,7 +18,7 @@ export type GapItem = {
 interface Props {
   gap: GapItem;
   soft: boolean;
-  onResolved: () => void;
+  onResolved: (occurrenceId: string) => void;
   onMarkAttendance: (gap: GapItem) => void;
 }
 
@@ -32,11 +32,15 @@ export function AttendanceGapModal({ gap, soft, onResolved, onMarkAttendance }: 
     setError(null);
     try {
       const result = await setOccurrenceGapHandlingAction(gap.occurrenceId, action);
-      if (result && "error" in result && result.error) {
+      if (!result) {
+        setError("הפעולה נכשלה. נסי שוב.");
+        return;
+      }
+      if ("error" in result && result.error) {
         setError(result.error);
         return;
       }
-      onResolved();
+      onResolved(gap.occurrenceId);
       router.refresh();
     } catch (e) {
       setError(e instanceof Error ? e.message : "פעולה נכשלה");
@@ -51,9 +55,9 @@ export function AttendanceGapModal({ gap, soft, onResolved, onMarkAttendance }: 
       title="שיעור קודם ללא נוכחות"
       description={`${gap.subject} · ${formatHebrewDate(gap.date)} (${formatGregorianDate(gap.date)})`}
       onClose={() => {
-        if (soft) onResolved();
+        if (soft) onResolved(gap.occurrenceId);
       }}
-      dismissible={soft}
+      dismissible={soft && !busy}
       className="max-w-xl"
     >
       <div className="space-y-4">
@@ -82,19 +86,19 @@ export function AttendanceGapModal({ gap, soft, onResolved, onMarkAttendance }: 
             type="button"
             variant="secondary"
             disabled={busy}
-            onClick={() => run("in_treatment")}
+            onClick={() => void run("in_treatment")}
             className="justify-center py-3"
           >
-            אין לי עדיין את הנתונים — תזכירי שוב
+            {busy ? "שומר…" : "אין לי עדיין את הנתונים — תזכירי שוב"}
           </Button>
           <Button
             type="button"
             variant="ghost"
             disabled={busy}
-            onClick={() => run("continued")}
+            onClick={() => void run("continued")}
             className="justify-center py-3 sm:col-span-2"
           >
-            המשך בכל זאת (בלי למלא עכשיו)
+            {busy ? "שומר…" : "המשך בכל זאת (בלי למלא עכשיו)"}
           </Button>
         </div>
 

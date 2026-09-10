@@ -1802,16 +1802,26 @@ export async function setOccurrenceGapHandlingAction(
   occurrenceId: string,
   handling: "in_treatment" | "continued"
 ) {
-  const actionAuth = await createActionClient();
-  if ("error" in actionAuth) return { error: actionAuth.error };
-  const supabase = actionAuth.supabase;
-  const { error } = await supabase
-    .from("lesson_occurrences")
-    .update({ gap_handling: handling })
-    .eq("id", occurrenceId);
-  if (error) return { error: error.message };
-  revalidatePath("/attendance");
-  return { success: true };
+  try {
+    const actionAuth = await createActionClient();
+    if ("error" in actionAuth) return { error: actionAuth.error };
+    const supabase = actionAuth.supabase;
+    const { data, error } = await supabase
+      .from("lesson_occurrences")
+      .update({ gap_handling: handling })
+      .eq("id", occurrenceId)
+      .select("id, gap_handling")
+      .maybeSingle();
+    if (error) return { error: error.message };
+    if (!data) {
+      return { error: "לא נמצא המופע לעדכון. ייתכן שחסרה עמודת gap_handling במסד — הריצי את supabase/patches/022_occurrence_gap_handling.sql" };
+    }
+    revalidatePath("/attendance");
+    revalidatePath("/");
+    return { success: true as const, gapHandling: data.gap_handling as typeof handling };
+  } catch (err) {
+    return { error: err instanceof Error ? err.message : "עדכון הטיפול בשיעור החסר נכשל" };
+  }
 }
 
 export async function upsertAttendanceNoteAction(formData: FormData) {
