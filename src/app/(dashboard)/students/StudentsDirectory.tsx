@@ -158,6 +158,10 @@ export function StudentsDirectory({
       yearOptions.specializations.length
   );
 
+  const hasActiveFilter = Boolean(
+    query.trim() || gradeId || classId || trackId || specId || status !== "all"
+  );
+
   return (
     <div className="min-w-0 overflow-x-hidden rounded-xl border border-outline-variant/30 bg-surface-container-lowest shadow-tactile-md">
       <div className="grid gap-3 border-b border-outline-variant/30 bg-surface-container-low/60 px-5 py-4 md:grid-cols-2 xl:grid-cols-7">
@@ -218,6 +222,20 @@ export function StudentsDirectory({
         />
         <div className="flex items-end xl:col-span-7">
           <div className="flex w-full flex-wrap items-center justify-between gap-3">
+            <p className="text-body-md text-on-surface-variant">
+              {hasActiveFilter ? (
+                <>
+                  מוצגות{" "}
+                  <span className="font-semibold text-primary">{filtered.length}</span> מתוך{" "}
+                  <span className="font-semibold text-primary">{students.length}</span> תלמידות
+                </>
+              ) : (
+                <>
+                  סה״כ{" "}
+                  <span className="font-semibold text-primary">{students.length}</span> תלמידות
+                </>
+              )}
+            </p>
             {!hasSettingsLists && yearOptions && (
               <p className="text-body-md text-secondary">
                 אין עדיין שכבות/כיתות/מסלולים/התמחויות בהגדרות —{" "}
