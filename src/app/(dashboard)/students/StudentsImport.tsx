@@ -75,6 +75,10 @@ export function StudentsImport({ disabledReason }: { disabledReason?: string }) 
     setError(null);
     try {
       const result = await downloadStudentImportTemplateAction();
+      if (!result) {
+        setError("הורדת הדוגמה נכשלה");
+        return;
+      }
       if ("error" in result && result.error) {
         setError(result.error);
         return;
@@ -112,6 +116,10 @@ export function StudentsImport({ disabledReason }: { disabledReason?: string }) 
       const fd = new FormData();
       fd.set("file", file);
       const result = await previewStudentsExcelAction(fd);
+      if (!result) {
+        setError("בדיקת הקובץ נכשלה. נסי שוב.");
+        return;
+      }
       if ("error" in result && result.error && !("rows" in result)) {
         setError(result.error);
         return;
@@ -126,6 +134,8 @@ export function StudentsImport({ disabledReason }: { disabledReason?: string }) 
         if (!result.ok && result.errors?.length) {
           setError("הקובץ לא תקין. עד שלא יתוקנו כל השגיאות לא תישמר אף תלמידה.");
         }
+      } else {
+        setError("בדיקת הקובץ נכשלה. נסי שוב.");
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : "בדיקת הקובץ נכשלה");
@@ -145,6 +155,10 @@ export function StudentsImport({ disabledReason }: { disabledReason?: string }) 
     setSummary(null);
     try {
       const result = await importStudentsFromExcelAction(fd);
+      if (!result) {
+        setError("הייבוא נכשל. נסי שוב.");
+        return;
+      }
       if ("error" in result && result.error && !("created" in result)) {
         setError(result.error);
         setPreview(null);
@@ -164,6 +178,8 @@ export function StudentsImport({ disabledReason }: { disabledReason?: string }) 
         if ("error" in result && result.error) {
           setError(result.error);
         }
+      } else {
+        setError("הייבוא נכשל. נסי שוב.");
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : "הייבוא נכשל");

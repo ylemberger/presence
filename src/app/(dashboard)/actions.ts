@@ -2487,113 +2487,127 @@ export async function downloadStudentImportTemplateAction() {
 }
 
 export async function importStudentsFromExcelAction(formData: FormData) {
-  const actionAuth = await createActionClient();
-  if ("error" in actionAuth) return { error: actionAuth.error };
-  const supabase = actionAuth.supabase;
-  const activeYear = await getActiveAcademicYear();
-  if (!activeYear) return { error: "יש להגדיר שנה אקדמית פעילה לפני ייבוא." };
+  try {
+    const actionAuth = await createActionClient();
+    if ("error" in actionAuth) return { error: actionAuth.error };
+    const supabase = actionAuth.supabase;
+    const activeYear = await getActiveAcademicYear();
+    if (!activeYear) return { error: "יש להגדיר שנה אקדמית פעילה לפני ייבוא." };
 
-  const file = formData.get("file");
-  if (!(file instanceof File) || file.size === 0) {
-    return { error: "יש לבחור קובץ אקסל או CSV." };
-  }
-  if (file.size > MAX_STUDENT_IMPORT_BYTES) {
-    return { error: "הקובץ גדול מדי. הגודל המרבי הוא 3MB." };
-  }
-  const name = file.name.toLowerCase();
-  if (!name.endsWith(".xlsx") && !name.endsWith(".xls") && !name.endsWith(".csv")) {
-    return { error: "יש להעלות קובץ בפורמט Excel (.xlsx) או CSV." };
-  }
+    const file = formData.get("file");
+    if (!(file instanceof File) || file.size === 0) {
+      return { error: "יש לבחור קובץ אקסל או CSV." };
+    }
+    if (file.size > MAX_STUDENT_IMPORT_BYTES) {
+      return { error: "הקובץ גדול מדי. הגודל המרבי הוא 3MB." };
+    }
+    const name = file.name.toLowerCase();
+    if (!name.endsWith(".xlsx") && !name.endsWith(".xls") && !name.endsWith(".csv")) {
+      return { error: "יש להעלות קובץ בפורמט Excel (.xlsx) או CSV." };
+    }
 
-  const loaded = await loadStudentImportParse(supabase, file, activeYear.id);
-  if (!loaded.parsed) return { error: loaded.error ?? "קריאת הקובץ נכשלה" };
+    const loaded = await loadStudentImportParse(supabase, file, activeYear.id);
+    if (!loaded.parsed) return { error: loaded.error ?? "קריאת הקובץ נכשלה" };
 
-  const parsed = loaded.parsed;
-  if (parsed.errors.length > 0) {
+    const parsed = loaded.parsed;
+    if (parsed.errors.length > 0) {
+      return {
+        error: "הקובץ לא יובא. יש לתקן את כל השגיאות קודם — אף תלמידה לא נשמרה.",
+        errors: parsed.errors,
+        created: 0,
+        updated: 0,
+        unchanged: 0,
+      };
+    }
+    if (parsed.rows.length === 0) {
+      return {
+        error: "לא נמצאו שורות תקינות לייבוא.",
+        errors: parsed.errors,
+        created: 0,
+        updated: 0,
+        unchanged: 0,
+      };
+    }
+
+    const applied = await applyStudentImportRows(supabase, activeYear.id, parsed.rows);
+    if (applied.errors.length > 0) {
+      return {
+        error: applied.errors[0]?.message ?? "הייבוא בוטל — אף תלמידה לא נשמרה.",
+        errors: applied.errors,
+        created: 0,
+        updated: 0,
+        unchanged: 0,
+      };
+    }
+
+    revalidatePath("/students");
+    revalidatePath("/attendance");
     return {
-      error: "הקובץ לא יובא. יש לתקן את כל השגיאות קודם — אף תלמידה לא נשמרה.",
-      errors: parsed.errors,
+      success: true as const,
+      created: applied.created,
+      updated: applied.updated,
+      unchanged: applied.unchanged,
+      errors: [] as { rowNumber: number; message: string }[],
+    };
+  } catch (err) {
+    return {
+      error: err instanceof Error ? err.message : "הייבוא נכשל",
+      errors: [] as { rowNumber: number; message: string }[],
       created: 0,
       updated: 0,
       unchanged: 0,
     };
   }
-  if (parsed.rows.length === 0) {
-    return {
-      error: "לא נמצאו שורות תקינות לייבוא.",
-      errors: parsed.errors,
-      created: 0,
-      updated: 0,
-      unchanged: 0,
-    };
-  }
-
-  const applied = await applyStudentImportRows(supabase, activeYear.id, parsed.rows);
-  if (applied.errors.length > 0) {
-    return {
-      error: applied.errors[0]?.message ?? "הייבוא בוטל — אף תלמידה לא נשמרה.",
-      errors: applied.errors,
-      created: 0,
-      updated: 0,
-      unchanged: 0,
-    };
-  }
-
-  revalidatePath("/students");
-  revalidatePath("/attendance");
-  return {
-    success: true as const,
-    created: applied.created,
-    updated: applied.updated,
-    unchanged: applied.unchanged,
-    errors: [] as { rowNumber: number; message: string }[],
-  };
 }
 
 export async function previewStudentsExcelAction(formData: FormData) {
-  const actionAuth = await createActionClient();
-  if ("error" in actionAuth) return { error: actionAuth.error };
-  const supabase = actionAuth.supabase;
-  const activeYear = await getActiveAcademicYear();
-  if (!activeYear) return { error: "יש להגדיר שנה אקדמית פעילה לפני ייבוא." };
+  try {
+    const actionAuth = await createActionClient();
+    if ("error" in actionAuth) return { error: actionAuth.error };
+    const supabase = actionAuth.supabase;
+    const activeYear = await getActiveAcademicYear();
+    if (!activeYear) return { error: "יש להגדיר שנה אקדמית פעילה לפני ייבוא." };
 
-  const file = formData.get("file");
-  if (!(file instanceof File) || file.size === 0) {
-    return { error: "יש לבחור קובץ אקסל או CSV." };
-  }
-  if (file.size > MAX_STUDENT_IMPORT_BYTES) {
-    return { error: "הקובץ גדול מדי. הגודל המרבי הוא 3MB." };
-  }
-  const name = file.name.toLowerCase();
-  if (!name.endsWith(".xlsx") && !name.endsWith(".xls") && !name.endsWith(".csv")) {
-    return { error: "יש להעלות קובץ בפורמט Excel (.xlsx) או CSV." };
-  }
+    const file = formData.get("file");
+    if (!(file instanceof File) || file.size === 0) {
+      return { error: "יש לבחור קובץ אקסל או CSV." };
+    }
+    if (file.size > MAX_STUDENT_IMPORT_BYTES) {
+      return { error: "הקובץ גדול מדי. הגודל המרבי הוא 3MB." };
+    }
+    const name = file.name.toLowerCase();
+    if (!name.endsWith(".xlsx") && !name.endsWith(".xls") && !name.endsWith(".csv")) {
+      return { error: "יש להעלות קובץ בפורמט Excel (.xlsx) או CSV." };
+    }
 
-  const loaded = await loadStudentImportParse(supabase, file, activeYear.id);
-  if (!loaded.parsed || !loaded.catalogs) {
-    return { error: loaded.error ?? "קריאת הקובץ נכשלה" };
+    const loaded = await loadStudentImportParse(supabase, file, activeYear.id);
+    if (!loaded.parsed || !loaded.catalogs) {
+      return { error: loaded.error ?? "קריאת הקובץ נכשלה" };
+    }
+
+    const catalogs = loaded.catalogs;
+    const parsed = loaded.parsed;
+    const classById = new Map(catalogs.classes.map((item) => [item.id, item.name]));
+    const trackById = new Map(catalogs.tracks.map((item) => [item.id, item.name]));
+    const specById = new Map(catalogs.specializations.map((item) => [item.id, item.name]));
+
+    return {
+      ok: parsed.errors.length === 0 && parsed.rows.length > 0,
+      fileName: file.name,
+      count: parsed.rows.length,
+      errors: parsed.errors,
+      rows: parsed.rows.map((row) => ({
+        rowNumber: row.rowNumber,
+        fullName: row.fullName,
+        identityNumber: row.identityNumber,
+        className: classById.get(row.classId) ?? "",
+        trackName: trackById.get(row.trackId) ?? "",
+        specializationName: specById.get(row.specializationId) ?? "",
+      })),
+    };
+  } catch (err) {
+    return { error: err instanceof Error ? err.message : "בדיקת הקובץ נכשלה" };
   }
-
-  const catalogs = loaded.catalogs;
-  const parsed = loaded.parsed;
-  const classById = new Map(catalogs.classes.map((item) => [item.id, item.name]));
-  const trackById = new Map(catalogs.tracks.map((item) => [item.id, item.name]));
-  const specById = new Map(catalogs.specializations.map((item) => [item.id, item.name]));
-
-  return {
-    ok: parsed.errors.length === 0 && parsed.rows.length > 0,
-    fileName: file.name,
-    count: parsed.rows.length,
-    errors: parsed.errors,
-    rows: parsed.rows.map((row) => ({
-      rowNumber: row.rowNumber,
-      fullName: row.fullName,
-      identityNumber: row.identityNumber,
-      className: classById.get(row.classId) ?? "",
-      trackName: trackById.get(row.trackId) ?? "",
-      specializationName: specById.get(row.specializationId) ?? "",
-    })),
-  };
 }
 
 async function loadStudentImportParse(
