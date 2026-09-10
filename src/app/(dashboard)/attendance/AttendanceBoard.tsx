@@ -234,19 +234,23 @@ export function AttendanceBoard({
   }, [noteBody]);
 
   useEffect(() => {
-    const suppressed = new Set(suppressedGapIds);
-    // Never block the occurrence the user is already filling right now.
-    if (selectedOccurrenceId) suppressed.add(selectedOccurrenceId);
+    // Only nudge when the user is filling a specific occurrence, and only for
+    // earlier incomplete occurrences of that same lesson (passed in as pastGaps).
+    if (!selectedOccurrenceId || pastGaps.length === 0) {
+      setGapQueue([]);
+      return;
+    }
 
-    const hard = pastGaps.filter(
-      (g) => !g.gapHandling && !suppressed.has(g.occurrenceId)
-    );
-    const soft = pastGaps.filter(
+    const suppressed = new Set(suppressedGapIds);
+    suppressed.add(selectedOccurrenceId);
+
+    const open = pastGaps.filter(
       (g) =>
-        g.gapHandling === "in_treatment" &&
+        g.gapHandling !== "continued" &&
         !suppressed.has(g.occurrenceId)
     );
-    setGapQueue(hard.length ? hard : soft.slice(0, 1));
+    // One gentle reminder at a time — never a hard blocking queue.
+    setGapQueue(open.slice(0, 1));
   }, [pastGaps, selectedOccurrenceId, suppressedGapIds]);
 
   const activeGap = gapQueue[0] ?? null;
@@ -885,7 +889,6 @@ export function AttendanceBoard({
       {activeGap && (
         <AttendanceGapModal
           gap={activeGap}
-          soft={Boolean(activeGap.gapHandling)}
           onResolved={(occurrenceId) => {
             setSuppressedGapIds((ids) =>
               ids.includes(occurrenceId) ? ids : [...ids, occurrenceId]
@@ -1065,10 +1068,10 @@ export function AttendanceBoard({
             )}
           </div>
           {prevWeekBlocked && (
-            <div className="mb-2 rounded-md bg-error-container/70 px-3 py-2 font-body-sm text-body-sm text-on-error-container">
-              <p className="font-semibold">לא ניתן לסמן נוכחות למופע זה עדיין.</p>
-              <p className="mt-1">
-                יש להשלים קודם את נוכחות השבוע הקודם של השיעור הזה
+            <div className="mb-2 rounded-md border border-secondary/25 bg-secondary/5 px-3 py-2 font-body-sm text-body-sm text-on-surface">
+              <p className="font-semibold text-primary">תזכורת: יש מופע קודם של אותו שיעור בלי נוכחות מלאה</p>
+              <p className="mt-1 text-on-surface-variant">
+                כדאי להשלים אותו לפני הסימון כאן
                 {prevWeekIncomplete[0]
                   ? ` (${formatHebrewDate(prevWeekIncomplete[0].date)}).`
                   : "."}

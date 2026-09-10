@@ -17,12 +17,11 @@ export type GapItem = {
 
 interface Props {
   gap: GapItem;
-  soft: boolean;
   onResolved: (occurrenceId: string) => void;
   onMarkAttendance: (gap: GapItem) => void;
 }
 
-export function AttendanceGapModal({ gap, soft, onResolved, onMarkAttendance }: Props) {
+export function AttendanceGapModal({ gap, onResolved, onMarkAttendance }: Props) {
   const router = useRouter();
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -52,26 +51,18 @@ export function AttendanceGapModal({ gap, soft, onResolved, onMarkAttendance }: 
   return (
     <Modal
       open
-      title="שיעור קודם ללא נוכחות"
+      title="תזכורת קלה"
       description={`${gap.subject} · ${formatHebrewDate(gap.date)} (${formatGregorianDate(gap.date)})`}
-      onClose={() => {
-        if (soft) onResolved(gap.occurrenceId);
-      }}
-      dismissible={soft && !busy}
+      onClose={() => onResolved(gap.occurrenceId)}
+      dismissible={!busy}
       className="max-w-xl"
     >
       <div className="space-y-4">
-        {soft ? (
-          <p className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
-            המופע עדיין מסומן כ«
-            {gap.gapHandling === "in_treatment" ? "בטיפול" : "המשך למרות זאת"}
-            ». אפשר להמשיך, או לטפל עכשיו.
-          </p>
-        ) : (
-          <p className="rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-900">
-            לפני הזנת נוכחות לשיעורים אחרים יש לבחור פעולה למופע החסר הזה.
-          </p>
-        )}
+        <p className="rounded-xl border border-secondary/25 bg-secondary/5 px-4 py-3 text-sm text-on-surface">
+          {gap.gapHandling === "in_treatment"
+            ? "עדיין ממתין לרישום מהמופע הקודם של אותו שיעור. אפשר למלא עכשיו, או להמשיך ולחזור מאוחר יותר."
+            : "לשיעור הזה יש מופע קודם שעדיין בלי נוכחות מלאה. אפשר למלא אותו עכשיו — או להמשיך בלי לחסום את עצמך."}
+        </p>
 
         <div className="grid gap-2 sm:grid-cols-2">
           <Button
@@ -86,21 +77,30 @@ export function AttendanceGapModal({ gap, soft, onResolved, onMarkAttendance }: 
             type="button"
             variant="secondary"
             disabled={busy}
-            onClick={() => void run("in_treatment")}
+            onClick={() => void run("continued")}
             className="justify-center py-3"
           >
-            {busy ? "שומר…" : "אין לי עדיין את הנתונים — תזכירי שוב"}
+            {busy ? "שומר…" : "המשך למופע הנוכחי"}
           </Button>
           <Button
             type="button"
             variant="ghost"
             disabled={busy}
-            onClick={() => void run("continued")}
+            onClick={() => void run("in_treatment")}
             className="justify-center py-3 sm:col-span-2"
           >
-            {busy ? "שומר…" : "המשך בכל זאת (בלי למלא עכשיו)"}
+            {busy ? "שומר…" : "אין לי עדיין את הנתונים — תזכירי שוב"}
           </Button>
         </div>
+
+        <button
+          type="button"
+          disabled={busy}
+          onClick={() => onResolved(gap.occurrenceId)}
+          className="w-full text-center font-caption text-caption text-on-surface-variant underline-offset-2 hover:underline disabled:opacity-50"
+        >
+          סגירה בינתיים
+        </button>
 
         {error && <p className="text-sm text-rose-600">{error}</p>}
       </div>

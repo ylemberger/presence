@@ -21,7 +21,10 @@ import {
 import { audienceKey, formatLessonGroupLabel } from "@/lib/lessons/group-label";
 import { formatSubjectLessonLabel } from "@/lib/lessons/subject-label";
 import { fetchAttendancePools, calcUnitForLesson } from "@/lib/attendance/pools";
-import { findIncompletePreviousWeekOccurrences } from "@/lib/attendance/previous-week";
+import {
+  blockingPreviousWeekGaps,
+  findIncompletePreviousWeekOccurrences,
+} from "@/lib/attendance/previous-week";
 import { AttendanceReminderBanner } from "@/components/attendance/AttendanceReminderBanner";
 import { embedOne, embeddedTeacher } from "@/lib/supabase/embed";
 import {
@@ -546,22 +549,27 @@ export default async function AttendancePage({ searchParams }: Props) {
     });
   }
 
-  const prevWeekIncomplete = selectedOcc
+  const prevWeekIncompleteRaw = selectedOcc
     ? await findIncompletePreviousWeekOccurrences(supabase, selectedOcc.id)
     : [];
+  const prevWeekIncomplete = blockingPreviousWeekGaps(prevWeekIncompleteRaw);
 
   const pendingSummary = await getPendingAttendanceSummary(activeYear.id);
   const holidaySets = holidayDatesByKind(holidayRows ?? []);
 
-  const pastGaps = pendingSummary.items
-    .filter((i) => i.date < todayIso())
-    .map((i) => ({
-      lessonId: i.lessonId,
-      subject: i.subject,
-      date: i.date,
-      occurrenceId: i.id,
-      gapHandling: i.gapHandling,
-    }));
+  // Gentle gap nudge only for the lesson the user is about to fill — not every pending lesson.
+  const pastGaps =
+    selectedOcc && prevWeekIncompleteRaw.length > 0
+      ? prevWeekIncompleteRaw
+          .filter((i) => i.gapHandling !== "continued")
+          .map((i) => ({
+            lessonId: selectedOcc.lessonId,
+            subject: selectedOcc.subject,
+            date: i.date,
+            occurrenceId: i.id,
+            gapHandling: i.gapHandling,
+          }))
+      : [];
 
   const dayLessonIds = [
     ...new Set(

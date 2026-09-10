@@ -6,6 +6,7 @@ type Supabase = Awaited<ReturnType<typeof createClient>>;
 export type IncompletePreviousOccurrence = {
   id: string;
   date: string;
+  gapHandling: "in_treatment" | "continued" | null;
 };
 
 function previousWeekRange(occurrenceDate: string): { start: string; end: string } {
@@ -15,9 +16,15 @@ function previousWeekRange(occurrenceDate: string): { start: string; end: string
   return { start, end };
 }
 
+function parseGapHandling(
+  value: string | null | undefined
+): IncompletePreviousOccurrence["gapHandling"] {
+  return value === "in_treatment" || value === "continued" ? value : null;
+}
+
 /**
- * חוסם סימון למופע אם לשיעור יש מופע בשבוע הקודם (א'-ש') שלא מולא במלואו.
- * לא מוחק ולא משנה שורות קיימות.
+ * מופעים חסרים של אותו שיעור בשבוע הקודם (א'-ש').
+ * `continued` לא נספר כחוסם סימון — רק כתזכורת רכה אם בכלל.
  */
 export async function findIncompletePreviousWeekOccurrences(
   supabase: Supabase,
@@ -33,7 +40,7 @@ export async function findIncompletePreviousWeekOccurrences(
   const { start, end } = previousWeekRange(current.occurrence_date);
   const { data: prevOccs } = await supabase
     .from("lesson_occurrences")
-    .select("id, occurrence_date, lesson_id")
+    .select("id, occurrence_date, lesson_id, gap_handling")
     .eq("lesson_id", current.lesson_id)
     .gte("occurrence_date", start)
     .lte("occurrence_date", end)
@@ -71,11 +78,22 @@ export async function findIncompletePreviousWeekOccurrences(
     if (students.length === 0) continue;
     const allMarked = students.every((s) => markedSet.has(`${occ.id}::${s.student_id}`));
     if (!allMarked) {
-      incomplete.push({ id: occ.id, date: occ.occurrence_date });
+      incomplete.push({
+        id: occ.id,
+        date: occ.occurrence_date,
+        gapHandling: parseGapHandling(occ.gap_handling),
+      });
     }
   }
 
   return incomplete.sort((a, b) => a.date.localeCompare(b.date));
+}
+
+/** Incomplete previous-week rows that still block marking (not marked "continued"). */
+export function blockingPreviousWeekGaps(
+  incomplete: IncompletePreviousOccurrence[]
+): IncompletePreviousOccurrence[] {
+  return incomplete.filter((o) => o.gapHandling !== "continued");
 }
 
 export async function previousWeekBlockMessage(
@@ -85,7 +103,7 @@ export async function previousWeekBlockMessage(
   const unique = [...new Set(occurrenceIds.filter(Boolean))];
   for (const id of unique) {
     const incomplete = await findIncompletePreviousWeekOccurrences(supabase, id);
-    if (incomplete.length > 0) {
+    if (blockingPreviousWeekGaps(incomplete).length > 0) {
       return "יש להשלים קודם את נוכחות השבוע הקודם של השיעור הזה.";
     }
   }
