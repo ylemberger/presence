@@ -367,9 +367,24 @@ export default async function LessonsPage({ searchParams }: Props) {
             : editingLesson.grade_id
               ? [editingLesson.grade_id]
               : [],
-        classIds: editingAudience?.class_ids ?? [],
-        trackIds: editingAudience?.track_ids ?? [],
-        specializationIds: editingAudience?.specialization_ids ?? [],
+        classIds:
+          editingAudience && editingAudience.class_ids.length > 0
+            ? editingAudience.class_ids
+            : editingLesson.class_id
+              ? [editingLesson.class_id]
+              : [],
+        trackIds:
+          editingAudience && editingAudience.track_ids.length > 0
+            ? editingAudience.track_ids
+            : editingLesson.track_id
+              ? [editingLesson.track_id]
+              : [],
+        specializationIds:
+          editingAudience && editingAudience.specialization_ids.length > 0
+            ? editingAudience.specialization_ids
+            : editingLesson.specialization_id
+              ? [editingLesson.specialization_id]
+              : [],
         wholeGrade:
           editingLesson.billing_type === "mandatory" &&
           !editingLesson.for_psychology &&

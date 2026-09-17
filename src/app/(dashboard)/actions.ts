@@ -1585,6 +1585,37 @@ export async function createLessonAction(formData: FormData) {
   return { success: true };
 }
 
+function sortedIds(ids: string[]): string[] {
+  return [...ids].sort();
+}
+
+function sameIdSet(a: string[], b: string[]): boolean {
+  const aa = sortedIds(a);
+  const bb = sortedIds(b);
+  return aa.length === bb.length && aa.every((id, i) => id === bb[i]);
+}
+
+async function lessonHasRecordedAttendance(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  lessonId: string
+): Promise<boolean> {
+  const { data: occs, error: occError } = await supabase
+    .from("lesson_occurrences")
+    .select("id")
+    .eq("lesson_id", lessonId);
+  if (occError) throw new Error(occError.message);
+  if (!occs?.length) return false;
+  const { count, error } = await supabase
+    .from("attendance")
+    .select("id", { count: "exact", head: true })
+    .in(
+      "lesson_occurrence_id",
+      occs.map((o) => o.id)
+    );
+  if (error) throw new Error(error.message);
+  return (count ?? 0) > 0;
+}
+
 export async function updateLessonAction(formData: FormData) {
   const lessonId = requireId(formData.get("lesson_id"), "שיעור");
   if (isError(lessonId)) return lessonId;
@@ -1593,12 +1624,21 @@ export async function updateLessonAction(formData: FormData) {
   if ("error" in actionAuth) return { error: actionAuth.error };
   const supabase = actionAuth.supabase;
 
-  const { data: existing, error: loadError } = await supabase
-    .from("lessons")
-    .select("id, academic_year_id, teacher_teaching_assignment_id, activity_range_id")
-    .eq("id", lessonId)
-    .maybeSingle();
-  if (loadError) return { error: "טעינת השיעור נכשלה" };
+  const [{ data: existing, error: loadError }, { data: existingAudience, error: audienceLoadError }] =
+    await Promise.all([
+      supabase
+        .from("lessons")
+        .select(
+          "id, academic_year_id, teacher_teaching_assignment_id, activity_range_id, grade_id, class_id, track_id, specialization_id, billing_type, for_psychology"
+        )
+        .eq("id", lessonId)
+        .maybeSingle(),
+      supabase
+        .from("lesson_audience")
+        .select("lesson_id, grade_id, class_id, track_id, specialization_id")
+        .eq("lesson_id", lessonId),
+    ]);
+  if (loadError || audienceLoadError) return { error: "טעינת השיעור נכשלה" };
   if (!existing) return { error: "השיעור לא נמצא" };
 
   formData.set("teacher_teaching_assignment_id", existing.teacher_teaching_assignment_id);
@@ -1614,6 +1654,37 @@ export async function updateLessonAction(formData: FormData) {
   if ("error" in billing) return billing;
   const gradeIds = parseLessonGradeIds(formData);
   if ("error" in gradeIds) return gradeIds;
+
+  const previousAudience = audienceForLesson(
+    existing,
+    audienceMapFromRows(existingAudience ?? [])
+  );
+  const nextAudience = {
+    grade_ids: gradeIds,
+    class_ids: billing.class_ids,
+    track_ids: billing.track_ids,
+    specialization_ids: billing.specialization_ids,
+  };
+  const audienceChanged =
+    existing.billing_type !== billing.billing_type ||
+    Boolean(existing.for_psychology) !== billing.for_psychology ||
+    !sameIdSet(previousAudience.grade_ids, nextAudience.grade_ids) ||
+    !sameIdSet(previousAudience.class_ids, nextAudience.class_ids) ||
+    !sameIdSet(previousAudience.track_ids, nextAudience.track_ids) ||
+    !sameIdSet(previousAudience.specialization_ids, nextAudience.specialization_ids);
+
+  if (audienceChanged) {
+    try {
+      if (await lessonHasRecordedAttendance(supabase, lessonId)) {
+        return {
+          error:
+            "לא ניתן לשנות כיתה/מסלול/התמחות/שכבה אחרי שכבר נרשמה נוכחות לשיעור הזה.",
+        };
+      }
+    } catch (e) {
+      return { error: e instanceof Error ? e.message : "בדיקת נוכחות קיימת נכשלה" };
+    }
+  }
 
   const { error: ttaError } = await supabase
     .from("teacher_teaching_assignments")
@@ -1672,10 +1743,12 @@ export async function updateLessonAction(formData: FormData) {
     return { error: (e as Error).message };
   }
 
-  try {
-    await refreshAutomaticAssignmentsForLesson(lessonId, payload.academic_year_id);
-  } catch (e) {
-    return { error: (e as Error).message };
+  if (audienceChanged) {
+    try {
+      await refreshAutomaticAssignmentsForLesson(lessonId, payload.academic_year_id);
+    } catch (e) {
+      return { error: (e as Error).message };
+    }
   }
 
   if (existing.activity_range_id && existing.activity_range_id !== payload.activity_range_id) {

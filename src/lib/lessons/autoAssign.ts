@@ -159,31 +159,33 @@ export function audienceForLesson(
   map: Map<string, LessonAudienceIds>
 ): LessonAudienceIds {
   const fromMap = map.get(lesson.id);
-  if (
-    fromMap &&
-    (fromMap.grade_ids.length > 0 ||
-      fromMap.class_ids.length > 0 ||
-      fromMap.track_ids.length > 0 ||
-      fromMap.specialization_ids.length > 0)
-  ) {
-    return {
-      grade_ids:
-        fromMap.grade_ids.length > 0
-          ? fromMap.grade_ids
-          : lesson.grade_id
-            ? [lesson.grade_id]
-            : [],
-      class_ids: fromMap.class_ids,
-      track_ids: fromMap.track_ids,
-      specialization_ids: fromMap.specialization_ids,
-    };
-  }
-  return {
-    grade_ids: lesson.grade_id ? [lesson.grade_id] : [],
-    class_ids: lesson.class_id ? [lesson.class_id] : [],
-    track_ids: lesson.track_id ? [lesson.track_id] : [],
-    specialization_ids: lesson.specialization_id ? [lesson.specialization_id] : [],
-  };
+  const grade_ids =
+    fromMap && fromMap.grade_ids.length > 0
+      ? fromMap.grade_ids
+      : lesson.grade_id
+        ? [lesson.grade_id]
+        : [];
+  // Prefer multi-target rows from lesson_audience; fall back to legacy columns on lessons
+  // when a dimension was never written to the audience table (common once grade rows exist).
+  const class_ids =
+    fromMap && fromMap.class_ids.length > 0
+      ? fromMap.class_ids
+      : lesson.class_id
+        ? [lesson.class_id]
+        : [];
+  const track_ids =
+    fromMap && fromMap.track_ids.length > 0
+      ? fromMap.track_ids
+      : lesson.track_id
+        ? [lesson.track_id]
+        : [];
+  const specialization_ids =
+    fromMap && fromMap.specialization_ids.length > 0
+      ? fromMap.specialization_ids
+      : lesson.specialization_id
+        ? [lesson.specialization_id]
+        : [];
+  return { grade_ids, class_ids, track_ids, specialization_ids };
 }
 
 /** Filter: empty audience on a dimension means "no restriction" (whole grade / other groups). */
@@ -212,19 +214,17 @@ function withAudience(
   rows: AudienceRow[]
 ): LessonScope {
   const mine = rows.filter((r) => r.lesson_id === lesson.id);
-  const grade_ids = mine
-    .map((r) => r.grade_id)
-    .filter((id): id is string => Boolean(id));
+  const fromRows: LessonAudienceIds = {
+    grade_ids: mine.map((r) => r.grade_id).filter((id): id is string => Boolean(id)),
+    class_ids: mine.map((r) => r.class_id).filter((id): id is string => Boolean(id)),
+    track_ids: mine.map((r) => r.track_id).filter((id): id is string => Boolean(id)),
+    specialization_ids: mine
+      .map((r) => r.specialization_id)
+      .filter((id): id is string => Boolean(id)),
+  };
   return {
     ...lesson,
-    audience: {
-      grade_ids: grade_ids.length > 0 ? grade_ids : lesson.grade_id ? [lesson.grade_id] : [],
-      class_ids: mine.map((r) => r.class_id).filter((id): id is string => Boolean(id)),
-      track_ids: mine.map((r) => r.track_id).filter((id): id is string => Boolean(id)),
-      specialization_ids: mine
-        .map((r) => r.specialization_id)
-        .filter((id): id is string => Boolean(id)),
-    },
+    audience: audienceForLesson(lesson, new Map([[lesson.id, fromRows]])),
   };
 }
 

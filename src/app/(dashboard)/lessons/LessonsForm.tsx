@@ -121,13 +121,20 @@ export function LessonsForm({
     ? { start: initialRange?.start_date, end: initialRange?.end_date }
     : { start: undefined, end: undefined };
 
-  const filteredClasses = useMemo(
-    () =>
+  const filteredClasses = useMemo(() => {
+    const base =
       gradeIds.length === 0
         ? classes
-        : classes.filter((c) => gradeIds.includes(c.grade_id)),
-    [classes, gradeIds]
-  );
+        : classes.filter((c) => gradeIds.includes(c.grade_id));
+    const byId = new Map(base.map((c) => [c.id, c]));
+    // Keep already-selected classes visible even if grade filter would hide them.
+    for (const id of classIds) {
+      if (byId.has(id)) continue;
+      const cls = classes.find((c) => c.id === id);
+      if (cls) byId.set(cls.id, cls);
+    }
+    return [...byId.values()];
+  }, [classes, gradeIds, classIds]);
 
   const assignmentOptions = useMemo(
     () =>
