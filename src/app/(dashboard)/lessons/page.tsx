@@ -9,6 +9,7 @@ import { filterFixedGrades } from "@/lib/years/grades";
 import {
   buildHebrewMonth,
   hebrewMonthFromIso,
+  parseIsoDate,
   todayIso,
 } from "@/lib/dates/hebrew";
 import type { Lesson } from "@/types/database";
@@ -21,6 +22,10 @@ import {
 import { describeAudienceScope } from "@/lib/validation";
 import { formatLessonHours, formatLessonOptionLabel } from "@/lib/lessons/hours";
 import { formatSubjectLessonLabel } from "@/lib/lessons/subject-label";
+import {
+  formatWeeklySlotsLabel,
+  slotsFromLessonAndRows,
+} from "@/lib/lessons/weekly-slots";
 import { fetchAttendancePools, fingerprintForLesson } from "@/lib/attendance/pools";
 import { formatLessonGroupLabel } from "@/lib/lessons/group-label";
 import { AttendancePoolsPanel } from "./AttendancePoolsPanel";
@@ -73,7 +78,7 @@ export default async function LessonsPage({ searchParams }: Props) {
   const from = searchParams.from || month.rangeStart;
   const to = searchParams.to || month.rangeEnd;
 
-  const [lessonsRes, teachers, sourceRows, grades, classes, tracks, specializations, subjectsRes, ranges, rules, holidays, audienceRes, yearStudentsRes] =
+  const [lessonsRes, teachers, sourceRows, grades, classes, tracks, specializations, subjectsRes, ranges, rules, holidays, audienceRes, yearStudentsRes, weeklySlotsRes] =
     await Promise.all([
       supabase
         .from("lessons")
@@ -113,6 +118,9 @@ export default async function LessonsPage({ searchParams }: Props) {
         .select("student_id, students(id, full_name, is_active)")
         .eq("academic_year_id", activeYear.id)
         .is("end_date", null),
+      supabase
+        .from("lesson_weekly_slots")
+        .select("lesson_id, day_of_week, lesson_number, period_count"),
     ]);
 
   type LessonRow = Lesson & {
@@ -125,6 +133,25 @@ export default async function LessonsPage({ searchParams }: Props) {
 
   const allLessons = (lessonsRes.data ?? []) as LessonRow[];
   const audienceByLesson = audienceMapFromRows(audienceRes.data ?? []);
+  const weeklySlotRowsByLesson = new Map<
+    string,
+    { day_of_week: number; lesson_number: number; period_count: number }[]
+  >();
+  for (const row of weeklySlotsRes.data ?? []) {
+    const list = weeklySlotRowsByLesson.get(row.lesson_id) ?? [];
+    list.push({
+      day_of_week: row.day_of_week,
+      lesson_number: row.lesson_number,
+      period_count: row.period_count,
+    });
+    weeklySlotRowsByLesson.set(row.lesson_id, list);
+  }
+  const weeklySlotsByLesson = new Map(
+    allLessons.map((l) => [
+      l.id,
+      slotsFromLessonAndRows(l, weeklySlotRowsByLesson.get(l.id)),
+    ])
+  );
   const filteredLessons = allLessons.filter((l) => {
     if (
       !lessonMatchesAudienceFilter(audienceForLesson(l, audienceByLesson), {
@@ -253,6 +280,7 @@ export default async function LessonsPage({ searchParams }: Props) {
       teacherName,
       gradeName: gradeNames.join(" / ") || (gradeById.get(l.grade_id) ?? ""),
       audienceLabel,
+      scheduleLabel: formatWeeklySlotsLabel(weeklySlotsByLesson.get(l.id) ?? []),
       rangeName: rangeById.get(l.activity_range_id) ?? "",
       studentCount: studentCountByLesson.get(l.id) ?? 0,
     };
@@ -299,9 +327,19 @@ export default async function LessonsPage({ searchParams }: Props) {
           lesson?.subject ?? ""
         ),
         teacherName: one<{ full_name: string }>(assignment?.teachers)?.full_name ?? "",
-        hoursLabel: lesson
-          ? formatLessonHours(lesson.lesson_number, lesson.period_count ?? 1)
-          : "",
+        hoursLabel: (() => {
+          if (!lesson) return "";
+          const slots = weeklySlotsByLesson.get(lesson.id) ?? [];
+          const day = parseIsoDate(o.occurrence_date).getDay();
+          const slot =
+            slots.find((s) => s.dayOfWeek === day) ??
+            slots[0] ?? {
+              dayOfWeek: lesson.day_of_week,
+              lessonNumber: lesson.lesson_number,
+              periodCount: lesson.period_count ?? 1,
+            };
+          return formatLessonHours(slot.lessonNumber, slot.periodCount);
+        })(),
       };
     });
 
@@ -353,6 +391,10 @@ export default async function LessonsPage({ searchParams }: Props) {
   const editingTeacherId = editingLesson
     ? one<{ teacher_id: string }>(editingLesson.teacher_teaching_assignments)?.teacher_id ?? ""
     : "";
+  const editingSlots = editingLesson
+    ? weeklySlotsByLesson.get(editingLesson.id) ??
+      slotsFromLessonAndRows(editingLesson, weeklySlotRowsByLesson.get(editingLesson.id))
+    : [];
   const editingDraft: LessonFormDraft | null = editingLesson
     ? {
         id: editingLesson.id,
@@ -391,9 +433,10 @@ export default async function LessonsPage({ searchParams }: Props) {
           (editingAudience?.class_ids.length ?? 0) === 0 &&
           (editingAudience?.track_ids.length ?? 0) === 0 &&
           (editingAudience?.specialization_ids.length ?? 0) === 0,
-        dayOfWeek: editingLesson.day_of_week,
-        lessonNumber: editingLesson.lesson_number,
-        periodCount: editingLesson.period_count ?? 1,
+        weeklySlots: editingSlots,
+        dayOfWeek: editingSlots[0]?.dayOfWeek ?? editingLesson.day_of_week,
+        lessonNumber: editingSlots[0]?.lessonNumber ?? editingLesson.lesson_number,
+        periodCount: editingSlots[0]?.periodCount ?? editingLesson.period_count ?? 1,
         activityRangeId: editingLesson.activity_range_id,
         attendanceRuleId: editingLesson.attendance_rule_id,
       }

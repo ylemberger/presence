@@ -23,6 +23,10 @@ import {
   FLEXIBLE_RANGE_FORM_VALUE,
   isFlexibleActivityRange,
 } from "@/lib/lessons/flexible-range";
+import {
+  formatWeeklySlotsLabel,
+  type WeeklySlot,
+} from "@/lib/lessons/weekly-slots";
 
 export type LessonFormTeacher = {
   id: string;
@@ -42,6 +46,7 @@ export type LessonFormDraft = {
   trackIds: string[];
   specializationIds: string[];
   wholeGrade: boolean;
+  weeklySlots: WeeklySlot[];
   dayOfWeek: number;
   lessonNumber: number;
   periodCount: number;
@@ -96,8 +101,17 @@ export function LessonsForm({
     initial?.specializationIds ?? []
   );
   const [wholeGrade, setWholeGrade] = useState(initial?.wholeGrade ?? false);
-  const [lessonNumber, setLessonNumber] = useState(String(initial?.lessonNumber ?? 1));
-  const [periodCount, setPeriodCount] = useState(String(initial?.periodCount ?? 1));
+  const [weeklySlots, setWeeklySlots] = useState<WeeklySlot[]>(() =>
+    initial?.weeklySlots?.length
+      ? initial.weeklySlots
+      : [
+          {
+            dayOfWeek: initial?.dayOfWeek ?? 0,
+            lessonNumber: initial?.lessonNumber ?? 1,
+            periodCount: initial?.periodCount ?? 1,
+          },
+        ]
+  );
   const [assignmentKey, setAssignmentKey] = useState(() => {
     if (!initial?.teacherId) return "";
     const teacher = teachers.find((t) => t.id === initial.teacherId);
@@ -261,8 +275,7 @@ export function LessonsForm({
       setTrackIds([]);
       setSpecializationIds([]);
       setWholeGrade(false);
-      setLessonNumber("1");
-      setPeriodCount("1");
+      setWeeklySlots([{ dayOfWeek: 0, lessonNumber: 1, periodCount: 1 }]);
       setAssignmentKey("");
       setSubjectName("");
       setRangeChoice("");
@@ -535,39 +548,108 @@ export function LessonsForm({
 
       <div>
         <p className="mb-3 font-headline-md text-headline-md text-primary">לוח זמנים ונוכחות</p>
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-5">
-          <Select
-            fieldSize="lg"
-            label="יום בשבוע"
-            name="day_of_week"
-            required
-            defaultValue={String(initial?.dayOfWeek ?? 0)}
-            options={DAY_OF_WEEK_LABELS.map((l, i) => ({ value: String(i), label: l }))}
-          />
-          <Select
-            fieldSize="lg"
-            label="שעת התחלה"
-            name="lesson_number"
-            required
-            value={lessonNumber}
-            onChange={(e) => setLessonNumber(e.target.value)}
-            options={Array.from({ length: MAX_LESSON_NUMBER }, (_, i) => ({
-              value: String(i + 1),
-              label: `שיעור ${i + 1}`,
-            }))}
-          />
-          <Select
-            fieldSize="lg"
-            label="מספר שעות רצופות"
-            name="period_count"
-            required
-            value={periodCount}
-            onChange={(e) => setPeriodCount(e.target.value)}
-            options={Array.from({ length: MAX_LESSON_NUMBER }, (_, i) => ({
-              value: String(i + 1),
-              label: i === 0 ? "שעה אחת" : `${i + 1} שעות`,
-            }))}
-          />
+        <div className="mb-4 space-y-3">
+          <p className="font-body-md text-body-md text-on-surface-variant">
+            אפשר כמה מפגשים בשבוע לאותו שיעור (למשל ראשון שיעורים 6–7 ורביעי שיעור 3). כל מפגש
+            יוצר מופעי נוכחות נפרדים תחת אותו שיעור.
+          </p>
+          {weeklySlots.map((slot, index) => (
+            <div
+              key={`slot-${index}`}
+              className="grid grid-cols-1 gap-3 rounded-xl border border-outline-variant/40 bg-surface-container-low/40 p-3 sm:grid-cols-2 xl:grid-cols-4"
+            >
+              <Select
+                fieldSize="lg"
+                label={index === 0 ? "יום בשבוע" : `יום נוסף ${index + 1}`}
+                id={`slot_day_of_week_${index}`}
+                name="slot_day_of_week"
+                required
+                value={String(slot.dayOfWeek)}
+                onChange={(e) => {
+                  const dayOfWeek = Number(e.target.value);
+                  setWeeklySlots((prev) =>
+                    prev.map((s, i) => (i === index ? { ...s, dayOfWeek } : s))
+                  );
+                }}
+                options={DAY_OF_WEEK_LABELS.map((l, i) => ({ value: String(i), label: l }))}
+              />
+              <Select
+                fieldSize="lg"
+                label="שעת התחלה"
+                id={`slot_lesson_number_${index}`}
+                name="slot_lesson_number"
+                required
+                value={String(slot.lessonNumber)}
+                onChange={(e) => {
+                  const lessonNumber = Number(e.target.value);
+                  setWeeklySlots((prev) =>
+                    prev.map((s, i) => (i === index ? { ...s, lessonNumber } : s))
+                  );
+                }}
+                options={Array.from({ length: MAX_LESSON_NUMBER }, (_, i) => ({
+                  value: String(i + 1),
+                  label: `שיעור ${i + 1}`,
+                }))}
+              />
+              <Select
+                fieldSize="lg"
+                label="מספר שעות רצופות"
+                id={`slot_period_count_${index}`}
+                name="slot_period_count"
+                required
+                value={String(slot.periodCount)}
+                onChange={(e) => {
+                  const periodCount = Number(e.target.value);
+                  setWeeklySlots((prev) =>
+                    prev.map((s, i) => (i === index ? { ...s, periodCount } : s))
+                  );
+                }}
+                options={Array.from({ length: MAX_LESSON_NUMBER }, (_, i) => ({
+                  value: String(i + 1),
+                  label: i === 0 ? "שעה אחת" : `${i + 1} שעות`,
+                }))}
+              />
+              <div className="flex items-end">
+                {weeklySlots.length > 1 ? (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="w-full"
+                    onClick={() =>
+                      setWeeklySlots((prev) => prev.filter((_, i) => i !== index))
+                    }
+                  >
+                    הסרת מפגש
+                  </Button>
+                ) : (
+                  <p className="pb-2 font-caption text-caption text-on-surface-variant">
+                    מפגש ראשון
+                  </p>
+                )}
+              </div>
+            </div>
+          ))}
+          {weeklySlots.length < 7 && (
+            <Button
+              type="button"
+              variant="secondary"
+              onClick={() => {
+                const used = new Set(weeklySlots.map((s) => s.dayOfWeek));
+                let nextDay = 0;
+                while (used.has(nextDay) && nextDay < 6) nextDay += 1;
+                if (used.has(nextDay)) return;
+                setWeeklySlots((prev) => [
+                  ...prev,
+                  { dayOfWeek: nextDay, lessonNumber: 1, periodCount: 1 },
+                ]);
+              }}
+            >
+              <Icon name="add" className="text-[18px]" />
+              הוסיפי יום נוסף בשבוע
+            </Button>
+          )}
+        </div>
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
           <Combobox
             fieldSize="lg"
             label="טווח פעילות"
@@ -617,8 +699,8 @@ export function LessonsForm({
           </div>
         )}
         <p className="mt-3 font-body-md text-body-md text-on-surface-variant">
-          שיעור של שעתיים רצופות: שעת התחלה 1 ומשך 2 ({formatLessonHours(1, 2)}). ימי חופשה
-          מגדירים ב־הגדרות ← לשונית «לוח חופשות».
+          שיעור של שעתיים רצופות באותו יום: שעת התחלה 1 ומשך 2 (
+          {formatLessonHours(1, 2)}). ימי חופשה מגדירים ב־הגדרות ← לשונית «לוח חופשות».
         </p>
       </div>
 
@@ -627,7 +709,7 @@ export function LessonsForm({
           <div className="font-semibold">סיכום</div>
           <div className="mt-1 text-on-surface-variant">קהל: {audienceSummary}</div>
           <div className="mt-1 text-on-surface-variant">
-            שעות: {formatLessonHours(Number(lessonNumber) || 1, Number(periodCount) || 1)}
+            מפגשים: {formatWeeklySlotsLabel(weeklySlots) || "—"}
           </div>
         </div>
       )}

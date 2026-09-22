@@ -29,6 +29,7 @@ export type LessonTemplateCard = Lesson & {
   teacherName: string;
   gradeName: string;
   audienceLabel: string;
+  scheduleLabel?: string;
   rangeName: string;
   studentCount: number;
   subjectParentName?: string;
@@ -410,7 +411,16 @@ export function LessonsCalendar({
           ) : (
             <ul className="flex flex-col gap-2 font-body-md text-body-md">
               {lessons.map((l) => {
-                const day = DAY_OF_WEEK_LABELS[l.day_of_week] ?? "";
+                const schedule =
+                  l.scheduleLabel ||
+                  [
+                    DAY_OF_WEEK_LABELS[l.day_of_week]
+                      ? `יום ${DAY_OF_WEEK_LABELS[l.day_of_week]}`
+                      : "",
+                    formatLessonHours(l.lesson_number, l.period_count ?? 1),
+                  ]
+                    .filter(Boolean)
+                    .join(" · ");
                 const billing =
                   BILLING_TYPE_LABELS[l.billing_type as keyof typeof BILLING_TYPE_LABELS] ??
                   l.billing_type;
@@ -434,8 +444,7 @@ export function LessonsCalendar({
                         <div className="font-semibold text-on-surface">{l.subject}</div>
                         <p className="mt-0.5 font-caption text-caption text-on-surface-variant">
                           {[
-                            day ? `יום ${day}` : "",
-                            formatLessonHours(l.lesson_number, l.period_count ?? 1),
+                            schedule,
                             billing,
                             l.for_psychology ? "פסיכולוגיה" : "",
                           ]

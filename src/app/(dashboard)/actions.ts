@@ -32,13 +32,17 @@ import { applyStudentImportRows } from "@/lib/students/importApply";
 import type { AttendanceStatus, HolidayKind } from "@/types/database";
 import { todayIso, formatHebrewDate } from "@/lib/dates/hebrew";
 import { resolveOrCreateSubject } from "@/lib/lessons/subjects";
-import { MAX_LESSON_NUMBER } from "@/lib/lessons/hours";
 import { fingerprintForLesson } from "@/lib/attendance/pools";
 import { previousWeekBlockMessage } from "@/lib/attendance/previous-week";
 import {
   FLEXIBLE_RANGE_FORM_VALUE,
   isFlexibleActivityRange,
 } from "@/lib/lessons/flexible-range";
+import {
+  parseWeeklySlotsFromFormData,
+  primarySlot,
+  type WeeklySlot,
+} from "@/lib/lessons/weekly-slots";
 import {
   isError,
   parseLessonBilling,
@@ -1346,21 +1350,9 @@ async function buildLessonPayload(formData: FormData) {
   const ruleId = requireId(formData.get("attendance_rule_id"), "כלל נוכחות");
   if (isError(ruleId)) return ruleId;
 
-  const dayOfWeek = parseInt(String(formData.get("day_of_week") ?? ""), 10);
-  if (Number.isNaN(dayOfWeek) || dayOfWeek < 0 || dayOfWeek > 6) {
-    return { error: "יש לבחור יום בשבוע" };
-  }
-  const lessonNumber = parseInt(String(formData.get("lesson_number") ?? ""), 10);
-  if (Number.isNaN(lessonNumber) || lessonNumber < 1 || lessonNumber > MAX_LESSON_NUMBER) {
-    return { error: `מספר שיעור חייב להיות בין 1 ל-${MAX_LESSON_NUMBER}` };
-  }
-  const periodCount = parseInt(String(formData.get("period_count") ?? "1"), 10);
-  if (Number.isNaN(periodCount) || periodCount < 1 || periodCount > MAX_LESSON_NUMBER) {
-    return { error: `מספר השעות הרצופות חייב להיות בין 1 ל-${MAX_LESSON_NUMBER}` };
-  }
-  if (lessonNumber + periodCount - 1 > MAX_LESSON_NUMBER) {
-    return { error: `השעות הרצופות חורגות משיעור ${MAX_LESSON_NUMBER}. בחרי התחלה מוקדמת יותר או משך קצר יותר.` };
-  }
+  const slots = parseWeeklySlotsFromFormData(formData);
+  if ("error" in slots) return slots;
+  const first = primarySlot(slots);
 
   const actionAuth = await createActionClient();
   if ("error" in actionAuth) return { error: actionAuth.error };
@@ -1443,12 +1435,44 @@ async function buildLessonPayload(formData: FormData) {
     specialization_id: teaching.specialization_id,
     billing_type: teaching.billing_type as "mandatory" | "specialization",
     for_psychology: Boolean(teaching.for_psychology),
-    day_of_week: dayOfWeek,
-    lesson_number: lessonNumber,
-    period_count: periodCount,
+    day_of_week: first.dayOfWeek,
+    lesson_number: first.lessonNumber,
+    period_count: first.periodCount,
     activity_range_id: rangeId,
     attendance_rule_id: ruleId,
+    weekly_slots: slots,
   };
+}
+
+async function replaceLessonWeeklySlots(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  lessonId: string,
+  slots: WeeklySlot[]
+) {
+  const { error: clearError } = await supabase
+    .from("lesson_weekly_slots")
+    .delete()
+    .eq("lesson_id", lessonId);
+  if (clearError) {
+    if (/lesson_weekly_slots|schema cache|PGRST205|42P01/i.test(clearError.message)) {
+      return {
+        error:
+          "חסרה טבלת מפגשים שבועיים במסד — הריצי את supabase/patches/023_lesson_weekly_slots.sql",
+      };
+    }
+    return { error: clearError.message };
+  }
+  if (slots.length === 0) return { success: true as const };
+  const { error: insertError } = await supabase.from("lesson_weekly_slots").insert(
+    slots.map((slot) => ({
+      lesson_id: lessonId,
+      day_of_week: slot.dayOfWeek,
+      lesson_number: slot.lessonNumber,
+      period_count: slot.periodCount,
+    }))
+  );
+  if (insertError) return { error: insertError.message };
+  return { success: true as const };
 }
 
 function lessonAudienceRows(
@@ -1528,6 +1552,7 @@ export async function createLessonAction(formData: FormData) {
   const payload = await buildLessonPayload(formData);
   if ("error" in payload) return payload;
 
+  const { weekly_slots: weeklySlots, ...lessonInsert } = payload;
   const isNewAssignment = !String(formData.get("teacher_teaching_assignment_id") ?? "").trim();
   const assignmentId = payload.teacher_teaching_assignment_id;
 
@@ -1536,7 +1561,7 @@ export async function createLessonAction(formData: FormData) {
   const supabase = actionAuth.supabase;
   const { data: lesson, error } = await supabase
     .from("lessons")
-    .insert(payload)
+    .insert(lessonInsert)
     .select("id")
     .single();
   if (error || !lesson) {
@@ -1545,6 +1570,16 @@ export async function createLessonAction(formData: FormData) {
       removeAssignment: isNewAssignment,
     });
     return { error: error?.message ?? "יצירת שיעור נכשלה" };
+  }
+
+  const slotsResult = await replaceLessonWeeklySlots(supabase, lesson.id, weeklySlots);
+  if ("error" in slotsResult) {
+    await rollbackFailedLessonCreate(supabase, {
+      lessonId: lesson.id,
+      assignmentId,
+      removeAssignment: isNewAssignment,
+    });
+    return slotsResult;
   }
 
   const audienceRows = lessonAudienceRows(lesson.id, payload.grade_id, formData);
@@ -1723,6 +1758,13 @@ export async function updateLessonAction(formData: FormData) {
     })
     .eq("id", lessonId);
   if (updateError) return { error: updateError.message };
+
+  const slotsResult = await replaceLessonWeeklySlots(
+    supabase,
+    lessonId,
+    payload.weekly_slots
+  );
+  if ("error" in slotsResult) return slotsResult;
 
   const { error: clearAudienceError } = await supabase
     .from("lesson_audience")

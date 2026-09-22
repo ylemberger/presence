@@ -14,6 +14,7 @@
 | מצב | מה להריץ |
 |-----|----------|
 | **טווח פעילות גמיש** | [`patches/021_flexible_activity_range.sql`](patches/021_flexible_activity_range.sql) |
+| **מפגשים מרובים בשבוע** | [`patches/023_lesson_weekly_slots.sql`](patches/023_lesson_weekly_slots.sql) |
 | **שיעור 10** | [`patches/020_lesson_number_10.sql`](patches/020_lesson_number_10.sql) |
 | **לוח חופשות/טווחים משותף** | [`patches/019_shared_activity_and_holiday_calendar.sql`](patches/019_shared_activity_and_holiday_calendar.sql) |
 | **קיבוץ נוכחות ידני** | [`patches/015_attendance_pools.sql`](patches/015_attendance_pools.sql) |
@@ -51,5 +52,5 @@
 - **לוח מוסדי (כל השנים):** `activity_ranges`, `holiday_periods`
 - **תלמידות:** `students`, `student_assignments`, `student_lesson_assignments`
 - **מורות:** `teachers`, `teacher_teaching_assignments`, `teacher_source_records`
-- **שיעורים:** `subjects`, `lessons`, `lesson_audience`, `lesson_occurrences`
+- **שיעורים:** `subjects`, `lessons`, `lesson_weekly_slots`, `lesson_audience`, `lesson_occurrences`
 - **נוכחות:** `attendance`, `attendance_change_log`, `attendance_rules`, `attendance_notes`, `makeup_exams`

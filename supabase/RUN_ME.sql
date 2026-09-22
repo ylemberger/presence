@@ -14,6 +14,7 @@
 --   • לוח חופשות וטווחי פעילות משותפים לכל השנים (לא נמחקים עם שנה)
 --   • שיעור 10 (שעת התחלה ומשך רצוף עד 10)
 --   • טווח פעילות גמיש (בחירת תאריכים בלוח בעת יצירת שיעור)
+--   • מפגשים מרובים בשבוע לאותו שיעור (lesson_weekly_slots)
 --
 -- חשוב ללוגיקה:
 --   כיתה / מסלול / התמחות / פסיכולוגיה נשארים ב-student_assignments (לפי שנה).
@@ -460,6 +461,48 @@ alter table lessons add constraint lessons_period_span_check
 alter table activity_ranges drop constraint if exists activity_ranges_range_type_check;
 alter table activity_ranges add constraint activity_ranges_range_type_check
   check (range_type in ('annual', 'semester_a', 'semester_b', 'course', 'flexible'));
+
+-- ========== מפגשים מרובים בשבוע לאותו שיעור ==========
+create table if not exists lesson_weekly_slots (
+  id uuid primary key default gen_random_uuid(),
+  lesson_id uuid not null references lessons(id) on delete cascade,
+  day_of_week smallint not null check (day_of_week between 0 and 6),
+  lesson_number smallint not null check (lesson_number between 1 and 10),
+  period_count smallint not null default 1 check (period_count between 1 and 10),
+  constraint lesson_weekly_slots_period_span_check
+    check (lesson_number + period_count - 1 between 1 and 10),
+  unique (lesson_id, day_of_week)
+);
+
+create index if not exists idx_lesson_weekly_slots_lesson
+  on lesson_weekly_slots (lesson_id);
+
+alter table lesson_weekly_slots enable row level security;
+
+do $$
+begin
+  if not exists (
+    select 1 from pg_policies
+    where tablename = 'lesson_weekly_slots'
+      and policyname = 'authenticated_select_lesson_weekly_slots'
+  ) then
+    create policy "authenticated_select_lesson_weekly_slots"
+      on lesson_weekly_slots for select to authenticated using (true);
+    create policy "authenticated_insert_lesson_weekly_slots"
+      on lesson_weekly_slots for insert to authenticated with check (true);
+    create policy "authenticated_update_lesson_weekly_slots"
+      on lesson_weekly_slots for update to authenticated using (true) with check (true);
+    create policy "authenticated_delete_lesson_weekly_slots"
+      on lesson_weekly_slots for delete to authenticated using (true);
+  end if;
+end $$;
+
+insert into lesson_weekly_slots (lesson_id, day_of_week, lesson_number, period_count)
+select l.id, l.day_of_week, l.lesson_number, coalesce(l.period_count, 1)
+from lessons l
+where not exists (
+  select 1 from lesson_weekly_slots s where s.lesson_id = l.id
+);
 
 -- Presence project only (never the salary database).
 notify pgrst, 'reload schema';

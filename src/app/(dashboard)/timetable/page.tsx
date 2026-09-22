@@ -177,6 +177,25 @@ export default async function TimetablePage({ searchParams }: Props) {
 
   const { data: lessonsRows } = await lessonsQuery;
 
+  const lessonIdsForSlots = (lessonsRows ?? []).map((l: { id: string }) => l.id);
+  const { data: slotRows } =
+    lessonIdsForSlots.length > 0
+      ? await supabase
+          .from("lesson_weekly_slots")
+          .select("lesson_id, day_of_week, lesson_number, period_count")
+          .in("lesson_id", lessonIdsForSlots)
+      : { data: [] as { lesson_id: string; day_of_week: number; lesson_number: number; period_count: number }[] };
+
+  const slotsByLesson = new Map<
+    string,
+    { day_of_week: number; lesson_number: number; period_count: number }[]
+  >();
+  for (const row of slotRows ?? []) {
+    const list = slotsByLesson.get(row.lesson_id) ?? [];
+    list.push(row);
+    slotsByLesson.set(row.lesson_id, list);
+  }
+
   const entries: TimetableEntry[] = (lessonsRows ?? [])
     .filter((l: any) => {
       if (params.teacherId) {
@@ -189,7 +208,7 @@ export default async function TimetablePage({ searchParams }: Props) {
       }
       return true;
     })
-    .map((l: any) => {
+    .flatMap((l: any) => {
       const teacher = embeddedTeacher(l.teacher_teaching_assignments);
       const teacherId = teacher?.id ?? null;
       const parent = embedOne<{ name: string }>(l.subjects)?.name;
@@ -204,18 +223,29 @@ export default async function TimetablePage({ searchParams }: Props) {
         audienceLabel = cls?.name ?? tr?.name ?? "—";
       }
 
-      return {
+      const slots =
+        slotsByLesson.get(l.id)?.length
+          ? slotsByLesson.get(l.id)!
+          : [
+              {
+                day_of_week: l.day_of_week,
+                lesson_number: l.lesson_number,
+                period_count: l.period_count ?? 1,
+              },
+            ];
+
+      return slots.map((slot) => ({
         lessonId: l.id,
         subject: formatSubjectLessonLabel(parent, l.subject),
         teacherName: teacher?.fullName ?? "",
         teacherId,
-        dayOfWeek: l.day_of_week,
-        lessonNumber: l.lesson_number,
-        periodCount: l.period_count ?? 1,
+        dayOfWeek: slot.day_of_week,
+        lessonNumber: slot.lesson_number,
+        periodCount: slot.period_count ?? 1,
         billingType: l.billing_type,
         forPsychology: l.for_psychology,
         audienceLabel,
-      };
+      }));
     });
 
   return (

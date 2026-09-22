@@ -166,6 +166,14 @@ export interface Lesson {
   created_at: string;
 }
 
+export interface LessonWeeklySlot {
+  id: string;
+  lesson_id: string;
+  day_of_week: number;
+  lesson_number: number;
+  period_count: number;
+}
+
 export interface LessonAudience {
   id: string;
   lesson_id: string;
@@ -263,6 +271,11 @@ export interface Database {
       teacher_source_records: { Row: TeacherSourceRecord; Insert: Omit<TeacherSourceRecord, "id" | "synced_at"> & { id?: string; synced_at?: string }; Update: Partial<TeacherSourceRecord> };
       teacher_teaching_assignments: { Row: TeacherTeachingAssignment; Insert: Omit<TeacherTeachingAssignment, "id"> & { id?: string }; Update: Partial<TeacherTeachingAssignment> };
       lessons: { Row: Lesson; Insert: Omit<Lesson, "id" | "created_at"> & { id?: string; created_at?: string }; Update: Partial<Lesson> };
+      lesson_weekly_slots: {
+        Row: LessonWeeklySlot;
+        Insert: Omit<LessonWeeklySlot, "id"> & { id?: string };
+        Update: Partial<LessonWeeklySlot>;
+      };
       lesson_audience: { Row: LessonAudience; Insert: Omit<LessonAudience, "id"> & { id?: string }; Update: Partial<LessonAudience> };
       lesson_occurrences: { Row: LessonOccurrence; Insert: Omit<LessonOccurrence, "id"> & { id?: string; gap_handling?: LessonOccurrence["gap_handling"] }; Update: Partial<LessonOccurrence> };
       student_lesson_assignments: { Row: StudentLessonAssignment; Insert: Omit<StudentLessonAssignment, "id"> & { id?: string }; Update: Partial<StudentLessonAssignment> };

@@ -163,6 +163,17 @@ create table lessons (
   created_at timestamptz default now()
 );
 
+create table lesson_weekly_slots (
+  id uuid primary key default gen_random_uuid(),
+  lesson_id uuid not null references lessons(id) on delete cascade,
+  day_of_week smallint not null check (day_of_week between 0 and 6),
+  lesson_number smallint not null check (lesson_number between 1 and 10),
+  period_count smallint not null default 1 check (period_count between 1 and 10),
+  constraint lesson_weekly_slots_period_span_check
+    check (lesson_number + period_count - 1 between 1 and 10),
+  unique (lesson_id, day_of_week)
+);
+
 create table lesson_audience (
   id uuid primary key default gen_random_uuid(),
   lesson_id uuid not null references lessons(id) on delete cascade,
@@ -232,6 +243,7 @@ create index idx_teacher_teaching_assignments_teacher on teacher_teaching_assign
 create index idx_teacher_teaching_assignments_year on teacher_teaching_assignments(academic_year_id);
 create index idx_lessons_academic_year on lessons(academic_year_id);
 create index idx_lesson_audience_lesson on lesson_audience(lesson_id);
+create index idx_lesson_weekly_slots_lesson on lesson_weekly_slots(lesson_id);
 create unique index idx_lesson_audience_grade
   on lesson_audience (lesson_id, grade_id)
   where grade_id is not null;
@@ -299,6 +311,7 @@ alter table teachers enable row level security;
 alter table teacher_source_records enable row level security;
 alter table teacher_teaching_assignments enable row level security;
 alter table lessons enable row level security;
+alter table lesson_weekly_slots enable row level security;
 alter table lesson_audience enable row level security;
 alter table lesson_occurrences enable row level security;
 alter table student_lesson_assignments enable row level security;
@@ -313,7 +326,7 @@ begin
     'academic_years', 'grades', 'classes', 'tracks', 'specializations', 'subjects',
     'activity_ranges', 'holiday_periods', 'attendance_rules', 'students', 'student_assignments',
     'teachers', 'teacher_source_records', 'teacher_teaching_assignments',
-    'lessons', 'lesson_audience', 'lesson_occurrences', 'student_lesson_assignments',
+    'lessons', 'lesson_weekly_slots', 'lesson_audience', 'lesson_occurrences', 'student_lesson_assignments',
     'attendance', 'attendance_change_log'
   ]
   loop
