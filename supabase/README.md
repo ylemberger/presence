@@ -15,6 +15,7 @@
 |-----|----------|
 | **טווח פעילות גמיש** | [`patches/021_flexible_activity_range.sql`](patches/021_flexible_activity_range.sql) |
 | **מפגשים מרובים בשבוע** | [`patches/023_lesson_weekly_slots.sql`](patches/023_lesson_weekly_slots.sql) |
+| **שיעורים 1–13 + פעם בשבועיים** | [`patches/024_lesson_number_13_and_fortnightly.sql`](patches/024_lesson_number_13_and_fortnightly.sql) |
 | **שיעור 10** | [`patches/020_lesson_number_10.sql`](patches/020_lesson_number_10.sql) |
 | **לוח חופשות/טווחים משותף** | [`patches/019_shared_activity_and_holiday_calendar.sql`](patches/019_shared_activity_and_holiday_calendar.sql) |
 | **קיבוץ נוכחות ידני** | [`patches/015_attendance_pools.sql`](patches/015_attendance_pools.sql) |

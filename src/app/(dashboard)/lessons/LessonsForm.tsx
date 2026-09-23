@@ -47,6 +47,8 @@ export type LessonFormDraft = {
   specializationIds: string[];
   wholeGrade: boolean;
   weeklySlots: WeeklySlot[];
+  /** 1 = every week, 2 = every other week */
+  repeatEveryWeeks: 1 | 2;
   dayOfWeek: number;
   lessonNumber: number;
   periodCount: number;
@@ -111,6 +113,9 @@ export function LessonsForm({
             periodCount: initial?.periodCount ?? 1,
           },
         ]
+  );
+  const [repeatEveryWeeks, setRepeatEveryWeeks] = useState<1 | 2>(
+    initial?.repeatEveryWeeks === 2 ? 2 : 1
   );
   const [assignmentKey, setAssignmentKey] = useState(() => {
     if (!initial?.teacherId) return "";
@@ -276,6 +281,7 @@ export function LessonsForm({
       setSpecializationIds([]);
       setWholeGrade(false);
       setWeeklySlots([{ dayOfWeek: 0, lessonNumber: 1, periodCount: 1 }]);
+      setRepeatEveryWeeks(1);
       setAssignmentKey("");
       setSubjectName("");
       setRangeChoice("");
@@ -553,6 +559,26 @@ export function LessonsForm({
             אפשר כמה מפגשים בשבוע לאותו שיעור (למשל ראשון שיעורים 6–7 ורביעי שיעור 3). כל מפגש
             יוצר מופעי נוכחות נפרדים תחת אותו שיעור.
           </p>
+          <Select
+            fieldSize="lg"
+            label="תדירות"
+            name="repeat_every_weeks"
+            required
+            value={String(repeatEveryWeeks)}
+            onChange={(e) =>
+              setRepeatEveryWeeks(e.target.value === "2" ? 2 : 1)
+            }
+            options={[
+              { value: "1", label: "כל שבוע" },
+              { value: "2", label: "פעם בשבועיים" },
+            ]}
+          />
+          {repeatEveryWeeks === 2 && (
+            <p className="rounded-lg border border-secondary/25 bg-secondary/5 px-3 py-2 font-caption text-caption text-on-surface-variant">
+              המופע הראשון הוא היום הראשון שמתאים בטווח הפעילות, ואז כל שבועיים. אפשר לכוון את
+              תאריך ההתחלה של הטווח (או טווח גמיש) כדי לבחור באיזה שבוע מתחילים.
+            </p>
+          )}
           {weeklySlots.map((slot, index) => (
             <div
               key={`slot-${index}`}
@@ -710,6 +736,7 @@ export function LessonsForm({
           <div className="mt-1 text-on-surface-variant">קהל: {audienceSummary}</div>
           <div className="mt-1 text-on-surface-variant">
             מפגשים: {formatWeeklySlotsLabel(weeklySlots) || "—"}
+            {repeatEveryWeeks === 2 ? " · פעם בשבועיים" : ""}
           </div>
         </div>
       )}

@@ -15,6 +15,7 @@
 --   • שיעור 10 (שעת התחלה ומשך רצוף עד 10)
 --   • טווח פעילות גמיש (בחירת תאריכים בלוח בעת יצירת שיעור)
 --   • מפגשים מרובים בשבוע לאותו שיעור (lesson_weekly_slots)
+--   • שעות 1–13 ביום + שיעור פעם בשבועיים (repeat_every_weeks)
 --
 -- חשוב ללוגיקה:
 --   כיתה / מסלול / התמחות / פסיכולוגיה נשארים ב-student_assignments (לפי שנה).
@@ -503,6 +504,50 @@ from lessons l
 where not exists (
   select 1 from lesson_weekly_slots s where s.lesson_id = l.id
 );
+
+-- ========== שעות 1–13 + פעם בשבועיים ==========
+alter table lessons drop constraint if exists lessons_lesson_number_check;
+alter table lessons add constraint lessons_lesson_number_check
+  check (lesson_number between 1 and 13);
+
+alter table lessons drop constraint if exists lessons_period_count_check;
+alter table lessons add constraint lessons_period_count_check
+  check (period_count between 1 and 13);
+
+alter table lessons drop constraint if exists lessons_period_span_check;
+alter table lessons add constraint lessons_period_span_check
+  check (lesson_number + period_count - 1 between 1 and 13);
+
+do $$
+begin
+  if to_regclass('public.lesson_weekly_slots') is not null then
+    alter table lesson_weekly_slots drop constraint if exists lesson_weekly_slots_lesson_number_check;
+    alter table lesson_weekly_slots drop constraint if exists lesson_weekly_slots_period_count_check;
+    alter table lesson_weekly_slots drop constraint if exists lesson_weekly_slots_period_span_check;
+
+    alter table lesson_weekly_slots
+      add constraint lesson_weekly_slots_lesson_number_check
+      check (lesson_number between 1 and 13);
+
+    alter table lesson_weekly_slots
+      add constraint lesson_weekly_slots_period_count_check
+      check (period_count between 1 and 13);
+
+    alter table lesson_weekly_slots
+      add constraint lesson_weekly_slots_period_span_check
+      check (lesson_number + period_count - 1 between 1 and 13);
+  end if;
+end $$;
+
+alter table lessons
+  add column if not exists repeat_every_weeks smallint not null default 1;
+
+alter table lessons
+  drop constraint if exists lessons_repeat_every_weeks_check;
+
+alter table lessons
+  add constraint lessons_repeat_every_weeks_check
+  check (repeat_every_weeks in (1, 2));
 
 -- Presence project only (never the salary database).
 notify pgrst, 'reload schema';

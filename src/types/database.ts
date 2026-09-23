@@ -161,6 +161,7 @@ export interface Lesson {
   day_of_week: number;
   lesson_number: number;
   period_count: number;
+  repeat_every_weeks: 1 | 2;
   activity_range_id: string;
   attendance_rule_id: string;
   created_at: string;

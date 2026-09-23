@@ -16,8 +16,10 @@ export interface GenerateOccurrencesResult {
 function getDatesForDayOfWeek(
   startDate: string,
   endDate: string,
-  dayOfWeek: number
+  dayOfWeek: number,
+  everyWeeks = 1
 ): string[] {
+  const stepWeeks = everyWeeks === 2 ? 2 : 1;
   const dates: string[] = [];
   const current = parseIsoDate(startDate);
   const end = parseIsoDate(endDate);
@@ -28,7 +30,7 @@ function getDatesForDayOfWeek(
 
   while (current <= end) {
     dates.push(toIsoDate(current));
-    current.setDate(current.getDate() + 7);
+    current.setDate(current.getDate() + 7 * stepWeeks);
   }
 
   return dates;
@@ -38,11 +40,17 @@ function datesForSlots(
   startDate: string,
   endDate: string,
   slots: WeeklySlot[],
-  holidays: Set<string>
+  holidays: Set<string>,
+  everyWeeks = 1
 ): string[] {
   const dates = new Set<string>();
   for (const slot of slots) {
-    for (const date of getDatesForDayOfWeek(startDate, endDate, slot.dayOfWeek)) {
+    for (const date of getDatesForDayOfWeek(
+      startDate,
+      endDate,
+      slot.dayOfWeek,
+      everyWeeks
+    )) {
       if (!holidays.has(date)) dates.add(date);
     }
   }
@@ -92,7 +100,7 @@ export async function generateLessonOccurrences(
   let lessonsQuery = supabase
     .from("lessons")
     .select(
-      "id, subject, day_of_week, lesson_number, period_count, academic_year_id, activity_ranges(start_date, end_date)"
+      "id, subject, day_of_week, lesson_number, period_count, repeat_every_weeks, academic_year_id, activity_ranges(start_date, end_date)"
     );
 
   if (lessonId) {
@@ -101,7 +109,19 @@ export async function generateLessonOccurrences(
     lessonsQuery = lessonsQuery.eq("academic_year_id", academicYearId);
   }
 
-  const { data: lessons, error } = await lessonsQuery;
+  let { data: lessons, error } = await lessonsQuery;
+  if (error && /repeat_every_weeks/i.test(error.message)) {
+    let fallback = supabase
+      .from("lessons")
+      .select(
+        "id, subject, day_of_week, lesson_number, period_count, academic_year_id, activity_ranges(start_date, end_date)"
+      );
+    if (lessonId) fallback = fallback.eq("id", lessonId);
+    else if (academicYearId) fallback = fallback.eq("academic_year_id", academicYearId);
+    const retry = await fallback;
+    lessons = (retry.data ?? []).map((row) => ({ ...row, repeat_every_weeks: 1 }));
+    error = retry.error;
+  }
   if (error) throw error;
   if (!lessons?.length) {
     if (lessonId) {
@@ -136,9 +156,11 @@ export async function generateLessonOccurrences(
     }
 
     const slots = slotsFromLessonAndRows(lesson, slotsByLesson.get(lesson.id));
+    const everyWeeks =
+      lesson.repeat_every_weeks === 2 ? 2 : 1;
     const holidays = holidaysByYear.get(lesson.academic_year_id) ?? new Set<string>();
     const candidateDates = slots.flatMap((slot) =>
-      getDatesForDayOfWeek(range.start_date, range.end_date, slot.dayOfWeek)
+      getDatesForDayOfWeek(range.start_date, range.end_date, slot.dayOfWeek, everyWeeks)
     );
     if (candidateDates.length === 0) {
       throw new Error(
@@ -146,7 +168,13 @@ export async function generateLessonOccurrences(
       );
     }
 
-    const dates = datesForSlots(range.start_date, range.end_date, slots, holidays);
+    const dates = datesForSlots(
+      range.start_date,
+      range.end_date,
+      slots,
+      holidays,
+      everyWeeks
+    );
     if (dates.length === 0) {
       result.skipped += new Set(candidateDates).size;
       continue;
@@ -205,7 +233,7 @@ export async function syncLessonOccurrences(
   const { data: lesson, error: lessonError } = await supabase
     .from("lessons")
     .select(
-      "id, day_of_week, lesson_number, period_count, academic_year_id, activity_ranges(start_date, end_date)"
+      "id, day_of_week, lesson_number, period_count, repeat_every_weeks, academic_year_id, activity_ranges(start_date, end_date)"
     )
     .eq("id", lessonId)
     .maybeSingle();
@@ -223,7 +251,10 @@ export async function syncLessonOccurrences(
   const holidays = holidaysByYear.get(lesson.academic_year_id) ?? new Set<string>();
   const slotsByLesson = await loadSlotsForLessons(supabase, [lessonId]);
   const slots = slotsFromLessonAndRows(lesson, slotsByLesson.get(lessonId));
-  const expected = new Set(datesForSlots(range.start_date, range.end_date, slots, holidays));
+  const everyWeeks = lesson.repeat_every_weeks === 2 ? 2 : 1;
+  const expected = new Set(
+    datesForSlots(range.start_date, range.end_date, slots, holidays, everyWeeks)
+  );
 
   const { data: occs, error: occError } = await supabase
     .from("lesson_occurrences")

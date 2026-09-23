@@ -280,7 +280,12 @@ export default async function LessonsPage({ searchParams }: Props) {
       teacherName,
       gradeName: gradeNames.join(" / ") || (gradeById.get(l.grade_id) ?? ""),
       audienceLabel,
-      scheduleLabel: formatWeeklySlotsLabel(weeklySlotsByLesson.get(l.id) ?? []),
+      scheduleLabel: [
+        formatWeeklySlotsLabel(weeklySlotsByLesson.get(l.id) ?? []),
+        l.repeat_every_weeks === 2 ? "פעם בשבועיים" : "",
+      ]
+        .filter(Boolean)
+        .join(" · "),
       rangeName: rangeById.get(l.activity_range_id) ?? "",
       studentCount: studentCountByLesson.get(l.id) ?? 0,
     };
@@ -434,6 +439,8 @@ export default async function LessonsPage({ searchParams }: Props) {
           (editingAudience?.track_ids.length ?? 0) === 0 &&
           (editingAudience?.specialization_ids.length ?? 0) === 0,
         weeklySlots: editingSlots,
+        repeatEveryWeeks:
+          editingLesson.repeat_every_weeks === 2 ? 2 : 1,
         dayOfWeek: editingSlots[0]?.dayOfWeek ?? editingLesson.day_of_week,
         lessonNumber: editingSlots[0]?.lessonNumber ?? editingLesson.lesson_number,
         periodCount: editingSlots[0]?.periodCount ?? editingLesson.period_count ?? 1,

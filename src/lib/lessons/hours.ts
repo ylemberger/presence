@@ -2,7 +2,7 @@ import { BILLING_TYPE_LABELS, DAY_OF_WEEK_LABELS } from "@/lib/constants";
 import { formatSubjectLessonLabel } from "@/lib/lessons/subject-label";
 
 /** Highest lesson period in the school day (start hour and consecutive span). */
-export const MAX_LESSON_NUMBER = 10;
+export const MAX_LESSON_NUMBER = 13;
 
 export function occupiedLessonNumbers(start: number, count = 1): number[] {
   const n = Math.max(1, count);

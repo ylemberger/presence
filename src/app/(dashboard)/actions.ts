@@ -1353,6 +1353,8 @@ async function buildLessonPayload(formData: FormData) {
   const slots = parseWeeklySlotsFromFormData(formData);
   if ("error" in slots) return slots;
   const first = primarySlot(slots);
+  const repeatRaw = Number(formData.get("repeat_every_weeks") ?? "1");
+  const repeatEveryWeeks: 1 | 2 = repeatRaw === 2 ? 2 : 1;
 
   const actionAuth = await createActionClient();
   if ("error" in actionAuth) return { error: actionAuth.error };
@@ -1438,6 +1440,7 @@ async function buildLessonPayload(formData: FormData) {
     day_of_week: first.dayOfWeek,
     lesson_number: first.lessonNumber,
     period_count: first.periodCount,
+    repeat_every_weeks: repeatEveryWeeks,
     activity_range_id: rangeId,
     attendance_rule_id: ruleId,
     weekly_slots: slots,
@@ -1753,6 +1756,7 @@ export async function updateLessonAction(formData: FormData) {
       day_of_week: payload.day_of_week,
       lesson_number: payload.lesson_number,
       period_count: payload.period_count,
+      repeat_every_weeks: payload.repeat_every_weeks,
       activity_range_id: payload.activity_range_id,
       attendance_rule_id: payload.attendance_rule_id,
     })

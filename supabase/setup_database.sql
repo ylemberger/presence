@@ -155,9 +155,10 @@ create table lessons (
   specialization_id uuid references specializations(id),
   billing_type text check (billing_type in ('mandatory', 'specialization')) not null,
   day_of_week smallint not null check (day_of_week between 0 and 6),
-  lesson_number smallint not null check (lesson_number between 1 and 10),
-  period_count smallint not null default 1 check (period_count between 1 and 10),
-  constraint lessons_period_span_check check (lesson_number + period_count - 1 between 1 and 10),
+  lesson_number smallint not null check (lesson_number between 1 and 13),
+  period_count smallint not null default 1 check (period_count between 1 and 13),
+  constraint lessons_period_span_check check (lesson_number + period_count - 1 between 1 and 13),
+  repeat_every_weeks smallint not null default 1 check (repeat_every_weeks in (1, 2)),
   activity_range_id uuid references activity_ranges(id) on delete cascade,
   attendance_rule_id uuid references attendance_rules(id) on delete set null,
   created_at timestamptz default now()
@@ -167,10 +168,10 @@ create table lesson_weekly_slots (
   id uuid primary key default gen_random_uuid(),
   lesson_id uuid not null references lessons(id) on delete cascade,
   day_of_week smallint not null check (day_of_week between 0 and 6),
-  lesson_number smallint not null check (lesson_number between 1 and 10),
-  period_count smallint not null default 1 check (period_count between 1 and 10),
+  lesson_number smallint not null check (lesson_number between 1 and 13),
+  period_count smallint not null default 1 check (period_count between 1 and 13),
   constraint lesson_weekly_slots_period_span_check
-    check (lesson_number + period_count - 1 between 1 and 10),
+    check (lesson_number + period_count - 1 between 1 and 13),
   unique (lesson_id, day_of_week)
 );
 
