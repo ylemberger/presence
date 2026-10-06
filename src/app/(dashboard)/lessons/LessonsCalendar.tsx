@@ -33,6 +33,7 @@ export type LessonTemplateCard = Lesson & {
   rangeName: string;
   studentCount: number;
   subjectParentName?: string;
+  attendanceLocked?: boolean;
 };
 
 interface OccurrenceRow {
@@ -465,16 +466,22 @@ export function LessonsCalendar({
                         </p>
                       </div>
                       <div className="flex shrink-0 flex-col items-stretch gap-1">
-                        <Link
-                          href={`/lessons?${new URLSearchParams({
-                            ...(monthQuery ? Object.fromEntries(new URLSearchParams(monthQuery)) : {}),
-                            edit: l.id,
-                          }).toString()}`}
-                          className="inline-flex items-center justify-center gap-1 rounded-lg border border-outline-variant bg-surface-container-lowest px-3 py-1.5 font-semibold text-caption text-primary hover:bg-surface-container-low"
-                        >
-                          <Icon name="edit" className="text-[16px]" />
-                          עריכה
-                        </Link>
+                        {l.attendanceLocked ? (
+                          <p className="max-w-[9rem] text-center font-caption text-caption text-on-surface-variant">
+                            לא ניתן לערוך — כבר נרשמה נוכחות
+                          </p>
+                        ) : (
+                          <Link
+                            href={`/lessons?${new URLSearchParams({
+                              ...(monthQuery ? Object.fromEntries(new URLSearchParams(monthQuery)) : {}),
+                              edit: l.id,
+                            }).toString()}`}
+                            className="inline-flex items-center justify-center gap-1 rounded-lg border border-outline-variant bg-surface-container-lowest px-3 py-1.5 font-semibold text-caption text-primary hover:bg-surface-container-low"
+                          >
+                            <Icon name="edit" className="text-[16px]" />
+                            עריכה
+                          </Link>
+                        )}
                         <DeleteButton
                           label="מחק שיעור"
                           confirmMessage="יימחקו השיעור, שיבוצי התלמידות לשיעור, המופעים והנוכחות שלהם. התלמידות עצמן לא יימחקו. להמשיך?"

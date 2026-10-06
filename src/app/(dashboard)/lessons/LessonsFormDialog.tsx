@@ -12,12 +12,14 @@ interface LessonsFormDialogProps extends LessonsFormProps {
   startOpen?: boolean;
   noTeachers?: boolean;
   editNotFound?: boolean;
+  editLocked?: boolean;
 }
 
 export function LessonsFormDialog({
   startOpen = false,
   noTeachers = false,
   editNotFound = false,
+  editLocked = false,
   cancelHref,
   initial,
   ...formProps
@@ -50,7 +52,9 @@ export function LessonsFormDialog({
       title={editing ? "עריכת שיעור" : "יצירת שיעור חדש"}
       description={
         editing
-          ? "כל נתוני השיעור נטענים לעריכה. שינוי קהל יעד מעדכן שיוכי תלמידות רק אם עדיין לא נרשמה נוכחות לשיעור."
+          ? editLocked
+            ? "לשיעור הזה כבר נרשמה נוכחות, ולכן אי אפשר לשנות אותו."
+            : "כל נתוני השיעור נטענים לעריכה. השמירה מעדכנת מופעים ושיוכי תלמידות, כל עוד עדיין אין נוכחות."
           : "יצירת שיעור פותחת אוטומטית את המופעים בטווח שנבחר. ימי חופשה לא נכללים."
       }
       onClose={close}
@@ -68,6 +72,10 @@ export function LessonsFormDialog({
       {editNotFound ? (
         <p className="rounded-lg bg-error-container/60 px-4 py-3 font-body-md text-body-md text-on-error-container">
           השיעור לעריכה לא נמצא.
+        </p>
+      ) : editLocked ? (
+        <p className="rounded-lg bg-surface-container-low px-4 py-3 font-body-md text-body-md text-on-surface">
+          לא ניתן לערוך את השיעור כי כבר התחילו למלא לו נוכחות. הנוכחות, המופעים ושיוכי התלמידות נשארים כמו שהם.
         </p>
       ) : (
         <LessonsForm

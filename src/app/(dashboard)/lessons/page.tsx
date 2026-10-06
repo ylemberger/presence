@@ -37,6 +37,11 @@ import {
   fetchTeacherSourceRecords,
   groupSourceRowsByTeacher,
 } from "@/lib/teachers/source-records";
+import {
+  representativeTeacherId,
+  teacherIdsSharingName,
+  uniqueTeachersByName,
+} from "@/lib/teachers/name-group";
 import type { LessonTemplateCard } from "./LessonsCalendar";
 import type { LessonFormTeacher } from "./LessonsForm";
 
@@ -168,7 +173,13 @@ export default async function LessonsPage({ searchParams }: Props) {
     }
     if (searchParams.teacherId) {
       const assignment = one<{ teacher_id: string }>(l.teacher_teaching_assignments);
-      if (assignment?.teacher_id !== searchParams.teacherId) return false;
+      const matchingTeacherIds = teacherIdsSharingName(
+        teachers.data ?? [],
+        searchParams.teacherId
+      );
+      if (!assignment?.teacher_id || !matchingTeacherIds.has(assignment.teacher_id)) {
+        return false;
+      }
     }
     return true;
   });
@@ -249,6 +260,18 @@ export default async function LessonsPage({ searchParams }: Props) {
       .filter((v): v is readonly [string, { id: string; full_name: string }] => Boolean(v))
   ).values()].sort((a, b) => a.full_name.localeCompare(b.full_name, "he"));
 
+  const lessonsWithAttendance = new Set<string>();
+  const yearLessonIds = allLessons.map((l) => l.id);
+  if (yearLessonIds.length > 0) {
+    const { data: markedOccurrences } = await supabase
+      .from("lesson_occurrences")
+      .select("lesson_id, attendance!inner(id)")
+      .in("lesson_id", yearLessonIds);
+    for (const row of markedOccurrences ?? []) {
+      if (row.lesson_id) lessonsWithAttendance.add(row.lesson_id);
+    }
+  }
+
   const lessonCards: LessonTemplateCard[] = filteredLessons.map((l) => {
     const assignment = one<{ teacher_id: string; teachers?: unknown }>(l.teacher_teaching_assignments);
     const teacherName = one<{ full_name: string }>(assignment?.teachers)?.full_name ?? "";
@@ -288,6 +311,7 @@ export default async function LessonsPage({ searchParams }: Props) {
         .join(" · "),
       rangeName: rangeById.get(l.activity_range_id) ?? "",
       studentCount: studentCountByLesson.get(l.id) ?? 0,
+      attendanceLocked: lessonsWithAttendance.has(l.id),
     };
   });
 
@@ -467,6 +491,7 @@ export default async function LessonsPage({ searchParams }: Props) {
             startOpen={Boolean(searchParams.edit)}
             noTeachers={formProps.teachers.length === 0}
             editNotFound={Boolean(searchParams.edit && !editingDraft)}
+            editLocked={Boolean(editingLesson && lessonsWithAttendance.has(editingLesson.id))}
             {...formProps}
             initial={editingDraft}
             cancelHref={cancelHref}
@@ -478,7 +503,7 @@ export default async function LessonsPage({ searchParams }: Props) {
         classes={(classes.data ?? []).map((c) => ({ id: c.id, name: c.name }))}
         tracks={(tracks.data ?? []).map((t) => ({ id: t.id, name: t.name }))}
         specializations={(specializations.data ?? []).map((s) => ({ id: s.id, name: s.name }))}
-        teachers={(teachers.data ?? []).map((t) => ({ id: t.id, name: t.full_name }))}
+        teachers={uniqueTeachersByName(teachers.data ?? [])}
         subjects={subjects}
         monthFrom={from}
         monthTo={to}
@@ -486,7 +511,7 @@ export default async function LessonsPage({ searchParams }: Props) {
           classId: searchParams.classId,
           trackId: searchParams.trackId,
           specializationId: searchParams.specializationId,
-          teacherId: searchParams.teacherId,
+          teacherId: representativeTeacherId(teachers.data ?? [], searchParams.teacherId),
           subject: searchParams.subject,
         }}
       />
