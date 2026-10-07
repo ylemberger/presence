@@ -6,11 +6,15 @@ import { syncTeachersAction } from "../actions";
 import { Icon } from "@/components/ui/Icon";
 import { Button } from "@/components/ui/Button";
 
+import { useAccess } from "@/components/auth/AccessProvider";
+
 export function TeachersForms() {
+  const { canWrite } = useAccess();
   const router = useRouter();
   const [error, setError] = useState<string | null>(null);
   const [summary, setSummary] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  if (!canWrite) return null;
 
   async function handleSync() {
     setError(null);

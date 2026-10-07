@@ -20,6 +20,8 @@ import {
   updateHolidayPeriodAction,
 } from "../actions";
 
+import { useAccess } from "@/components/auth/AccessProvider";
+
 export function HolidayCalendar({
   yearId,
   periods,
@@ -27,6 +29,7 @@ export function HolidayCalendar({
   yearId: string;
   periods: HolidayPeriod[];
 }) {
+  const { canWrite } = useAccess();
   const router = useRouter();
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
@@ -96,6 +99,8 @@ export function HolidayCalendar({
           חודש עברי שלם בכל פעם. בחרי סוג, ואז לחצי על ימים בלוח כדי לצבוע. אפשר גם להוסיף
           טווח למטה. מגדירים בתחילת השנה — ואפשר לתקן גם באמצע.
         </p>
+        {canWrite ? (
+        <>
         <div className="mb-4 flex flex-wrap gap-2">
           <button
             type="button"
@@ -132,10 +137,12 @@ export function HolidayCalendar({
             onChange={(e) => setPaintName(e.target.value)}
           />
         </div>
+        </>
+        ) : null}
         <HebrewMonthCalendar
           holidayDates={vacation}
           cancelledDates={cancelled}
-          onSelectDate={handleDayClick}
+          onSelectDate={canWrite ? handleDayClick : undefined}
         />
         {loading && (
           <p className="mt-3 font-caption text-caption text-on-surface-variant">שומר…</p>
@@ -148,6 +155,7 @@ export function HolidayCalendar({
       </div>
 
       <div className="flex flex-col gap-gutter xl:col-span-5">
+        {canWrite ? (
         <form key={formEpoch} onSubmit={handleCreate} className="flex flex-col gap-3 p-6">
           <p className="font-label-md text-label-md text-primary">הוספת טווח</p>
           <Input label="שם" name="name" placeholder={HOLIDAY_KIND_LABELS[paintKind]} />
@@ -161,6 +169,7 @@ export function HolidayCalendar({
             {loading ? "שומר..." : `הוספת ${HOLIDAY_KIND_LABELS[paintKind]}`}
           </Button>
         </form>
+        ) : null}
 
         <div className="overflow-x-auto border-t border-outline-variant/30">
           <table className="w-full text-body-md">
@@ -228,6 +237,7 @@ export function HolidayCalendar({
                           ({formatDatePair(period.end_date).gregorian})
                         </span>
                       </td>
+                      {canWrite ? (
                       <td className="px-4 py-3 text-right">
                         <div className="flex items-center justify-end gap-2">
                           <Button
@@ -241,6 +251,7 @@ export function HolidayCalendar({
                           <DeleteButton onDelete={() => deleteHolidayPeriodAction(period.id)} />
                         </div>
                       </td>
+                      ) : null}
                     </tr>
                   )
                 )

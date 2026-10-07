@@ -1,18 +1,17 @@
 let cachedAllowedEmails: Set<string> | null = null;
-let cachedRestrictedViewerEmails: Set<string> | null = null;
-let cachedFullViewerEmails: Set<string> | null = null;
+let cachedViewerEmails: Set<string> | null = null;
+let cachedReadAllEmails: Set<string> | null = null;
 
-/** View students and teachers lists only. No student card, no writes. */
-const BUILTIN_RESTRICTED_VIEWER_EMAILS = [
+/** List-only: students and teachers lists. No student card, no writes. */
+const BUILTIN_VIEWER_EMAILS = [
   "sara.m@bybs.org.il",
   "shaindi.s@bybs.org.il",
   "h.babad@bybs.org.il",
   "machshev@bybs.org.il",
-  "ester.r@bybs.org.il",
 ];
 
-/** View every page. No writes. */
-const BUILTIN_FULL_VIEWER_EMAILS = ["zipora.e@bybs.org.il"];
+/** All pages, including student cards. No writes. Wins over ALLOWED_LOGIN_EMAILS. */
+const BUILTIN_READ_ALL_EMAILS = ["zipora.e@bybs.org.il", "sby7935@gmail.com"];
 
 function parseEmailList(raw: string): string[] {
   return raw
@@ -27,50 +26,50 @@ function getAllowedLoginEmails(): Set<string> {
   return cachedAllowedEmails;
 }
 
-function getRestrictedViewerEmails(): Set<string> {
-  if (cachedRestrictedViewerEmails) return cachedRestrictedViewerEmails;
-  cachedRestrictedViewerEmails = new Set([
-    ...BUILTIN_RESTRICTED_VIEWER_EMAILS,
+function getViewerEmails(): Set<string> {
+  if (cachedViewerEmails) return cachedViewerEmails;
+  cachedViewerEmails = new Set([
+    ...BUILTIN_VIEWER_EMAILS,
     ...parseEmailList(process.env.VIEWER_LOGIN_EMAILS ?? ""),
   ]);
-  return cachedRestrictedViewerEmails;
+  return cachedViewerEmails;
 }
 
-function getFullViewerEmails(): Set<string> {
-  if (cachedFullViewerEmails) return cachedFullViewerEmails;
-  cachedFullViewerEmails = new Set([
-    ...BUILTIN_FULL_VIEWER_EMAILS,
-    ...parseEmailList(process.env.FULL_VIEWER_LOGIN_EMAILS ?? ""),
+function getReadAllEmails(): Set<string> {
+  if (cachedReadAllEmails) return cachedReadAllEmails;
+  cachedReadAllEmails = new Set([
+    ...BUILTIN_READ_ALL_EMAILS,
+    ...parseEmailList(process.env.READ_ALL_LOGIN_EMAILS ?? ""),
   ]);
-  return cachedFullViewerEmails;
+  return cachedReadAllEmails;
 }
 
-export function isRestrictedViewerEmail(email: string | null | undefined): boolean {
-  if (!email) return false;
-  return getRestrictedViewerEmails().has(email.trim().toLowerCase());
-}
-
-export function isFullViewerEmail(email: string | null | undefined): boolean {
-  if (!email) return false;
-  return getFullViewerEmails().has(email.trim().toLowerCase());
-}
-
-/** Any view-only account: cannot write. */
 export function isViewerEmail(email: string | null | undefined): boolean {
-  return isRestrictedViewerEmail(email) || isFullViewerEmail(email);
+  if (!email) return false;
+  return getViewerEmails().has(email.trim().toLowerCase());
+}
+
+export function isReadOnlyAllEmail(email: string | null | undefined): boolean {
+  if (!email) return false;
+  return getReadAllEmails().has(email.trim().toLowerCase());
+}
+
+/** Cannot create, edit, sync, or change the active year. */
+export function cannotWriteEmail(email: string | null | undefined): boolean {
+  return isViewerEmail(email) || isReadOnlyAllEmail(email);
 }
 
 /** Full editors from ALLOWED_LOGIN_EMAILS, plus view-only accounts. */
 export function isAllowedLoginEmail(email: string | null | undefined): boolean {
   if (!email) return false;
   const normalized = email.trim().toLowerCase();
-  if (isViewerEmail(normalized)) return true;
+  if (getViewerEmails().has(normalized) || getReadAllEmails().has(normalized)) return true;
   const allowed = getAllowedLoginEmails();
   if (allowed.size === 0) return false;
   return allowed.has(normalized);
 }
 
-/** Pages a list-only account may open. Student cards stay closed. A teacher card is allowed. */
+/** Pages a view-only account may open. Student cards stay closed. A teacher card is allowed. */
 export function viewerMayOpenPath(pathname: string): boolean {
   if (pathname === "/students" || pathname === "/teachers") return true;
   return /^\/teachers\/[^/]+$/.test(pathname);

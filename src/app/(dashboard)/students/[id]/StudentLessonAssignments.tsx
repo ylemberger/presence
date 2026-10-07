@@ -32,6 +32,8 @@ interface AssignmentRow {
   end_date: string | null;
 }
 
+import { useAccess } from "@/components/auth/AccessProvider";
+
 export function StudentLessonAssignments({
   studentId,
   lessons,
@@ -41,6 +43,7 @@ export function StudentLessonAssignments({
   lessons: LessonOption[];
   assignments: AssignmentRow[];
 }) {
+  const { canWrite } = useAccess();
   const router = useRouter();
   const [error, setError] = useState<string | null>(null);
   const [mismatchWarning, setMismatchWarning] = useState<string | null>(null);
@@ -102,10 +105,13 @@ export function StudentLessonAssignments({
 
   return (
     <div className="flex flex-col gap-4">
+      {canWrite ? (
       <p className="font-caption text-caption text-on-surface-variant">
         אפשר לשייך לשיעור ספציפי, ואפשר גם להסיר שיוך לשיעור ספציפי. הסרה לא מוחקת נוכחות מהעבר, והשיוך
         האוטומטי לא יחזיר את התלמידה לשיעור הזה.
       </p>
+      ) : null}
+      {canWrite ? (
       <form onSubmit={handleSubmit} className="flex flex-col gap-3">
         <Combobox
           label="הוספת שיוך לשיעור"
@@ -123,8 +129,9 @@ export function StudentLessonAssignments({
           שיוך לשיעור
         </Button>
       </form>
+      ) : null}
 
-      {openAssignments.length > 0 && (
+      {canWrite && openAssignments.length > 0 && (
         <form
           onSubmit={handleRemove}
           className="flex flex-col gap-3 rounded-lg border border-outline-variant/40 bg-surface-container-low p-3"

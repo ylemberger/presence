@@ -3,6 +3,7 @@
 import { useLayoutEffect, useState } from "react";
 import { createPortal } from "react-dom";
 import { useRouter } from "next/navigation";
+import { useAccess } from "@/components/auth/AccessProvider";
 import { Button } from "@/components/ui/Button";
 import { Icon } from "@/components/ui/Icon";
 import { Modal } from "@/components/ui/Modal";
@@ -24,6 +25,7 @@ export function LessonsFormDialog({
   initial,
   ...formProps
 }: LessonsFormDialogProps) {
+  const { canWrite } = useAccess();
   const router = useRouter();
   const editToken = initial?.id ?? (startOpen ? "missing" : "create");
   const [open, setOpen] = useState(startOpen);
@@ -38,6 +40,8 @@ export function LessonsFormDialog({
   useLayoutEffect(() => {
     if (startOpen) setOpen(true);
   }, [startOpen, editToken]);
+
+  if (!canWrite) return null;
 
   function close() {
     setOpen(false);

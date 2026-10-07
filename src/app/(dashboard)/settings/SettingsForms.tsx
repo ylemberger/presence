@@ -8,6 +8,7 @@ import { HebrewDateRangePicker } from "@/components/ui/HebrewDateRangePicker";
 import { RANGE_TYPE_LABELS } from "@/lib/constants";
 import { FIXED_GRADE_NAMES } from "@/lib/years/grades";
 import type { Grade } from "@/types/database";
+import { useAccess } from "@/components/auth/AccessProvider";
 import { Icon } from "@/components/ui/Icon";
 
 interface SettingsFormsProps {
@@ -18,9 +19,11 @@ interface SettingsFormsProps {
 }
 
 export function SettingsForms({ type, yearId, grades, createAction }: SettingsFormsProps) {
+  const { canWrite } = useAccess();
   const router = useRouter();
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  if (!canWrite) return null;
 
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();

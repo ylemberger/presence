@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { useAccess } from "@/components/auth/AccessProvider";
 import { Button } from "@/components/ui/Button";
 import { Icon } from "@/components/ui/Icon";
 import { updateStudentPersonalNoteAction } from "../../actions";
@@ -16,6 +17,7 @@ export function StudentPersonalNote({
   /** Compact editor under the name in the header */
   compact?: boolean;
 }) {
+  const { canWrite } = useAccess();
   const router = useRouter();
   const [error, setError] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
@@ -56,6 +58,7 @@ export function StudentPersonalNote({
         ) : (
           <p className="font-caption text-caption text-on-surface-variant">אין הערה אישית</p>
         )}
+        {canWrite ? (
         <button
           type="button"
           onClick={() => setEditing(true)}
@@ -63,7 +66,16 @@ export function StudentPersonalNote({
         >
           {note ? "עריכת הערה" : "הוספת הערה אישית"}
         </button>
+        ) : null}
       </div>
+    );
+  }
+
+  if (!canWrite) {
+    return note ? (
+      <p className="font-body-md text-body-md text-on-surface">{note}</p>
+    ) : (
+      <p className="font-caption text-caption text-on-surface-variant">אין הערה אישית</p>
     );
   }
 

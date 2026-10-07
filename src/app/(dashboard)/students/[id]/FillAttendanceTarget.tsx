@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/Button";
 import { Combobox } from "@/components/ui/Combobox";
 import { fillAttendanceToTargetAction } from "../../actions";
 import { formatLessonOptionLabel } from "@/lib/lessons/hours";
+import { useAccess } from "@/components/auth/AccessProvider";
 import { Icon } from "@/components/ui/Icon";
 
 interface LessonOption {
@@ -30,6 +31,7 @@ export function FillAttendanceTarget({
   lessons: LessonOption[];
   assignments: AssignmentRow[];
 }) {
+  const { canWrite } = useAccess();
   const router = useRouter();
   const [lessonId, setLessonId] = useState("");
   const [pending, startTransition] = useTransition();
@@ -85,6 +87,8 @@ export function FillAttendanceTarget({
       router.refresh();
     });
   }
+
+  if (!canWrite) return null;
 
   if (options.length === 0) {
     return (

@@ -1,5 +1,5 @@
 import { PageHeader } from "@/components/ui/PageHeader";
-import { isViewerEmail } from "@/lib/auth/allowed-emails";
+import { cannotWriteEmail, isViewerEmail } from "@/lib/auth/allowed-emails";
 import { createClient, requireAuthenticatedUser } from "@/lib/supabase/server";
 import { getActiveAcademicYear, getAllAcademicYears } from "@/lib/utils";
 import { filterFixedGrades } from "@/lib/years/grades";
@@ -151,19 +151,22 @@ export default async function StudentsPage() {
   const previousYear = yearIdx >= 0 ? allYears[yearIdx + 1] : allYears[1];
 
   const { user } = await requireAuthenticatedUser();
-  const viewOnly = isViewerEmail(user.email);
+  const listOnly = isViewerEmail(user.email);
+  const canWrite = !cannotWriteEmail(user.email);
 
   return (
     <div>
       <PageHeader
         title="תלמידות"
         description={
-          viewOnly
+          listOnly
             ? "צפייה ברשימת התלמידות. אין פתיחת כרטיס ואין עריכה."
-            : "כרטסת קבועה עם מחזור. שיבוץ (שכבה/כיתה/מסלול) לפי השנה שנבחרה למעלה. בארכיון רואים את מה שהיה באותה שנה."
+            : canWrite
+              ? "כרטסת קבועה עם מחזור. שיבוץ (שכבה/כיתה/מסלול) לפי השנה שנבחרה למעלה. בארכיון רואים את מה שהיה באותה שנה."
+              : "צפייה בתלמידות ובכרטיסים. אין הוספה ואין עריכה."
         }
       />
-      {!viewOnly && activeUnplaced > 0 && previousYear && (
+      {canWrite && activeUnplaced > 0 && previousYear && (
         <div className="mb-4 rounded-xl border border-primary/20 bg-secondary-container/40 p-4">
           <p className="mb-2 text-body-md font-medium text-on-surface">
             {activeUnplaced} תלמידות פעילות בלי שיבוץ בשנה הנוכחית
@@ -174,7 +177,12 @@ export default async function StudentsPage() {
           />
         </div>
       )}
-      <StudentsDirectory students={rows} yearOptions={yearOptions} viewOnly={viewOnly} />
+      <StudentsDirectory
+        students={rows}
+        yearOptions={yearOptions}
+        viewOnly={listOnly}
+        canWrite={canWrite}
+      />
     </div>
   );
 }

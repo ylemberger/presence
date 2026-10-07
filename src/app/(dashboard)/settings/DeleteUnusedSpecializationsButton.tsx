@@ -5,10 +5,14 @@ import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/Button";
 import { deleteUnusedSpecializationsAction } from "../actions";
 
+import { useAccess } from "@/components/auth/AccessProvider";
+
 export function DeleteUnusedSpecializationsButton({ yearId }: { yearId: string }) {
+  const { canWrite } = useAccess();
   const router = useRouter();
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
+  if (!canWrite) return null;
 
   async function handleClick() {
     if (

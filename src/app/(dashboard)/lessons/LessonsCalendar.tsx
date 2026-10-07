@@ -16,6 +16,7 @@ import {
 } from "@/lib/dates/hebrew";
 import { BILLING_TYPE_LABELS, DAY_OF_WEEK_LABELS, OCCURRENCE_STATUS_LABELS } from "@/lib/constants";
 import { formatLessonHours } from "@/lib/lessons/hours";
+import { useAccess } from "@/components/auth/AccessProvider";
 import { cn } from "@/lib/cn";
 import { completeOccurrenceAction, deleteLessonAction, restoreOccurrenceAction } from "../actions";
 import type { Lesson } from "@/types/database";
@@ -81,6 +82,7 @@ export function LessonsCalendar({
   students = [],
   editingId,
 }: LessonsCalendarProps) {
+  const { canWrite } = useAccess();
   const router = useRouter();
   const seed = hebrewMonthFromIso(initialMonthIso || todayIso());
   const [cursor, setCursor] = useState(seed);
@@ -465,6 +467,7 @@ export function LessonsCalendar({
                             : `${monthOccCount} מופעים בחודש`}
                         </p>
                       </div>
+                      {canWrite ? (
                       <div className="flex shrink-0 flex-col items-stretch gap-1">
                         {l.attendanceLocked ? (
                           <p className="max-w-[9rem] text-center font-caption text-caption text-on-surface-variant">
@@ -497,6 +500,7 @@ export function LessonsCalendar({
                           }}
                         />
                       </div>
+                      ) : null}
                     </div>
                     {students.length > 0 && (
                       <div className="mt-2">

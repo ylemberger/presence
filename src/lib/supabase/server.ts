@@ -1,7 +1,7 @@
 import { createServerClient } from "@supabase/ssr";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
-import { isAllowedLoginEmail, isViewerEmail } from "@/lib/auth/allowed-emails";
+import { cannotWriteEmail, isAllowedLoginEmail } from "@/lib/auth/allowed-emails";
 
 export async function createClient() {
   const cookieStore = await cookies();
@@ -55,7 +55,7 @@ export async function createActionClient(): Promise<
     return { error: "אין הרשאה. התחברי מחדש." };
   }
 
-  if (isViewerEmail(user.email)) {
+  if (cannotWriteEmail(user.email)) {
     return { error: "לחשבון הזה יש הרשאת צפייה בלבד." };
   }
 

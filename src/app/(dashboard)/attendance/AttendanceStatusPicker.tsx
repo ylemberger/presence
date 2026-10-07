@@ -3,6 +3,7 @@
 import { ATTENDANCE_STATUS_LABELS } from "@/lib/constants";
 import { cn } from "@/lib/cn";
 import type { AttendanceStatus } from "@/types/database";
+import { useAccess } from "@/components/auth/AccessProvider";
 import { Icon } from "@/components/ui/Icon";
 
 const STATUS_ORDER: AttendanceStatus[] = ["present", "late", "absent"];
@@ -45,11 +46,13 @@ export function AttendanceStatusPicker({
   onPick,
   compact,
 }: AttendanceStatusPickerProps) {
+  const { canWrite } = useAccess();
+  const locked = disabled || !canWrite;
   return (
     <div
       className={cn(
         "inline-flex w-full min-w-[11rem] max-w-md items-center justify-center gap-2",
-        disabled && "pointer-events-none opacity-50"
+        locked && "pointer-events-none opacity-50"
       )}
       role="group"
       aria-label="סטטוס נוכחות"
@@ -64,7 +67,7 @@ export function AttendanceStatusPicker({
           <button
             key={option}
             type="button"
-            disabled={disabled || isSaving}
+            disabled={locked || isSaving}
             onClick={() => onPick(option)}
             className={cn(
               "relative flex flex-1 items-center justify-center gap-1.5 rounded-lg border font-label-md text-label-md transition-all duration-150 active:scale-95",

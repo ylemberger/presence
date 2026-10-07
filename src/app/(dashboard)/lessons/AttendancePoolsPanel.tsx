@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { Modal } from "@/components/ui/Modal";
 import { MultiSelect } from "@/components/ui/MultiSelect";
+import { useAccess } from "@/components/auth/AccessProvider";
 import { Section } from "@/components/ui/Section";
 import { Icon } from "@/components/ui/Icon";
 import {
@@ -36,6 +37,7 @@ export function AttendancePoolsPanel({
   pools: PoolView[];
   lessons: PoolLessonOption[];
 }) {
+  const { canWrite } = useAccess();
   const router = useRouter();
   const [open, setOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -112,12 +114,14 @@ export function AttendancePoolsPanel({
       title="קיבוץ נוכחות משותפת"
       subtitle="כל שיעור נשאר עם סימון משלו. כאן אפשר לצרף ידנית כמה שיעורים של אותה קבוצה לחישוב אחוז אחד."
     >
+      {canWrite ? (
       <div className="mb-3 flex flex-wrap items-center gap-2">
         <Button type="button" onClick={openCreate}>
           <Icon name="add" className="text-[18px]" />
           קיבוץ שיעורים לאותה נוכחות
         </Button>
       </div>
+      ) : null}
 
       {pools.length === 0 ? (
         <p className="font-body-sm text-body-sm text-on-surface-variant">
@@ -138,6 +142,7 @@ export function AttendancePoolsPanel({
                     .join(" · ")}
                 </p>
               </div>
+              {canWrite ? (
               <div className="flex gap-2">
                 <Button type="button" size="sm" variant="secondary" onClick={() => openEdit(pool)}>
                   עריכה
@@ -146,6 +151,7 @@ export function AttendancePoolsPanel({
                   פירוק
                 </Button>
               </div>
+              ) : null}
             </li>
           ))}
         </ul>

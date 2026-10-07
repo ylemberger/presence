@@ -105,10 +105,12 @@ export function StudentsDirectory({
   students,
   yearOptions,
   viewOnly = false,
+  canWrite = true,
 }: {
   students: StudentRow[];
   yearOptions: YearOptions | null;
   viewOnly?: boolean;
+  canWrite?: boolean;
 }) {
   const [query, setQuery] = useState("");
   const [gradeId, setGradeId] = useState("");
@@ -299,7 +301,7 @@ export function StudentsDirectory({
                 </Link>
               </p>
             )}
-            {viewOnly ? null : (
+            {!canWrite ? null : (
             <div className="ms-auto flex flex-wrap items-center gap-2">
               <StudentsImport
                 disabledReason={
@@ -432,7 +434,7 @@ export function StudentsDirectory({
         </div>
       )}
 
-      {!viewOnly && yearOptions && (
+      {canWrite && yearOptions && (
         <Modal
           open={modalOpen}
           onClose={() => setModalOpen(false)}

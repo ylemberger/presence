@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { useAccess } from "@/components/auth/AccessProvider";
 import { Button } from "@/components/ui/Button";
 import { Input, Select } from "@/components/ui/Input";
 import { HebrewDateRangePicker } from "@/components/ui/HebrewDateRangePicker";
@@ -40,6 +41,7 @@ export function EditableNameRow({
   onBuildFormData,
   nameField = "input",
 }: EditableNameRowProps) {
+  const { canWrite } = useAccess();
   const router = useRouter();
   const [editing, setEditing] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -79,6 +81,7 @@ export function EditableNameRow({
           </td>
         )}
         <td className="px-4 py-3 text-right">
+          {canWrite ? (
           <div className="flex items-center justify-end gap-2">
             <Button
               size="sm"
@@ -90,6 +93,7 @@ export function EditableNameRow({
             </Button>
             <DeleteButton onDelete={() => deleteAction(id)} />
           </div>
+          ) : null}
           {error && (
             <p className="mt-1 text-caption text-error">{error}</p>
           )}
@@ -195,6 +199,7 @@ export function EditableActivityRangeRow({
   updateAction: UpdateAction;
   deleteAction: (id: string) => Promise<{ error?: string }>;
 }) {
+  const { canWrite } = useAccess();
   const router = useRouter();
   const [editing, setEditing] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -234,6 +239,7 @@ export function EditableActivityRangeRow({
           {formatDate(endDate)}
         </td>
         <td className="px-4 py-3 text-right">
+          {canWrite ? (
           <div className="flex items-center justify-end gap-2">
             <Button
               size="sm"
@@ -245,6 +251,7 @@ export function EditableActivityRangeRow({
             </Button>
             <DeleteButton onDelete={() => deleteAction(id)} />
           </div>
+          ) : null}
         </td>
       </tr>
     );

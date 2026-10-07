@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/Button";
 import { Combobox } from "@/components/ui/Combobox";
 import { Input, Select } from "@/components/ui/Input";
 import { upsertMakeupExamAction, updateMakeupExamAction } from "../actions";
+import { useAccess } from "@/components/auth/AccessProvider";
 import { Icon } from "@/components/ui/Icon";
 
 interface Props {
@@ -32,9 +33,11 @@ export function MakeupForms({
   editDefaults,
   compact,
 }: Props) {
+  const { canWrite } = useAccess();
   const router = useRouter();
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  if (!canWrite) return null;
 
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();

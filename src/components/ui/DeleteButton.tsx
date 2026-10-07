@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { useAccess } from "@/components/auth/AccessProvider";
 import { Button } from "@/components/ui/Button";
 
 interface DeleteButtonProps {
@@ -15,9 +16,11 @@ export function DeleteButton({
   label = "מחק",
   confirmMessage = "האם את בטוחה שברצונך למחוק?",
 }: DeleteButtonProps) {
+  const { canWrite } = useAccess();
   const router = useRouter();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  if (!canWrite) return null;
 
   async function handleDelete() {
     if (!confirm(confirmMessage)) return;

@@ -6,6 +6,8 @@ import { Button } from "@/components/ui/Button";
 import { Icon } from "@/components/ui/Icon";
 import { repairMissingPromotionsAction } from "@/app/(dashboard)/actions";
 
+import { useAccess } from "@/components/auth/AccessProvider";
+
 export function RepairPromotionsButton({
   missingCount,
   previousYearName,
@@ -13,10 +15,12 @@ export function RepairPromotionsButton({
   missingCount?: number;
   previousYearName?: string;
 }) {
+  const { canWrite } = useAccess();
   const router = useRouter();
   const [pending, startTransition] = useTransition();
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  if (!canWrite) return null;
 
   function run() {
     setMessage(null);

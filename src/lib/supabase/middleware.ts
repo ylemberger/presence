@@ -1,10 +1,6 @@
 import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
-import {
-  isAllowedLoginEmail,
-  isRestrictedViewerEmail,
-  viewerMayOpenPath,
-} from "@/lib/auth/allowed-emails";
+import { isAllowedLoginEmail, isViewerEmail, viewerMayOpenPath } from "@/lib/auth/allowed-emails";
 
 export async function updateSession(request: NextRequest) {
   let supabaseResponse = NextResponse.next({ request });
@@ -55,7 +51,7 @@ export async function updateSession(request: NextRequest) {
     return NextResponse.redirect(url);
   }
 
-  if (user && isRestrictedViewerEmail(user.email) && !isLoginPage && !isAuthCallback) {
+  if (user && isViewerEmail(user.email) && !isLoginPage && !isAuthCallback) {
     if (!viewerMayOpenPath(request.nextUrl.pathname)) {
       const url = request.nextUrl.clone();
       url.pathname = "/students";
@@ -66,7 +62,7 @@ export async function updateSession(request: NextRequest) {
 
   if (user && isLoginPage) {
     const url = request.nextUrl.clone();
-    url.pathname = isRestrictedViewerEmail(user.email) ? "/students" : "/";
+    url.pathname = isViewerEmail(user.email) ? "/students" : "/";
     return NextResponse.redirect(url);
   }
 

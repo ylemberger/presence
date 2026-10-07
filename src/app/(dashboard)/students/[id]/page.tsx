@@ -30,7 +30,8 @@ interface Props {
 
 export default async function StudentDetailPage({ params }: Props) {
   const { user } = await requireAuthenticatedUser();
-  if (isViewerEmail(user.email)) redirect("/students");
+  const listOnly = isViewerEmail(user.email);
+  if (listOnly) redirect("/students");
 
   const { id } = params;
   const supabase = await createClient();

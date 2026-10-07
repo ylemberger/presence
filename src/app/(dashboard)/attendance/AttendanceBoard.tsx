@@ -39,6 +39,7 @@ import { AttendanceBlankSheet } from "./AttendanceBlankSheet";
 import { AddOccurrenceDate } from "./AddOccurrenceDate";
 import { AttendanceGapModal, type GapItem } from "./AttendanceGapModal";
 import { HebrewDateInput } from "@/components/ui/HebrewDateInput";
+import { useAccess } from "@/components/auth/AccessProvider";
 import { Modal } from "@/components/ui/Modal";
 
 export type AttendanceMode = "single" | "group";
@@ -193,6 +194,7 @@ export function AttendanceBoard({
   pastGaps = [],
   lessonIdsWithNotes = [],
 }: Props) {
+  const { canWrite } = useAccess();
   const router = useRouter();
   const [draft, setDraft] = useState<Record<DraftKey, AttendanceStatus | null>>({});
   const [reasons, setReasons] = useState<Record<DraftKey, AbsenceReason | null>>({});
@@ -768,7 +770,10 @@ export function AttendanceBoard({
   }
 
   const canMark =
-    Boolean(activeOccurrenceId) && lessonStudents.length > 0 && !prevWeekBlocked;
+    canWrite &&
+    Boolean(activeOccurrenceId) &&
+    lessonStudents.length > 0 &&
+    !prevWeekBlocked;
   const markedInLesson = activeOccurrenceId
     ? Object.keys(draft).filter(
         (k) => k.endsWith(`::${activeOccurrenceId}`) && draft[k] !== null

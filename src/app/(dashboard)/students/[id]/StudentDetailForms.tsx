@@ -28,7 +28,10 @@ interface Props {
   yearData: YearData;
 }
 
+import { useAccess } from "@/components/auth/AccessProvider";
+
 export function StudentDetailForms({ studentId, yearData }: Props) {
+  const { canWrite } = useAccess();
   const router = useRouter();
   const [error, setError] = useState<string | null>(null);
   const [gradeId, setGradeId] = useState("");
@@ -75,6 +78,8 @@ export function StudentDetailForms({ studentId, yearData }: Props) {
       setError(err instanceof Error ? err.message : "העברה נכשלה");
     }
   }
+
+  if (!canWrite) return null;
 
   return (
     <div>

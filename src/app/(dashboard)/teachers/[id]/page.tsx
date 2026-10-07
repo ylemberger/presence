@@ -3,7 +3,7 @@ import Link from "next/link";
 import { StatusPill } from "@/components/ui/PageHeader";
 import { Section } from "@/components/ui/Section";
 import { Table, TableRow, TableCell } from "@/components/ui/Table";
-import { isViewerEmail } from "@/lib/auth/allowed-emails";
+import { cannotWriteEmail } from "@/lib/auth/allowed-emails";
 import { createClient, requireAuthenticatedUser } from "@/lib/supabase/server";
 import { getActiveAcademicYear } from "@/lib/utils";
 import { WeeklyTimetableGrid, type TimetableEntry } from "@/components/timetable/WeeklyTimetableGrid";
@@ -20,7 +20,7 @@ interface Props {
 
 export default async function TeacherDetailPage({ params }: Props) {
   const { user } = await requireAuthenticatedUser();
-  const viewOnly = isViewerEmail(user.email);
+  const viewOnly = cannotWriteEmail(user.email);
 
   const { id } = params;
   const supabase = await createClient();

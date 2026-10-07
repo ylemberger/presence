@@ -1,5 +1,5 @@
 import { PageHeader } from "@/components/ui/PageHeader";
-import { isViewerEmail } from "@/lib/auth/allowed-emails";
+import { cannotWriteEmail, isViewerEmail } from "@/lib/auth/allowed-emails";
 import { createClient, requireAuthenticatedUser } from "@/lib/supabase/server";
 import { getActiveAcademicYear } from "@/lib/utils";
 import { BILLING_TYPE_LABELS } from "@/lib/constants";
@@ -50,7 +50,8 @@ function sumMeetingLabels(labels: string[]): string {
 
 export default async function TeachersPage() {
   const { user } = await requireAuthenticatedUser();
-  const viewOnly = isViewerEmail(user.email);
+  const listOnly = isViewerEmail(user.email);
+  const canWrite = !cannotWriteEmail(user.email);
   const activeYear = await getActiveAcademicYear();
   const supabase = await createClient();
 
@@ -156,15 +157,17 @@ export default async function TeachersPage() {
       <PageHeader
         title="מורות"
         description={
-          viewOnly
+          listOnly
             ? "צפייה ברשימת המורות. כל מורה פעם אחת. סנכרון מהשכר זמין רק למי שמנהלת את המערכת."
-            : "מורות מגיעות ממערכת השכר, גם אם החוזה עדיין לא אושר. כל שם מופיע פעם אחת ברשימה."
+            : canWrite
+              ? "מורות מגיעות ממערכת השכר, גם אם החוזה עדיין לא אושר. כל שם מופיע פעם אחת ברשימה."
+              : "צפייה במורות ובכרטיס. אין סנכרון ואין עריכה."
         }
         size="display"
       />
 
       <div className="grid grid-cols-1 items-start gap-gutter lg:grid-cols-12">
-        {viewOnly ? null : (
+        {canWrite ? (
         <div className="lg:col-span-4 lg:row-span-2">
           <section className="rounded-xl border-t-4 border-secondary bg-surface-container-lowest p-stack_md shadow-tactile-md">
             <h3 className="mb-4 flex items-center gap-2 font-title-lg text-title-lg text-primary">
@@ -174,15 +177,15 @@ export default async function TeachersPage() {
             <TeachersForms />
           </section>
         </div>
-        )}
+        ) : null}
 
-        <div className={viewOnly ? "min-w-0 lg:col-span-12" : "min-w-0 lg:col-span-8"}>
-          <TeachersDirectory teachers={directoryRows} viewOnly={viewOnly} />
+        <div className={canWrite ? "min-w-0 lg:col-span-8" : "min-w-0 lg:col-span-12"}>
+          <TeachersDirectory teachers={directoryRows} viewOnly={!canWrite} />
         </div>
 
         {activeYear && (
-          <div className={viewOnly ? "min-w-0 lg:col-span-12" : "min-w-0 lg:col-span-8"}>
-            <TeachersLessons rows={lessonRows} viewOnly={viewOnly} />
+          <div className={canWrite ? "min-w-0 lg:col-span-8" : "min-w-0 lg:col-span-12"}>
+            <TeachersLessons rows={lessonRows} viewOnly={!canWrite} />
           </div>
         )}
       </div>

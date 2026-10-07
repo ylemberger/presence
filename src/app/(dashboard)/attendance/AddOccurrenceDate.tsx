@@ -4,13 +4,16 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/Button";
 import { HebrewDateInput } from "@/components/ui/HebrewDateInput";
+import { useAccess } from "@/components/auth/AccessProvider";
 import { createOccurrenceAction } from "../actions";
 
 export function AddOccurrenceDate({ lessonId }: { lessonId: string }) {
+  const { canWrite } = useAccess();
   const router = useRouter();
   const [open, setOpen] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  if (!canWrite) return null;
 
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();

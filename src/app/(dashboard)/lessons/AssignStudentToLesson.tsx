@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/Button";
 import { Combobox } from "@/components/ui/Combobox";
 import { HebrewDateInput } from "@/components/ui/HebrewDateInput";
 import { createStudentLessonAssignmentAction } from "../actions";
+import { useAccess } from "@/components/auth/AccessProvider";
 import { Icon } from "@/components/ui/Icon";
 
 export function AssignStudentToLesson({
@@ -17,12 +18,14 @@ export function AssignStudentToLesson({
   students: { id: string; full_name: string }[];
   defaultStartDate?: string;
 }) {
+  const { canWrite } = useAccess();
   const router = useRouter();
   const [open, setOpen] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [mismatchWarning, setMismatchWarning] = useState<string | null>(null);
   const [pendingForm, setPendingForm] = useState<FormData | null>(null);
   const [saving, setSaving] = useState(false);
+  if (!canWrite) return null;
 
   async function submit(fd: FormData, force: boolean) {
     fd.set("lesson_id", lessonId);

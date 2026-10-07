@@ -1,3 +1,5 @@
+import { cannotWriteEmail } from "@/lib/auth/allowed-emails";
+import { requireAuthenticatedUser } from "@/lib/supabase/server";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { Section } from "@/components/ui/Section";
 import { Tabs } from "@/components/ui/Tabs";
@@ -62,12 +64,14 @@ function SettingsTableHead({ columns }: { columns: string[] }) {
 }
 
 export default async function SettingsPage() {
+  const { user } = await requireAuthenticatedUser();
+  const canWrite = !cannotWriteEmail(user.email);
   const activeYear = await getActiveAcademicYear();
   const years = await getAllAcademicYears();
   const supabase = await createClient();
   const yearId = activeYear?.id;
 
-  if (yearId) {
+  if (yearId && canWrite) {
     await ensureFixedGrades(yearId);
   }
 

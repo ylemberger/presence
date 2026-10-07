@@ -5,7 +5,8 @@ import { NavigationProgress } from "@/components/layout/NavigationProgress";
 import { AttendanceReminderBanner } from "@/components/attendance/AttendanceReminderBanner";
 import { UserAvatar } from "@/components/layout/UserAvatar";
 import { requireAuthenticatedUser } from "@/lib/supabase/server";
-import { isRestrictedViewerEmail, isViewerEmail } from "@/lib/auth/allowed-emails";
+import { AccessProvider } from "@/components/auth/AccessProvider";
+import { cannotWriteEmail, isViewerEmail } from "@/lib/auth/allowed-emails";
 import { authUserProfile } from "@/lib/auth/user-profile";
 import { getActiveAcademicYear, getAllAcademicYears } from "@/lib/utils";
 import { getPendingAttendanceSummary, EMPTY_PENDING_SUMMARY } from "@/lib/attendance/pending";
@@ -18,8 +19,8 @@ export default async function DashboardLayout({
 }) {
   const { user } = await requireAuthenticatedUser();
   const profile = authUserProfile(user);
-  const viewOnly = isViewerEmail(user.email);
-  const listOnly = isRestrictedViewerEmail(user.email);
+  const listOnly = isViewerEmail(user.email);
+  const canWrite = !cannotWriteEmail(user.email);
 
   const [activeYear, years] = await Promise.all([
     getActiveAcademicYear(),
@@ -27,9 +28,9 @@ export default async function DashboardLayout({
   ]);
 
   const pending =
-    !viewOnly && activeYear
-      ? await getPendingAttendanceSummary(activeYear.id)
-      : EMPTY_PENDING_SUMMARY;
+    listOnly || !activeYear
+      ? EMPTY_PENDING_SUMMARY
+      : await getPendingAttendanceSummary(activeYear.id);
 
   return (
     <div className="flex min-h-screen">
@@ -38,7 +39,7 @@ export default async function DashboardLayout({
       </Suspense>
       <Sidebar
         activeYearName={activeYear?.name}
-        attendancePendingCount={viewOnly ? 0 : pending.pendingCount}
+        attendancePendingCount={listOnly ? 0 : pending.pendingCount}
         userEmail={profile.email}
         userName={profile.displayName}
         userAvatarUrl={profile.avatarUrl}
@@ -59,7 +60,7 @@ export default async function DashboardLayout({
             )}
           </div>
           <div className="flex items-center gap-3">
-            {viewOnly ? null : <AttendanceReminderBanner summary={pending} compact />}
+            {listOnly ? null : <AttendanceReminderBanner summary={pending} compact />}
             <button
               type="button"
               className="text-on-surface-variant transition-colors hover:text-secondary"
@@ -82,12 +83,14 @@ export default async function DashboardLayout({
               />
             </div>
             <div className="mx-2 hidden h-6 w-px bg-outline-variant md:block" />
-            {viewOnly ? null : <YearSelector years={years} activeYearId={activeYear?.id} />}
+            {canWrite ? <YearSelector years={years} activeYearId={activeYear?.id} /> : null}
           </div>
         </header>
         {/* Canvas */}
         <div className="mx-auto flex w-full max-w-canvas flex-1 flex-col gap-stack_lg p-container_padding print:max-w-none print:gap-4 print:p-0">
-          {children}
+          <AccessProvider canWrite={canWrite} listOnly={listOnly}>
+            {children}
+          </AccessProvider>
         </div>
       </main>
     </div>
