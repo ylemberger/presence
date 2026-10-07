@@ -1,5 +1,6 @@
 import { PageHeader } from "@/components/ui/PageHeader";
-import { createClient } from "@/lib/supabase/server";
+import { isViewerEmail } from "@/lib/auth/allowed-emails";
+import { createClient, requireAuthenticatedUser } from "@/lib/supabase/server";
 import { getActiveAcademicYear, getAllAcademicYears } from "@/lib/utils";
 import { filterFixedGrades } from "@/lib/years/grades";
 import { StudentsDirectory } from "./StudentsDirectory";
@@ -149,13 +150,20 @@ export default async function StudentsPage() {
   const yearIdx = allYears.findIndex((y) => y.id === activeYear?.id);
   const previousYear = yearIdx >= 0 ? allYears[yearIdx + 1] : allYears[1];
 
+  const { user } = await requireAuthenticatedUser();
+  const viewOnly = isViewerEmail(user.email);
+
   return (
     <div>
       <PageHeader
         title="תלמידות"
-        description="כרטסת קבועה עם מחזור. שיבוץ (שכבה/כיתה/מסלול) לפי השנה שנבחרה למעלה. בארכיון רואים את מה שהיה באותה שנה."
+        description={
+          viewOnly
+            ? "צפייה ברשימת התלמידות. אין פתיחת כרטיס ואין עריכה."
+            : "כרטסת קבועה עם מחזור. שיבוץ (שכבה/כיתה/מסלול) לפי השנה שנבחרה למעלה. בארכיון רואים את מה שהיה באותה שנה."
+        }
       />
-      {activeUnplaced > 0 && previousYear && (
+      {!viewOnly && activeUnplaced > 0 && previousYear && (
         <div className="mb-4 rounded-xl border border-primary/20 bg-secondary-container/40 p-4">
           <p className="mb-2 text-body-md font-medium text-on-surface">
             {activeUnplaced} תלמידות פעילות בלי שיבוץ בשנה הנוכחית
@@ -166,7 +174,7 @@ export default async function StudentsPage() {
           />
         </div>
       )}
-      <StudentsDirectory students={rows} yearOptions={yearOptions} />
+      <StudentsDirectory students={rows} yearOptions={yearOptions} viewOnly={viewOnly} />
     </div>
   );
 }

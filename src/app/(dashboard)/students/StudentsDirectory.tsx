@@ -40,6 +40,59 @@ interface StudentRow {
   isPsychology: boolean;
 }
 
+function StudentNameCell({
+  student: s,
+  viewOnly = false,
+}: {
+  student: StudentRow;
+  viewOnly?: boolean;
+}) {
+  return (
+    <>
+      <span
+        className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-primary text-caption font-bold text-white"
+        aria-hidden
+      >
+        {(s.first_name || s.full_name).slice(0, 1)}
+      </span>
+      <span className="min-w-0">
+        <span className="block break-words font-label-md text-label-md text-primary">
+          {s.first_name || s.full_name.split(" ")[0]} {s.last_name}
+          {s.mi ? (
+            <span className="ms-1 font-caption text-caption text-on-surface-variant">
+              {s.mi}
+            </span>
+          ) : null}
+        </span>
+        <span className="mt-0.5 flex flex-wrap gap-1">
+          {s.chetz_program && (
+            <span className="rounded-full bg-surface-container-high px-1.5 py-0 font-caption text-caption text-on-surface-variant">
+              חץ
+            </span>
+          )}
+          {s.isPsychology && (
+            <span className="rounded-full bg-surface-container-high px-1.5 py-0 font-caption text-caption text-on-surface-variant">
+              פסיכ׳
+            </span>
+          )}
+        </span>
+        {!viewOnly && s.personal_note && (
+          <p
+            className="mt-0.5 break-words font-caption text-caption text-secondary"
+            title={s.personal_note}
+          >
+            <Icon
+              name="sticky_note_2"
+              className="me-0.5 inline text-[12px] align-text-bottom"
+            />
+            {s.personal_note}
+          </p>
+        )}
+      </span>
+    </>
+  );
+}
+
 interface YearOptions {
   yearId: string;
   grades: Grade[];
@@ -51,9 +104,11 @@ interface YearOptions {
 export function StudentsDirectory({
   students,
   yearOptions,
+  viewOnly = false,
 }: {
   students: StudentRow[];
   yearOptions: YearOptions | null;
+  viewOnly?: boolean;
 }) {
   const [query, setQuery] = useState("");
   const [gradeId, setGradeId] = useState("");
@@ -236,7 +291,7 @@ export function StudentsDirectory({
                 </>
               )}
             </p>
-            {!hasSettingsLists && yearOptions && (
+            {!viewOnly && !hasSettingsLists && yearOptions && (
               <p className="text-body-md text-secondary">
                 אין עדיין שכבות/כיתות/מסלולים/התמחויות בהגדרות —{" "}
                 <Link href="/settings" className="font-medium underline">
@@ -244,6 +299,7 @@ export function StudentsDirectory({
                 </Link>
               </p>
             )}
+            {viewOnly ? null : (
             <div className="ms-auto flex flex-wrap items-center gap-2">
               <StudentsImport
                 disabledReason={
@@ -259,6 +315,7 @@ export function StudentsDirectory({
                 תלמידה חדשה
               </Button>
             </div>
+            )}
           </div>
         </div>
       </div>
@@ -277,13 +334,16 @@ export function StudentsDirectory({
             <col className="w-[28%]" />
             <col className="w-[16%]" />
             <col className="w-[10%]" />
-            <col className="w-[6%]" />
+            {viewOnly ? null : <col className="w-[6%]" />}
           </colgroup>
           <thead>
             <tr className="border-b border-outline-variant/40 bg-surface-container-low text-on-surface-variant">
-              {["תלמידה", 'ת"ז', "שיבוץ", "קשר", "סטטוס", ""].map((h) => (
+              {(viewOnly
+                ? ["תלמידה", 'ת"ז', "שיבוץ", "קשר", "סטטוס"]
+                : ["תלמידה", 'ת"ז', "שיבוץ", "קשר", "סטטוס", ""]
+              ).map((h, i) => (
                 <th
-                  key={h || "card"}
+                  key={h || `card-${i}`}
                   className="px-3 py-2 text-right text-caption font-semibold tracking-wide"
                 >
                   {h}
@@ -301,52 +361,18 @@ export function StudentsDirectory({
                   className="transition-colors hover:bg-[var(--accent-soft)]"
                 >
                   <td className="px-3 py-2">
-                    <Link
-                      href={`/students/${s.id}`}
-                      className="flex min-w-0 items-start gap-2 rounded-md outline-none transition-colors hover:bg-secondary-container/30 focus-visible:ring-2 focus-visible:ring-secondary"
-                    >
-                      <span
-                        className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-primary text-caption font-bold text-white"
-                        aria-hidden
+                    {viewOnly ? (
+                      <div className="flex min-w-0 items-start gap-2">
+                        <StudentNameCell student={s} viewOnly />
+                      </div>
+                    ) : (
+                      <Link
+                        href={`/students/${s.id}`}
+                        className="flex min-w-0 items-start gap-2 rounded-md outline-none transition-colors hover:bg-secondary-container/30 focus-visible:ring-2 focus-visible:ring-secondary"
                       >
-                        {(s.first_name || s.full_name).slice(0, 1)}
-                      </span>
-                      <span className="min-w-0">
-                        <span className="block break-words font-label-md text-label-md text-primary">
-                          {s.first_name || s.full_name.split(" ")[0]}{" "}
-                          {s.last_name}
-                          {s.mi ? (
-                            <span className="ms-1 font-caption text-caption text-on-surface-variant">
-                              {s.mi}
-                            </span>
-                          ) : null}
-                        </span>
-                        <span className="mt-0.5 flex flex-wrap gap-1">
-                          {s.chetz_program && (
-                            <span className="rounded-full bg-surface-container-high px-1.5 py-0 font-caption text-caption text-on-surface-variant">
-                              חץ
-                            </span>
-                          )}
-                          {s.isPsychology && (
-                            <span className="rounded-full bg-surface-container-high px-1.5 py-0 font-caption text-caption text-on-surface-variant">
-                              פסיכ׳
-                            </span>
-                          )}
-                        </span>
-                        {s.personal_note && (
-                          <p
-                            className="mt-0.5 break-words font-caption text-caption text-secondary"
-                            title={s.personal_note}
-                          >
-                            <Icon
-                              name="sticky_note_2"
-                              className="me-0.5 inline text-[12px] align-text-bottom"
-                            />
-                            {s.personal_note}
-                          </p>
-                        )}
-                      </span>
-                    </Link>
+                        <StudentNameCell student={s} />
+                      </Link>
+                    )}
                   </td>
                   <td className="break-all px-3 py-2 font-mono text-caption text-on-surface-variant" dir="ltr">
                     {s.identity_number}
@@ -377,6 +403,7 @@ export function StudentsDirectory({
                       {s.is_active ? "פעילה" : "לא פעילה"}
                     </StatusPill>
                   </td>
+                  {viewOnly ? null : (
                   <td className="px-3 py-2">
                     <Link
                       href={`/students/${s.id}`}
@@ -386,6 +413,7 @@ export function StudentsDirectory({
                       כרטיס
                     </Link>
                   </td>
+                  )}
                 </tr>
               );
             })}
@@ -399,12 +427,12 @@ export function StudentsDirectory({
             לא נמצאו תלמידות
           </p>
           <p className="text-body-md text-on-surface-variant">
-            נסי לשנות סינון או להוסיף תלמידה חדשה.
+            {viewOnly ? "נסי לשנות את הסינון." : "נסי לשנות סינון או להוסיף תלמידה חדשה."}
           </p>
         </div>
       )}
 
-      {yearOptions && (
+      {!viewOnly && yearOptions && (
         <Modal
           open={modalOpen}
           onClose={() => setModalOpen(false)}

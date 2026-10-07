@@ -319,9 +319,35 @@ alter table student_lesson_assignments enable row level security;
 alter table attendance enable row level security;
 alter table attendance_change_log enable row level security;
 
+-- View-only accounts (see src/lib/auth/allowed-emails.ts) may read the student
+-- and teacher lists. They cannot write, and cannot read attendance or other tables.
+create or replace function public.is_attendance_viewer()
+returns boolean
+language sql
+stable
+security invoker
+set search_path = public
+as $$
+  select lower(coalesce(
+    auth.jwt() ->> 'email',
+    auth.jwt() -> 'user_metadata' ->> 'email',
+    ''
+  )) in (
+    'sara.m@bybs.org.il',
+    'shaindi.s@bybs.org.il',
+    'h.babad@bybs.org.il',
+    'machshev@bybs.org.il'
+  );
+$$;
+
+revoke all on function public.is_attendance_viewer() from public;
+revoke all on function public.is_attendance_viewer() from anon;
+grant execute on function public.is_attendance_viewer() to authenticated;
+
 do $$
 declare
   tbl text;
+  select_using text;
 begin
   foreach tbl in array array[
     'academic_years', 'grades', 'classes', 'tracks', 'specializations', 'subjects',
@@ -331,10 +357,19 @@ begin
     'attendance', 'attendance_change_log'
   ]
   loop
-    execute format('create policy "authenticated_select_%s" on %I for select to authenticated using (true)', tbl, tbl);
-    execute format('create policy "authenticated_insert_%s" on %I for insert to authenticated with check (true)', tbl, tbl);
-    execute format('create policy "authenticated_update_%s" on %I for update to authenticated using (true) with check (true)', tbl, tbl);
-    execute format('create policy "authenticated_delete_%s" on %I for delete to authenticated using (true)', tbl, tbl);
+    if tbl in (
+      'academic_years', 'grades', 'classes', 'tracks', 'specializations',
+      'students', 'student_assignments',
+      'teachers', 'teacher_source_records', 'teacher_teaching_assignments'
+    ) then
+      select_using := 'true';
+    else
+      select_using := 'not public.is_attendance_viewer()';
+    end if;
+    execute format('create policy "authenticated_select_%s" on %I for select to authenticated using (%s)', tbl, tbl, select_using);
+    execute format('create policy "authenticated_insert_%s" on %I for insert to authenticated with check (not public.is_attendance_viewer())', tbl, tbl);
+    execute format('create policy "authenticated_update_%s" on %I for update to authenticated using (not public.is_attendance_viewer()) with check (not public.is_attendance_viewer())', tbl, tbl);
+    execute format('create policy "authenticated_delete_%s" on %I for delete to authenticated using (not public.is_attendance_viewer())', tbl, tbl);
   end loop;
 end $$;
 
@@ -889,10 +924,10 @@ begin
     select 1 from pg_policies
     where tablename = 'makeup_exams' and policyname = 'authenticated_select_makeup_exams'
   ) then
-    create policy "authenticated_select_makeup_exams" on makeup_exams for select to authenticated using (true);
-    create policy "authenticated_insert_makeup_exams" on makeup_exams for insert to authenticated with check (true);
-    create policy "authenticated_update_makeup_exams" on makeup_exams for update to authenticated using (true) with check (true);
-    create policy "authenticated_delete_makeup_exams" on makeup_exams for delete to authenticated using (true);
+    create policy "authenticated_select_makeup_exams" on makeup_exams for select to authenticated using (not public.is_attendance_viewer());
+    create policy "authenticated_insert_makeup_exams" on makeup_exams for insert to authenticated with check (not public.is_attendance_viewer());
+    create policy "authenticated_update_makeup_exams" on makeup_exams for update to authenticated using (not public.is_attendance_viewer()) with check (not public.is_attendance_viewer());
+    create policy "authenticated_delete_makeup_exams" on makeup_exams for delete to authenticated using (not public.is_attendance_viewer());
   end if;
 end $$;
 
@@ -926,10 +961,10 @@ begin
     select 1 from pg_policies
     where tablename = 'attendance_notes' and policyname = 'authenticated_select_attendance_notes'
   ) then
-    create policy "authenticated_select_attendance_notes" on attendance_notes for select to authenticated using (true);
-    create policy "authenticated_insert_attendance_notes" on attendance_notes for insert to authenticated with check (true);
-    create policy "authenticated_update_attendance_notes" on attendance_notes for update to authenticated using (true) with check (true);
-    create policy "authenticated_delete_attendance_notes" on attendance_notes for delete to authenticated using (true);
+    create policy "authenticated_select_attendance_notes" on attendance_notes for select to authenticated using (not public.is_attendance_viewer());
+    create policy "authenticated_insert_attendance_notes" on attendance_notes for insert to authenticated with check (not public.is_attendance_viewer());
+    create policy "authenticated_update_attendance_notes" on attendance_notes for update to authenticated using (not public.is_attendance_viewer()) with check (not public.is_attendance_viewer());
+    create policy "authenticated_delete_attendance_notes" on attendance_notes for delete to authenticated using (not public.is_attendance_viewer());
   end if;
 end $$;
 
@@ -969,10 +1004,10 @@ begin
     select 1 from pg_policies
     where tablename = 'attendance_pools' and policyname = 'authenticated_select_attendance_pools'
   ) then
-    create policy "authenticated_select_attendance_pools" on attendance_pools for select to authenticated using (true);
-    create policy "authenticated_insert_attendance_pools" on attendance_pools for insert to authenticated with check (true);
-    create policy "authenticated_update_attendance_pools" on attendance_pools for update to authenticated using (true) with check (true);
-    create policy "authenticated_delete_attendance_pools" on attendance_pools for delete to authenticated using (true);
+    create policy "authenticated_select_attendance_pools" on attendance_pools for select to authenticated using (not public.is_attendance_viewer());
+    create policy "authenticated_insert_attendance_pools" on attendance_pools for insert to authenticated with check (not public.is_attendance_viewer());
+    create policy "authenticated_update_attendance_pools" on attendance_pools for update to authenticated using (not public.is_attendance_viewer()) with check (not public.is_attendance_viewer());
+    create policy "authenticated_delete_attendance_pools" on attendance_pools for delete to authenticated using (not public.is_attendance_viewer());
   end if;
 end $$;
 
@@ -982,10 +1017,10 @@ begin
     select 1 from pg_policies
     where tablename = 'attendance_pool_members' and policyname = 'authenticated_select_attendance_pool_members'
   ) then
-    create policy "authenticated_select_attendance_pool_members" on attendance_pool_members for select to authenticated using (true);
-    create policy "authenticated_insert_attendance_pool_members" on attendance_pool_members for insert to authenticated with check (true);
-    create policy "authenticated_update_attendance_pool_members" on attendance_pool_members for update to authenticated using (true) with check (true);
-    create policy "authenticated_delete_attendance_pool_members" on attendance_pool_members for delete to authenticated using (true);
+    create policy "authenticated_select_attendance_pool_members" on attendance_pool_members for select to authenticated using (not public.is_attendance_viewer());
+    create policy "authenticated_insert_attendance_pool_members" on attendance_pool_members for insert to authenticated with check (not public.is_attendance_viewer());
+    create policy "authenticated_update_attendance_pool_members" on attendance_pool_members for update to authenticated using (not public.is_attendance_viewer()) with check (not public.is_attendance_viewer());
+    create policy "authenticated_delete_attendance_pool_members" on attendance_pool_members for delete to authenticated using (not public.is_attendance_viewer());
   end if;
 end $$;
 
@@ -1009,13 +1044,13 @@ begin
       and policyname = 'authenticated_select_student_lesson_exclusions'
   ) then
     create policy "authenticated_select_student_lesson_exclusions"
-      on student_lesson_exclusions for select to authenticated using (true);
+      on student_lesson_exclusions for select to authenticated using (not public.is_attendance_viewer());
     create policy "authenticated_insert_student_lesson_exclusions"
-      on student_lesson_exclusions for insert to authenticated with check (true);
+      on student_lesson_exclusions for insert to authenticated with check (not public.is_attendance_viewer());
     create policy "authenticated_update_student_lesson_exclusions"
-      on student_lesson_exclusions for update to authenticated using (true) with check (true);
+      on student_lesson_exclusions for update to authenticated using (not public.is_attendance_viewer()) with check (not public.is_attendance_viewer());
     create policy "authenticated_delete_student_lesson_exclusions"
-      on student_lesson_exclusions for delete to authenticated using (true);
+      on student_lesson_exclusions for delete to authenticated using (not public.is_attendance_viewer());
   end if;
 end $$;
 

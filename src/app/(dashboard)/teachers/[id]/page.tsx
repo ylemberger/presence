@@ -1,9 +1,10 @@
-import { notFound } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
 import Link from "next/link";
 import { StatusPill } from "@/components/ui/PageHeader";
 import { Section } from "@/components/ui/Section";
 import { Table, TableRow, TableCell } from "@/components/ui/Table";
-import { createClient } from "@/lib/supabase/server";
+import { isViewerEmail } from "@/lib/auth/allowed-emails";
+import { createClient, requireAuthenticatedUser } from "@/lib/supabase/server";
 import { getActiveAcademicYear } from "@/lib/utils";
 import { WeeklyTimetableGrid, type TimetableEntry } from "@/components/timetable/WeeklyTimetableGrid";
 import { BILLING_TYPE_LABELS } from "@/lib/constants";
@@ -17,6 +18,9 @@ interface Props {
 }
 
 export default async function TeacherDetailPage({ params }: Props) {
+  const { user } = await requireAuthenticatedUser();
+  if (isViewerEmail(user.email)) redirect("/teachers");
+
   const { id } = params;
   const supabase = await createClient();
   const activeYear = await getActiveAcademicYear();

@@ -1,10 +1,11 @@
-import { notFound } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
 import Link from "next/link";
 import { Table, TableRow, TableCell } from "@/components/ui/Table";
 import { StatusPill } from "@/components/ui/PageHeader";
 import { Section } from "@/components/ui/Section";
 import { PrintButton } from "@/components/ui/PrintButton";
-import { createClient } from "@/lib/supabase/server";
+import { isViewerEmail } from "@/lib/auth/allowed-emails";
+import { createClient, requireAuthenticatedUser } from "@/lib/supabase/server";
 import { getActiveAcademicYear } from "@/lib/utils";
 import { filterFixedGrades } from "@/lib/years/grades";
 import { formatDate, isDateInRange } from "@/lib/dates/hebrew";
@@ -28,6 +29,9 @@ interface Props {
 }
 
 export default async function StudentDetailPage({ params }: Props) {
+  const { user } = await requireAuthenticatedUser();
+  if (isViewerEmail(user.email)) redirect("/students");
+
   const { id } = params;
   const supabase = await createClient();
   const activeYear = await getActiveAcademicYear();

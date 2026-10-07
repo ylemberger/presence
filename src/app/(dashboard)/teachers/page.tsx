@@ -1,5 +1,6 @@
 import { PageHeader } from "@/components/ui/PageHeader";
-import { createClient } from "@/lib/supabase/server";
+import { isViewerEmail } from "@/lib/auth/allowed-emails";
+import { createClient, requireAuthenticatedUser } from "@/lib/supabase/server";
 import { getActiveAcademicYear } from "@/lib/utils";
 import { BILLING_TYPE_LABELS } from "@/lib/constants";
 import { TeachersForms } from "./TeachersForms";
@@ -37,6 +38,8 @@ function uniqueJoined(values: Array<string | null | undefined>): string {
 }
 
 export default async function TeachersPage() {
+  const { user } = await requireAuthenticatedUser();
+  const viewOnly = isViewerEmail(user.email);
   const activeYear = await getActiveAcademicYear();
   const supabase = await createClient();
 
@@ -108,11 +111,16 @@ export default async function TeachersPage() {
     <div className="flex flex-col gap-stack_lg">
       <PageHeader
         title="מורות"
-        description="מורות מגיעות ממערכת השכר אחרי אישור. אפשר לערוך פרטים מקומית."
+        description={
+          viewOnly
+            ? "צפייה ברשימת המורות. אין עריכה ואין סנכרון."
+            : "מורות מגיעות ממערכת השכר אחרי אישור. אפשר לערוך פרטים מקומית."
+        }
         size="display"
       />
 
       <div className="grid grid-cols-1 items-start gap-gutter lg:grid-cols-12">
+        {viewOnly ? null : (
         <div className="lg:col-span-4 lg:row-span-2">
           <section className="rounded-xl border-t-4 border-secondary bg-surface-container-lowest p-stack_md shadow-tactile-md">
             <h3 className="mb-4 flex items-center gap-2 font-title-lg text-title-lg text-primary">
@@ -122,14 +130,15 @@ export default async function TeachersPage() {
             <TeachersForms />
           </section>
         </div>
+        )}
 
-        <div className="min-w-0 lg:col-span-8">
-          <TeachersDirectory teachers={directoryRows} />
+        <div className={viewOnly ? "min-w-0 lg:col-span-12" : "min-w-0 lg:col-span-8"}>
+          <TeachersDirectory teachers={directoryRows} viewOnly={viewOnly} />
         </div>
 
         {activeYear && (
-          <div className="min-w-0 lg:col-span-8">
-            <TeachersLessons rows={lessonRows} />
+          <div className={viewOnly ? "min-w-0 lg:col-span-12" : "min-w-0 lg:col-span-8"}>
+            <TeachersLessons rows={lessonRows} viewOnly={viewOnly} />
           </div>
         )}
       </div>

@@ -22,8 +22,15 @@ export type TeacherDirectoryRow = {
 const PREVIEW_LIMIT = 50;
 
 const HEADERS = ["מורה", "קשר", "שיבוצי שכר", "סטטוס", ""] as const;
+const VIEW_HEADERS = ["מורה", "קשר", "שיבוצי שכר", "סטטוס"] as const;
 
-export function TeachersDirectory({ teachers }: { teachers: TeacherDirectoryRow[] }) {
+export function TeachersDirectory({
+  teachers,
+  viewOnly = false,
+}: {
+  teachers: TeacherDirectoryRow[];
+  viewOnly?: boolean;
+}) {
   const [query, setQuery] = useState("");
   const [showAll, setShowAll] = useState(false);
 
@@ -80,7 +87,7 @@ export function TeachersDirectory({ teachers }: { teachers: TeacherDirectoryRow[
           </colgroup>
           <thead>
             <tr className="border-b border-outline-variant bg-background text-on-surface-variant">
-              {HEADERS.map((h) => (
+              {(viewOnly ? VIEW_HEADERS : HEADERS).map((h) => (
                 <th
                   key={h || "actions"}
                   className="px-3 py-3 font-label-md text-label-md font-medium"
@@ -132,6 +139,7 @@ export function TeachersDirectory({ teachers }: { teachers: TeacherDirectoryRow[
                     {t.is_local ? "מקומית" : "מסונכרנת"}
                   </StatusPill>
                 </td>
+                {viewOnly ? null : (
                 <td className="px-3 py-3 text-center">
                   <Link
                     href={`/teachers/${t.id}`}
@@ -141,6 +149,7 @@ export function TeachersDirectory({ teachers }: { teachers: TeacherDirectoryRow[
                     <Icon name="edit" className="text-[20px]" />
                   </Link>
                 </td>
+                )}
               </tr>
             ))}
           </tbody>

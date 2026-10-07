@@ -13,7 +13,13 @@ export type TeacherLessonRow = {
   audience: string;
 };
 
-export function TeachersLessons({ rows }: { rows: TeacherLessonRow[] }) {
+export function TeachersLessons({
+  rows,
+  viewOnly = false,
+}: {
+  rows: TeacherLessonRow[];
+  viewOnly?: boolean;
+}) {
   const [query, setQuery] = useState("");
   const [open, setOpen] = useState(false);
 
@@ -65,7 +71,7 @@ export function TeachersLessons({ rows }: { rows: TeacherLessonRow[] }) {
               ? "עדיין אין שיעורים בשנה זו."
               : "לא נמצאו שיעורים לפי הסינון."}
           </p>
-          {rows.length === 0 && (
+          {rows.length === 0 && !viewOnly && (
             <Link
               href="/lessons"
               className="mt-2 inline-block font-label-md text-label-md text-secondary hover:underline"

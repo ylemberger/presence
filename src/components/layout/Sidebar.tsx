@@ -15,6 +15,7 @@ interface SidebarProps {
   userEmail?: string | null;
   userName?: string | null;
   userAvatarUrl?: string | null;
+  viewOnly?: boolean;
 }
 
 const ICON_MAP: Record<string, string> = {
@@ -54,6 +55,7 @@ export function Sidebar({
   userEmail,
   userName,
   userAvatarUrl,
+  viewOnly = false,
 }: SidebarProps) {
   const pathname = usePathname();
   const router = useRouter();
@@ -136,7 +138,9 @@ export function Sidebar({
         id="sidebar-nav-items"
         className="sidebar-nav flex flex-1 flex-col gap-1 overflow-y-auto px-3 py-4"
       >
-        {NAV_ITEMS.map((item) => {
+        {NAV_ITEMS.filter((item) =>
+          viewOnly ? item.href === "/students" || item.href === "/teachers" : true
+        ).map((item) => {
           const isActive =
             item.href === "/" ? pathname === "/" : pathname.startsWith(item.href);
           const isPending = pendingHref === item.href;
