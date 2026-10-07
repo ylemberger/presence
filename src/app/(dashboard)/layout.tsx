@@ -5,7 +5,7 @@ import { NavigationProgress } from "@/components/layout/NavigationProgress";
 import { AttendanceReminderBanner } from "@/components/attendance/AttendanceReminderBanner";
 import { UserAvatar } from "@/components/layout/UserAvatar";
 import { requireAuthenticatedUser } from "@/lib/supabase/server";
-import { isViewerEmail } from "@/lib/auth/allowed-emails";
+import { isRestrictedViewerEmail, isViewerEmail } from "@/lib/auth/allowed-emails";
 import { authUserProfile } from "@/lib/auth/user-profile";
 import { getActiveAcademicYear, getAllAcademicYears } from "@/lib/utils";
 import { getPendingAttendanceSummary, EMPTY_PENDING_SUMMARY } from "@/lib/attendance/pending";
@@ -19,6 +19,7 @@ export default async function DashboardLayout({
   const { user } = await requireAuthenticatedUser();
   const profile = authUserProfile(user);
   const viewOnly = isViewerEmail(user.email);
+  const listOnly = isRestrictedViewerEmail(user.email);
 
   const [activeYear, years] = await Promise.all([
     getActiveAcademicYear(),
@@ -41,7 +42,7 @@ export default async function DashboardLayout({
         userEmail={profile.email}
         userName={profile.displayName}
         userAvatarUrl={profile.avatarUrl}
-        viewOnly={viewOnly}
+        viewOnly={listOnly}
       />
       {/* Main Content Area — offset right by the fixed sidebar width */}
       <main className="relative mr-[var(--sidebar-width)] flex min-h-screen w-[calc(100%-var(--sidebar-width))] min-w-0 flex-1 flex-col transition-[margin,width] duration-200 print:mr-0 print:w-full">

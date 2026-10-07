@@ -1,4 +1,4 @@
--- View-only logins: sara.m@bybs.org.il, shaindi.s@bybs.org.il, h.babad@bybs.org.il, machshev@bybs.org.il
+-- View-only logins: sara.m@bybs.org.il, shaindi.s@bybs.org.il, h.babad@bybs.org.il, machshev@bybs.org.il, ester.r@bybs.org.il
 -- Run on the ATTENDANCE Supabase project (the one with public.lessons), never the salary database.
 -- Does not delete or rewrite rows. Safe to run again.
 -- Editors keep full access. Viewers may read only the student and teacher lists.
@@ -18,7 +18,8 @@ as $$
     'sara.m@bybs.org.il',
     'shaindi.s@bybs.org.il',
     'h.babad@bybs.org.il',
-    'machshev@bybs.org.il'
+    'machshev@bybs.org.il',
+    'ester.r@bybs.org.il'
   );
 $$;
 

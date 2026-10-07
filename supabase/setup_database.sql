@@ -336,7 +336,8 @@ as $$
     'sara.m@bybs.org.il',
     'shaindi.s@bybs.org.il',
     'h.babad@bybs.org.il',
-    'machshev@bybs.org.il'
+    'machshev@bybs.org.il',
+    'ester.r@bybs.org.il'
   );
 $$;
 
