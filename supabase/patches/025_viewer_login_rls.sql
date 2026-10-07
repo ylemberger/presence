@@ -41,7 +41,8 @@ begin
     readable := pol.tablename in (
       'academic_years', 'grades', 'classes', 'tracks', 'specializations',
       'students', 'student_assignments',
-      'teachers', 'teacher_source_records', 'teacher_teaching_assignments'
+      'teachers', 'teacher_source_records', 'teacher_teaching_assignments',
+      'lessons'
     );
     execute format('drop policy if exists %I on public.%I', pol.policyname, pol.tablename);
     if pol.cmd = 'SELECT' then

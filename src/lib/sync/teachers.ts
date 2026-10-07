@@ -74,10 +74,6 @@ function usableMeetings(raw: number | string | null | undefined): number | null 
   return Math.trunc(n);
 }
 
-function shouldImport(row: SalaryRow): boolean {
-  return row.is_approved === true;
-}
-
 function isMissingColumnError(error: { message?: string; code?: string } | null): boolean {
   if (!error) return false;
   const code = error.code ?? "";
@@ -107,7 +103,11 @@ function sourceRecordWrite(row: SalaryRow, identity: string, fullName: string) {
   };
 }
 
-/** Pull salary rows. Never updates/deletes the salary system. Never deletes local teachers. */
+/**
+ * Pull every salary row that has a teacher name, including rows whose contract
+ * is not approved yet. Never updates or deletes the salary system.
+ * Never deletes local teachers and never clears is_local.
+ */
 export async function syncTeacherSourceRecords(
   supabaseClient?: SupabaseClient
 ): Promise<SyncResult> {
@@ -133,7 +133,6 @@ export async function syncTeacherSourceRecords(
     const { data: remote, error: remoteError } = await salary.client
       .from("salary_records")
       .select(salarySelect)
-      .eq("is_approved", true)
       .range(from, from + pageSize - 1);
 
     if (remoteError) {
@@ -142,7 +141,7 @@ export async function syncTeacherSourceRecords(
         from -= pageSize;
         continue;
       }
-      throw new Error("לא ניתן לקרוא מורות מאושרות ממערכת השכר.");
+      throw new Error("לא ניתן לקרוא מורות ממערכת השכר.");
     }
 
     const chunk = (remote ?? []) as SalaryRow[];
@@ -170,11 +169,6 @@ export async function syncTeacherSourceRecords(
   );
 
   for (const row of rows) {
-    if (!shouldImport(row)) {
-      result.skippedInvalid++;
-      continue;
-    }
-
     const fullName = text(row.teacher_name);
     if (!fullName) {
       result.skippedInvalid++;

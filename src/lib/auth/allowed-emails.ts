@@ -46,7 +46,8 @@ export function isAllowedLoginEmail(email: string | null | undefined): boolean {
   return allowed.has(normalized);
 }
 
-/** Pages a view-only account may open. Student and teacher cards are excluded. */
+/** Pages a view-only account may open. Student cards stay closed. A teacher card is allowed. */
 export function viewerMayOpenPath(pathname: string): boolean {
-  return pathname === "/students" || pathname === "/teachers";
+  if (pathname === "/students" || pathname === "/teachers") return true;
+  return /^\/teachers\/[^/]+$/.test(pathname);
 }

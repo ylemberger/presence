@@ -360,7 +360,8 @@ begin
     if tbl in (
       'academic_years', 'grades', 'classes', 'tracks', 'specializations',
       'students', 'student_assignments',
-      'teachers', 'teacher_source_records', 'teacher_teaching_assignments'
+      'teachers', 'teacher_source_records', 'teacher_teaching_assignments',
+      'lessons'
     ) then
       select_using := 'true';
     else

@@ -1,4 +1,4 @@
-import { notFound, redirect } from "next/navigation";
+import { notFound } from "next/navigation";
 import Link from "next/link";
 import { StatusPill } from "@/components/ui/PageHeader";
 import { Section } from "@/components/ui/Section";
@@ -12,6 +12,7 @@ import { hebrewWeekdayLabels } from "@/lib/dates/hebrew";
 import { Icon } from "@/components/ui/Icon";
 import { TeacherEditForm } from "../TeacherEditForm";
 import { salaryDisplayFields } from "@/lib/teachers/salary-display";
+import { teacherIdsSharingName } from "@/lib/teachers/name-group";
 
 interface Props {
   params: { id: string };
@@ -19,7 +20,7 @@ interface Props {
 
 export default async function TeacherDetailPage({ params }: Props) {
   const { user } = await requireAuthenticatedUser();
-  if (isViewerEmail(user.email)) redirect("/teachers");
+  const viewOnly = isViewerEmail(user.email);
 
   const { id } = params;
   const supabase = await createClient();
@@ -29,17 +30,32 @@ export default async function TeacherDetailPage({ params }: Props) {
   const { data: teacher } = await supabase.from("teachers").select("*").eq("id", id).single();
   if (!teacher) notFound();
 
-  const { data: sourceRows } = await supabase
-    .from("teacher_source_records")
-    .select("id, subject, payload, synced_at")
-    .eq("teacher_identity_number", teacher.identity_number)
-    .order("synced_at", { ascending: false });
+  const { data: allTeachers } = await supabase
+    .from("teachers")
+    .select("id, full_name, identity_number, phone, email");
+  const groupIds = [...teacherIdsSharingName(allTeachers ?? [], id)];
+  const group = (allTeachers ?? []).filter((row) => groupIds.includes(row.id));
+  const identities = [
+    ...new Set(
+      group
+        .map((row) => row.identity_number)
+        .filter((value): value is string => Boolean(value))
+    ),
+  ];
+
+  const { data: sourceRows } = identities.length
+    ? await supabase
+        .from("teacher_source_records")
+        .select("id, subject, payload, synced_at, teacher_identity_number")
+        .in("teacher_identity_number", identities)
+        .order("subject")
+    : { data: [] as { id: string; subject: string; payload: unknown; synced_at: string }[] };
 
   const { data: taIdsRaw } = activeYear
     ? await supabase
         .from("teacher_teaching_assignments")
         .select("id")
-        .eq("teacher_id", id)
+        .in("teacher_id", groupIds)
         .eq("academic_year_id", activeYear.id)
     : { data: [] as { id: string }[] };
   const taIds = (taIdsRaw ?? []).map((r: { id: string }) => r.id);
@@ -52,8 +68,7 @@ export default async function TeacherDetailPage({ params }: Props) {
         `
           id, subject, day_of_week, lesson_number, billing_type, for_psychology,
           class_id, track_id, specialization_id,
-          classes(name), tracks(name), specializations(name),
-          activity_ranges(name)
+          classes(name), tracks(name), specializations(name)
         `
       )
       .eq("academic_year_id", activeYear.id)
@@ -100,6 +115,9 @@ export default async function TeacherDetailPage({ params }: Props) {
   });
 
   const initial = teacher.full_name?.[0] ?? "?";
+  const identityLabel = identities.length > 0 ? identities.join(" · ") : (teacher.identity_number ?? "—");
+  const displayPhone = group.find((row) => row.phone)?.phone ?? teacher.phone;
+  const displayEmail = group.find((row) => row.email)?.email ?? teacher.email;
 
   return (
     <div className="flex flex-col gap-gutter">
@@ -120,13 +138,13 @@ export default async function TeacherDetailPage({ params }: Props) {
               <div className="flex flex-wrap items-center gap-3 font-body-md text-body-md text-on-surface-variant">
                 <span className="flex items-center gap-1">
                   <Icon name="badge" className="text-[18px]" />
-                  ת&quot;ז: {teacher.identity_number ?? "—"}
+                  ת&quot;ז: {identityLabel}
                 </span>
                 {teacher.is_local && <StatusPill tone="warn">מקומית</StatusPill>}
               </div>
             </div>
           </div>
-          {activeYear && (
+          {!viewOnly && activeYear && (
             <Link
               href={`/timetable?teacherId=${teacher.id}`}
               className="inline-flex items-center gap-2 rounded-lg bg-secondary px-6 py-2.5 font-label-md text-label-md text-on-secondary shadow-tactile-sm transition-all hover:-translate-y-0.5 hover:bg-secondary-fixed-dim"
@@ -173,12 +191,19 @@ export default async function TeacherDetailPage({ params }: Props) {
 
       <div className="grid grid-cols-1 gap-gutter xl:grid-cols-3">
         <Section icon="contact_phone" title="פרטי מורה">
-          <TeacherEditForm
-            teacherId={teacher.id}
-            fullName={teacher.full_name}
-            phone={teacher.phone}
-            email={teacher.email}
-          />
+          {viewOnly ? (
+            <div className="flex flex-col gap-2 font-body-md text-body-md text-on-surface">
+              <p dir="ltr" className="text-right">{displayPhone ?? "—"}</p>
+              <p dir="ltr" className="text-right">{displayEmail ?? "—"}</p>
+            </div>
+          ) : (
+            <TeacherEditForm
+              teacherId={teacher.id}
+              fullName={teacher.full_name}
+              phone={teacher.phone}
+              email={teacher.email}
+            />
+          )}
         </Section>
 
         <div className="xl:col-span-2">
@@ -212,14 +237,11 @@ export default async function TeacherDetailPage({ params }: Props) {
           </div>
         ) : (
           <Table
-            headers={[
-              "מקצוע",
-              "סוג",
-              "קהל יעד",
-              "יום×שעה",
-              "תלמידות פעילות",
-              "פעולות",
-            ]}
+            headers={
+              viewOnly
+                ? ["מקצוע", "סוג", "קהל יעד", "יום×שעה"]
+                : ["מקצוע", "סוג", "קהל יעד", "יום×שעה", "תלמידות פעילות", "פעולות"]
+            }
           >
             {lessonsRows.map((l: any) => {
               const cls = l.classes as unknown as { name: string } | null;
@@ -253,9 +275,12 @@ export default async function TeacherDetailPage({ params }: Props) {
                   <TableCell className="text-on-surface-variant">
                     {days[l.day_of_week] ?? "—"} · {l.lesson_number}
                   </TableCell>
-                  <TableCell className="font-semibold text-primary">
-                    {studentCount}
-                  </TableCell>
+                  {viewOnly ? null : (
+                    <TableCell className="font-semibold text-primary">
+                      {studentCount}
+                    </TableCell>
+                  )}
+                  {viewOnly ? null : (
                   <TableCell>
                     <Link
                       href={`/timetable?teacherId=${teacher.id}&subject=${encodeURIComponent(l.subject)}`}
@@ -265,6 +290,7 @@ export default async function TeacherDetailPage({ params }: Props) {
                       סנן
                     </Link>
                   </TableCell>
+                  )}
                 </TableRow>
               );
             })}

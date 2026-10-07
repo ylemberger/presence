@@ -18,12 +18,12 @@ alwaysApply: true
 ## מותר
 
 - קריאה בלבד דרך `createSalaryReadClient()` ב-`src/lib/sync/salary-client.ts`
-- רק `.select(...)` (למשל מ-`salary_records` עם `is_approved = true`) כמו ב-`src/lib/sync/teachers.ts`
+- רק `.select(...)` מ-`salary_records` כמו ב-`src/lib/sync/teachers.ts` (כל שורה עם שם מורה, גם בלי חוזה מאושר)
 - כתיבה **רק** למסד הנוכחות: `teachers`, `teacher_source_records` (וטבלאות presence אחרות)
 
 ## שנה חדשה
 
-שיבוצי מורות **לא** מגיעים מהשנה הקודמת. כל שנה: סנכרון מחדש ממערכת השכר (`is_approved = true`). אסור להעתיק `teacher_source_records` / `teacher_teaching_assignments` בקידום שנה.
+שיבוצי מורות **לא** מגיעים מהשנה הקודמת. כל שנה: סנכרון מחדש ממערכת השכר (כל הרשומות עם שם מורה, גם בלי חוזה מאושר). אסור להעתיק `teacher_source_records` / `teacher_teaching_assignments` בקידום שנה.
 
 ## משתני סביבה (presence)
 

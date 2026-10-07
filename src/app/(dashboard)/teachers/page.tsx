@@ -13,6 +13,7 @@ import {
   groupSourceRowsByTeacher,
 } from "@/lib/teachers/source-records";
 import { embedOne } from "@/lib/supabase/embed";
+import { teacherNameKey, uniqueTeachersByName } from "@/lib/teachers/name-group";
 
 type AssignmentRow = {
   id: string;
@@ -31,10 +32,20 @@ function uniqueJoined(values: Array<string | null | undefined>): string {
     ...new Set(
       values
         .map((v) => String(v ?? "").trim())
-        .filter(Boolean)
+        .filter((v) => v && v !== "—")
     ),
   ];
   return list.length ? list.join(" · ") : "—";
+}
+
+function mergeLabels(values: string[]): string {
+  return uniqueJoined(values.flatMap((value) => value.split(" · ")));
+}
+
+function sumMeetingLabels(labels: string[]): string {
+  const numbers = labels.map((label) => Number(label)).filter((n) => Number.isFinite(n));
+  if (numbers.length === 0) return "—";
+  return String(numbers.reduce((sum, n) => sum + n, 0));
 }
 
 export default async function TeachersPage() {
@@ -52,7 +63,7 @@ export default async function TeachersPage() {
   );
   const sourcesByTeacher = groupSourceRowsByTeacher(sourceRows, identityToTeacherId);
 
-  const directoryRows: TeacherDirectoryRow[] = (teachers ?? []).map((t) => {
+  const flatRows: TeacherDirectoryRow[] = (teachers ?? []).map((t) => {
     const sources = sourcesByTeacher.get(t.id) ?? [];
     const fields = sources.map((s) => salaryDisplayFields(s));
     const meetings = fields
@@ -75,6 +86,39 @@ export default async function TeachersPage() {
           : String(meetings.reduce((a, b) => a + b, 0)),
     };
   });
+
+  const membersByName = new Map<string, TeacherDirectoryRow[]>();
+  for (const row of flatRows) {
+    const key = teacherNameKey(row.full_name) || row.id;
+    const list = membersByName.get(key) ?? [];
+    list.push(row);
+    membersByName.set(key, list);
+  }
+
+  const namedRows: TeacherDirectoryRow[] = uniqueTeachersByName(flatRows).map((option) => {
+    const members = membersByName.get(teacherNameKey(option.name)) ?? [];
+    const identity =
+      members.find((member) => /\d{5,}/.test(member.identity_number))?.identity_number ??
+      members[0]?.identity_number ??
+      "";
+    return {
+      id: option.id,
+      full_name: option.name,
+      identity_number: identity,
+      phone: members.find((member) => member.phone)?.phone ?? null,
+      email: members.find((member) => member.email)?.email ?? null,
+      is_local: members.length > 0 && members.every((member) => member.is_local),
+      salarySubjects: mergeLabels(members.map((member) => member.salarySubjects)),
+      salaryTracks: mergeLabels(members.map((member) => member.salaryTracks)),
+      salaryGradeYears: mergeLabels(members.map((member) => member.salaryGradeYears)),
+      salarySemesters: mergeLabels(members.map((member) => member.salarySemesters)),
+      salaryMeetings: sumMeetingLabels(members.map((member) => member.salaryMeetings)),
+    };
+  });
+  const directoryRows = [
+    ...namedRows,
+    ...flatRows.filter((row) => !teacherNameKey(row.full_name)),
+  ];
 
   let lessonRows: TeacherLessonRow[] = [];
 
@@ -113,8 +157,8 @@ export default async function TeachersPage() {
         title="מורות"
         description={
           viewOnly
-            ? "צפייה ברשימת המורות. אין עריכה ואין סנכרון."
-            : "מורות מגיעות ממערכת השכר אחרי אישור. אפשר לערוך פרטים מקומית."
+            ? "צפייה ברשימת המורות. כל מורה פעם אחת. סנכרון מהשכר זמין רק למי שמנהלת את המערכת."
+            : "מורות מגיעות ממערכת השכר, גם אם החוזה עדיין לא אושר. כל שם מופיע פעם אחת ברשימה."
         }
         size="display"
       />

@@ -104,9 +104,12 @@ export function TeachersDirectory({
                 className="group border-b border-surface-variant transition-colors hover:bg-surface-variant/50"
               >
                 <td className="px-3 py-3">
-                  <div className="break-words font-body-md text-body-md text-on-surface">
+                  <Link
+                    href={`/teachers/${t.id}`}
+                    className="break-words font-body-md text-body-md text-primary hover:underline"
+                  >
                     {t.full_name}
-                  </div>
+                  </Link>
                   <div className="mt-0.5 break-all font-caption text-caption text-on-surface-variant" dir="ltr">
                     {t.identity_number}
                   </div>
