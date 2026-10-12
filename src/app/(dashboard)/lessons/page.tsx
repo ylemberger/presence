@@ -6,21 +6,14 @@ import { type LessonFormDraft } from "./LessonsForm";
 import { LessonsFormDialog } from "./LessonsFormDialog";
 import { LessonsFilters } from "./LessonsFilters";
 import { filterFixedGrades } from "@/lib/years/grades";
-import {
-  buildHebrewMonth,
-  hebrewMonthFromIso,
-  parseIsoDate,
-  todayIso,
-} from "@/lib/dates/hebrew";
 import type { Lesson } from "@/types/database";
-import { holidayDatesByKind } from "@/lib/lessons/holidays";
 import {
   audienceForLesson,
   audienceMapFromRows,
   lessonMatchesAudienceFilter,
 } from "@/lib/lessons/autoAssign";
 import { describeAudienceScope } from "@/lib/validation";
-import { formatLessonHours, formatLessonOptionLabel } from "@/lib/lessons/hours";
+import { formatLessonOptionLabel } from "@/lib/lessons/hours";
 import { formatSubjectLessonLabel } from "@/lib/lessons/subject-label";
 import {
   formatWeeklySlotsLabel,
@@ -47,8 +40,6 @@ import type { LessonFormTeacher } from "./LessonsForm";
 
 interface Props {
   searchParams: {
-    from?: string;
-    to?: string;
     classId?: string;
     trackId?: string;
     specializationId?: string;
@@ -71,19 +62,14 @@ export default async function LessonsPage({ searchParams }: Props) {
     return (
       <div>
         <PageHeader
-          title="יומן שיעורים עברי"
+          title="שיעורים"
           description="יש להגדיר שנה אקדמית פעילה תחילה."
         />
       </div>
     );
   }
 
-  const monthSeed = hebrewMonthFromIso(searchParams.from || todayIso());
-  const month = buildHebrewMonth(monthSeed.year, monthSeed.month);
-  const from = searchParams.from || month.rangeStart;
-  const to = searchParams.to || month.rangeEnd;
-
-  const [lessonsRes, teachers, sourceRows, grades, classes, tracks, specializations, subjectsRes, ranges, rules, holidays, audienceRes, yearStudentsRes, weeklySlotsRes] =
+  const [lessonsRes, teachers, sourceRows, grades, classes, tracks, specializations, subjectsRes, ranges, rules, audienceRes, yearStudentsRes, weeklySlotsRes] =
     await Promise.all([
       supabase
         .from("lessons")
@@ -116,7 +102,6 @@ export default async function LessonsPage({ searchParams }: Props) {
       supabase.from("subjects").select("id, name").eq("academic_year_id", activeYear.id).order("name"),
       supabase.from("activity_ranges").select("*"),
       supabase.from("attendance_rules").select("*"),
-      supabase.from("holiday_periods").select("start_date, end_date, kind"),
       supabase.from("lesson_audience").select("lesson_id, grade_id, class_id, track_id, specialization_id"),
       supabase
         .from("student_assignments")
@@ -315,65 +300,6 @@ export default async function LessonsPage({ searchParams }: Props) {
     };
   });
 
-  const occurrenceSelect =
-    "id, occurrence_date, status, notes, lesson_id, lessons!inner(subject, academic_year_id, subjects(name))";
-
-  const monthOcc =
-    filteredIds.length === 0
-      ? { data: [] }
-      : await supabase
-          .from("lesson_occurrences")
-          .select(occurrenceSelect)
-          .eq("lessons.academic_year_id", activeYear.id)
-          .in("lesson_id", filteredIds)
-          .neq("status", "cancelled")
-          .gte("occurrence_date", from)
-          .lte("occurrence_date", to)
-          .order("occurrence_date");
-
-  const lessonById = new Map(filteredLessons.map((l) => [l.id, l]));
-  const mapOcc = (
-    rows: {
-      id: string;
-      occurrence_date: string;
-      status: string;
-      notes: string | null;
-      lesson_id: string;
-      lessons?: unknown;
-    }[]
-  ) =>
-    rows.map((o) => {
-      const lesson = lessonById.get(o.lesson_id);
-      const assignment = one<{ teachers?: unknown }>(lesson?.teacher_teaching_assignments);
-      return {
-        id: o.id,
-        occurrence_date: o.occurrence_date,
-        status: o.status,
-        notes: o.notes,
-        lesson_id: o.lesson_id,
-        subject: formatSubjectLessonLabel(
-          one<{ name: string }>(lesson?.subjects)?.name,
-          lesson?.subject ?? ""
-        ),
-        teacherName: one<{ full_name: string }>(assignment?.teachers)?.full_name ?? "",
-        hoursLabel: (() => {
-          if (!lesson) return "";
-          const slots = weeklySlotsByLesson.get(lesson.id) ?? [];
-          const day = parseIsoDate(o.occurrence_date).getDay();
-          const slot =
-            slots.find((s) => s.dayOfWeek === day) ??
-            slots[0] ?? {
-              dayOfWeek: lesson.day_of_week,
-              lessonNumber: lesson.lesson_number,
-              periodCount: lesson.period_count ?? 1,
-            };
-          return formatLessonHours(slot.lessonNumber, slot.periodCount);
-        })(),
-      };
-    });
-
-  const occurrenceRows = mapOcc(monthOcc.data ?? []);
-
   const identityToTeacherId = new Map(
     (teachers.data ?? []).map((t) => [t.identity_number, t.id])
   );
@@ -407,8 +333,6 @@ export default async function LessonsPage({ searchParams }: Props) {
   }
   if (searchParams.teacherId) filterQuery.set("teacherId", searchParams.teacherId);
   if (searchParams.subject) filterQuery.set("subject", searchParams.subject);
-  if (searchParams.from) filterQuery.set("from", searchParams.from);
-  if (searchParams.to) filterQuery.set("to", searchParams.to);
   if (searchParams.edit) filterQuery.set("edit", searchParams.edit);
 
   const editingLesson = searchParams.edit
@@ -483,8 +407,8 @@ export default async function LessonsPage({ searchParams }: Props) {
   return (
     <div className="flex flex-col gap-stack_lg">
       <PageHeader
-        title="יומן שיעורים עברי"
-        description="יצירת שיעור פותחת אוטומטית את המופעים בטווח שנבחר. אין יצירת מופע בודד — ליום אחד מגדירים טווח של יום אחד. ימי חופשה לא נכללים."
+        title="שיעורים"
+        description="רשימת תבניות השיעור לפי הסינון. יצירת שיעור פותחת אוטומטית את המופעים בטווח שנבחר."
         actions={
           <LessonsFormDialog
             key={searchParams.edit ?? "create"}
@@ -505,8 +429,6 @@ export default async function LessonsPage({ searchParams }: Props) {
         specializations={(specializations.data ?? []).map((s) => ({ id: s.id, name: s.name }))}
         teachers={uniqueTeachersByName(teachers.data ?? [])}
         subjects={subjects}
-        monthFrom={from}
-        monthTo={to}
         defaults={{
           classId: searchParams.classId,
           trackId: searchParams.trackId,
@@ -517,12 +439,8 @@ export default async function LessonsPage({ searchParams }: Props) {
       />
 
       <LessonsCalendar
-        initialMonthIso={from}
-        occurrences={occurrenceRows}
         lessons={lessonCards}
         monthQuery={calendarQuery.toString()}
-        holidayDates={holidayDatesByKind(holidays.data ?? []).vacation}
-        cancelledDates={holidayDatesByKind(holidays.data ?? []).cancelled}
         students={yearStudents}
         editingId={editingDraft?.id}
       />

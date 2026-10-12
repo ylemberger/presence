@@ -12,8 +12,6 @@ export interface LessonsFiltersProps {
   specializations: { id: string; name: string }[];
   teachers: { id: string; name: string }[];
   subjects: string[];
-  monthFrom?: string;
-  monthTo?: string;
   defaults: {
     classId?: string;
     trackId?: string;
@@ -29,8 +27,6 @@ export function LessonsFilters({
   specializations,
   teachers,
   subjects,
-  monthFrom,
-  monthTo,
   defaults,
 }: LessonsFiltersProps) {
   const router = useRouter();
@@ -39,8 +35,6 @@ export function LessonsFilters({
     e.preventDefault();
     const fd = new FormData(e.currentTarget);
     const params = new URLSearchParams();
-    if (monthFrom) params.set("from", monthFrom);
-    if (monthTo) params.set("to", monthTo);
 
     for (const key of ["classId", "trackId", "specializationId", "teacherId", "subject"] as const) {
       const value = fd.get(key) as string;
