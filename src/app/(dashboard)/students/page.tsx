@@ -309,6 +309,7 @@ export default async function StudentsPage() {
 
   return (
     <div>
+      <div className="print:hidden">
       <PageHeader
         title="תלמידות"
         description={
@@ -319,8 +320,9 @@ export default async function StudentsPage() {
               : "צפייה בתלמידות ובכרטיסים. אין הוספה ואין עריכה."
         }
       />
+      </div>
       {canWrite && activeUnplaced > 0 && previousYear && (
-        <div className="mb-4 rounded-xl border border-primary/20 bg-secondary-container/40 p-4">
+        <div className="mb-4 rounded-xl border border-primary/20 bg-secondary-container/40 p-4 print:hidden">
           <p className="mb-2 text-body-md font-medium text-on-surface">
             {activeUnplaced} תלמידות פעילות בלי שיבוץ בשנה הנוכחית
           </p>
@@ -335,6 +337,7 @@ export default async function StudentsPage() {
         yearOptions={yearOptions}
         viewOnly={listOnly}
         canWrite={canWrite}
+        yearName={activeYear?.name ?? ""}
       />
     </div>
   );

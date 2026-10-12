@@ -49,20 +49,22 @@ export function StudentPersonalNote({
 
   if (compact && !editing) {
     return (
-      <div className="mt-2 max-w-xl">
+      <div className="mt-1 max-w-xl">
         {note ? (
-          <p className="rounded-lg border border-secondary/25 bg-secondary-container/40 px-3 py-2 font-body-sm text-body-sm text-on-surface">
-            <Icon name="edit_note" className="me-1 inline align-text-bottom text-[16px] text-secondary" />
+          <p className="rounded-md border border-secondary/25 bg-secondary-container/40 px-2 py-1 text-[12px] leading-snug text-on-surface">
+            <Icon name="edit_note" className="me-1 inline align-text-bottom text-[14px] text-secondary" />
             {note}
           </p>
         ) : (
-          <p className="font-caption text-caption text-on-surface-variant">אין הערה אישית</p>
+          <p className="print:hidden font-caption text-caption text-on-surface-variant">
+            אין הערה אישית
+          </p>
         )}
         {canWrite ? (
         <button
           type="button"
           onClick={() => setEditing(true)}
-          className="mt-1 font-label-md text-label-md text-secondary hover:underline"
+          className="print:hidden mt-0.5 font-caption text-caption text-secondary hover:underline"
         >
           {note ? "עריכת הערה" : "הוספת הערה אישית"}
         </button>

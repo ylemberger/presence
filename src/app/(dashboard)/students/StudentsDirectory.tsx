@@ -11,6 +11,62 @@ import { StudentsForm } from "./StudentsForm";
 import { StudentsImport } from "./StudentsImport";
 import type { Grade, Class, Track, Specialization } from "@/types/database";
 import { Icon } from "@/components/ui/Icon";
+import { PrintButton } from "@/components/ui/PrintButton";
+import { SeminarPrintHeader } from "@/components/print/SeminarPrintHeader";
+
+const PRINT_COLUMNS = [
+  { id: "name", label: "שם", defaultOn: true },
+  { id: "identity", label: 'ת"ז', defaultOn: true },
+  { id: "grade", label: "שכבה", defaultOn: true },
+  { id: "class", label: "כיתה", defaultOn: true },
+  { id: "track", label: "מסלול", defaultOn: true },
+  { id: "spec", label: "התמחות", defaultOn: true },
+  { id: "psychology", label: "פסיכולוגיה", defaultOn: false },
+  { id: "city", label: "עיר", defaultOn: false },
+  { id: "phone", label: "טלפון", defaultOn: false },
+  { id: "studentPhone", label: "פל׳ תלמידה", defaultOn: false },
+  { id: "motherPhone", label: "פל׳ אם", defaultOn: false },
+  { id: "fatherPhone", label: "פל׳ אב", defaultOn: false },
+  { id: "highSchool", label: "תיכון", defaultOn: false },
+  { id: "status", label: "סטטוס", defaultOn: false },
+] as const;
+
+type PrintColId = (typeof PRINT_COLUMNS)[number]["id"];
+
+function printCell(s: StudentRow, id: PrintColId): string {
+  switch (id) {
+    case "name":
+      return `${s.first_name || s.full_name.split(" ")[0]} ${s.last_name}`.trim();
+    case "identity":
+      return s.identity_number;
+    case "grade":
+      return s.gradeName;
+    case "class":
+      return s.className;
+    case "track":
+      return s.trackName;
+    case "spec":
+      return [s.specializationName, s.secondarySpecializationName]
+        .filter((v) => v && v !== "—")
+        .join(" + ") || "—";
+    case "psychology":
+      return s.isPsychology ? "פסיכולוגיה" : "";
+    case "city":
+      return s.city ?? "";
+    case "phone":
+      return s.phone ?? "";
+    case "studentPhone":
+      return s.student_phone ?? "";
+    case "motherPhone":
+      return s.mother_phone ?? "";
+    case "fatherPhone":
+      return s.father_phone ?? "";
+    case "highSchool":
+      return s.high_school ?? "";
+    case "status":
+      return s.is_active ? "פעילה" : "לא פעילה";
+  }
+}
 
 interface StudentRow {
   id: string;
@@ -113,11 +169,13 @@ export function StudentsDirectory({
   yearOptions,
   viewOnly = false,
   canWrite = true,
+  yearName = "",
 }: {
   students: StudentRow[];
   yearOptions: YearOptions | null;
   viewOnly?: boolean;
   canWrite?: boolean;
+  yearName?: string;
 }) {
   const [query, setQuery] = useState("");
   const [gradeId, setGradeId] = useState("");
@@ -130,6 +188,12 @@ export function StudentsDirectory({
   const [status, setStatus] = useState<"all" | "active" | "inactive">("all");
   const [modalOpen, setModalOpen] = useState(false);
   const [yearError, setYearError] = useState<string | null>(null);
+  const [printCols, setPrintCols] = useState<Record<PrintColId, boolean>>(() =>
+    Object.fromEntries(PRINT_COLUMNS.map((c) => [c.id, c.defaultOn])) as Record<
+      PrintColId,
+      boolean
+    >
+  );
 
   const gradeNameById = useMemo(
     () => new Map((yearOptions?.grades ?? []).map((g) => [g.id, g.name])),
@@ -248,6 +312,51 @@ export function StudentsDirectory({
       yearOptions.specializations.length
   );
 
+  const visiblePrintCols = PRINT_COLUMNS.filter((c) => printCols[c.id]);
+  const printColumns =
+    visiblePrintCols.length > 0 ? visiblePrintCols : PRINT_COLUMNS.filter((c) => c.id === "name");
+
+  const printSubtitle = useMemo(() => {
+    const bits: string[] = [];
+    if (yearName) bits.push(yearName);
+    if (gradeId) {
+      bits.push(`שכבה ${yearOptions?.grades.find((g) => g.id === gradeId)?.name ?? ""}`.trim());
+    }
+    if (classId) {
+      bits.push(`כיתה ${yearOptions?.classes.find((c) => c.id === classId)?.name ?? ""}`.trim());
+    }
+    if (trackId) {
+      bits.push(yearOptions?.tracks.find((t) => t.id === trackId)?.name ?? "");
+    }
+    if (specId) {
+      bits.push(yearOptions?.specializations.find((s) => s.id === specId)?.name ?? "");
+    }
+    if (subjectKey) bits.push(subjectKey);
+    if (lessonId) {
+      bits.push(yearOptions?.lessons?.find((l) => l.id === lessonId)?.label ?? "");
+    }
+    if (psychology === "yes") bits.push("פסיכולוגיה");
+    if (psychology === "no") bits.push("לא פסיכולוגיה");
+    if (status === "active") bits.push("פעילות");
+    if (status === "inactive") bits.push("לא פעילות");
+    if (query.trim()) bits.push(`חיפוש: ${query.trim()}`);
+    bits.push(`${filtered.length} תלמידות`);
+    return bits.filter(Boolean).join(" · ");
+  }, [
+    yearName,
+    yearOptions,
+    gradeId,
+    classId,
+    trackId,
+    specId,
+    subjectKey,
+    lessonId,
+    psychology,
+    status,
+    query,
+    filtered.length,
+  ]);
+
   const hasActiveFilter = Boolean(
     query.trim() ||
       gradeId ||
@@ -261,8 +370,9 @@ export function StudentsDirectory({
   );
 
   return (
-    <div className="min-w-0 overflow-x-hidden rounded-xl border border-outline-variant/30 bg-surface-container-lowest shadow-tactile-md">
-      <div className="grid gap-3 border-b border-outline-variant/30 bg-surface-container-low/60 px-5 py-4 md:grid-cols-2 xl:grid-cols-4">
+    <div className="min-w-0 overflow-x-hidden rounded-xl border border-outline-variant/30 bg-surface-container-lowest shadow-tactile-md print:overflow-visible print:border-0 print:bg-transparent print:shadow-none">
+      <SeminarPrintHeader title="רשימת תלמידות" subtitle={printSubtitle} />
+      <div className="grid gap-3 border-b border-outline-variant/30 bg-surface-container-low/60 px-5 py-4 print:hidden md:grid-cols-2 xl:grid-cols-4">
         <div className="xl:col-span-2">
           <Input
             label="חיפוש"
@@ -375,8 +485,15 @@ export function StudentsDirectory({
                 </Link>
               </p>
             )}
-            {!canWrite ? null : (
             <div className="ms-auto flex flex-wrap items-center gap-2">
+              <PrintButton
+                label="הדפסת רשימה"
+                documentTitle={`תלמידות${yearName ? `-${yearName}` : ""}`}
+                disabled={filtered.length === 0}
+                disabledReason="אין תלמידות להדפסה לפי הסינון"
+              />
+            {!canWrite ? null : (
+            <>
               <StudentsImport
                 disabledReason={
                   !yearOptions
@@ -390,19 +507,43 @@ export function StudentsDirectory({
                 <Icon name="person_add" className="text-[18px]" />
                 תלמידה חדשה
               </Button>
-            </div>
+            </>
             )}
+            </div>
+          </div>
+        </div>
+        <div className="xl:col-span-4">
+          <p className="mb-1 font-caption text-caption text-on-surface-variant">
+            עמודות להדפסה — סמני מה שיופיע ברשימה המודפסת (לפי הסינון למעלה)
+          </p>
+          <div className="flex flex-wrap gap-x-3 gap-y-1">
+            {PRINT_COLUMNS.map((col) => (
+              <label
+                key={col.id}
+                className="inline-flex cursor-pointer items-center gap-1.5 font-caption text-caption text-on-surface"
+              >
+                <input
+                  type="checkbox"
+                  checked={printCols[col.id]}
+                  onChange={() =>
+                    setPrintCols((prev) => ({ ...prev, [col.id]: !prev[col.id] }))
+                  }
+                  className="rounded border-outline-variant"
+                />
+                {col.label}
+              </label>
+            ))}
           </div>
         </div>
       </div>
 
       {yearError && (
-        <p className="border-b border-outline-variant/30 bg-error-container/40 px-5 py-3 text-body-md text-on-error-container">
+        <p className="border-b border-outline-variant/30 bg-error-container/40 px-5 py-3 text-body-md text-on-error-container print:hidden">
           {yearError}
         </p>
       )}
 
-      <div className="min-w-0 overflow-x-hidden">
+      <div className="min-w-0 overflow-x-hidden print:hidden">
         <table className="w-full table-fixed border-collapse text-right">
           <colgroup>
             <col className="w-[26%]" />
@@ -496,8 +637,36 @@ export function StudentsDirectory({
           </tbody>
         </table>
       </div>
+      <div className="hidden print:block">
+        <table className="w-full border-collapse text-right text-[11px] leading-tight">
+          <thead>
+            <tr className="border-b border-primary">
+              {printColumns.map((col) => (
+                <th
+                  key={col.id}
+                  className="px-1.5 py-1 text-right font-semibold text-primary"
+                >
+                  {col.label}
+                </th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {filtered.map((s) => (
+              <tr key={s.id} className="border-b border-outline-variant/40">
+                {printColumns.map((col) => (
+                  <td key={col.id} className="px-1.5 py-0.5 text-on-surface">
+                    {printCell(s, col.id) || "—"}
+                  </td>
+                ))}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+
       {filtered.length === 0 && (
-        <div className="flex flex-col items-center gap-2 px-5 py-12 text-center">
+        <div className="flex flex-col items-center gap-2 px-5 py-12 text-center print:hidden">
           <Icon name="group" className="text-5xl text-outline-variant" />
           <p className="font-title-lg text-title-lg text-primary">
             לא נמצאו תלמידות

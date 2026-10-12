@@ -4,6 +4,7 @@ import { Table, TableRow, TableCell } from "@/components/ui/Table";
 import { StatusPill } from "@/components/ui/PageHeader";
 import { Section } from "@/components/ui/Section";
 import { PrintButton } from "@/components/ui/PrintButton";
+import { SeminarPrintHeader } from "@/components/print/SeminarPrintHeader";
 import { isViewerEmail } from "@/lib/auth/allowed-emails";
 import { createClient, requireAuthenticatedUser } from "@/lib/supabase/server";
 import { getActiveAcademicYear } from "@/lib/utils";
@@ -443,15 +444,14 @@ export default async function StudentDetailPage({ params }: Props) {
     : null;
 
   function detail(label: string, value: string | number | null | undefined) {
-    const text =
-      value === null || value === undefined || value === ""
-        ? "—"
-        : String(value);
+    if (value === null || value === undefined || value === "" || value === "—") {
+      return null;
+    }
     return (
       <div className="min-w-0">
-        <dt className="font-caption text-caption text-on-surface-variant">{label}</dt>
-        <dd className="mt-0.5 break-words font-body-md text-body-md text-on-surface">
-          {text}
+        <dt className="text-[10px] leading-none text-on-surface-variant">{label}</dt>
+        <dd className="mt-0.5 break-words text-[12px] font-medium leading-snug text-on-surface">
+          {String(value)}
         </dd>
       </div>
     );
@@ -459,22 +459,47 @@ export default async function StudentDetailPage({ params }: Props) {
 
   return (
     <div className="flex flex-col gap-gutter">
+      <SeminarPrintHeader
+        title={displayName}
+        subtitle={
+          currentPlacement
+            ? [
+                currentPlacement.grade,
+                currentPlacement.className,
+                currentPlacement.track,
+                currentPlacement.specialization !== "—"
+                  ? currentPlacement.specialization
+                  : null,
+                activeYear?.name,
+              ]
+                .filter(Boolean)
+                .join(" · ")
+            : activeYear?.name
+        }
+      />
+      <Link
+        href="/students"
+        className="print:hidden inline-flex w-fit items-center gap-1 font-label-md text-label-md text-primary hover:underline"
+      >
+        <Icon name="arrow_back" className="text-[18px]" />
+        חזרה לתלמידות
+      </Link>
       {/* Student Header Profile Card — bento hero with top accent */}
-      <section className="rounded-xl border border-outline-variant/30 border-t-4 border-t-secondary bg-surface-container-lowest p-6 shadow-tactile-md">
-        <div className="flex flex-col items-start justify-between gap-4 md:flex-row md:items-start">
-          <div className="flex w-full min-w-0 flex-1 items-start gap-6">
+      <section className="rounded-xl border border-outline-variant/30 border-t-4 border-t-secondary bg-surface-container-lowest p-4 shadow-tactile-md print:border print:p-3 print:shadow-none">
+        <div className="flex flex-col items-start justify-between gap-3 md:flex-row md:items-start">
+          <div className="flex w-full min-w-0 flex-1 items-start gap-3">
             <span
               aria-hidden
-              className="flex h-20 w-20 shrink-0 items-center justify-center rounded-full border-2 border-outline-variant bg-secondary-container font-headline-lg text-headline-lg font-bold text-primary"
+              className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full border border-outline-variant bg-secondary-container text-[18px] font-bold text-primary print:hidden"
             >
               {initial}
             </span>
             <div className="min-w-0 flex-1">
-              <div className="flex flex-wrap items-center gap-3">
-                <h2 className="font-headline-lg text-headline-lg text-primary">
+              <div className="flex flex-wrap items-center gap-2">
+                <h2 className="font-headline-md text-headline-md text-primary print:text-title-lg">
                   {displayName}
                 </h2>
-                <span className="flex items-center gap-2 font-body-md text-body-md text-on-surface-variant">
+                <span className="flex items-center gap-1.5 text-[12px] text-on-surface-variant">
                   <span
                     className={cn(
                       "inline-block h-2 w-2 rounded-full",
@@ -502,7 +527,7 @@ export default async function StudentDetailPage({ params }: Props) {
               />
 
               {currentPlacement && (
-                <p className="mt-2 font-body-md text-body-md text-on-surface-variant">
+                <p className="mt-1 text-[12px] leading-snug text-on-surface-variant">
                   {[
                     `שכבה ${currentPlacement.grade}`,
                     currentPlacement.className,
@@ -520,10 +545,7 @@ export default async function StudentDetailPage({ params }: Props) {
                 </p>
               )}
 
-              <dl className="mt-4 grid grid-cols-2 gap-x-4 gap-y-3 sm:grid-cols-3 lg:grid-cols-4">
-                {detail("מי", student.mi)}
-                {detail("שם פרטי", student.first_name || null)}
-                {detail("משפחה", student.last_name || null)}
+              <dl className="mt-2 grid grid-cols-2 gap-x-3 gap-y-1.5 sm:grid-cols-3 lg:grid-cols-5 print:grid-cols-5">
                 {detail("מ.ז.", student.identity_number)}
                 {detail("מחזור", student.cohort_number)}
                 {detail("עיר", student.city)}
@@ -535,20 +557,12 @@ export default async function StudentDetailPage({ params }: Props) {
                 {detail("פל׳ אם", student.mother_phone)}
                 {detail("פל׳ תלמידה", student.student_phone)}
                 {detail("תיכון", student.high_school)}
-                {detail("תוכנית חץ", student.chetz_program ? "כן" : "לא")}
-                {currentPlacement && detail("שכבה", currentPlacement.grade)}
-                {currentPlacement && detail("כיתה", currentPlacement.className)}
-                {currentPlacement && detail("מסלול", currentPlacement.track)}
-                {currentPlacement &&
-                  detail("התמחות", currentPlacement.specialization)}
-                {currentPlacement &&
-                  detail("התמחות נוספת", currentPlacement.secondary)}
-                {currentPlacement &&
-                  detail("פסיכולוגיה", currentPlacement.psychology ? "כן" : "לא")}
               </dl>
             </div>
           </div>
-          <PrintButton />
+          <div className="print:hidden">
+            <PrintButton documentTitle={`כרטיס-${displayName}`} />
+          </div>
         </div>
       </section>
 
@@ -556,7 +570,7 @@ export default async function StudentDetailPage({ params }: Props) {
       <div className="grid grid-cols-1 gap-gutter xl:grid-cols-3">
         {/* Left column — wider tables */}
         <div className="flex flex-col gap-gutter xl:col-span-2">
-          <Section icon="donut_large" title="אחוזי נוכחות">
+          <Section icon="donut_large" title="אחוזי נוכחות" className="print:border-0 print:shadow-none">
             {subjectStats.length === 0 ? (
               <div className="rounded-xl border border-dashed border-outline-variant/50 bg-surface-container-low/60 px-4 py-8 text-center">
                 <Icon name="insights" className="mb-2 block text-[36px] text-secondary" />
@@ -566,10 +580,11 @@ export default async function StudentDetailPage({ params }: Props) {
               </div>
             ) : (
               <>
-              <p className="mb-3 font-caption text-caption text-on-surface-variant">
+              <p className="mb-2 print:hidden font-caption text-caption text-on-surface-variant">
                 כל שני איחורים = חיסור אחד. איחור בודד שנשאר נספר כנוכחות. שיעורים מחושבים לחוד, אלא אם קובצו ידנית.
               </p>
               <Table
+                compact
                 headers={[
                   "נוכחות",
                   "שיעורים",
@@ -582,7 +597,7 @@ export default async function StudentDetailPage({ params }: Props) {
               >
                 {subjectStats.map((row) => (
                   <TableRow key={row.unitKey}>
-                    <TableCell className="font-semibold text-primary">
+                    <TableCell compact className="font-semibold text-primary">
                       <div>{row.subject}</div>
                       {row.lessonNames ? (
                         <div className="mt-0.5 font-caption text-caption font-normal text-on-surface-variant">
@@ -590,19 +605,19 @@ export default async function StudentDetailPage({ params }: Props) {
                         </div>
                       ) : null}
                     </TableCell>
-                    <TableCell className="text-on-surface-variant">
+                    <TableCell compact className="text-on-surface-variant">
                       {row.totalRequired}
                     </TableCell>
-                    <TableCell className="text-attendance-present">
+                    <TableCell compact className="text-attendance-present">
                       {row.presentOnlyCount}
                     </TableCell>
-                    <TableCell className="text-attendance-late">
+                    <TableCell compact className="text-attendance-late">
                       {row.lateCount}
                     </TableCell>
-                    <TableCell className="text-attendance-absent">
+                    <TableCell compact className="text-attendance-absent">
                       {row.absentCount}
                     </TableCell>
-                    <TableCell
+                    <TableCell compact
                       className={cn(
                         "font-bold",
                         row.ruleLevel === "blocked" && "text-attendance-absent",
@@ -613,7 +628,7 @@ export default async function StudentDetailPage({ params }: Props) {
                       {row.absencePercent}%
                       {row.maxAllowed != null ? ` / ${row.maxAllowed}%` : ""}
                     </TableCell>
-                    <TableCell>
+                    <TableCell compact>
                       <StatusPill
                         tone={
                           row.ruleLevel === "blocked"
@@ -634,7 +649,7 @@ export default async function StudentDetailPage({ params }: Props) {
             )}
           </Section>
 
-          <Section icon="history" title="היסטוריית העברות" accent="none">
+          <Section icon="history" title="היסטוריית העברות" accent="none" className="print:hidden">
             <Table
               headers={[
                 "שנה",
@@ -717,7 +732,7 @@ export default async function StudentDetailPage({ params }: Props) {
         </div>
 
         {/* Right column — forms & smaller cards */}
-        <div className="flex flex-col gap-gutter">
+        <div className="flex flex-col gap-gutter print:hidden">
           {yearData && (
             <Section
               icon="move_up"
