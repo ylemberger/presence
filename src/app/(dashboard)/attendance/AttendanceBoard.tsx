@@ -8,7 +8,9 @@ import { Combobox } from "@/components/ui/Combobox";
 import { HebrewMonthCalendar } from "@/components/ui/HebrewMonthCalendar";
 import {
   bulkAttendanceAction,
+  cancelOccurrenceAction,
   copyPreviousAttendanceAction,
+  restoreCancelledOccurrenceAction,
   restoreOccurrencesAction,
   syncLessonStudentsAction,
   upsertAttendanceAction,
@@ -115,6 +117,7 @@ interface Props {
     date: string;
     studentCount: number;
     markedCount: number;
+    cancelled?: boolean;
   }>;
   prevWeekBlocked?: boolean;
   prevWeekIncomplete?: Array<{ id: string; date: string }>;
@@ -204,6 +207,7 @@ export function AttendanceBoard({
   const [syncing, setSyncing] = useState(false);
   const [copying, setCopying] = useState(false);
   const [reopening, setReopening] = useState(false);
+  const [cancellingId, setCancellingId] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
   const [note, setNote] = useState(noteBody);
   const [noteSaving, setNoteSaving] = useState(false);
@@ -635,6 +639,47 @@ export function AttendanceBoard({
     setCopying(false);
   }
 
+  async function markOccurrenceDidNotTakePlace(occurrenceId: string) {
+    if (!canWrite || cancellingId) return;
+    const ok = window.confirm(
+      "לסמן שהמפגש לא התקיים? הוא לא ייספר בנוכחות ולא יוריד חיסורים לתלמידות."
+    );
+    if (!ok) return;
+    setCancellingId(occurrenceId);
+    setMessage(null);
+    const result = await cancelOccurrenceAction(occurrenceId);
+    if (result && "error" in result && result.error) {
+      setMessage(result.error);
+      setCancellingId(null);
+      return;
+    }
+    const remaining = selectedLessonOccurrences.filter(
+      (o) => o.id !== occurrenceId && !o.cancelled
+    );
+    if (occurrenceId === activeOccurrenceId) {
+      if (remaining[0]) selectOccurrence(remaining[0].id, remaining[0].date);
+      else navigate(buildParams({ occurrenceId: undefined }));
+    }
+    setMessage("המפגש סומן כלא התקיים ואינו נספר בנוכחות.");
+    setCancellingId(null);
+    router.refresh();
+  }
+
+  async function restoreCancelledOccurrence(occurrenceId: string, date: string) {
+    if (!canWrite || cancellingId) return;
+    setCancellingId(occurrenceId);
+    setMessage(null);
+    const result = await restoreCancelledOccurrenceAction(occurrenceId);
+    if (result && "error" in result && result.error) {
+      setMessage(result.error);
+    } else {
+      setMessage("המופע חזר ללוח. אפשר למלא נוכחות.");
+      selectOccurrence(occurrenceId, date);
+      router.refresh();
+    }
+    setCancellingId(null);
+  }
+
   async function reopenForEdits() {
     if (!activeLesson || reopening) return;
     const ids = linkedOccurrenceIds(activeLesson, activeOccurrenceId);
@@ -1029,29 +1074,64 @@ export function AttendanceBoard({
                 {selectedLessonOccurrences.map((o) => {
                   const complete = o.studentCount > 0 && o.markedCount >= o.studentCount;
                   const selected = o.id === activeOccurrenceId;
+                  const cancelled = Boolean(o.cancelled);
                   return (
-                    <button
+                    <div
                       key={o.id}
-                      type="button"
-                      onClick={() => selectOccurrence(o.id, o.date)}
                       className={cn(
-                        "flex items-center justify-between gap-2 rounded-md border px-2 py-1.5 text-right",
-                        selected
-                          ? "border-secondary bg-secondary-container/40"
-                          : "border-outline-variant/40 hover:border-secondary/50"
+                        "flex items-center gap-1 rounded-md border px-1 py-0.5",
+                        cancelled
+                          ? "border-outline-variant/30 bg-surface-container-low/50 opacity-80"
+                          : selected
+                            ? "border-secondary bg-secondary-container/40"
+                            : "border-outline-variant/40"
                       )}
                     >
-                      <span className="font-body-sm text-body-sm text-on-surface">
-                        {formatHebrewDate(o.date)}
-                        <span className="ms-1 font-caption text-caption text-on-surface-variant">
-                          ({formatGregorianDate(o.date)})
+                      <button
+                        type="button"
+                        onClick={() => {
+                          if (!cancelled) selectOccurrence(o.id, o.date);
+                        }}
+                        disabled={cancelled}
+                        className="flex min-w-0 flex-1 items-center justify-between gap-2 px-1 py-1 text-right disabled:cursor-default"
+                      >
+                        <span className="font-body-sm text-body-sm text-on-surface">
+                          {formatHebrewDate(o.date)}
+                          <span className="ms-1 font-caption text-caption text-on-surface-variant">
+                            ({formatGregorianDate(o.date)})
+                          </span>
+                          {cancelled ? (
+                            <span className="ms-1 font-caption text-caption text-on-surface-variant">
+                              לא התקיים
+                            </span>
+                          ) : null}
                         </span>
-                      </span>
-                      <span className="font-caption text-caption text-on-surface-variant">
-                        {o.markedCount}/{o.studentCount}
-                        {complete ? " ✓" : ""}
-                      </span>
-                    </button>
+                        <span className="font-caption text-caption text-on-surface-variant">
+                          {cancelled ? "—" : `${o.markedCount}/${o.studentCount}${complete ? " ✓" : ""}`}
+                        </span>
+                      </button>
+                      {canWrite && cancelled ? (
+                        <button
+                          type="button"
+                          title="החזרי את המופע"
+                          disabled={cancellingId === o.id}
+                          onClick={() => void restoreCancelledOccurrence(o.id, o.date)}
+                          className="shrink-0 rounded px-1.5 py-1 font-caption text-caption text-primary hover:bg-surface-container-lowest disabled:opacity-50"
+                        >
+                          החזר
+                        </button>
+                      ) : canWrite ? (
+                        <button
+                          type="button"
+                          title="המפגש לא התקיים — לא ייספר בנוכחות"
+                          disabled={cancellingId === o.id}
+                          onClick={() => void markOccurrenceDidNotTakePlace(o.id)}
+                          className="shrink-0 rounded px-1.5 py-1 font-caption text-caption text-on-surface-variant hover:bg-error-container hover:text-on-error-container disabled:opacity-50"
+                        >
+                          {cancellingId === o.id ? "…" : "לא התקיים"}
+                        </button>
+                      ) : null}
+                    </div>
                   );
                 })}
               </div>
@@ -1234,6 +1314,18 @@ export function AttendanceBoard({
                   >
                     <Icon name="undo" className="text-[16px]" />
                     {reopening ? "מחזירה…" : "החזירי לעריכה"}
+                  </Button>
+                )}
+                {canWrite && activeOccurrenceId && activeLesson.status !== "cancelled" && (
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="danger"
+                    disabled={cancellingId === activeOccurrenceId}
+                    onClick={() => void markOccurrenceDidNotTakePlace(activeOccurrenceId)}
+                  >
+                    <Icon name="event_busy" className="text-[16px]" />
+                    {cancellingId === activeOccurrenceId ? "מעדכנת…" : "המפגש לא התקיים"}
                   </Button>
                 )}
               </div>

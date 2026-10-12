@@ -433,22 +433,29 @@ export default async function ReportsPage({ searchParams }: Props) {
         const specName = currentAssignment?.specialization_id
           ? specById.get(currentAssignment.specialization_id) ?? "-"
           : "-";
-        const studies = studentLessonAssignments
-          .filter((la) => !la.end_date)
-          .map((la) => {
-            const meta = lessonCatalog.get(la.lesson_id);
-            if (!meta) return null;
-            const billing =
-              meta.billingType && meta.billingType in BILLING_TYPE_LABELS
-                ? BILLING_TYPE_LABELS[meta.billingType as keyof typeof BILLING_TYPE_LABELS]
-                : "";
-            const extra = la.assignment_type === "manual" ? "חריג" : "";
-            return [meta.subject, meta.lessonName !== meta.subject ? meta.lessonName : "", billing, extra]
-              .filter(Boolean)
-              .join(" · ");
-          })
-          .filter((v): v is string => Boolean(v))
-          .join(" | ");
+        const studies = params.lessonId
+          ? ""
+          : studentLessonAssignments
+              .filter((la) => !la.end_date)
+              .map((la) => {
+                const meta = lessonCatalog.get(la.lesson_id);
+                if (!meta) return null;
+                const billing =
+                  meta.billingType && meta.billingType in BILLING_TYPE_LABELS
+                    ? BILLING_TYPE_LABELS[meta.billingType as keyof typeof BILLING_TYPE_LABELS]
+                    : "";
+                const extra = la.assignment_type === "manual" ? "חריג" : "";
+                return [
+                  meta.subject,
+                  meta.lessonName !== meta.subject ? meta.lessonName : "",
+                  billing,
+                  extra,
+                ]
+                  .filter(Boolean)
+                  .join(" · ");
+              })
+              .filter((v): v is string => Boolean(v))
+              .join(" | ");
         const evaluated = evaluateAbsenceAgainstRule(summary.absencePercent, threshold);
 
         reportRows.push({
@@ -623,6 +630,14 @@ export default async function ReportsPage({ searchParams }: Props) {
   const selectedLessonMeta = params.lessonId ? lessonCatalog.get(params.lessonId) : undefined;
   const printTitle = singleStudentName
     ? `דוח נוכחות · ${singleStudentName} · ${activeYear.name}`
+    : selectedLessonMeta
+      ? `דוח נוכחות · ${lessonOptionLabel(
+          selectedLessonMeta.subject,
+          selectedLessonMeta.teacherName,
+          selectedLessonMeta.dayOfWeek,
+          selectedLessonMeta.lessonNumber,
+          selectedLessonMeta.periodCount
+        )} · ${activeYear.name}`
     : filterTeacherName
       ? `דוח נוכחות · ${filterTeacherName} · ${activeYear.name}`
       : `דוח נוכחות · ${activeYear.name}`;
@@ -861,15 +876,71 @@ export default async function ReportsPage({ searchParams }: Props) {
           <Section
             icon="table_view"
             title={printTitle}
-            subtitle={`שנה ${activeYear.name} · סף${
-              selectedRule
-                ? ` ${selectedRule.max_allowed_absence_percent}% (${selectedRule.name})`
-                : ` ${threshold}%`
-            }${selectedRule ? ` · אזהרה מ-${includeFrom}%` : ""}`}
+            subtitle={
+              params.lessonId
+                ? `שנה ${activeYear.name} · שורה לכל תלמידה בשיעור`
+                : `שנה ${activeYear.name} · סף${
+                    selectedRule
+                      ? ` ${selectedRule.max_allowed_absence_percent}% (${selectedRule.name})`
+                      : ` ${threshold}%`
+                  }${selectedRule ? ` · אזהרה מ-${includeFrom}%` : ""}`
+            }
             bodyBleed
             className="print:border-0"
             headerClassName="print:hidden"
           >
+            {params.lessonId ? (
+              <Table
+                compact
+                headers={[
+                  "תלמידה",
+                  "כיתה",
+                  "מופעים",
+                  "נוכחת",
+                  "איחור",
+                  "נעדרה",
+                  "לא סומן",
+                  "% חיסורים",
+                ]}
+              >
+                {reportRows.map((row) => (
+                  <TableRow key={row.studentId}>
+                    <TableCell compact className="font-medium text-primary">
+                      <Link href={`/students/${row.studentId}`} className="hover:underline">
+                        {row.studentName}
+                      </Link>
+                    </TableCell>
+                    <TableCell compact className="text-on-surface-variant">
+                      {row.className}
+                    </TableCell>
+                    <TableCell compact>{row.totalRequired}</TableCell>
+                    <TableCell compact className="text-attendance-present">
+                      {row.presentOnlyCount}
+                    </TableCell>
+                    <TableCell compact className="text-attendance-late">
+                      {row.lateCount}
+                    </TableCell>
+                    <TableCell compact className="text-attendance-absent">
+                      {row.absentCount}
+                    </TableCell>
+                    <TableCell compact className="text-on-surface-variant">
+                      {row.unmarkedCount}
+                    </TableCell>
+                    <TableCell
+                      compact
+                      className={cn(
+                        "font-semibold",
+                        row.ruleLevel === "blocked" && "text-attendance-absent",
+                        row.ruleLevel === "warning" && "text-attendance-late",
+                        row.ruleLevel === "ok" && "text-attendance-present"
+                      )}
+                    >
+                      {row.absencePercent}%
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </Table>
+            ) : (
             <Table
               headers={[
                 "תלמידה",
@@ -950,6 +1021,7 @@ export default async function ReportsPage({ searchParams }: Props) {
                 </TableRow>
               ))}
             </Table>
+            )}
           </Section>
           )}
 

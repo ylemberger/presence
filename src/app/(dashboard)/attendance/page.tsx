@@ -122,11 +122,12 @@ export default async function AttendancePage({ searchParams }: Props) {
     params.lessonId
       ? supabase
           .from("lesson_occurrences")
-          .select("id, occurrence_date, lesson_id")
+          .select("id, occurrence_date, lesson_id, status")
           .eq("lesson_id", params.lessonId)
-          .neq("status", "cancelled")
           .order("occurrence_date")
-      : Promise.resolve({ data: [] as { id: string; occurrence_date: string; lesson_id: string }[] }),
+      : Promise.resolve({
+          data: [] as { id: string; occurrence_date: string; lesson_id: string; status: string }[],
+        }),
   ]);
 
   type LessonJoin = {
@@ -517,6 +518,7 @@ export default async function AttendancePage({ searchParams }: Props) {
     date: string;
     studentCount: number;
     markedCount: number;
+    cancelled: boolean;
   }> = [];
   if (params.lessonId && (selectedLessonOccRaw ?? []).length > 0) {
     const yearOccs = selectedLessonOccRaw ?? [];
@@ -545,6 +547,7 @@ export default async function AttendancePage({ searchParams }: Props) {
         date: o.occurrence_date,
         studentCount: students.length,
         markedCount: marked,
+        cancelled: o.status === "cancelled",
       };
     });
   }

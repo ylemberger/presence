@@ -26,6 +26,9 @@ export function MultiSelect({
   }
 
   const large = fieldSize === "lg";
+  const optionIds = options.map((opt) => opt.value);
+  const allSelected =
+    optionIds.length > 0 && optionIds.every((id) => values.includes(id));
 
   return (
     <fieldset className="flex flex-col gap-1.5">
@@ -39,6 +42,26 @@ export function MultiSelect({
         >
           {hint}
         </p>
+      )}
+      {options.length > 0 && (
+        <div className="flex flex-wrap gap-2">
+          <button
+            type="button"
+            onClick={() => onChange(optionIds)}
+            disabled={allSelected}
+            className="font-label-md text-label-md text-secondary hover:underline disabled:text-on-surface-variant disabled:no-underline"
+          >
+            בחרי הכול
+          </button>
+          <button
+            type="button"
+            onClick={() => onChange([])}
+            disabled={values.length === 0}
+            className="font-label-md text-label-md text-secondary hover:underline disabled:text-on-surface-variant disabled:no-underline"
+          >
+            נקי
+          </button>
+        </div>
       )}
       {values.map((id) => (
         <input key={id} type="hidden" name={name} value={id} />

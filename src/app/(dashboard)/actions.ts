@@ -1828,13 +1828,36 @@ export async function cancelOccurrenceAction(occurrenceId: string) {
   const actionAuth = await createActionClient();
   if ("error" in actionAuth) return { error: actionAuth.error };
   const supabase = actionAuth.supabase;
+  const id = String(occurrenceId ?? "").trim();
+  if (!id) return { error: "חסר מופע" };
   const { error } = await supabase
     .from("lesson_occurrences")
     .update({ status: "cancelled", gap_handling: null })
-    .eq("id", occurrenceId);
+    .eq("id", id);
   if (error) return { error: error.message };
   revalidatePath("/lessons");
   revalidatePath("/attendance");
+  revalidatePath("/reports");
+  revalidatePath("/timetable");
+  return { success: true };
+}
+
+export async function restoreCancelledOccurrenceAction(occurrenceId: string) {
+  const actionAuth = await createActionClient();
+  if ("error" in actionAuth) return { error: actionAuth.error };
+  const supabase = actionAuth.supabase;
+  const id = String(occurrenceId ?? "").trim();
+  if (!id) return { error: "חסר מופע" };
+  const { error } = await supabase
+    .from("lesson_occurrences")
+    .update({ status: "scheduled", gap_handling: null })
+    .eq("id", id)
+    .eq("status", "cancelled");
+  if (error) return { error: "לא ניתן להחזיר את המופע" };
+  revalidatePath("/lessons");
+  revalidatePath("/attendance");
+  revalidatePath("/reports");
+  revalidatePath("/timetable");
   return { success: true };
 }
 

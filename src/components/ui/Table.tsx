@@ -4,9 +4,10 @@ interface TableProps {
   headers: string[];
   children: React.ReactNode;
   className?: string;
+  compact?: boolean;
 }
 
-export function Table({ headers, children, className }: TableProps) {
+export function Table({ headers, children, className, compact = false }: TableProps) {
   return (
     <div
       className={cn(
@@ -15,13 +16,16 @@ export function Table({ headers, children, className }: TableProps) {
       )}
     >
       <div className="overflow-x-auto print:overflow-visible">
-        <table className="w-full text-body-md">
+        <table className={cn("w-full", compact ? "text-caption" : "text-body-md")}>
           <thead>
             <tr className="border-b border-outline-variant/40 bg-surface-container-low">
               {headers.map((header) => (
                 <th
                   key={header}
-                  className="px-3 py-2 text-right text-caption font-semibold tracking-wide text-on-surface-variant print:bg-surface-container-low"
+                  className={cn(
+                    "text-right font-semibold tracking-wide text-on-surface-variant print:bg-surface-container-low",
+                    compact ? "px-2 py-1 text-[11px]" : "px-3 py-2 text-caption"
+                  )}
                 >
                   {header}
                 </th>
@@ -53,13 +57,22 @@ export function TableCell({
   children,
   className,
   dir,
+  compact = false,
 }: {
   children: React.ReactNode;
   className?: string;
   dir?: "ltr" | "rtl" | "auto";
+  compact?: boolean;
 }) {
   return (
-    <td className={cn("px-3 py-2 text-right text-on-surface", className)} dir={dir}>
+    <td
+      className={cn(
+        "text-right text-on-surface",
+        compact ? "px-2 py-0.5 leading-tight" : "px-3 py-2",
+        className
+      )}
+      dir={dir}
+    >
       {children}
     </td>
   );
