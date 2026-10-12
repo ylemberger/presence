@@ -372,6 +372,37 @@ export function StudentsDirectory({
   return (
     <div className="min-w-0 overflow-x-hidden rounded-xl border border-outline-variant/30 bg-surface-container-lowest shadow-tactile-md print:overflow-visible print:border-0 print:bg-transparent print:shadow-none">
       <SeminarPrintHeader title="רשימת תלמידות" subtitle={printSubtitle} />
+      <div className="flex flex-wrap items-start justify-between gap-3 border-b border-outline-variant/30 bg-secondary-container/30 px-5 py-3 print:hidden">
+        <div className="min-w-0 flex-1">
+          <p className="mb-1 font-label-md text-label-md text-on-surface">
+            הדפסה — סמני אילו עמודות יופיעו ברשימה המודפסת (לפי הסינון למטה)
+          </p>
+          <div className="flex flex-wrap gap-x-3 gap-y-1">
+            {PRINT_COLUMNS.map((col) => (
+              <label
+                key={col.id}
+                className="inline-flex cursor-pointer items-center gap-1.5 font-caption text-caption text-on-surface"
+              >
+                <input
+                  type="checkbox"
+                  checked={printCols[col.id]}
+                  onChange={() =>
+                    setPrintCols((prev) => ({ ...prev, [col.id]: !prev[col.id] }))
+                  }
+                  className="rounded border-outline-variant"
+                />
+                {col.label}
+              </label>
+            ))}
+          </div>
+        </div>
+        <PrintButton
+          label="הדפסת רשימה"
+          documentTitle={`תלמידות${yearName ? `-${yearName}` : ""}`}
+          disabled={filtered.length === 0}
+          disabledReason="אין תלמידות להדפסה לפי הסינון"
+        />
+      </div>
       <div className="grid gap-3 border-b border-outline-variant/30 bg-surface-container-low/60 px-5 py-4 print:hidden md:grid-cols-2 xl:grid-cols-4">
         <div className="xl:col-span-2">
           <Input
@@ -486,12 +517,6 @@ export function StudentsDirectory({
               </p>
             )}
             <div className="ms-auto flex flex-wrap items-center gap-2">
-              <PrintButton
-                label="הדפסת רשימה"
-                documentTitle={`תלמידות${yearName ? `-${yearName}` : ""}`}
-                disabled={filtered.length === 0}
-                disabledReason="אין תלמידות להדפסה לפי הסינון"
-              />
             {!canWrite ? null : (
             <>
               <StudentsImport
@@ -510,29 +535,6 @@ export function StudentsDirectory({
             </>
             )}
             </div>
-          </div>
-        </div>
-        <div className="xl:col-span-4">
-          <p className="mb-1 font-caption text-caption text-on-surface-variant">
-            עמודות להדפסה — סמני מה שיופיע ברשימה המודפסת (לפי הסינון למעלה)
-          </p>
-          <div className="flex flex-wrap gap-x-3 gap-y-1">
-            {PRINT_COLUMNS.map((col) => (
-              <label
-                key={col.id}
-                className="inline-flex cursor-pointer items-center gap-1.5 font-caption text-caption text-on-surface"
-              >
-                <input
-                  type="checkbox"
-                  checked={printCols[col.id]}
-                  onChange={() =>
-                    setPrintCols((prev) => ({ ...prev, [col.id]: !prev[col.id] }))
-                  }
-                  className="rounded border-outline-variant"
-                />
-                {col.label}
-              </label>
-            ))}
           </div>
         </div>
       </div>
