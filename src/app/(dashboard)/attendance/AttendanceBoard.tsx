@@ -645,7 +645,7 @@ export function AttendanceBoard({
   async function markOccurrenceDidNotTakePlace(occurrenceId: string) {
     if (!canWrite || cancellingId) return;
     const ok = window.confirm(
-      "לסמן שהמפגש לא התקיים? הוא לא ייספר בנוכחות ולא יוריד חיסורים לתלמידות."
+      "לבטל את השיעור ביום זה? הוא לא ייספר בנוכחות ולא יוריד חיסורים לתלמידות."
     );
     if (!ok) return;
     setCancellingId(occurrenceId);
@@ -1100,7 +1100,7 @@ export function AttendanceBoard({
                           </span>
                           {cancelled ? (
                             <span className="ms-1 font-caption text-caption text-on-surface-variant">
-                              לא התקיים
+                              בוטל
                             </span>
                           ) : null}
                         </span>
@@ -1109,25 +1109,25 @@ export function AttendanceBoard({
                         </span>
                       </button>
                       {canWrite && cancelled ? (
-                        <button
+                        <Button
                           type="button"
-                          title="החזרי את המופע"
+                          size="sm"
+                          variant="outline"
                           disabled={cancellingId === o.id}
                           onClick={() => void restoreCancelledOccurrence(o.id, o.date)}
-                          className="shrink-0 rounded px-1.5 py-1 font-caption text-caption text-primary hover:bg-surface-container-lowest disabled:opacity-50"
                         >
-                          החזר
-                        </button>
+                          החזר שיעור
+                        </Button>
                       ) : canWrite ? (
-                        <button
+                        <Button
                           type="button"
-                          title="המפגש לא התקיים — לא ייספר בנוכחות"
+                          size="sm"
+                          variant="danger"
                           disabled={cancellingId === o.id}
                           onClick={() => void markOccurrenceDidNotTakePlace(o.id)}
-                          className="shrink-0 rounded px-1.5 py-1 font-caption text-caption text-on-surface-variant hover:bg-error-container hover:text-on-error-container disabled:opacity-50"
                         >
-                          {cancellingId === o.id ? "…" : "לא התקיים"}
-                        </button>
+                          {cancellingId === o.id ? "…" : "בטל שיעור"}
+                        </Button>
                       ) : null}
                     </div>
                   );
@@ -1323,7 +1323,7 @@ export function AttendanceBoard({
                     onClick={() => void markOccurrenceDidNotTakePlace(activeOccurrenceId)}
                   >
                     <Icon name="event_busy" className="text-[16px]" />
-                    {cancellingId === activeOccurrenceId ? "מעדכנת…" : "המפגש לא התקיים"}
+                    {cancellingId === activeOccurrenceId ? "מעדכנת…" : "בטל שיעור"}
                   </Button>
                 )}
               </div>

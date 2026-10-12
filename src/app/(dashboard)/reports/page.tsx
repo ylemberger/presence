@@ -24,6 +24,7 @@ import { Icon } from "@/components/ui/Icon";
 import { ATTENDANCE_STATUS_LABELS, BILLING_TYPE_LABELS, DAY_OF_WEEK_LABELS } from "@/lib/constants";
 import { formatLessonHours } from "@/lib/lessons/hours";
 import { formatSubjectLessonLabel } from "@/lib/lessons/subject-label";
+import { audienceForLesson, audienceMapFromRows } from "@/lib/lessons/autoAssign";
 
 interface Props {
   searchParams: {
@@ -155,8 +156,9 @@ export default async function ReportsPage({ searchParams }: Props) {
     { data: specializations },
     { data: teachers },
     { data: yearLessons },
-    { data: allStudents },
     { data: rules },
+    { data: audienceRows },
+    { data: yearPlacements },
   ] = await Promise.all([
     supabase.from("grades").select("id, name").eq("academic_year_id", activeYear.id).order("name"),
     supabase.from("classes").select("id, name, grade_id").eq("academic_year_id", activeYear.id).order("name"),
@@ -170,19 +172,84 @@ export default async function ReportsPage({ searchParams }: Props) {
     supabase
       .from("lessons")
       .select(
-        `id, subject, subject_id, class_id, track_id, specialization_id, teacher_teaching_assignment_id, day_of_week, lesson_number, period_count, billing_type,
+        `id, subject, subject_id, grade_id, class_id, track_id, specialization_id, teacher_teaching_assignment_id, day_of_week, lesson_number, period_count, billing_type,
          subjects(name), teacher_teaching_assignments(teacher_id, teachers(full_name))`
       )
       .eq("academic_year_id", activeYear.id),
-    supabase.from("students").select("id, full_name").eq("is_active", true).order("full_name"),
     supabase.from("attendance_rules").select("id, name, max_allowed_absence_percent").order("name"),
+    supabase
+      .from("lesson_audience")
+      .select("lesson_id, grade_id, class_id, track_id, specialization_id"),
+    supabase
+      .from("student_assignments")
+      .select(
+        "student_id, grade_id, class_id, track_id, specialization_id, secondary_specialization_id, students(id, full_name, is_active)"
+      )
+      .eq("academic_year_id", activeYear.id)
+      .is("end_date", null),
   ]);
 
   const poolCatalog = await fetchAttendancePools(supabase, activeYear.id);
+  const audienceByLesson = audienceMapFromRows(audienceRows ?? []);
 
   const subjects = [
     ...new Set((yearLessons ?? []).map((l) => lessonParentName(l))),
   ].sort((a, b) => a.localeCompare(b, "he"));
+
+  const filterStudents: Array<{
+    id: string;
+    full_name: string;
+    gradeId: string | null;
+    classId: string | null;
+    trackId: string | null;
+    specId: string | null;
+    secondarySpecId: string | null;
+  }> = [];
+  const seenStudents = new Set<string>();
+  for (const row of yearPlacements ?? []) {
+    const s = one<{ id: string; full_name: string; is_active: boolean }>(row.students);
+    if (!s?.is_active || seenStudents.has(s.id)) continue;
+    seenStudents.add(s.id);
+    filterStudents.push({
+      id: s.id,
+      full_name: s.full_name,
+      gradeId: row.grade_id,
+      classId: row.class_id,
+      trackId: row.track_id,
+      specId: row.specialization_id,
+      secondarySpecId: row.secondary_specialization_id,
+    });
+  }
+  filterStudents.sort((a, b) => a.full_name.localeCompare(b.full_name, "he"));
+
+  const filterLessons = (yearLessons ?? []).map((l) => {
+    const audience = audienceForLesson(
+      {
+        id: l.id,
+        grade_id: (l as { grade_id?: string | null }).grade_id ?? null,
+        class_id: l.class_id,
+        track_id: l.track_id,
+        specialization_id: l.specialization_id,
+      },
+      audienceByLesson
+    );
+    return {
+      id: l.id,
+      label: lessonOptionLabel(
+        formatSubjectLessonLabel(lessonParentName(l), l.subject),
+        teacherFullName(l.teacher_teaching_assignments),
+        l.day_of_week,
+        l.lesson_number,
+        l.period_count ?? 1
+      ),
+      teacherId: teacherIdOf(l.teacher_teaching_assignments),
+      subject: lessonParentName(l),
+      gradeIds: audience.grade_ids,
+      classIds: audience.class_ids,
+      trackIds: audience.track_ids,
+      specializationIds: audience.specialization_ids,
+    };
+  });
 
   const selectedRule = (rules ?? []).find((r) => r.id === params.ruleId);
   const threshold = selectedRule
@@ -744,23 +811,9 @@ export default async function ReportsPage({ searchParams }: Props) {
           tracks={tracks ?? []}
           specializations={specializations ?? []}
           teachers={(teachers ?? []).map((t) => ({ id: t.id, name: t.full_name }))}
-          students={allStudents ?? []}
+          students={filterStudents}
           subjects={subjects}
-          lessons={(yearLessons ?? []).map((l) => ({
-            id: l.id,
-            label: lessonOptionLabel(
-              formatSubjectLessonLabel(lessonParentName(l), l.subject),
-              teacherFullName(l.teacher_teaching_assignments),
-              l.day_of_week,
-              l.lesson_number,
-              l.period_count ?? 1
-            ),
-            teacherId: teacherIdOf(l.teacher_teaching_assignments),
-            subject: lessonParentName(l),
-            classId: l.class_id,
-            trackId: l.track_id,
-            specializationId: l.specialization_id,
-          }))}
+          lessons={filterLessons}
           rules={rules ?? []}
           defaults={{
             minAbsence: String(minAbsence),
