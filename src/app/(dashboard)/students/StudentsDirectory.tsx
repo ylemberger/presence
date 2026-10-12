@@ -3,8 +3,8 @@
 import { useMemo, useState } from "react";
 import Link from "next/link";
 import { Button } from "@/components/ui/Button";
-import { Combobox } from "@/components/ui/Combobox";
 import { Input, Select } from "@/components/ui/Input";
+import { MultiSelect } from "@/components/ui/MultiSelect";
 import { StatusPill } from "@/components/ui/PageHeader";
 import { Modal } from "@/components/ui/Modal";
 import { StudentsForm } from "./StudentsForm";
@@ -33,6 +33,50 @@ const PRINT_COLUMNS = [
 ] as const;
 
 type PrintColId = (typeof PRINT_COLUMNS)[number]["id"];
+
+type SortKey =
+  | "name"
+  | "identity"
+  | "grade"
+  | "class"
+  | "track"
+  | "spec"
+  | "city"
+  | "status";
+
+const SORT_OPTIONS: { value: SortKey; label: string }[] = [
+  { value: "name", label: "שם" },
+  { value: "identity", label: 'ת"ז' },
+  { value: "grade", label: "שכבה" },
+  { value: "class", label: "כיתה" },
+  { value: "track", label: "מסלול" },
+  { value: "spec", label: "התמחות" },
+  { value: "city", label: "עיר" },
+  { value: "status", label: "סטטוס" },
+];
+
+function sortValue(s: StudentRow, key: SortKey): string {
+  switch (key) {
+    case "name":
+      return `${s.last_name} ${s.first_name}`.trim() || s.full_name;
+    case "identity":
+      return s.identity_number;
+    case "grade":
+      return s.gradeName;
+    case "class":
+      return s.className;
+    case "track":
+      return s.trackName;
+    case "spec":
+      return [s.specializationName, s.secondarySpecializationName]
+        .filter((v) => v && v !== "—")
+        .join(" ");
+    case "city":
+      return s.city ?? "";
+    case "status":
+      return s.is_active ? "0" : "1";
+  }
+}
 
 function printCell(s: StudentRow, id: PrintColId): string {
   switch (id) {
@@ -179,14 +223,16 @@ export function StudentsDirectory({
   yearName?: string;
 }) {
   const [query, setQuery] = useState("");
-  const [gradeId, setGradeId] = useState("");
-  const [classId, setClassId] = useState("");
-  const [trackId, setTrackId] = useState("");
-  const [specId, setSpecId] = useState("");
-  const [subjectKey, setSubjectKey] = useState("");
-  const [lessonId, setLessonId] = useState("");
+  const [gradeIds, setGradeIds] = useState<string[]>([]);
+  const [classIds, setClassIds] = useState<string[]>([]);
+  const [trackIds, setTrackIds] = useState<string[]>([]);
+  const [specIds, setSpecIds] = useState<string[]>([]);
+  const [subjectKeys, setSubjectKeys] = useState<string[]>([]);
+  const [lessonIds, setLessonIds] = useState<string[]>([]);
   const [psychology, setPsychology] = useState<"all" | "yes" | "no">("all");
   const [status, setStatus] = useState<"all" | "active" | "inactive">("all");
+  const [sortKey, setSortKey] = useState<SortKey>("name");
+  const [sortDir, setSortDir] = useState<"asc" | "desc">("asc");
   const [modalOpen, setModalOpen] = useState(false);
   const [yearError, setYearError] = useState<string | null>(null);
   const [printCols, setPrintCols] = useState<Record<PrintColId, boolean>>(() =>
@@ -203,17 +249,18 @@ export function StudentsDirectory({
 
   const classFilterOptions = useMemo(() => {
     const list = (yearOptions?.classes ?? []).filter(
-      (c) => !gradeId || c.grade_id === gradeId
+      (c) => gradeIds.length === 0 || gradeIds.includes(c.grade_id)
     );
     return [...list]
       .sort((a, b) => a.name.localeCompare(b.name, "he"))
       .map((c) => ({
         value: c.id,
-        label: gradeId
-          ? c.name
-          : `${gradeNameById.get(c.grade_id) ?? "?"} · ${c.name}`,
+        label:
+          gradeIds.length === 1
+            ? c.name
+            : `${gradeNameById.get(c.grade_id) ?? "?"} · ${c.name}`,
       }));
-  }, [yearOptions, gradeId, gradeNameById]);
+  }, [yearOptions, gradeIds, gradeNameById]);
 
   const subjectFilterOptions = useMemo(() => {
     const names = new Set(
@@ -228,12 +275,12 @@ export function StudentsDirectory({
 
   const lessonFilterOptions = useMemo(() => {
     const list = (yearOptions?.lessons ?? []).filter(
-      (l) => !subjectKey || l.subjectKey === subjectKey
+      (l) => subjectKeys.length === 0 || subjectKeys.includes(l.subjectKey)
     );
     return [...list]
       .sort((a, b) => a.label.localeCompare(b.label, "he"))
       .map((l) => ({ value: l.id, label: l.label }));
-  }, [yearOptions, subjectKey]);
+  }, [yearOptions, subjectKeys]);
 
   const lessonSubjectById = useMemo(
     () => new Map((yearOptions?.lessons ?? []).map((l) => [l.id, l.subjectKey])),
@@ -245,24 +292,29 @@ export function StudentsDirectory({
     return students.filter((s) => {
       if (status === "active" && !s.is_active) return false;
       if (status === "inactive" && s.is_active) return false;
-      if (gradeId && s.gradeId !== gradeId) return false;
-      if (classId && s.classId !== classId) return false;
-      if (trackId && s.trackId !== trackId) return false;
+      if (gradeIds.length > 0 && !gradeIds.includes(s.gradeId)) return false;
+      if (classIds.length > 0 && !classIds.includes(s.classId)) return false;
+      if (trackIds.length > 0 && !trackIds.includes(s.trackId)) return false;
       if (
-        specId &&
-        s.specId !== specId &&
-        s.secondarySpecId !== specId
+        specIds.length > 0 &&
+        !(
+          (s.specId && specIds.includes(s.specId)) ||
+          (s.secondarySpecId && specIds.includes(s.secondarySpecId))
+        )
       ) {
         return false;
       }
       if (psychology === "yes" && !s.isPsychology) return false;
       if (psychology === "no" && s.isPsychology) return false;
       const assignedLessonIds = yearOptions?.assignedLessonIdsByStudent?.[s.id] ?? [];
-      if (lessonId && !assignedLessonIds.includes(lessonId)) return false;
-      if (subjectKey) {
-        const takesSubject = assignedLessonIds.some(
-          (id) => lessonSubjectById.get(id) === subjectKey
-        );
+      if (lessonIds.length > 0 && !lessonIds.some((id) => assignedLessonIds.includes(id))) {
+        return false;
+      }
+      if (subjectKeys.length > 0) {
+        const takesSubject = assignedLessonIds.some((id) => {
+          const key = lessonSubjectById.get(id);
+          return Boolean(key && subjectKeys.includes(key));
+        });
         if (!takesSubject) return false;
       }
       if (!q) return true;
@@ -285,16 +337,36 @@ export function StudentsDirectory({
     query,
     students,
     status,
-    gradeId,
-    classId,
-    trackId,
-    specId,
+    gradeIds,
+    classIds,
+    trackIds,
+    specIds,
     psychology,
-    lessonId,
-    subjectKey,
+    lessonIds,
+    subjectKeys,
     yearOptions,
     lessonSubjectById,
   ]);
+
+  const sorted = useMemo(() => {
+    const dir = sortDir === "asc" ? 1 : -1;
+    return [...filtered].sort((a, b) => {
+      const cmp = sortValue(a, sortKey).localeCompare(sortValue(b, sortKey), "he", {
+        numeric: true,
+        sensitivity: "base",
+      });
+      if (cmp !== 0) return cmp * dir;
+      return a.full_name.localeCompare(b.full_name, "he") * dir;
+    });
+  }, [filtered, sortKey, sortDir]);
+
+  function toggleSort(key: SortKey) {
+    if (sortKey === key) setSortDir((d) => (d === "asc" ? "desc" : "asc"));
+    else {
+      setSortKey(key);
+      setSortDir("asc");
+    }
+  }
 
   function openCreate() {
     if (!yearOptions) {
@@ -320,21 +392,46 @@ export function StudentsDirectory({
   const printSubtitle = useMemo(() => {
     const bits: string[] = [];
     if (yearName) bits.push(yearName);
-    if (gradeId) {
-      bits.push(`שכבה ${yearOptions?.grades.find((g) => g.id === gradeId)?.name ?? ""}`.trim());
+    if (gradeIds.length) {
+      bits.push(
+        gradeIds
+          .map((id) => yearOptions?.grades.find((g) => g.id === id)?.name)
+          .filter(Boolean)
+          .join(", ")
+      );
     }
-    if (classId) {
-      bits.push(`כיתה ${yearOptions?.classes.find((c) => c.id === classId)?.name ?? ""}`.trim());
+    if (classIds.length) {
+      bits.push(
+        classIds
+          .map((id) => yearOptions?.classes.find((c) => c.id === id)?.name)
+          .filter(Boolean)
+          .join(", ")
+      );
     }
-    if (trackId) {
-      bits.push(yearOptions?.tracks.find((t) => t.id === trackId)?.name ?? "");
+    if (trackIds.length) {
+      bits.push(
+        trackIds
+          .map((id) => yearOptions?.tracks.find((t) => t.id === id)?.name)
+          .filter(Boolean)
+          .join(", ")
+      );
     }
-    if (specId) {
-      bits.push(yearOptions?.specializations.find((s) => s.id === specId)?.name ?? "");
+    if (specIds.length) {
+      bits.push(
+        specIds
+          .map((id) => yearOptions?.specializations.find((s) => s.id === id)?.name)
+          .filter(Boolean)
+          .join(", ")
+      );
     }
-    if (subjectKey) bits.push(subjectKey);
-    if (lessonId) {
-      bits.push(yearOptions?.lessons?.find((l) => l.id === lessonId)?.label ?? "");
+    if (subjectKeys.length) bits.push(subjectKeys.join(", "));
+    if (lessonIds.length) {
+      bits.push(
+        lessonIds
+          .map((id) => yearOptions?.lessons?.find((l) => l.id === id)?.label)
+          .filter(Boolean)
+          .join(", ")
+      );
     }
     if (psychology === "yes") bits.push("פסיכולוגיה");
     if (psychology === "no") bits.push("לא פסיכולוגיה");
@@ -346,12 +443,12 @@ export function StudentsDirectory({
   }, [
     yearName,
     yearOptions,
-    gradeId,
-    classId,
-    trackId,
-    specId,
-    subjectKey,
-    lessonId,
+    gradeIds,
+    classIds,
+    trackIds,
+    specIds,
+    subjectKeys,
+    lessonIds,
     psychology,
     status,
     query,
@@ -360,12 +457,12 @@ export function StudentsDirectory({
 
   const hasActiveFilter = Boolean(
     query.trim() ||
-      gradeId ||
-      classId ||
-      trackId ||
-      specId ||
-      subjectKey ||
-      lessonId ||
+      gradeIds.length ||
+      classIds.length ||
+      trackIds.length ||
+      specIds.length ||
+      subjectKeys.length ||
+      lessonIds.length ||
       psychology !== "all" ||
       status !== "all"
   );
@@ -412,7 +509,7 @@ export function StudentsDirectory({
           onClick={() => {
             const cols = PRINT_COLUMNS.filter((col) => printCols[col.id]);
             const header = cols.map((col) => col.label);
-            const body = filtered.map((s) => cols.map((col) => printCell(s, col.id)));
+            const body = sorted.map((s) => cols.map((col) => printCell(s, col.id)));
             const sheet = XLSX.utils.aoa_to_sheet([header, ...body]);
             sheet["!cols"] = cols.map((col) => ({
               wch: Math.min(28, Math.max(10, col.label.length + 4)),
@@ -437,65 +534,78 @@ export function StudentsDirectory({
             onChange={(e) => setQuery(e.target.value)}
           />
         </div>
-        <Combobox
-          label="שכבה"
-          value={gradeId}
-          onChange={(v) => {
-            setGradeId(v);
-            setClassId("");
+        <MultiSelect
+          label="שכבות"
+          name="gradeId"
+          hint="אפשר לבחור כמה"
+          values={gradeIds}
+          onChange={(next) => {
+            setGradeIds(next);
+            setClassIds((prev) =>
+              prev.filter((id) => {
+                const cls = yearOptions?.classes.find((c) => c.id === id);
+                return cls && (next.length === 0 || next.includes(cls.grade_id));
+              })
+            );
           }}
           options={(yearOptions?.grades ?? []).map((g) => ({
             value: g.id,
             label: g.name,
           }))}
-          maxSuggestions={80}
         />
-        <Combobox
-          label="כיתה"
-          value={classId}
-          onChange={setClassId}
+        <MultiSelect
+          label="כיתות"
+          name="classId"
+          hint="אפשר לבחור כמה"
+          values={classIds}
+          onChange={setClassIds}
           options={classFilterOptions}
-          emptyLabel={classFilterOptions.length ? "הכל" : "אין כיתות בהגדרות"}
-          maxSuggestions={80}
         />
-        <Combobox
-          label="מסלול"
-          value={trackId}
-          onChange={setTrackId}
+        <MultiSelect
+          label="מסלולים"
+          name="trackId"
+          hint="אפשר לבחור כמה"
+          values={trackIds}
+          onChange={setTrackIds}
           options={(yearOptions?.tracks ?? []).map((t) => ({
             value: t.id,
             label: t.name,
           }))}
-          maxSuggestions={80}
         />
-        <Combobox
-          label="התמחות"
-          value={specId}
-          onChange={setSpecId}
+        <MultiSelect
+          label="התמחויות"
+          name="specId"
+          hint="אפשר לבחור כמה"
+          values={specIds}
+          onChange={setSpecIds}
           options={(yearOptions?.specializations ?? []).map((s) => ({
             value: s.id,
             label: s.name,
           }))}
-          maxSuggestions={80}
         />
-        <Combobox
-          label="מקצוע"
-          value={subjectKey}
-          onChange={(v) => {
-            setSubjectKey(v);
-            setLessonId("");
+        <MultiSelect
+          label="מקצועות"
+          name="subjectKey"
+          hint="אפשר לבחור כמה"
+          values={subjectKeys}
+          onChange={(next) => {
+            setSubjectKeys(next);
+            setLessonIds((prev) =>
+              prev.filter((id) => {
+                const lesson = yearOptions?.lessons?.find((l) => l.id === id);
+                return lesson && (next.length === 0 || next.includes(lesson.subjectKey));
+              })
+            );
           }}
           options={subjectFilterOptions}
-          emptyLabel={subjectFilterOptions.length ? "הכל" : "אין מקצועות בשנה"}
-          maxSuggestions={200}
         />
-        <Combobox
-          label="שיעור"
-          value={lessonId}
-          onChange={setLessonId}
+        <MultiSelect
+          label="שיעורים"
+          name="lessonId"
+          hint="אפשר לבחור כמה"
+          values={lessonIds}
+          onChange={setLessonIds}
           options={lessonFilterOptions}
-          emptyLabel={lessonFilterOptions.length ? "הכל" : "אין שיעורים בשנה"}
-          maxSuggestions={200}
         />
         <Select
           label="פסיכולוגיה"
@@ -517,6 +627,26 @@ export function StudentsDirectory({
             { value: "inactive", label: "לא פעילות" },
           ]}
         />
+        <Select
+          label="מיון לפי"
+          value={sortKey}
+          onChange={(e) => {
+            setSortKey(e.target.value as SortKey);
+            setSortDir("asc");
+          }}
+          options={SORT_OPTIONS.map((o) => ({ value: o.value, label: o.label }))}
+        />
+        <div className="flex items-end">
+          <Button
+            type="button"
+            variant="outline"
+            className="w-full"
+            onClick={() => setSortDir((d) => (d === "asc" ? "desc" : "asc"))}
+          >
+            <Icon name={sortDir === "asc" ? "arrow_upward" : "arrow_downward"} className="text-[18px]" />
+            {sortDir === "asc" ? "סדר עולה" : "סדר יורד"}
+          </Button>
+        </div>
         <div className="flex items-end xl:col-span-4">
           <div className="flex w-full flex-wrap items-center justify-between gap-3">
             <p className="text-body-md text-on-surface-variant">
@@ -582,21 +712,36 @@ export function StudentsDirectory({
           </colgroup>
           <thead>
             <tr className="border-b border-outline-variant/40 bg-surface-container-low text-on-surface-variant">
-              {(viewOnly
-                ? ["תלמידה", 'ת"ז', "שיבוץ", "קשר", "סטטוס"]
-                : ["תלמידה", 'ת"ז', "שיבוץ", "קשר", "סטטוס", ""]
-              ).map((h, i) => (
-                <th
-                  key={h || `card-${i}`}
-                  className="px-3 py-2 text-right text-caption font-semibold tracking-wide"
-                >
-                  {h}
+              {(
+                [
+                  { key: "name" as SortKey, label: "תלמידה" },
+                  { key: "identity" as SortKey, label: 'ת"ז' },
+                  { key: "grade" as SortKey, label: "שיבוץ" },
+                  { key: "city" as SortKey, label: "קשר" },
+                  { key: "status" as SortKey, label: "סטטוס" },
+                ] as const
+              ).map((h) => (
+                <th key={h.key} className="px-3 py-2 text-right text-caption font-semibold tracking-wide">
+                  <button
+                    type="button"
+                    onClick={() => toggleSort(h.key)}
+                    className="inline-flex items-center gap-1 hover:text-primary"
+                  >
+                    {h.label}
+                    {sortKey === h.key ? (
+                      <Icon
+                        name={sortDir === "asc" ? "arrow_upward" : "arrow_downward"}
+                        className="text-[14px] text-primary"
+                      />
+                    ) : null}
+                  </button>
                 </th>
               ))}
+              {viewOnly ? null : <th className="px-3 py-2" />}
             </tr>
           </thead>
           <tbody className="divide-y divide-outline-variant/25">
-            {filtered.map((s) => {
+            {sorted.map((s) => {
               const contactPhone =
                 s.student_phone || s.phone || s.mother_phone || s.father_phone || null;
               return (
@@ -679,7 +824,7 @@ export function StudentsDirectory({
             </tr>
           </thead>
           <tbody>
-            {filtered.map((s) => (
+            {sorted.map((s) => (
               <tr key={s.id} className="border-b border-outline-variant/40">
                 {printColumns.map((col) => (
                   <td key={col.id} className="px-1.5 py-0.5 text-on-surface">
