@@ -10,6 +10,21 @@ import { formatSubjectLessonLabel } from "@/lib/lessons/subject-label";
 import { Section } from "@/components/ui/Section";
 import { Icon } from "@/components/ui/Icon";
 import { embeddedTeacher, embedOne } from "@/lib/supabase/embed";
+import {
+  audienceForLesson,
+  audienceMapFromRows,
+} from "@/lib/lessons/autoAssign";
+
+function parseIdList(raw: string | string[] | undefined): string[] {
+  const joined = Array.isArray(raw) ? raw.join(",") : (raw ?? "");
+  return [...new Set(joined.split(",").map((id) => id.trim()).filter(Boolean))];
+}
+
+function overlaps(selected: string[], lessonValues: string[]): boolean {
+  if (selected.length === 0) return true;
+  if (lessonValues.length === 0) return true;
+  return lessonValues.some((id) => selected.includes(id));
+}
 
 interface Props {
   searchParams: {
@@ -40,6 +55,9 @@ export default async function TimetablePage({ searchParams }: Props) {
       </div>
     );
   }
+
+  const classIds = parseIdList(params.classId);
+  const trackIds = parseIdList(params.trackId);
 
   const forPsychology =
     params.forPsychology === "yes"
@@ -136,8 +154,8 @@ export default async function TimetablePage({ searchParams }: Props) {
               subjects={subjects}
               activityRanges={(activityRanges ?? []).map((r: any) => ({ id: r.id, name: r.name }))}
               defaults={{
-                classId: params.classId,
-                trackId: params.trackId,
+                classIds,
+                trackIds,
                 specializationId: params.specializationId,
                 teacherId: params.teacherId,
                 subject: params.subject,
@@ -166,8 +184,6 @@ export default async function TimetablePage({ searchParams }: Props) {
 
     lessonsQuery = lessonsQuery.in("id", lessonIdFilter);
   }
-  if (params.classId) lessonsQuery = lessonsQuery.eq("class_id", params.classId);
-  if (params.trackId) lessonsQuery = lessonsQuery.eq("track_id", params.trackId);
   if (params.specializationId) lessonsQuery = lessonsQuery.eq("specialization_id", params.specializationId);
   if (params.teacherId) {
     // We'll filter in-memory after join because teacher_teaching_assignments is a nested relation
@@ -178,6 +194,14 @@ export default async function TimetablePage({ searchParams }: Props) {
   const { data: lessonsRows } = await lessonsQuery;
 
   const lessonIdsForSlots = (lessonsRows ?? []).map((l: { id: string }) => l.id);
+  const { data: audienceRows } =
+    lessonIdsForSlots.length > 0
+      ? await supabase
+          .from("lesson_audience")
+          .select("lesson_id, grade_id, class_id, track_id, specialization_id")
+          .in("lesson_id", lessonIdsForSlots)
+      : { data: [] as { lesson_id: string; grade_id: string | null; class_id: string | null; track_id: string | null; specialization_id: string | null }[] };
+  const audienceByLesson = audienceMapFromRows(audienceRows ?? []);
   const { data: slotRows } =
     lessonIdsForSlots.length > 0
       ? await supabase
@@ -198,6 +222,9 @@ export default async function TimetablePage({ searchParams }: Props) {
 
   const entries: TimetableEntry[] = (lessonsRows ?? [])
     .filter((l: any) => {
+      const audience = audienceForLesson(l, audienceByLesson);
+      if (!overlaps(classIds, audience.class_ids)) return false;
+      if (!overlaps(trackIds, audience.track_ids)) return false;
       if (params.teacherId) {
         const teacherId = embeddedTeacher(l.teacher_teaching_assignments)?.id ?? null;
         if (teacherId !== params.teacherId) return false;
@@ -252,7 +279,7 @@ export default async function TimetablePage({ searchParams }: Props) {
     <div className="flex flex-col gap-stack_lg">
       <PageHeader
         title="מערכת שעות"
-        description="סינון לפי כיתה/מסלול/התמחות/מורה/מקצוע/תלמידה, כולל פסיכולוגיה."
+        description="סינון לפי כמה כיתות ומסלולים, וגם התמחות/מורה/מקצוע/תלמידה, כולל פסיכולוגיה."
         size="headline"
       />
 
@@ -266,8 +293,8 @@ export default async function TimetablePage({ searchParams }: Props) {
           subjects={subjects}
           activityRanges={(activityRanges ?? []).map((r: any) => ({ id: r.id, name: r.name }))}
           defaults={{
-            classId: params.classId,
-            trackId: params.trackId,
+            classIds,
+            trackIds,
             specializationId: params.specializationId,
             teacherId: params.teacherId,
             subject: params.subject,

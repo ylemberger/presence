@@ -1,8 +1,10 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/Button";
 import { Combobox } from "@/components/ui/Combobox";
+import { MultiSelect } from "@/components/ui/MultiSelect";
 import { Select } from "@/components/ui/Input";
 import { Section } from "@/components/ui/Section";
 import { Icon } from "@/components/ui/Icon";
@@ -16,8 +18,8 @@ export interface TimetableFiltersProps {
   subjects: string[];
   activityRanges: { id: string; name: string }[];
   defaults: {
-    classId?: string;
-    trackId?: string;
+    classIds?: string[];
+    trackIds?: string[];
     specializationId?: string;
     teacherId?: string;
     subject?: string;
@@ -38,15 +40,30 @@ export function TimetableFilters({
   defaults,
 }: TimetableFiltersProps) {
   const router = useRouter();
+  const [classIds, setClassIds] = useState(defaults.classIds ?? []);
+  const [trackIds, setTrackIds] = useState(defaults.trackIds ?? []);
+  const classKey = (defaults.classIds ?? []).join(",");
+  const trackKey = (defaults.trackIds ?? []).join(",");
+
+  useEffect(() => {
+    setClassIds(classKey ? classKey.split(",") : []);
+  }, [classKey]);
+
+  useEffect(() => {
+    setTrackIds(trackKey ? trackKey.split(",") : []);
+  }, [trackKey]);
 
   function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
     const fd = new FormData(e.currentTarget);
     const params = new URLSearchParams();
 
+    const selectedClasses = fd.getAll("classId").map(String).filter(Boolean);
+    if (selectedClasses.length) params.set("classId", selectedClasses.join(","));
+    const selectedTracks = fd.getAll("trackId").map(String).filter(Boolean);
+    if (selectedTracks.length) params.set("trackId", selectedTracks.join(","));
+
     for (const key of [
-      "classId",
-      "trackId",
       "specializationId",
       "teacherId",
       "subject",
@@ -70,17 +87,21 @@ export function TimetableFilters({
         onSubmit={handleSubmit}
         className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4"
       >
-      <Combobox
-        label="שכבה/כיתה"
+      <MultiSelect
+        label="כיתות"
         name="classId"
-        defaultValue={defaults.classId ?? ""}
+        hint="אפשר לבחור כמה כיתות"
+        values={classIds}
+        onChange={setClassIds}
         options={classes.map((c) => ({ value: c.id, label: c.name }))}
       />
 
-      <Combobox
-        label="מסלול"
+      <MultiSelect
+        label="מסלולים"
         name="trackId"
-        defaultValue={defaults.trackId ?? ""}
+        hint="אפשר לבחור כמה מסלולים"
+        values={trackIds}
+        onChange={setTrackIds}
         options={tracks.map((t) => ({ value: t.id, label: t.name }))}
       />
 
