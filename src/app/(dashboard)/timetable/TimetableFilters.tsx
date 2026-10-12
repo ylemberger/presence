@@ -26,6 +26,7 @@ export interface TimetableFiltersProps {
     studentId?: string;
     activityRangeId?: string;
     forPsychology?: "all" | "yes" | "no";
+    week?: string;
   };
 }
 
@@ -78,6 +79,9 @@ export function TimetableFilters({
     if (psych === "yes") params.set("forPsychology", "yes");
     if (psych === "no") params.set("forPsychology", "no");
 
+    const week = (fd.get("week") as string) || defaults.week;
+    if (week) params.set("week", week);
+
     router.push(`/timetable?${params.toString()}`);
   }
 
@@ -87,6 +91,7 @@ export function TimetableFilters({
         onSubmit={handleSubmit}
         className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4"
       >
+      {defaults.week ? <input type="hidden" name="week" value={defaults.week} /> : null}
       <MultiSelect
         label="כיתות"
         name="classId"

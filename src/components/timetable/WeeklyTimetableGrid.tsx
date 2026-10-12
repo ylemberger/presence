@@ -1,7 +1,11 @@
 "use client";
 
 import { useMemo } from "react";
-import { hebrewWeekdayLabels } from "@/lib/dates/hebrew";
+import {
+  formatGregorianDayMonth,
+  formatHebrewDate,
+  hebrewWeekdayLabels,
+} from "@/lib/dates/hebrew";
 import { formatLessonHours, occupiedLessonNumbers, MAX_LESSON_NUMBER } from "@/lib/lessons/hours";
 import { cn } from "@/lib/cn";
 
@@ -24,10 +28,13 @@ export function WeeklyTimetableGrid({
   entries,
   maxLessonNumber = MAX_LESSON_NUMBER,
   onCellClick,
+  columnDates,
 }: {
   entries: TimetableEntry[];
   maxLessonNumber?: number;
   onCellClick?: (entry: TimetableEntry) => void;
+  /** Sunday–Saturday ISO dates for the displayed week. */
+  columnDates?: string[];
 }) {
   const days = hebrewWeekdayLabels();
 
@@ -68,14 +75,27 @@ export function WeeklyTimetableGrid({
             <th className="w-[4.5rem] border-b border-outline-variant/30 px-2 py-3 text-center font-label-md text-label-md text-on-surface-variant">
               שעה
             </th>
-            {days.map((d) => (
-              <th
-                key={d}
-                className="border-b border-outline-variant/30 px-2 py-3 text-center font-label-md text-label-md text-on-surface-variant"
-              >
-                {d}
-              </th>
-            ))}
+            {days.map((d, dayIdx) => {
+              const iso = columnDates?.[dayIdx];
+              return (
+                <th
+                  key={d}
+                  className="border-b border-outline-variant/30 px-2 py-3 text-center font-label-md text-label-md text-on-surface-variant"
+                >
+                  <span className="block">{d}</span>
+                  {iso ? (
+                    <>
+                      <span className="mt-0.5 block font-caption text-caption font-normal text-on-surface">
+                        {formatHebrewDate(iso)}
+                      </span>
+                      <span className="block font-caption text-caption font-normal text-on-surface-variant">
+                        {formatGregorianDayMonth(iso)}
+                      </span>
+                    </>
+                  ) : null}
+                </th>
+              );
+            })}
           </tr>
         </thead>
         <tbody>

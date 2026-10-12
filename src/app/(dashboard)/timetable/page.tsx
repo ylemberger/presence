@@ -14,6 +14,16 @@ import {
   audienceForLesson,
   audienceMapFromRows,
 } from "@/lib/lessons/autoAssign";
+import {
+  addDays,
+  expandIsoRange,
+  formatGregorianDate,
+  formatHebrewDate,
+  parseIsoDate,
+  startOfWeekSunday,
+  todayIso,
+} from "@/lib/dates/hebrew";
+import Link from "next/link";
 
 function parseIdList(raw: string | string[] | undefined): string[] {
   const joined = Array.isArray(raw) ? raw.join(",") : (raw ?? "");
@@ -36,7 +46,94 @@ interface Props {
     studentId?: string;
     activityRangeId?: string;
     forPsychology?: "yes" | "no" | string;
+    week?: string;
   };
+}
+
+function parseWeekStart(raw: string | undefined): string {
+  const iso = (raw ?? "").slice(0, 10);
+  if (/^\d{4}-\d{2}-\d{2}$/.test(iso)) return startOfWeekSunday(iso);
+  return startOfWeekSunday(todayIso());
+}
+
+function timetableHref(
+  params: Props["searchParams"],
+  classIds: string[],
+  trackIds: string[],
+  week: string
+): string {
+  const q = new URLSearchParams();
+  if (classIds.length) q.set("classId", classIds.join(","));
+  if (trackIds.length) q.set("trackId", trackIds.join(","));
+  for (const key of [
+    "specializationId",
+    "teacherId",
+    "subject",
+    "studentId",
+    "activityRangeId",
+    "forPsychology",
+  ] as const) {
+    const value = params[key];
+    if (value) q.set(key, value);
+  }
+  q.set("week", week);
+  return `/timetable?${q.toString()}`;
+}
+
+function WeekNav({
+  params,
+  classIds,
+  trackIds,
+  weekStart,
+  weekEnd,
+  isCurrentWeek,
+}: {
+  params: Props["searchParams"];
+  classIds: string[];
+  trackIds: string[];
+  weekStart: string;
+  weekEnd: string;
+  isCurrentWeek: boolean;
+}) {
+  const currentWeek = startOfWeekSunday(todayIso());
+  const linkClass =
+    "inline-flex items-center gap-1 rounded-lg border border-outline-variant/40 bg-surface-container-lowest px-3 py-1.5 font-label-md text-label-md text-primary hover:bg-surface-container-low";
+  return (
+    <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-outline-variant/30 bg-surface-container-low/60 px-4 py-3 print:hidden">
+      <Link
+        href={timetableHref(params, classIds, trackIds, addDays(weekStart, -7))}
+        className={linkClass}
+      >
+        <Icon name="chevron_right" className="text-[18px]" />
+        שבוע קודם
+      </Link>
+      <p className="text-center font-body-md text-body-md text-on-surface">
+        <span className="block font-label-md text-primary">
+          {isCurrentWeek ? "השבוע הנוכחי" : "שבוע נבחר"}
+        </span>
+        <span>
+          {formatHebrewDate(weekStart)} – {formatHebrewDate(weekEnd)}
+        </span>
+        <span className="mt-0.5 block font-caption text-caption text-on-surface-variant">
+          {formatGregorianDate(weekStart)} – {formatGregorianDate(weekEnd)}
+        </span>
+      </p>
+      <div className="flex flex-wrap items-center gap-2">
+        {!isCurrentWeek ? (
+          <Link href={timetableHref(params, classIds, trackIds, currentWeek)} className={linkClass}>
+            לשבוע הנוכחי
+          </Link>
+        ) : null}
+        <Link
+          href={timetableHref(params, classIds, trackIds, addDays(weekStart, 7))}
+          className={linkClass}
+        >
+          שבוע הבא
+          <Icon name="chevron_left" className="text-[18px]" />
+        </Link>
+      </div>
+    </div>
+  );
 }
 
 export default async function TimetablePage({ searchParams }: Props) {
@@ -58,6 +155,11 @@ export default async function TimetablePage({ searchParams }: Props) {
 
   const classIds = parseIdList(params.classId);
   const trackIds = parseIdList(params.trackId);
+  const weekStart = parseWeekStart(params.week);
+  const weekEnd = addDays(weekStart, 6);
+  const weekDates = expandIsoRange(weekStart, weekEnd);
+  const currentWeekStart = startOfWeekSunday(todayIso());
+  const isCurrentWeek = weekStart === currentWeekStart;
 
   const forPsychology =
     params.forPsychology === "yes"
@@ -118,7 +220,30 @@ export default async function TimetablePage({ searchParams }: Props) {
     lessonIdFilter = (lessonIds ?? []).map((r: any) => r.lesson_id);
   }
 
-  // 2) fetch lessons templates
+  let weekOccQuery = supabase
+    .from("lesson_occurrences")
+    .select("lesson_id, occurrence_date, lessons!inner(academic_year_id)")
+    .eq("lessons.academic_year_id", activeYear.id)
+    .gte("occurrence_date", weekStart)
+    .lte("occurrence_date", weekEnd)
+    .neq("status", "cancelled");
+  if (lessonIdFilter && lessonIdFilter.length > 0) {
+    weekOccQuery = weekOccQuery.in("lesson_id", lessonIdFilter);
+  }
+  const { data: weekOccurrences } =
+    lessonIdFilter && lessonIdFilter.length === 0
+      ? { data: [] as { lesson_id: string; occurrence_date: string }[] }
+      : await weekOccQuery;
+
+  const datesByLesson = new Map<string, string[]>();
+  for (const row of weekOccurrences ?? []) {
+    const list = datesByLesson.get(row.lesson_id) ?? [];
+    list.push(row.occurrence_date);
+    datesByLesson.set(row.lesson_id, list);
+  }
+  const weekLessonIds = [...datesByLesson.keys()];
+
+  // 2) fetch lesson details for this week's occurrences
   let lessonsQuery = supabase
     .from("lessons")
     .select(
@@ -135,63 +260,17 @@ export default async function TimetablePage({ searchParams }: Props) {
     )
     .eq("academic_year_id", activeYear.id);
 
-  if (lessonIdFilter) {
-    if (lessonIdFilter.length === 0) {
-      return (
-        <div className="flex flex-col gap-stack_lg">
-          <PageHeader
-            title="מערכת שעות"
-            description="סינון לפי תלמידה, לא נמצאו שיעורים פעילים."
-            size="headline"
-          />
-          <div className="print:hidden">
-            <TimetableFilters
-              classes={(classes ?? []).map((c: any) => ({ id: c.id, name: c.name }))}
-              tracks={(tracks ?? []).map((t: any) => ({ id: t.id, name: t.name }))}
-              specializations={(specializations ?? []).map((s: any) => ({ id: s.id, name: s.name }))}
-              teachers={(teachers ?? []).map((t: any) => ({ id: t.id, name: t.full_name }))}
-              students={(students ?? []).map((s: any) => ({ id: s.id, full_name: s.full_name }))}
-              subjects={subjects}
-              activityRanges={(activityRanges ?? []).map((r: any) => ({ id: r.id, name: r.name }))}
-              defaults={{
-                classIds,
-                trackIds,
-                specializationId: params.specializationId,
-                teacherId: params.teacherId,
-                subject: params.subject,
-                studentId: params.studentId,
-                activityRangeId: params.activityRangeId,
-                forPsychology:
-                  params.forPsychology === "yes"
-                    ? "yes"
-                    : params.forPsychology === "no"
-                      ? "no"
-                      : "all",
-              }}
-            />
-          </div>
-          <Section>
-            <div className="flex flex-col items-center gap-2 rounded-lg border border-dashed border-outline-variant/50 bg-surface-container-low/60 px-6 py-10 text-center">
-              <Icon name="event_busy" className="text-[36px] text-secondary" />
-              <p className="font-body-md text-body-md text-on-surface-variant">
-                לא נמצאו שיעורים פעילים לתלמידה שבחרת.
-              </p>
-            </div>
-          </Section>
-        </div>
-      );
-    }
-
-    lessonsQuery = lessonsQuery.in("id", lessonIdFilter);
+  if (weekLessonIds.length > 0) {
+    lessonsQuery = lessonsQuery.in("id", weekLessonIds);
   }
   if (params.specializationId) lessonsQuery = lessonsQuery.eq("specialization_id", params.specializationId);
-  if (params.teacherId) {
-    // We'll filter in-memory after join because teacher_teaching_assignments is a nested relation
-  }
   if (params.activityRangeId) lessonsQuery = lessonsQuery.eq("activity_range_id", params.activityRangeId);
   if (forPsychology !== undefined) lessonsQuery = lessonsQuery.eq("for_psychology", forPsychology);
 
-  const { data: lessonsRows } = await lessonsQuery;
+  const { data: lessonsRows } =
+    weekLessonIds.length === 0
+      ? { data: [] as { id: string }[] }
+      : await lessonsQuery;
 
   const lessonIdsForSlots = (lessonsRows ?? []).map((l: { id: string }) => l.id);
   const { data: audienceRows } =
@@ -250,37 +329,55 @@ export default async function TimetablePage({ searchParams }: Props) {
         audienceLabel = cls?.name ?? tr?.name ?? "—";
       }
 
-      const slots =
-        slotsByLesson.get(l.id)?.length
-          ? slotsByLesson.get(l.id)!
-          : [
-              {
+      const dates = datesByLesson.get(l.id) ?? [];
+      const slots = slotsByLesson.get(l.id) ?? [];
+
+      return dates.map((date) => {
+        const dayOfWeek = parseIsoDate(date).getDay();
+        const slot =
+          slots.find((s) => s.day_of_week === dayOfWeek) ??
+          (l.day_of_week === dayOfWeek
+            ? {
                 day_of_week: l.day_of_week,
                 lesson_number: l.lesson_number,
                 period_count: l.period_count ?? 1,
-              },
-            ];
+              }
+            : {
+                day_of_week: dayOfWeek,
+                lesson_number: l.lesson_number,
+                period_count: l.period_count ?? 1,
+              });
 
-      return slots.map((slot) => ({
-        lessonId: l.id,
-        subject: formatSubjectLessonLabel(parent, l.subject),
-        teacherName: teacher?.fullName ?? "",
-        teacherId,
-        dayOfWeek: slot.day_of_week,
-        lessonNumber: slot.lesson_number,
-        periodCount: slot.period_count ?? 1,
-        billingType: l.billing_type,
-        forPsychology: l.for_psychology,
-        audienceLabel,
-      }));
+        return {
+          lessonId: l.id,
+          subject: formatSubjectLessonLabel(parent, l.subject),
+          teacherName: teacher?.fullName ?? "",
+          teacherId,
+          dayOfWeek: slot.day_of_week,
+          lessonNumber: slot.lesson_number,
+          periodCount: slot.period_count ?? 1,
+          billingType: l.billing_type,
+          forPsychology: l.for_psychology,
+          audienceLabel,
+        };
+      });
     });
 
   return (
     <div className="flex flex-col gap-stack_lg">
       <PageHeader
         title="מערכת שעות"
-        description="סינון לפי כמה כיתות ומסלולים, וגם התמחות/מורה/מקצוע/תלמידה, כולל פסיכולוגיה."
+        description="מוצגים רק מופעים שיש בשבוע הנבחר (ברירת מחדל: השבוע הנוכחי). שיעורים שבוטלו או שאינם חלים השבוע לא מופיעים."
         size="headline"
+      />
+
+      <WeekNav
+        params={params}
+        classIds={classIds}
+        trackIds={trackIds}
+        weekStart={weekStart}
+        weekEnd={weekEnd}
+        isCurrentWeek={isCurrentWeek}
       />
 
       <div className="print:hidden">
@@ -300,6 +397,7 @@ export default async function TimetablePage({ searchParams }: Props) {
             subject: params.subject,
             studentId: params.studentId,
             activityRangeId: params.activityRangeId,
+            week: weekStart,
             forPsychology:
               params.forPsychology === "yes"
                 ? "yes"
@@ -311,18 +409,18 @@ export default async function TimetablePage({ searchParams }: Props) {
       </div>
 
       {entries.length === 0 ? (
-        <Section icon="calendar_view_week" title="מערכת שבועית">
+        <Section icon="calendar_view_week" title="מערכת השבוע">
           <div className="flex flex-col items-center gap-2 rounded-lg border border-dashed border-outline-variant/50 bg-surface-container-low/60 px-6 py-10 text-center">
-            <Icon name="search_off" className="text-[36px] text-secondary" />
+            <Icon name="event_busy" className="text-[36px] text-secondary" />
             <p className="font-body-md text-body-md text-on-surface-variant">
-              לא נמצאו שיעורים לסינון שבחרת.
+              אין מופעים בשבוע זה לפי הסינון שנבחר.
             </p>
           </div>
         </Section>
       ) : (
-        <Section icon="calendar_view_week" title="מערכת שבועית" bodyBleed>
+        <Section icon="calendar_view_week" title="מערכת השבוע" bodyBleed>
           <div className="p-4">
-            <WeeklyTimetableGrid entries={entries} />
+            <WeeklyTimetableGrid entries={entries} columnDates={weekDates} />
           </div>
         </Section>
       )}
