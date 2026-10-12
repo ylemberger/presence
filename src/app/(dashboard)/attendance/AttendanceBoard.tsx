@@ -376,21 +376,26 @@ export function AttendanceBoard({
 
   function buildParams(patch: Record<string, string | undefined>) {
     const params = new URLSearchParams();
-    params.set("date", patch.date ?? selectedDate);
-    params.set("from", patch.from ?? monthFrom);
-    params.set("to", patch.to ?? monthTo);
-    params.set("mode", patch.mode ?? mode);
-    const filters = {
-      classId: patch.classId !== undefined ? patch.classId : classId,
-      trackId: patch.trackId !== undefined ? patch.trackId : trackId,
-      specializationId:
-        patch.specializationId !== undefined ? patch.specializationId : specializationId,
-      teacherId: patch.teacherId !== undefined ? patch.teacherId : teacherId,
-      subject: patch.subject !== undefined ? patch.subject : subject,
-      studentId: patch.studentId !== undefined ? patch.studentId : studentId,
-      lessonId: patch.lessonId !== undefined ? patch.lessonId : lessonId,
-      occurrenceId: patch.occurrenceId,
+    params.set("date", "date" in patch ? patch.date ?? selectedDate : selectedDate);
+    params.set("from", "from" in patch ? patch.from ?? monthFrom : monthFrom);
+    params.set("to", "to" in patch ? patch.to ?? monthTo : monthTo);
+    params.set("mode", "mode" in patch ? patch.mode ?? mode : mode);
+    const current: Record<string, string | undefined> = {
+      classId,
+      trackId,
+      specializationId,
+      teacherId,
+      subject,
+      studentId,
+      lessonId,
     };
+    const filters: Record<string, string | undefined> = { ...current };
+    for (const key of Object.keys(current)) {
+      if (key in patch) filters[key] = patch[key] || undefined;
+    }
+    if ("occurrenceId" in patch) {
+      filters.occurrenceId = patch.occurrenceId || undefined;
+    }
     for (const [k, v] of Object.entries(filters)) {
       if (v) params.set(k, v);
     }
@@ -402,7 +407,13 @@ export function AttendanceBoard({
   }
 
   function selectDate(iso: string) {
-    navigate(buildParams({ date: iso, occurrenceId: undefined }));
+    navigate(
+      buildParams({
+        date: iso,
+        occurrenceId: undefined,
+        lessonId: undefined,
+      })
+    );
   }
 
   function selectLesson(occurrenceId: string) {
@@ -427,33 +438,6 @@ export function AttendanceBoard({
     navigate(buildParams({ [key]: value, occurrenceId: undefined }));
   }
 
-  useEffect(() => {
-    try {
-      const saved = window.localStorage.getItem("presence.attendance.lessonId");
-      const match = saved ? lessons.find((l) => l.id === saved && l.teacherId) : undefined;
-      if (!lessonId && match?.teacherId) {
-        navigate(
-          buildParams({
-            teacherId: match.teacherId,
-            lessonId: match.id,
-            occurrenceId: undefined,
-          })
-        );
-      }
-    } catch {
-      /* ignore */
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  useEffect(() => {
-    try {
-      if (lessonId) window.localStorage.setItem("presence.attendance.lessonId", lessonId);
-      else window.localStorage.removeItem("presence.attendance.lessonId");
-    } catch {
-      /* ignore */
-    }
-  }, [lessonId]);
 
   function bumpMarkedCount(occurrenceId: string, delta: number) {
     setDayOccurrences((prev) =>
@@ -1049,20 +1033,14 @@ export function AttendanceBoard({
             type="button"
             size="sm"
             variant="secondary"
-            onClick={() =>
-              navigate(
-                buildParams({
-                  classId: undefined,
-                  trackId: undefined,
-                  specializationId: undefined,
-                  teacherId: undefined,
-                  subject: undefined,
-                  studentId: undefined,
-                  lessonId: undefined,
-                  occurrenceId: undefined,
-                })
-              )
-            }
+            onClick={() => {
+              const params = new URLSearchParams();
+              params.set("date", selectedDate);
+              params.set("from", monthFrom);
+              params.set("to", monthTo);
+              params.set("mode", mode);
+              navigate(params);
+            }}
           >
             נקה סינון
           </Button>
