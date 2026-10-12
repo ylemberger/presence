@@ -526,9 +526,16 @@ export function StudentsDirectory({
         </div>
       </div>
       <div className="grid gap-3 border-b border-outline-variant/30 bg-surface-container-low/60 px-5 py-4 print:hidden md:grid-cols-2 xl:grid-cols-4">
-        <div className="xl:col-span-2">
+        <div className="xl:col-span-4">
+          <p className="mb-2 flex items-center gap-2 font-title-lg text-title-lg text-primary">
+            <Icon name="filter_list" className="text-secondary" />
+            חיפוש וסינון
+            <span className="rounded-full bg-secondary-container px-2 py-0.5 font-caption text-caption font-semibold text-primary">
+              אפשר לבחור כמה בכל שדה
+            </span>
+          </p>
           <Input
-            label="חיפוש"
+            label="חיפוש חופשי"
             placeholder="שם, תעודת זהות, כיתה, מסלול או התמחות"
             value={query}
             onChange={(e) => setQuery(e.target.value)}
@@ -537,7 +544,6 @@ export function StudentsDirectory({
         <MultiSelect
           label="שכבות"
           name="gradeId"
-          hint="אפשר לבחור כמה"
           values={gradeIds}
           onChange={(next) => {
             setGradeIds(next);
@@ -556,7 +562,6 @@ export function StudentsDirectory({
         <MultiSelect
           label="כיתות"
           name="classId"
-          hint="אפשר לבחור כמה"
           values={classIds}
           onChange={setClassIds}
           options={classFilterOptions}
@@ -564,7 +569,6 @@ export function StudentsDirectory({
         <MultiSelect
           label="מסלולים"
           name="trackId"
-          hint="אפשר לבחור כמה"
           values={trackIds}
           onChange={setTrackIds}
           options={(yearOptions?.tracks ?? []).map((t) => ({
@@ -575,7 +579,6 @@ export function StudentsDirectory({
         <MultiSelect
           label="התמחויות"
           name="specId"
-          hint="אפשר לבחור כמה"
           values={specIds}
           onChange={setSpecIds}
           options={(yearOptions?.specializations ?? []).map((s) => ({
@@ -586,7 +589,6 @@ export function StudentsDirectory({
         <MultiSelect
           label="מקצועות"
           name="subjectKey"
-          hint="אפשר לבחור כמה"
           values={subjectKeys}
           onChange={(next) => {
             setSubjectKeys(next);
@@ -602,7 +604,6 @@ export function StudentsDirectory({
         <MultiSelect
           label="שיעורים"
           name="lessonId"
-          hint="אפשר לבחור כמה"
           values={lessonIds}
           onChange={setLessonIds}
           options={lessonFilterOptions}
@@ -627,29 +628,52 @@ export function StudentsDirectory({
             { value: "inactive", label: "לא פעילות" },
           ]}
         />
-        <Select
-          label="מיון לפי"
-          value={sortKey}
-          onChange={(e) => {
-            setSortKey(e.target.value as SortKey);
-            setSortDir("asc");
-          }}
-          options={SORT_OPTIONS.map((o) => ({ value: o.value, label: o.label }))}
-        />
-        <div className="flex items-end">
-          <Button
-            type="button"
-            variant="outline"
-            className="w-full"
-            onClick={() => setSortDir((d) => (d === "asc" ? "desc" : "asc"))}
-          >
-            <Icon name={sortDir === "asc" ? "arrow_upward" : "arrow_downward"} className="text-[18px]" />
-            {sortDir === "asc" ? "סדר עולה" : "סדר יורד"}
-          </Button>
+        <div className="xl:col-span-4 rounded-xl border-2 border-secondary bg-secondary-container/50 px-4 py-3">
+          <p className="mb-2 flex flex-wrap items-center gap-2 font-title-lg text-title-lg text-primary">
+            <Icon name="sort" className="text-secondary" />
+            מיון הרשימה
+            <span className="rounded-full bg-primary px-2.5 py-0.5 font-caption text-caption font-bold text-white">
+              {SORT_OPTIONS.find((o) => o.value === sortKey)?.label} ·{" "}
+              {sortDir === "asc" ? "עולה" : "יורד"}
+            </span>
+          </p>
+          <div className="flex flex-wrap items-center gap-2">
+            {SORT_OPTIONS.map((opt) => {
+              const active = sortKey === opt.value;
+              return (
+                <button
+                  key={opt.value}
+                  type="button"
+                  onClick={() => toggleSort(opt.value)}
+                  className={
+                    active
+                      ? "inline-flex items-center gap-1 rounded-full bg-primary px-3 py-1.5 font-label-md text-label-md font-bold text-white shadow-tactile-sm"
+                      : "inline-flex items-center gap-1 rounded-full border border-outline-variant bg-surface-container-lowest px-3 py-1.5 font-label-md text-label-md text-on-surface hover:border-primary hover:text-primary"
+                  }
+                >
+                  {opt.label}
+                  {active ? (
+                    <Icon
+                      name={sortDir === "asc" ? "arrow_upward" : "arrow_downward"}
+                      className="text-[16px]"
+                    />
+                  ) : null}
+                </button>
+              );
+            })}
+            <Button
+              type="button"
+              variant={sortDir === "desc" ? "primary" : "outline"}
+              onClick={() => setSortDir((d) => (d === "asc" ? "desc" : "asc"))}
+            >
+              <Icon name={sortDir === "asc" ? "arrow_upward" : "arrow_downward"} className="text-[18px]" />
+              {sortDir === "asc" ? "סדר עולה" : "סדר יורד"}
+            </Button>
+          </div>
         </div>
         <div className="flex items-end xl:col-span-4">
           <div className="flex w-full flex-wrap items-center justify-between gap-3">
-            <p className="text-body-md text-on-surface-variant">
+            <p className="text-body-md text-on-surface">
               {hasActiveFilter ? (
                 <>
                   מוצגות{" "}
@@ -663,6 +687,26 @@ export function StudentsDirectory({
                 </>
               )}
             </p>
+            {hasActiveFilter ? (
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => {
+                  setQuery("");
+                  setGradeIds([]);
+                  setClassIds([]);
+                  setTrackIds([]);
+                  setSpecIds([]);
+                  setSubjectKeys([]);
+                  setLessonIds([]);
+                  setPsychology("all");
+                  setStatus("all");
+                }}
+              >
+                <Icon name="filter_alt_off" className="text-[18px]" />
+                נקה סינון
+              </Button>
+            ) : null}
             {!viewOnly && !hasSettingsLists && yearOptions && (
               <p className="text-body-md text-secondary">
                 אין עדיין שכבות/כיתות/מסלולים/התמחויות בהגדרות —{" "}
@@ -716,27 +760,43 @@ export function StudentsDirectory({
                 [
                   { key: "name" as SortKey, label: "תלמידה" },
                   { key: "identity" as SortKey, label: 'ת"ז' },
-                  { key: "grade" as SortKey, label: "שיבוץ" },
+                  { keys: ["grade", "class", "track", "spec"] as SortKey[], label: "שיבוץ" },
                   { key: "city" as SortKey, label: "קשר" },
                   { key: "status" as SortKey, label: "סטטוס" },
                 ] as const
-              ).map((h) => (
-                <th key={h.key} className="px-3 py-2 text-right text-caption font-semibold tracking-wide">
+              ).map((h) => {
+                const keys = "keys" in h ? h.keys : [h.key];
+                const active = keys.includes(sortKey);
+                return (
+                <th
+                  key={h.label}
+                  className={
+                    active
+                      ? "bg-secondary-container px-3 py-2.5 text-right text-caption font-bold tracking-wide text-primary"
+                      : "px-3 py-2.5 text-right text-caption font-semibold tracking-wide"
+                  }
+                >
                   <button
                     type="button"
-                    onClick={() => toggleSort(h.key)}
-                    className="inline-flex items-center gap-1 hover:text-primary"
+                    onClick={() => toggleSort(keys[0])}
+                    className="inline-flex items-center gap-1"
+                    title="לחצי למיון לפי עמודה זו"
                   >
                     {h.label}
-                    {sortKey === h.key ? (
-                      <Icon
-                        name={sortDir === "asc" ? "arrow_upward" : "arrow_downward"}
-                        className="text-[14px] text-primary"
-                      />
-                    ) : null}
+                    <Icon
+                      name={
+                        active
+                          ? sortDir === "asc"
+                            ? "arrow_upward"
+                            : "arrow_downward"
+                          : "unfold_more"
+                      }
+                      className={active ? "text-[16px] text-primary" : "text-[16px] text-outline"}
+                    />
                   </button>
                 </th>
-              ))}
+                );
+              })}
               {viewOnly ? null : <th className="px-3 py-2" />}
             </tr>
           </thead>
