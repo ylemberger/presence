@@ -13,6 +13,7 @@ import type { Grade, Class, Track, Specialization } from "@/types/database";
 import { Icon } from "@/components/ui/Icon";
 import { PrintButton } from "@/components/ui/PrintButton";
 import { SeminarPrintHeader } from "@/components/print/SeminarPrintHeader";
+import * as XLSX from "xlsx";
 
 const PRINT_COLUMNS = [
   { id: "name", label: "שם", defaultOn: true },
@@ -396,12 +397,36 @@ export function StudentsDirectory({
             ))}
           </div>
         </div>
+        <div className="flex flex-wrap items-center gap-2">
         <PrintButton
           label="הדפסת רשימה"
           documentTitle={`תלמידות${yearName ? `-${yearName}` : ""}`}
           disabled={filtered.length === 0}
           disabledReason="אין תלמידות להדפסה לפי הסינון"
         />
+        <Button
+          type="button"
+          variant="secondary"
+          disabled={filtered.length === 0}
+          title={filtered.length === 0 ? "אין תלמידות לייצוא לפי הסינון" : undefined}
+          onClick={() => {
+            const cols = PRINT_COLUMNS.filter((col) => printCols[col.id]);
+            const header = cols.map((col) => col.label);
+            const body = filtered.map((s) => cols.map((col) => printCell(s, col.id)));
+            const sheet = XLSX.utils.aoa_to_sheet([header, ...body]);
+            sheet["!cols"] = cols.map((col) => ({
+              wch: Math.min(28, Math.max(10, col.label.length + 4)),
+            }));
+            const workbook = XLSX.utils.book_new();
+            XLSX.utils.book_append_sheet(workbook, sheet, "תלמידות");
+            const safeYear = (yearName ?? "רשימה").replace(/[\\/:*?"<>|]/g, "-");
+            XLSX.writeFile(workbook, `תלמידות-${safeYear}.xlsx`);
+          }}
+        >
+          <Icon name="download" className="text-[18px]" />
+          ייצוא לאקסל
+        </Button>
+        </div>
       </div>
       <div className="grid gap-3 border-b border-outline-variant/30 bg-surface-container-low/60 px-5 py-4 print:hidden md:grid-cols-2 xl:grid-cols-4">
         <div className="xl:col-span-2">

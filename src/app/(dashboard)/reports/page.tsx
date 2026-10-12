@@ -505,29 +505,7 @@ export default async function ReportsPage({ searchParams }: Props) {
         const specName = currentAssignment?.specialization_id
           ? specById.get(currentAssignment.specialization_id) ?? "-"
           : "-";
-        const studies = params.lessonId
-          ? ""
-          : studentLessonAssignments
-              .filter((la) => !la.end_date)
-              .map((la) => {
-                const meta = lessonCatalog.get(la.lesson_id);
-                if (!meta) return null;
-                const billing =
-                  meta.billingType && meta.billingType in BILLING_TYPE_LABELS
-                    ? BILLING_TYPE_LABELS[meta.billingType as keyof typeof BILLING_TYPE_LABELS]
-                    : "";
-                const extra = la.assignment_type === "manual" ? "חריג" : "";
-                return [
-                  meta.subject,
-                  meta.lessonName !== meta.subject ? meta.lessonName : "",
-                  billing,
-                  extra,
-                ]
-                  .filter(Boolean)
-                  .join(" · ");
-              })
-              .filter((v): v is string => Boolean(v))
-              .join(" | ");
+        const studies = "";
         const evaluated = evaluateAbsenceAgainstRule(summary.absencePercent, threshold);
 
         reportRows.push({
@@ -609,50 +587,26 @@ export default async function ReportsPage({ searchParams }: Props) {
       for (const l of lessons) lessonIdsToShow.add(l.id);
     }
 
-    const grouped = new Map<
-      string,
-      {
-        representativeId: string;
-        name: string;
-        lessonNames: Set<string>;
-        teachers: Set<string>;
-        dayOfWeek: number;
-        lessonCount: number;
-        items: EligibleOccurrence[];
-      }
-    >();
     for (const lessonId of lessonIdsToShow) {
       const meta = lessonCatalog.get(lessonId);
       if (!meta) continue;
-      const key = calcUnitForLesson(lessonId, poolCatalog.byLesson).key;
-      const unit = poolCatalog.byLesson.get(lessonId);
-      const bucket = grouped.get(key) ?? {
-        representativeId: lessonId,
-        name: unit?.poolName || meta.subject,
-        lessonNames: new Set<string>(),
-        teachers: new Set<string>(),
-        dayOfWeek: meta.dayOfWeek,
-        lessonCount: 0,
-        items: [] as EligibleOccurrence[],
-      };
-      bucket.lessonCount += 1;
-      bucket.lessonNames.add(meta.lessonName);
-      if (meta.teacherName) bucket.teachers.add(meta.teacherName);
-      bucket.items.push(...(lessonItems.get(lessonId) ?? []));
-      grouped.set(key, bucket);
-    }
-
-    for (const bucket of grouped.values()) {
-      const summary = summarizeAttendance(bucket.items);
+      const summary = summarizeAttendance(lessonItems.get(lessonId) ?? []);
       const evaluated = evaluateAbsenceAgainstRule(summary.absencePercent, threshold);
-      const extra = [...bucket.lessonNames].filter((n) => n !== bucket.name);
+      const subjectLabel = formatSubjectLessonLabel(meta.subject, meta.lessonName);
       lessonRows.push({
-        lessonId: bucket.representativeId,
-        subject: bucket.name,
-        teacherName: [...bucket.teachers].join(" · "),
-        dayLabel:
-          bucket.lessonCount > 1 ? `${bucket.lessonCount} שיעורים` : dayLabel(bucket.dayOfWeek),
-        billingLabel: extra.join(", "),
+        lessonId,
+        subject: subjectLabel,
+        teacherName: meta.teacherName,
+        dayLabel: [
+          dayLabel(meta.dayOfWeek),
+          meta.lessonNumber ? formatLessonHours(meta.lessonNumber, meta.periodCount ?? 1) : "",
+        ]
+          .filter(Boolean)
+          .join(" · "),
+        billingLabel:
+          meta.billingType && meta.billingType in BILLING_TYPE_LABELS
+            ? BILLING_TYPE_LABELS[meta.billingType as keyof typeof BILLING_TYPE_LABELS]
+            : "",
         totalRequired: summary.totalRequired,
         presentOnlyCount: summary.presentOnlyCount,
         lateCount: summary.lateCount,
@@ -719,9 +673,6 @@ export default async function ReportsPage({ searchParams }: Props) {
   if (filterSpecName) printFilters.push({ label: "התמחות", value: filterSpecName });
   if (filterTeacherName) printFilters.push({ label: "מורה", value: filterTeacherName });
   if (params.subject) printFilters.push({ label: "מקצוע", value: params.subject });
-  if (params.studentId && reportRows[0]?.studies) {
-    printFilters.push({ label: "לומדת", value: reportRows[0].studies });
-  }
   if (selectedLessonMeta) {
     printFilters.push({
       label: "שיעור",
@@ -939,79 +890,19 @@ export default async function ReportsPage({ searchParams }: Props) {
           <Section
             icon="table_view"
             title={printTitle}
-            subtitle={
-              params.lessonId
-                ? `שנה ${activeYear.name} · שורה לכל תלמידה בשיעור`
-                : `שנה ${activeYear.name} · סף${
-                    selectedRule
-                      ? ` ${selectedRule.max_allowed_absence_percent}% (${selectedRule.name})`
-                      : ` ${threshold}%`
-                  }${selectedRule ? ` · אזהרה מ-${includeFrom}%` : ""}`
-            }
+            subtitle={`שנה ${activeYear.name} · שורה לכל תלמידה לפי הסינון`}
             bodyBleed
             className="print:border-0"
             headerClassName="print:hidden"
           >
-            {params.lessonId ? (
-              <Table
-                compact
-                headers={[
-                  "תלמידה",
-                  "כיתה",
-                  "מופעים",
-                  "נוכחת",
-                  "איחור",
-                  "נעדרה",
-                  "לא סומן",
-                  "% חיסורים",
-                ]}
-              >
-                {reportRows.map((row) => (
-                  <TableRow key={row.studentId}>
-                    <TableCell compact className="font-medium text-primary">
-                      <Link href={`/students/${row.studentId}`} className="hover:underline">
-                        {row.studentName}
-                      </Link>
-                    </TableCell>
-                    <TableCell compact className="text-on-surface-variant">
-                      {row.className}
-                    </TableCell>
-                    <TableCell compact>{row.totalRequired}</TableCell>
-                    <TableCell compact className="text-attendance-present">
-                      {row.presentOnlyCount}
-                    </TableCell>
-                    <TableCell compact className="text-attendance-late">
-                      {row.lateCount}
-                    </TableCell>
-                    <TableCell compact className="text-attendance-absent">
-                      {row.absentCount}
-                    </TableCell>
-                    <TableCell compact className="text-on-surface-variant">
-                      {row.unmarkedCount}
-                    </TableCell>
-                    <TableCell
-                      compact
-                      className={cn(
-                        "font-semibold",
-                        row.ruleLevel === "blocked" && "text-attendance-absent",
-                        row.ruleLevel === "warning" && "text-attendance-late",
-                        row.ruleLevel === "ok" && "text-attendance-present"
-                      )}
-                    >
-                      {row.absencePercent}%
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </Table>
-            ) : (
             <Table
+              compact
               headers={[
                 "תלמידה",
                 "שכבה",
                 "כיתה",
                 "מסלול",
                 "התמחות",
-                "לומדת",
                 "מופעים",
                 "נוכחת",
                 "איחור",
@@ -1023,42 +914,38 @@ export default async function ReportsPage({ searchParams }: Props) {
             >
               {reportRows.map((row) => (
                 <TableRow key={row.studentId}>
-                  <TableCell className="font-label-md text-label-md text-primary">
+                  <TableCell compact className="font-medium text-primary">
                     <Link href={`/students/${row.studentId}`} className="hover:underline">
                       {row.studentName}
                     </Link>
                   </TableCell>
-                  <TableCell className="text-on-surface-variant">
+                  <TableCell compact className="text-on-surface-variant">
                     {row.gradeName}
                   </TableCell>
-                  <TableCell className="text-on-surface-variant">
+                  <TableCell compact className="text-on-surface-variant">
                     {row.className}
                   </TableCell>
-                  <TableCell className="text-on-surface-variant">
+                  <TableCell compact className="text-on-surface-variant">
                     {row.trackName}
                   </TableCell>
-                  <TableCell className="text-on-surface-variant">
+                  <TableCell compact className="text-on-surface-variant">
                     {row.specName}
                   </TableCell>
-                  <TableCell className="max-w-[18rem] text-on-surface-variant">
-                    {row.studies || "—"}
-                  </TableCell>
-                  <TableCell className="text-on-surface">
-                    {row.totalRequired}
-                  </TableCell>
-                  <TableCell className="text-attendance-present">
+                  <TableCell compact>{row.totalRequired}</TableCell>
+                  <TableCell compact className="text-attendance-present">
                     {row.presentOnlyCount}
                   </TableCell>
-                  <TableCell className="text-attendance-late">
+                  <TableCell compact className="text-attendance-late">
                     {row.lateCount}
                   </TableCell>
-                  <TableCell className="text-attendance-absent">
+                  <TableCell compact className="text-attendance-absent">
                     {row.absentCount}
                   </TableCell>
-                  <TableCell className="text-on-surface-variant">
+                  <TableCell compact className="text-on-surface-variant">
                     {row.unmarkedCount}
                   </TableCell>
                   <TableCell
+                    compact
                     className={cn(
                       "font-semibold",
                       row.ruleLevel === "blocked" && "text-attendance-absent",
@@ -1068,7 +955,7 @@ export default async function ReportsPage({ searchParams }: Props) {
                   >
                     {row.absencePercent}%
                   </TableCell>
-                  <TableCell>
+                  <TableCell compact>
                     <StatusPill
                       tone={
                         row.ruleLevel === "blocked"
@@ -1084,18 +971,17 @@ export default async function ReportsPage({ searchParams }: Props) {
                 </TableRow>
               ))}
             </Table>
-            )}
           </Section>
           )}
 
-          {lessonRows.length > 0 && (
+          {(params.teacherId || params.subject || params.lessonId) && lessonRows.length > 0 && (
             <Section
               icon="menu_book"
-              title={params.teacherId ? "השיעורים שמלמדת" : "שיעורים ומצב כל שיעור"}
+              title={params.teacherId ? "שיעורים לפי המורה" : "שיעורים לפי הסינון"}
               subtitle={
                 params.lessonId
                   ? "בחרי שיעור אחר כדי לחזור לרשימה, או לחצי על מופע למטה"
-                  : "לחצי על שיעור כדי לראות את כל המופעים שלו"
+                  : "שורה לכל שיעור. לחצי על שיעור כדי לראות מופעים"
               }
               bodyBleed
               className="print:border-0"
@@ -1111,9 +997,9 @@ export default async function ReportsPage({ searchParams }: Props) {
                 </div>
               )}
               <Table
+                compact
                 headers={[
-                  "מקצוע",
-                  "שיעורים",
+                  "שיעור",
                   "מורה",
                   "יום",
                   "מופעים",
@@ -1130,23 +1016,28 @@ export default async function ReportsPage({ searchParams }: Props) {
                     key={row.lessonId}
                     className={params.lessonId === row.lessonId ? "bg-primary/5" : undefined}
                   >
-                    <TableCell className="font-label-md text-label-md text-primary">
+                    <TableCell compact className="font-medium text-primary">
                       <Link
                         href={buildReportHref(params, { lessonId: row.lessonId })}
                         className="hover:underline"
                       >
                         {row.subject}
+                        {row.billingLabel ? (
+                          <span className="mt-0.5 block font-caption text-caption font-normal text-on-surface-variant">
+                            {row.billingLabel}
+                          </span>
+                        ) : null}
                       </Link>
                     </TableCell>
-                    <TableCell className="text-on-surface-variant">{row.billingLabel || "—"}</TableCell>
-                    <TableCell className="text-on-surface-variant">{row.teacherName}</TableCell>
-                    <TableCell className="text-on-surface-variant">{row.dayLabel}</TableCell>
-                    <TableCell className="text-on-surface">{row.totalRequired}</TableCell>
-                    <TableCell className="text-attendance-present">{row.presentOnlyCount}</TableCell>
-                    <TableCell className="text-attendance-late">{row.lateCount}</TableCell>
-                    <TableCell className="text-attendance-absent">{row.absentCount}</TableCell>
-                    <TableCell className="text-on-surface-variant">{row.unmarkedCount}</TableCell>
+                    <TableCell compact className="text-on-surface-variant">{row.teacherName}</TableCell>
+                    <TableCell compact className="text-on-surface-variant">{row.dayLabel}</TableCell>
+                    <TableCell compact>{row.totalRequired}</TableCell>
+                    <TableCell compact className="text-attendance-present">{row.presentOnlyCount}</TableCell>
+                    <TableCell compact className="text-attendance-late">{row.lateCount}</TableCell>
+                    <TableCell compact className="text-attendance-absent">{row.absentCount}</TableCell>
+                    <TableCell compact className="text-on-surface-variant">{row.unmarkedCount}</TableCell>
                     <TableCell
+                      compact
                       className={cn(
                         "font-semibold",
                         row.ruleLevel === "blocked" && "text-attendance-absent",
@@ -1156,7 +1047,7 @@ export default async function ReportsPage({ searchParams }: Props) {
                     >
                       {row.absencePercent}%
                     </TableCell>
-                    <TableCell>
+                    <TableCell compact>
                       <StatusPill
                         tone={
                           row.ruleLevel === "blocked"
