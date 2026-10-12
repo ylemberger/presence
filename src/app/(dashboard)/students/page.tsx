@@ -1,11 +1,49 @@
 import { PageHeader } from "@/components/ui/PageHeader";
 import { cannotWriteEmail, isViewerEmail } from "@/lib/auth/allowed-emails";
+import {
+  audienceForLesson,
+  audienceMapFromRows,
+  studentMatchesLesson,
+} from "@/lib/lessons/autoAssign";
 import { formatLessonOptionLabel } from "@/lib/lessons/hours";
 import { createClient, requireAuthenticatedUser } from "@/lib/supabase/server";
 import { getActiveAcademicYear, getAllAcademicYears } from "@/lib/utils";
 import { filterFixedGrades } from "@/lib/years/grades";
 import { StudentsDirectory } from "./StudentsDirectory";
 import { RepairPromotionsButton } from "../settings/RepairPromotionsButton";
+import type { SupabaseClient } from "@supabase/supabase-js";
+
+async function fetchOpenLessonAssignments(
+  supabase: SupabaseClient,
+  yearLessonIds: string[]
+): Promise<{ student_id: string; lesson_id: string }[]> {
+  if (yearLessonIds.length === 0) return [];
+  const yearSet = new Set(yearLessonIds);
+  const pageSize = 1000;
+  const rows: { student_id: string; lesson_id: string }[] = [];
+  let from = 0;
+  for (;;) {
+    const { data, error } = await supabase
+      .from("student_lesson_assignments")
+      .select("student_id, lesson_id")
+      .is("end_date", null)
+      .range(from, from + pageSize - 1);
+    if (error) {
+      console.error("student_lesson_assignments load failed", error.message);
+      break;
+    }
+    const batch = data ?? [];
+    for (const row of batch) {
+      if (yearSet.has(row.lesson_id)) {
+        rows.push({ student_id: row.student_id, lesson_id: row.lesson_id });
+      }
+    }
+    if (batch.length < pageSize) break;
+    from += pageSize;
+    if (from > 30000) break;
+  }
+  return rows;
+}
 
 type YearAssignment = {
   student_id: string;
@@ -46,6 +84,11 @@ export default async function StudentsPage() {
   const assignments: Record<
     string,
     {
+      gradeId: string;
+      classId: string;
+      trackId: string;
+      specId: string | null;
+      secondarySpecId: string | null;
       className: string;
       gradeName: string;
       trackName: string;
@@ -66,7 +109,6 @@ export default async function StudentsPage() {
       { data: tracks },
       { data: specializations },
       { data: yearLessons },
-      { data: openLessonAssignments },
     ] = await Promise.all([
       supabase
         .from("student_assignments")
@@ -85,15 +127,10 @@ export default async function StudentsPage() {
       supabase
         .from("lessons")
         .select(
-          "id, subject, day_of_week, lesson_number, period_count, billing_type, subjects(name)"
+          "id, subject, day_of_week, lesson_number, period_count, billing_type, for_psychology, grade_id, class_id, track_id, specialization_id, subjects(name)"
         )
         .eq("academic_year_id", activeYear.id)
         .order("subject"),
-      supabase
-        .from("student_lesson_assignments")
-        .select("student_id, lesson_id, lessons!inner(academic_year_id)")
-        .eq("lessons.academic_year_id", activeYear.id)
-        .is("end_date", null),
     ]);
 
     if (assignmentsError) {
@@ -109,6 +146,11 @@ export default async function StudentsPage() {
     for (const [studentId, a] of picked) {
       placedStudentIds.add(studentId);
       assignments[studentId] = {
+        gradeId: a.grade_id,
+        classId: a.class_id,
+        trackId: a.track_id,
+        specId: a.specialization_id,
+        secondarySpecId: a.secondary_specialization_id,
         className: classNameById.get(a.class_id) ?? "לא משובצת",
         gradeName: gradeNameById.get(a.grade_id) ?? "—",
         trackName: trackNameById.get(a.track_id) ?? "—",
@@ -141,14 +183,74 @@ export default async function StudentsPage() {
       };
     });
 
+    const yearLessonIds = lessons.map((l) => l.id);
+    const [openLessonAssignments, audienceRes, exclusionRes] = await Promise.all([
+      fetchOpenLessonAssignments(supabase, yearLessonIds),
+      yearLessonIds.length > 0
+        ? supabase
+            .from("lesson_audience")
+            .select("lesson_id, grade_id, class_id, track_id, specialization_id")
+            .in("lesson_id", yearLessonIds)
+        : Promise.resolve({ data: [] as { lesson_id: string; grade_id: string | null; class_id: string | null; track_id: string | null; specialization_id: string | null }[] }),
+      yearLessonIds.length > 0
+        ? supabase
+            .from("student_lesson_exclusions")
+            .select("student_id, lesson_id")
+            .in("lesson_id", yearLessonIds)
+        : Promise.resolve({ data: [] as { student_id: string; lesson_id: string }[], error: null }),
+    ]);
+    const audienceByLesson = audienceMapFromRows(audienceRes.data ?? []);
+    const exclusionError = "error" in exclusionRes ? exclusionRes.error : null;
+    const excluded = new Set(
+      (exclusionError ? [] : exclusionRes.data ?? []).map(
+        (row) => `${row.student_id}::${row.lesson_id}`
+      )
+    );
+
     const assignedLessonIdsByStudent: Record<string, string[]> = {};
-    for (const row of openLessonAssignments ?? []) {
-      const studentId = row.student_id as string;
-      const lessonId = row.lesson_id as string;
-      if (!assignedLessonIdsByStudent[studentId]) {
-        assignedLessonIdsByStudent[studentId] = [];
+    function addLesson(studentId: string, lessonId: string) {
+      if (excluded.has(`${studentId}::${lessonId}`)) return;
+      const list = assignedLessonIdsByStudent[studentId] ?? [];
+      if (!list.includes(lessonId)) list.push(lessonId);
+      assignedLessonIdsByStudent[studentId] = list;
+    }
+    for (const row of openLessonAssignments) {
+      addLesson(row.student_id, row.lesson_id);
+    }
+    const lessonScopes = (yearLessons ?? []).map((lesson) => {
+      const audience = audienceForLesson(
+        {
+          id: lesson.id as string,
+          grade_id: (lesson.grade_id as string | null) ?? null,
+          class_id: (lesson.class_id as string | null) ?? null,
+          track_id: (lesson.track_id as string | null) ?? null,
+          specialization_id: (lesson.specialization_id as string | null) ?? null,
+        },
+        audienceByLesson
+      );
+      return {
+        id: lesson.id as string,
+        class_id: (lesson.class_id as string | null) ?? null,
+        track_id: (lesson.track_id as string | null) ?? null,
+        specialization_id: (lesson.specialization_id as string | null) ?? null,
+        billing_type: String(lesson.billing_type ?? "mandatory"),
+        grade_id: String(lesson.grade_id ?? ""),
+        for_psychology: Boolean(lesson.for_psychology),
+        audience,
+      };
+    });
+    for (const [studentId, a] of picked) {
+      const placement = {
+        grade_id: a.grade_id,
+        class_id: a.class_id,
+        track_id: a.track_id,
+        specialization_id: a.specialization_id,
+        secondary_specialization_id: a.secondary_specialization_id,
+        is_psychology: Boolean(a.is_psychology),
+      };
+      for (const lesson of lessonScopes) {
+        if (studentMatchesLesson(placement, lesson)) addLesson(studentId, lesson.id);
       }
-      assignedLessonIdsByStudent[studentId].push(lessonId);
     }
 
     yearOptions = {
@@ -184,6 +286,11 @@ export default async function StudentsPage() {
       address: s.address ?? null,
       personal_note: s.personal_note ?? null,
       is_active: s.is_active,
+      gradeId: assignments[s.id]?.gradeId ?? "",
+      classId: assignments[s.id]?.classId ?? "",
+      trackId: assignments[s.id]?.trackId ?? "",
+      specId: assignments[s.id]?.specId ?? null,
+      secondarySpecId: assignments[s.id]?.secondarySpecId ?? null,
       className: assignments[s.id]?.className ?? "לא משובצת",
       gradeName: assignments[s.id]?.gradeName ?? "—",
       trackName: assignments[s.id]?.trackName ?? "—",

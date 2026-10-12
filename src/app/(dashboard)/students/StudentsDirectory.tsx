@@ -32,6 +32,11 @@ interface StudentRow {
   address: string | null;
   personal_note: string | null;
   is_active: boolean;
+  gradeId: string;
+  classId: string;
+  trackId: string;
+  specId: string | null;
+  secondarySpecId: string | null;
   className: string;
   gradeName: string;
   trackName: string;
@@ -130,23 +135,6 @@ export function StudentsDirectory({
     () => new Map((yearOptions?.grades ?? []).map((g) => [g.id, g.name])),
     [yearOptions]
   );
-  const classById = useMemo(
-    () => new Map((yearOptions?.classes ?? []).map((c) => [c.id, c])),
-    [yearOptions]
-  );
-  const trackNameById = useMemo(
-    () => new Map((yearOptions?.tracks ?? []).map((t) => [t.id, t.name])),
-    [yearOptions]
-  );
-  const specNameById = useMemo(
-    () => new Map((yearOptions?.specializations ?? []).map((s) => [s.id, s.name])),
-    [yearOptions]
-  );
-
-  const filterGradeName = gradeId ? gradeNameById.get(gradeId) ?? "" : "";
-  const filterClassName = classId ? classById.get(classId)?.name ?? "" : "";
-  const filterTrackName = trackId ? trackNameById.get(trackId) ?? "" : "";
-  const filterSpecName = specId ? specNameById.get(specId) ?? "" : "";
 
   const classFilterOptions = useMemo(() => {
     const list = (yearOptions?.classes ?? []).filter(
@@ -192,13 +180,13 @@ export function StudentsDirectory({
     return students.filter((s) => {
       if (status === "active" && !s.is_active) return false;
       if (status === "inactive" && s.is_active) return false;
-      if (filterGradeName && s.gradeName !== filterGradeName) return false;
-      if (filterClassName && s.className !== filterClassName) return false;
-      if (filterTrackName && s.trackName !== filterTrackName) return false;
+      if (gradeId && s.gradeId !== gradeId) return false;
+      if (classId && s.classId !== classId) return false;
+      if (trackId && s.trackId !== trackId) return false;
       if (
-        filterSpecName &&
-        s.specializationName !== filterSpecName &&
-        s.secondarySpecializationName !== filterSpecName
+        specId &&
+        s.specId !== specId &&
+        s.secondarySpecId !== specId
       ) {
         return false;
       }
@@ -232,10 +220,10 @@ export function StudentsDirectory({
     query,
     students,
     status,
-    filterGradeName,
-    filterClassName,
-    filterTrackName,
-    filterSpecName,
+    gradeId,
+    classId,
+    trackId,
+    specId,
     psychology,
     lessonId,
     subjectKey,
@@ -294,6 +282,7 @@ export function StudentsDirectory({
             value: g.id,
             label: g.name,
           }))}
+          maxSuggestions={80}
         />
         <Combobox
           label="כיתה"
@@ -301,6 +290,7 @@ export function StudentsDirectory({
           onChange={setClassId}
           options={classFilterOptions}
           emptyLabel={classFilterOptions.length ? "הכל" : "אין כיתות בהגדרות"}
+          maxSuggestions={80}
         />
         <Combobox
           label="מסלול"
@@ -310,6 +300,7 @@ export function StudentsDirectory({
             value: t.id,
             label: t.name,
           }))}
+          maxSuggestions={80}
         />
         <Combobox
           label="התמחות"
@@ -319,6 +310,7 @@ export function StudentsDirectory({
             value: s.id,
             label: s.name,
           }))}
+          maxSuggestions={80}
         />
         <Combobox
           label="מקצוע"
@@ -329,6 +321,7 @@ export function StudentsDirectory({
           }}
           options={subjectFilterOptions}
           emptyLabel={subjectFilterOptions.length ? "הכל" : "אין מקצועות בשנה"}
+          maxSuggestions={200}
         />
         <Combobox
           label="שיעור"
@@ -336,6 +329,7 @@ export function StudentsDirectory({
           onChange={setLessonId}
           options={lessonFilterOptions}
           emptyLabel={lessonFilterOptions.length ? "הכל" : "אין שיעורים בשנה"}
+          maxSuggestions={200}
         />
         <Select
           label="פסיכולוגיה"
