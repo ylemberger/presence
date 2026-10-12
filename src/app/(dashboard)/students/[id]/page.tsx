@@ -12,6 +12,11 @@ import { filterFixedGrades } from "@/lib/years/grades";
 import { formatDate, isDateInRange } from "@/lib/dates/hebrew";
 import { summarizeAttendance, evaluateAbsenceAgainstRule } from "@/lib/attendance/calculator";
 import { fetchAttendancePools, calcUnitForLesson } from "@/lib/attendance/pools";
+import {
+  audienceForLesson,
+  audienceMapFromRows,
+  studentMatchesLesson,
+} from "@/lib/lessons/autoAssign";
 import { formatSubjectLessonLabel } from "@/lib/lessons/subject-label";
 import { StudentDetailForms } from "./StudentDetailForms";
 import { StudentLessonAssignments } from "./StudentLessonAssignments";
@@ -27,6 +32,45 @@ import {
 
 interface Props {
   params: { id: string };
+}
+
+const PAGE_SIZE = 1000;
+
+async function fetchPagedRows<T>(
+  query: (from: number, to: number) => PromiseLike<{
+    data: T[] | null;
+    error: { message: string } | null;
+  }>
+): Promise<T[]> {
+  const rows: T[] = [];
+  let from = 0;
+  for (;;) {
+    const { data, error } = await query(from, from + PAGE_SIZE - 1);
+    if (error) {
+      console.error(error.message);
+      break;
+    }
+    const batch = data ?? [];
+    rows.push(...batch);
+    if (batch.length < PAGE_SIZE) break;
+    from += PAGE_SIZE;
+    if (from > 50000) break;
+  }
+  return rows;
+}
+
+function chunkIds(ids: string[], size = 80): string[][] {
+  const chunks: string[][] = [];
+  for (let i = 0; i < ids.length; i += size) chunks.push(ids.slice(i, i + size));
+  return chunks;
+}
+
+function embeddedName(
+  value: { name?: string } | { name?: string }[] | null | undefined
+): string | null {
+  if (!value) return null;
+  if (Array.isArray(value)) return value[0]?.name ?? null;
+  return value.name ?? null;
 }
 
 export default async function StudentDetailPage({ params }: Props) {
@@ -164,7 +208,9 @@ export default async function StudentDetailPage({ params }: Props) {
       supabase.from("specializations").select("*").eq("academic_year_id", activeYear.id),
       supabase
         .from("lessons")
-        .select("id, subject, subject_id, day_of_week, lesson_number, period_count, billing_type, subjects(name)")
+        .select(
+          "id, subject, subject_id, day_of_week, lesson_number, period_count, billing_type, for_psychology, grade_id, class_id, track_id, specialization_id, attendance_rule_id, attendance_rules(name, max_allowed_absence_percent), subjects(name)"
+        )
         .eq("academic_year_id", activeYear.id)
         .order("subject"),
       supabase
@@ -267,20 +313,108 @@ export default async function StudentDetailPage({ params }: Props) {
       } satisfies TimetableEntry;
     });
 
-    const lessonIds = lessons.map((l) => l.id);
-    if (lessonIds.length > 0) {
-      const [{ data: occurrences }, { data: attendanceRecords }, poolCatalog] = await Promise.all([
-        supabase
-          .from("lesson_occurrences")
-          .select(
-            "id, occurrence_date, status, lesson_id, lessons!inner(id, subject, subject_id, academic_year_id, attendance_rule_id, attendance_rules(name, max_allowed_absence_percent), subjects(name))"
+    const yearLessonRows = yearLessons.data ?? [];
+    const yearLessonIds = yearLessonRows.map((l) => l.id as string);
+    const yearPlacementRows = (assignmentRows ?? []).filter(
+      (a) => a.academic_year_id === activeYear.id
+    );
+    const matchPlacement =
+      yearPlacementRows.find((a) => a.end_date == null) ?? yearPlacementRows[0] ?? null;
+
+    const [audienceRes, exclusionRes] = await Promise.all([
+      yearLessonIds.length > 0
+        ? supabase
+            .from("lesson_audience")
+            .select("lesson_id, grade_id, class_id, track_id, specialization_id")
+            .in("lesson_id", yearLessonIds)
+        : Promise.resolve({
+            data: [] as {
+              lesson_id: string;
+              grade_id: string | null;
+              class_id: string | null;
+              track_id: string | null;
+              specialization_id: string | null;
+            }[],
+          }),
+      supabase.from("student_lesson_exclusions").select("lesson_id").eq("student_id", id),
+    ]);
+    const excludedLessonIds = new Set(
+      ("error" in exclusionRes && exclusionRes.error
+        ? []
+        : exclusionRes.data ?? []
+      ).map((row) => row.lesson_id)
+    );
+    const audienceByLesson = audienceMapFromRows(audienceRes.data ?? []);
+    const assignedLessonIds = new Set<string>();
+    for (const la of lessonAssignments) {
+      if (!excludedLessonIds.has(la.lesson_id)) assignedLessonIds.add(la.lesson_id);
+    }
+    if (matchPlacement) {
+      const placement = {
+        class_id: matchPlacement.class_id,
+        track_id: matchPlacement.track_id,
+        specialization_id: matchPlacement.specialization_id,
+        secondary_specialization_id: matchPlacement.secondary_specialization_id,
+        grade_id: matchPlacement.grade_id,
+        is_psychology: Boolean(matchPlacement.is_psychology),
+      };
+      for (const lesson of yearLessonRows) {
+        const lessonId = lesson.id as string;
+        if (excludedLessonIds.has(lessonId)) continue;
+        const scoped = {
+          id: lessonId,
+          grade_id: (lesson.grade_id as string | null) ?? "",
+          class_id: (lesson.class_id as string | null) ?? null,
+          track_id: (lesson.track_id as string | null) ?? null,
+          specialization_id: (lesson.specialization_id as string | null) ?? null,
+          billing_type: String(lesson.billing_type ?? ""),
+          for_psychology: Boolean(lesson.for_psychology),
+          audience: audienceForLesson(
+            {
+              id: lessonId,
+              grade_id: (lesson.grade_id as string | null) ?? null,
+              class_id: (lesson.class_id as string | null) ?? null,
+              track_id: (lesson.track_id as string | null) ?? null,
+              specialization_id: (lesson.specialization_id as string | null) ?? null,
+            },
+            audienceByLesson
+          ),
+        };
+        if (studentMatchesLesson(placement, scoped)) assignedLessonIds.add(lessonId);
+      }
+    }
+
+    if (assignedLessonIds.size > 0) {
+      const assignedIds = [...assignedLessonIds];
+      const occSelect =
+        "id, occurrence_date, status, lesson_id, lessons!inner(id, subject, subject_id, academic_year_id, attendance_rule_id, attendance_rules(name, max_allowed_absence_percent), subjects(name))";
+      const [occurrenceChunks, attendanceRecords, poolCatalog] = await Promise.all([
+        Promise.all(
+          chunkIds(assignedIds).map((ids) =>
+            fetchPagedRows<{
+              id: string;
+              occurrence_date: string;
+              status: string;
+              lesson_id: string;
+              lessons: unknown;
+            }>((from, to) =>
+              supabase
+                .from("lesson_occurrences")
+                .select(occSelect)
+                .eq("lessons.academic_year_id", activeYear.id)
+                .in("lesson_id", ids)
+                .neq("status", "cancelled")
+                .range(from, to)
+            )
           )
-          .eq("lessons.academic_year_id", activeYear.id)
-          .in("lesson_id", lessonIds)
-          .neq("status", "cancelled"),
-        supabase.from("attendance").select("*").eq("student_id", id),
+        ),
+        fetchPagedRows<{ id: string; lesson_occurrence_id: string; status: string }>(
+          (from, to) =>
+            supabase.from("attendance").select("id, lesson_occurrence_id, status").eq("student_id", id).range(from, to)
+        ),
         fetchAttendancePools(supabase, activeYear.id),
       ]);
+      const occurrences = occurrenceChunks.flat();
 
       const yearAssignments = (assignments ?? []).filter(
         (a) => a.academic_year_id === activeYear.id
@@ -302,41 +436,45 @@ export default async function StudentDetailPage({ params }: Props) {
         }
       >();
 
-      for (const o of occurrences ?? []) {
-        const date = o.occurrence_date;
-        const inPlacement = yearAssignments.some((a) =>
-          isDateInRange(date, a.start_date, a.end_date)
+      const attendanceByOcc = new Map(
+        attendanceRecords.map((a) => [a.lesson_occurrence_id, a.status as AttendanceStatus])
+      );
+
+      function ruleFromEmbedded(
+        value: { name: string; max_allowed_absence_percent: number } | { name: string; max_allowed_absence_percent: number }[] | null | undefined
+      ) {
+        const rule = Array.isArray(value) ? value[0] : value;
+        if (!rule || rule.max_allowed_absence_percent == null) {
+          return { maxAllowed: null as number | null, ruleName: null as string | null };
+        }
+        return {
+          maxAllowed: Number(rule.max_allowed_absence_percent),
+          ruleName: rule.name ?? null,
+        };
+      }
+
+      function ensureBucket(lessonId: string, occLesson?: {
+        subject?: string;
+        subjects?: { name: string } | { name: string }[] | null;
+        attendance_rules?: { name: string; max_allowed_absence_percent: number } | null;
+      }) {
+        const catalog = yearLessonRows.find((l) => l.id === lessonId);
+        const parentName =
+          embeddedName(occLesson?.subjects) ??
+          embeddedName(catalog?.subjects as { name?: string } | { name?: string }[] | null);
+        const shortName = occLesson?.subject || String(catalog?.subject ?? "");
+        const label = formatSubjectLessonLabel(parentName, shortName);
+        const unit = calcUnitForLesson(lessonId, poolCatalog.byLesson);
+        const displayName = unit.poolName || label || "ללא";
+        const fromOcc = ruleFromEmbedded(occLesson?.attendance_rules);
+        const fromCatalog = ruleFromEmbedded(
+          catalog?.attendance_rules as
+            | { name: string; max_allowed_absence_percent: number }
+            | { name: string; max_allowed_absence_percent: number }[]
+            | null
         );
-        if (!inPlacement) continue;
-
-        const hasLessonLinks = lessonAssignments.length > 0;
-        const inLesson = !hasLessonLinks
-          ? true
-          : lessonAssignments.some(
-              (la) =>
-                la.lesson_id === o.lesson_id &&
-                isDateInRange(date, la.start_date, la.end_date)
-            );
-        if (!inLesson) continue;
-
-        const lesson = o.lessons as unknown as {
-          subject: string;
-          subject_id: string | null;
-          subjects: { name: string } | { name: string }[] | null;
-          attendance_rules: { name: string; max_allowed_absence_percent: number } | null;
-        } | null;
-        const parentName = Array.isArray(lesson?.subjects)
-          ? lesson?.subjects[0]?.name
-          : lesson?.subjects?.name;
-        const unit = calcUnitForLesson(o.lesson_id, poolCatalog.byLesson);
-        const displayName =
-          unit.poolName || parentName?.trim() || lesson?.subject || "ללא";
-        const rule = lesson?.attendance_rules ?? null;
-        const maxAllowed =
-          rule?.max_allowed_absence_percent != null
-            ? Number(rule.max_allowed_absence_percent)
-            : null;
-
+        const maxAllowed = fromOcc.maxAllowed ?? fromCatalog.maxAllowed;
+        const ruleName = fromOcc.ruleName ?? fromCatalog.ruleName;
         const bucket = byUnit.get(unit.key) ?? {
           name: displayName,
           lessonNames: new Set<string>(),
@@ -344,20 +482,47 @@ export default async function StudentDetailPage({ params }: Props) {
           maxAllowed: null,
           ruleName: null,
         };
-        if (lesson?.subject) bucket.lessonNames.add(lesson.subject);
+        if (label) bucket.lessonNames.add(label);
+        if (maxAllowed != null) {
+          bucket.maxAllowed =
+            bucket.maxAllowed == null ? maxAllowed : Math.min(bucket.maxAllowed, maxAllowed);
+          bucket.ruleName = ruleName ?? bucket.ruleName;
+        }
+        byUnit.set(unit.key, bucket);
+        return bucket;
+      }
+
+      for (const lessonId of assignedIds) {
+        ensureBucket(lessonId);
+      }
+
+      for (const o of occurrences) {
+        if (!assignedLessonIds.has(o.lesson_id)) continue;
+        const date = o.occurrence_date;
+        const inPlacement = yearAssignments.some((a) =>
+          isDateInRange(date, a.start_date, a.end_date)
+        );
+        if (!inPlacement) continue;
+
+        const slaForLesson = lessonAssignments.filter((la) => la.lesson_id === o.lesson_id);
+        const inLesson =
+          slaForLesson.length === 0
+            ? true
+            : slaForLesson.some((la) => isDateInRange(date, la.start_date, la.end_date));
+        if (!inLesson) continue;
+
+        const lesson = o.lessons as {
+          subject: string;
+          subjects: { name: string } | { name: string }[] | null;
+          attendance_rules: { name: string; max_allowed_absence_percent: number } | null;
+        } | null;
+        const bucket = ensureBucket(o.lesson_id, lesson ?? undefined);
         bucket.rows.push({
           occurrenceId: o.id,
           occurrenceDate: date,
           status: o.status,
-          attendanceStatus: attendanceRecords?.find((a) => a.lesson_occurrence_id === o.id)
-            ?.status as AttendanceStatus | undefined,
+          attendanceStatus: attendanceByOcc.get(o.id),
         });
-        if (maxAllowed != null) {
-          bucket.maxAllowed =
-            bucket.maxAllowed == null ? maxAllowed : Math.min(bucket.maxAllowed, maxAllowed);
-          bucket.ruleName = rule?.name ?? bucket.ruleName;
-        }
-        byUnit.set(unit.key, bucket);
       }
 
       subjectStats = Array.from(byUnit.entries()).map(([unitKey, bucket]) => {
@@ -374,7 +539,7 @@ export default async function StudentDetailPage({ params }: Props) {
           ruleLabel: evaluated.label,
           ruleLevel: evaluated.level,
         };
-      });
+      }).sort((a, b) => a.subject.localeCompare(b.subject, "he"));
 
       const attendanceIds = (attendanceRecords ?? []).map((a) => a.id);
       if (attendanceIds.length > 0) {
@@ -575,7 +740,7 @@ export default async function StudentDetailPage({ params }: Props) {
               <div className="rounded-xl border border-dashed border-outline-variant/50 bg-surface-container-low/60 px-4 py-8 text-center">
                 <Icon name="insights" className="mb-2 block text-[36px] text-secondary" />
                 <p className="font-body-md text-body-md text-on-surface-variant">
-                  אין נתוני נוכחות לחישוב עדיין.
+                  אין שיעורים משויכים לתלמידה בשנה זו.
                 </p>
               </div>
             ) : (
