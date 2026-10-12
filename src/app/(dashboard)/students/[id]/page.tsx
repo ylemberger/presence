@@ -11,12 +11,12 @@ import { getActiveAcademicYear } from "@/lib/utils";
 import { filterFixedGrades } from "@/lib/years/grades";
 import { formatDate, isDateInRange } from "@/lib/dates/hebrew";
 import { summarizeAttendance, evaluateAbsenceAgainstRule } from "@/lib/attendance/calculator";
-import { fetchAttendancePools, calcUnitForLesson } from "@/lib/attendance/pools";
 import {
   audienceForLesson,
   audienceMapFromRows,
   studentMatchesLesson,
 } from "@/lib/lessons/autoAssign";
+import { formatLessonOptionLabel } from "@/lib/lessons/hours";
 import { formatSubjectLessonLabel } from "@/lib/lessons/subject-label";
 import { StudentDetailForms } from "./StudentDetailForms";
 import { StudentLessonAssignments } from "./StudentLessonAssignments";
@@ -388,7 +388,7 @@ export default async function StudentDetailPage({ params }: Props) {
       const assignedIds = [...assignedLessonIds];
       const occSelect =
         "id, occurrence_date, status, lesson_id, lessons!inner(id, subject, subject_id, academic_year_id, attendance_rule_id, attendance_rules(name, max_allowed_absence_percent), subjects(name))";
-      const [occurrenceChunks, attendanceRecords, poolCatalog] = await Promise.all([
+      const [occurrenceChunks, attendanceRecords] = await Promise.all([
         Promise.all(
           chunkIds(assignedIds).map((ids) =>
             fetchPagedRows<{
@@ -412,7 +412,6 @@ export default async function StudentDetailPage({ params }: Props) {
           (from, to) =>
             supabase.from("attendance").select("id, lesson_occurrence_id, status").eq("student_id", id).range(from, to)
         ),
-        fetchAttendancePools(supabase, activeYear.id),
       ]);
       const occurrences = occurrenceChunks.flat();
 
@@ -463,9 +462,14 @@ export default async function StudentDetailPage({ params }: Props) {
           embeddedName(occLesson?.subjects) ??
           embeddedName(catalog?.subjects as { name?: string } | { name?: string }[] | null);
         const shortName = occLesson?.subject || String(catalog?.subject ?? "");
-        const label = formatSubjectLessonLabel(parentName, shortName);
-        const unit = calcUnitForLesson(lessonId, poolCatalog.byLesson);
-        const displayName = unit.poolName || label || "ללא";
+        const label = formatLessonOptionLabel({
+          subject: shortName,
+          subjectName: parentName,
+          day_of_week: (catalog?.day_of_week as number | null) ?? null,
+          lesson_number: (catalog?.lesson_number as number | null) ?? null,
+          period_count: (catalog?.period_count as number | null) ?? 1,
+          billing_type: (catalog?.billing_type as string | null) ?? null,
+        });
         const fromOcc = ruleFromEmbedded(occLesson?.attendance_rules);
         const fromCatalog = ruleFromEmbedded(
           catalog?.attendance_rules as
@@ -475,20 +479,20 @@ export default async function StudentDetailPage({ params }: Props) {
         );
         const maxAllowed = fromOcc.maxAllowed ?? fromCatalog.maxAllowed;
         const ruleName = fromOcc.ruleName ?? fromCatalog.ruleName;
-        const bucket = byUnit.get(unit.key) ?? {
-          name: displayName,
+        const key = `lesson:${lessonId}`;
+        const bucket = byUnit.get(key) ?? {
+          name: label || "ללא",
           lessonNames: new Set<string>(),
           rows: [],
           maxAllowed: null,
           ruleName: null,
         };
-        if (label) bucket.lessonNames.add(label);
         if (maxAllowed != null) {
           bucket.maxAllowed =
             bucket.maxAllowed == null ? maxAllowed : Math.min(bucket.maxAllowed, maxAllowed);
           bucket.ruleName = ruleName ?? bucket.ruleName;
         }
-        byUnit.set(unit.key, bucket);
+        byUnit.set(key, bucket);
         return bucket;
       }
 
@@ -746,13 +750,13 @@ export default async function StudentDetailPage({ params }: Props) {
             ) : (
               <>
               <p className="mb-2 print:hidden font-caption text-caption text-on-surface-variant">
-                כל שני איחורים = חיסור אחד. איחור בודד שנשאר נספר כנוכחות. שיעורים מחושבים לחוד, אלא אם קובצו ידנית.
+                כל שיעור שהתלמידה משויכת אליו מופיע בשורה נפרדת. כל שני איחורים = חיסור אחד; איחור בודד שנשאר נספר כנוכחות.
               </p>
               <Table
                 compact
                 headers={[
-                  "נוכחות",
-                  "שיעורים",
+                  "שיעור",
+                  "מופעים",
                   "נוכחת",
                   "איחור",
                   "נעדרה",
