@@ -99,6 +99,8 @@ interface YearOptions {
   classes: Class[];
   tracks: Track[];
   specializations: Specialization[];
+  lessons?: { id: string; subjectKey: string; label: string }[];
+  assignedLessonIdsByStudent?: Record<string, string[]>;
 }
 
 export function StudentsDirectory({
@@ -117,6 +119,9 @@ export function StudentsDirectory({
   const [classId, setClassId] = useState("");
   const [trackId, setTrackId] = useState("");
   const [specId, setSpecId] = useState("");
+  const [subjectKey, setSubjectKey] = useState("");
+  const [lessonId, setLessonId] = useState("");
+  const [psychology, setPsychology] = useState<"all" | "yes" | "no">("all");
   const [status, setStatus] = useState<"all" | "active" | "inactive">("all");
   const [modalOpen, setModalOpen] = useState(false);
   const [yearError, setYearError] = useState<string | null>(null);
@@ -157,6 +162,31 @@ export function StudentsDirectory({
       }));
   }, [yearOptions, gradeId, gradeNameById]);
 
+  const subjectFilterOptions = useMemo(() => {
+    const names = new Set(
+      (yearOptions?.lessons ?? [])
+        .map((l) => l.subjectKey)
+        .filter((name) => name.length > 0)
+    );
+    return [...names]
+      .sort((a, b) => a.localeCompare(b, "he"))
+      .map((name) => ({ value: name, label: name }));
+  }, [yearOptions]);
+
+  const lessonFilterOptions = useMemo(() => {
+    const list = (yearOptions?.lessons ?? []).filter(
+      (l) => !subjectKey || l.subjectKey === subjectKey
+    );
+    return [...list]
+      .sort((a, b) => a.label.localeCompare(b.label, "he"))
+      .map((l) => ({ value: l.id, label: l.label }));
+  }, [yearOptions, subjectKey]);
+
+  const lessonSubjectById = useMemo(
+    () => new Map((yearOptions?.lessons ?? []).map((l) => [l.id, l.subjectKey])),
+    [yearOptions]
+  );
+
   const filtered = useMemo(() => {
     const q = query.trim();
     return students.filter((s) => {
@@ -171,6 +201,16 @@ export function StudentsDirectory({
         s.secondarySpecializationName !== filterSpecName
       ) {
         return false;
+      }
+      if (psychology === "yes" && !s.isPsychology) return false;
+      if (psychology === "no" && s.isPsychology) return false;
+      const assignedLessonIds = yearOptions?.assignedLessonIdsByStudent?.[s.id] ?? [];
+      if (lessonId && !assignedLessonIds.includes(lessonId)) return false;
+      if (subjectKey) {
+        const takesSubject = assignedLessonIds.some(
+          (id) => lessonSubjectById.get(id) === subjectKey
+        );
+        if (!takesSubject) return false;
       }
       if (!q) return true;
       return (
@@ -196,6 +236,11 @@ export function StudentsDirectory({
     filterClassName,
     filterTrackName,
     filterSpecName,
+    psychology,
+    lessonId,
+    subjectKey,
+    yearOptions,
+    lessonSubjectById,
   ]);
 
   function openCreate() {
@@ -216,12 +261,20 @@ export function StudentsDirectory({
   );
 
   const hasActiveFilter = Boolean(
-    query.trim() || gradeId || classId || trackId || specId || status !== "all"
+    query.trim() ||
+      gradeId ||
+      classId ||
+      trackId ||
+      specId ||
+      subjectKey ||
+      lessonId ||
+      psychology !== "all" ||
+      status !== "all"
   );
 
   return (
     <div className="min-w-0 overflow-x-hidden rounded-xl border border-outline-variant/30 bg-surface-container-lowest shadow-tactile-md">
-      <div className="grid gap-3 border-b border-outline-variant/30 bg-surface-container-low/60 px-5 py-4 md:grid-cols-2 xl:grid-cols-7">
+      <div className="grid gap-3 border-b border-outline-variant/30 bg-surface-container-low/60 px-5 py-4 md:grid-cols-2 xl:grid-cols-4">
         <div className="xl:col-span-2">
           <Input
             label="חיפוש"
@@ -267,6 +320,33 @@ export function StudentsDirectory({
             label: s.name,
           }))}
         />
+        <Combobox
+          label="מקצוע"
+          value={subjectKey}
+          onChange={(v) => {
+            setSubjectKey(v);
+            setLessonId("");
+          }}
+          options={subjectFilterOptions}
+          emptyLabel={subjectFilterOptions.length ? "הכל" : "אין מקצועות בשנה"}
+        />
+        <Combobox
+          label="שיעור"
+          value={lessonId}
+          onChange={setLessonId}
+          options={lessonFilterOptions}
+          emptyLabel={lessonFilterOptions.length ? "הכל" : "אין שיעורים בשנה"}
+        />
+        <Select
+          label="פסיכולוגיה"
+          value={psychology}
+          onChange={(e) => setPsychology(e.target.value as typeof psychology)}
+          options={[
+            { value: "all", label: "הכל" },
+            { value: "yes", label: "פסיכולוגיה" },
+            { value: "no", label: "לא פסיכולוגיה" },
+          ]}
+        />
         <Select
           label="סטטוס"
           value={status}
@@ -277,7 +357,7 @@ export function StudentsDirectory({
             { value: "inactive", label: "לא פעילות" },
           ]}
         />
-        <div className="flex items-end xl:col-span-7">
+        <div className="flex items-end xl:col-span-4">
           <div className="flex w-full flex-wrap items-center justify-between gap-3">
             <p className="text-body-md text-on-surface-variant">
               {hasActiveFilter ? (

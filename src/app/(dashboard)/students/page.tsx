@@ -1,5 +1,6 @@
 import { PageHeader } from "@/components/ui/PageHeader";
 import { cannotWriteEmail, isViewerEmail } from "@/lib/auth/allowed-emails";
+import { formatLessonOptionLabel } from "@/lib/lessons/hours";
 import { createClient, requireAuthenticatedUser } from "@/lib/supabase/server";
 import { getActiveAcademicYear, getAllAcademicYears } from "@/lib/utils";
 import { filterFixedGrades } from "@/lib/years/grades";
@@ -64,6 +65,8 @@ export default async function StudentsPage() {
       { data: classes },
       { data: tracks },
       { data: specializations },
+      { data: yearLessons },
+      { data: openLessonAssignments },
     ] = await Promise.all([
       supabase
         .from("student_assignments")
@@ -79,6 +82,18 @@ export default async function StudentsPage() {
         .select("*")
         .eq("academic_year_id", activeYear.id)
         .order("name"),
+      supabase
+        .from("lessons")
+        .select(
+          "id, subject, day_of_week, lesson_number, period_count, billing_type, subjects(name)"
+        )
+        .eq("academic_year_id", activeYear.id)
+        .order("subject"),
+      supabase
+        .from("student_lesson_assignments")
+        .select("student_id, lesson_id, lessons!inner(academic_year_id)")
+        .eq("lessons.academic_year_id", activeYear.id)
+        .is("end_date", null),
     ]);
 
     if (assignmentsError) {
@@ -107,12 +122,43 @@ export default async function StudentsPage() {
       };
     }
 
+    const lessons = (yearLessons ?? []).map((lesson) => {
+      const embedded = lesson.subjects as { name: string } | { name: string }[] | null;
+      const subjectName = Array.isArray(embedded)
+        ? embedded[0]?.name ?? null
+        : embedded?.name ?? null;
+      return {
+        id: lesson.id as string,
+        subjectKey: (subjectName || String(lesson.subject ?? "")).trim(),
+        label: formatLessonOptionLabel({
+          subject: String(lesson.subject ?? ""),
+          subjectName,
+          day_of_week: lesson.day_of_week as number | null,
+          lesson_number: lesson.lesson_number as number | null,
+          period_count: (lesson.period_count as number | null) ?? 1,
+          billing_type: lesson.billing_type as string | null,
+        }),
+      };
+    });
+
+    const assignedLessonIdsByStudent: Record<string, string[]> = {};
+    for (const row of openLessonAssignments ?? []) {
+      const studentId = row.student_id as string;
+      const lessonId = row.lesson_id as string;
+      if (!assignedLessonIdsByStudent[studentId]) {
+        assignedLessonIdsByStudent[studentId] = [];
+      }
+      assignedLessonIdsByStudent[studentId].push(lessonId);
+    }
+
     yearOptions = {
       yearId: activeYear.id,
       grades: filterFixedGrades(grades ?? []),
       classes: classes ?? [],
       tracks: tracks ?? [],
       specializations: specializations ?? [],
+      lessons,
+      assignedLessonIdsByStudent,
     };
   }
 
