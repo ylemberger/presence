@@ -1,11 +1,9 @@
 "use client";
 
-import { Button } from "@/components/ui/Button";
 import { Combobox } from "@/components/ui/Combobox";
 import { Select } from "@/components/ui/Input";
 import { Section } from "@/components/ui/Section";
 import { useRouter } from "next/navigation";
-import { Icon } from "@/components/ui/Icon";
 
 export type MakeupFilterStatus = "all" | "open" | "done" | "blocked";
 
@@ -38,11 +36,9 @@ export function MakeupFilters({
 }: MakeupFiltersProps) {
   const router = useRouter();
 
-  function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
-    e.preventDefault();
-    const fd = new FormData(e.currentTarget);
+  function apply(patch: Partial<MakeupFiltersProps["defaults"]>) {
+    const next = { ...defaults, ...patch };
     const params = new URLSearchParams();
-
     for (const key of [
       "classId",
       "trackId",
@@ -52,89 +48,71 @@ export function MakeupFilters({
       "studentId",
       "status",
     ] as const) {
-      const value = fd.get(key) as string;
-      if (value) params.set(key, value);
+      const value = next[key];
+      if (value && value !== "all") params.set(key, value);
     }
-
     params.set("run", "1");
     router.push(`/makeup?${params.toString()}`);
   }
 
   return (
     <Section icon="filter_list" title="סינון מבחני השלמה">
-      <form
-        onSubmit={handleSubmit}
-        className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4"
-      >
-      <Combobox
-        label="כיתה"
-        name="classId"
-        defaultValue={defaults.classId ?? ""}
-        options={classes.map((c) => ({ value: c.id, label: c.name }))}
-        emptyLabel="כל הכיתות"
-      />
-
-      <Combobox
-        label="מסלול"
-        name="trackId"
-        defaultValue={defaults.trackId ?? ""}
-        options={tracks.map((t) => ({ value: t.id, label: t.name }))}
-        emptyLabel="כל המסלולים"
-      />
-
-      <Combobox
-        label="התמחות"
-        name="specializationId"
-        defaultValue={defaults.specializationId ?? ""}
-        options={specializations.map((s) => ({ value: s.id, label: s.name }))}
-        emptyLabel="כל ההתמחויות"
-      />
-
-      <Combobox
-        label="מורה"
-        name="teacherId"
-        defaultValue={defaults.teacherId ?? ""}
-        options={teachers.map((t) => ({ value: t.id, label: t.name }))}
-        emptyLabel="כל המורות"
-        maxSuggestions={40}
-      />
-
-      <Combobox
-        label="מקצוע"
-        name="subject"
-        defaultValue={defaults.subject ?? ""}
-        options={subjects.map((s) => ({ value: s, label: s }))}
-        emptyLabel="כל המקצועות"
-      />
-
-      <Combobox
-        label="תלמידה"
-        name="studentId"
-        defaultValue={defaults.studentId ?? ""}
-        options={students.map((s) => ({ value: s.id, label: s.full_name }))}
-        emptyLabel="כל התלמידות"
-      />
-
-      <Select
-        label="סטטוס"
-        name="status"
-        defaultValue={defaults.status ?? "all"}
-        options={[
-          { value: "all", label: "הכל" },
-          { value: "open", label: "פתוח" },
-          { value: "done", label: "הושלם" },
-          { value: "blocked", label: "חסום" },
-        ]}
-      />
-
-      <div className="flex items-end sm:col-span-2 lg:col-span-4">
-        <Button type="submit" className="w-full sm:w-auto">
-          <Icon name="search" className="text-[18px]" />
-          הצג מבחנים
-        </Button>
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
+        <Combobox
+          label="כיתה"
+          value={defaults.classId ?? ""}
+          onChange={(v) => apply({ classId: v || undefined })}
+          options={classes.map((c) => ({ value: c.id, label: c.name }))}
+          emptyLabel="כל הכיתות"
+        />
+        <Combobox
+          label="מסלול"
+          value={defaults.trackId ?? ""}
+          onChange={(v) => apply({ trackId: v || undefined })}
+          options={tracks.map((t) => ({ value: t.id, label: t.name }))}
+          emptyLabel="כל המסלולים"
+        />
+        <Combobox
+          label="התמחות"
+          value={defaults.specializationId ?? ""}
+          onChange={(v) => apply({ specializationId: v || undefined })}
+          options={specializations.map((s) => ({ value: s.id, label: s.name }))}
+          emptyLabel="כל ההתמחויות"
+        />
+        <Combobox
+          label="מורה"
+          value={defaults.teacherId ?? ""}
+          onChange={(v) => apply({ teacherId: v || undefined })}
+          options={teachers.map((t) => ({ value: t.id, label: t.name }))}
+          emptyLabel="כל המורות"
+          maxSuggestions={80}
+        />
+        <Combobox
+          label="מקצוע"
+          value={defaults.subject ?? ""}
+          onChange={(v) => apply({ subject: v || undefined })}
+          options={subjects.map((s) => ({ value: s, label: s }))}
+          emptyLabel="כל המקצועות"
+        />
+        <Combobox
+          label="תלמידה"
+          value={defaults.studentId ?? ""}
+          onChange={(v) => apply({ studentId: v || undefined })}
+          options={students.map((s) => ({ value: s.id, label: s.full_name }))}
+          emptyLabel="כל התלמידות"
+        />
+        <Select
+          label="סטטוס"
+          value={defaults.status ?? "all"}
+          onChange={(e) => apply({ status: e.target.value as MakeupFilterStatus })}
+          options={[
+            { value: "all", label: "הכל" },
+            { value: "open", label: "פתוח" },
+            { value: "done", label: "הושלם" },
+            { value: "blocked", label: "חסום" },
+          ]}
+        />
       </div>
-      </form>
     </Section>
   );
 }
-

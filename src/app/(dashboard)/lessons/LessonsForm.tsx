@@ -289,7 +289,8 @@ export function LessonsForm({
       onCreated?.();
       router.refresh();
     } catch (err) {
-      setError(err instanceof Error ? err.message : "שמירה נכשלה");
+      const raw = err instanceof Error ? err.message : "";
+      setError(/[\u0590-\u05FF]/.test(raw) ? raw : "שמירה נכשלה. השיעור לא נשמר.");
     } finally {
       setLoading(false);
     }
@@ -297,6 +298,11 @@ export function LessonsForm({
 
   return (
     <form key={`${initial?.id ?? "new"}-${formEpoch}`} onSubmit={handleSubmit} className="flex flex-col gap-6">
+      {error && (
+        <p className="rounded-lg bg-error-container/60 px-4 py-3 font-body-lg text-body-lg text-on-error-container" role="alert">
+          {error}
+        </p>
+      )}
       <div>
         <p className="mb-3 font-headline-md text-headline-md text-primary">מורה ושיעור</p>
         <div className="grid grid-cols-1 items-start gap-4 lg:grid-cols-12">

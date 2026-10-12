@@ -436,6 +436,7 @@ export default async function LessonsPage({ searchParams }: Props) {
           teacherId: representativeTeacherId(teachers.data ?? [], searchParams.teacherId),
           subject: searchParams.subject,
         }}
+        keepEdit={searchParams.edit}
       />
 
       <LessonsCalendar

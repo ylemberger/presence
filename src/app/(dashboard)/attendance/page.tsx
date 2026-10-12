@@ -495,8 +495,12 @@ export default async function AttendancePage({ searchParams }: Props) {
     return {
       id: l.id,
       subject: formatSubjectLessonLabel(name, l.subject),
+      subjectKey: name?.trim() || l.subject,
       teacherId: teacher?.id ?? "",
       teacherName: teacher?.fullName ?? "",
+      classId: l.class_id,
+      trackId: l.track_id,
+      specializationId: l.specialization_id,
       groupLabel: formatLessonGroupLabel({
         billingType: l.billing_type,
         forPsychology: Boolean(l.for_psychology),

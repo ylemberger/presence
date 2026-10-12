@@ -11,7 +11,7 @@ import {
   type FieldSize,
 } from "@/components/ui/Input";
 
-const MAX_SUGGESTIONS = 24;
+const MAX_SUGGESTIONS = 80;
 
 export type ComboboxOption = {
   value: string;

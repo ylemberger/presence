@@ -1,10 +1,8 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { Button } from "@/components/ui/Button";
 import { Combobox } from "@/components/ui/Combobox";
 import { Section } from "@/components/ui/Section";
-import { Icon } from "@/components/ui/Icon";
 
 export interface LessonsFiltersProps {
   classes: { id: string; name: string }[];
@@ -19,6 +17,7 @@ export interface LessonsFiltersProps {
     teacherId?: string;
     subject?: string;
   };
+  keepEdit?: string;
 }
 
 export function LessonsFilters({
@@ -28,66 +27,56 @@ export function LessonsFilters({
   teachers,
   subjects,
   defaults,
+  keepEdit,
 }: LessonsFiltersProps) {
   const router = useRouter();
 
-  function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
-    e.preventDefault();
-    const fd = new FormData(e.currentTarget);
+  function apply(patch: Partial<LessonsFiltersProps["defaults"]>) {
+    const next = { ...defaults, ...patch };
     const params = new URLSearchParams();
-
     for (const key of ["classId", "trackId", "specializationId", "teacherId", "subject"] as const) {
-      const value = fd.get(key) as string;
-      if (value) params.set(key, value);
+      if (next[key]) params.set(key, next[key] as string);
     }
-
-    router.push(`/lessons?${params.toString()}`);
+    if (keepEdit) params.set("edit", keepEdit);
+    const q = params.toString();
+    router.push(q ? `/lessons?${q}` : "/lessons");
   }
 
   return (
     <Section icon="filter_list" title="סינון שיעורים">
-      <form
-        onSubmit={handleSubmit}
-        className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-5"
-      >
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-5">
         <Combobox
           label="כיתה"
-          name="classId"
-          defaultValue={defaults.classId ?? ""}
+          value={defaults.classId ?? ""}
+          onChange={(v) => apply({ classId: v || undefined })}
           options={classes.map((c) => ({ value: c.id, label: c.name }))}
         />
         <Combobox
           label="מסלול"
-          name="trackId"
-          defaultValue={defaults.trackId ?? ""}
+          value={defaults.trackId ?? ""}
+          onChange={(v) => apply({ trackId: v || undefined })}
           options={tracks.map((t) => ({ value: t.id, label: t.name }))}
         />
         <Combobox
           label="התמחות"
-          name="specializationId"
-          defaultValue={defaults.specializationId ?? ""}
+          value={defaults.specializationId ?? ""}
+          onChange={(v) => apply({ specializationId: v || undefined })}
           options={specializations.map((s) => ({ value: s.id, label: s.name }))}
         />
         <Combobox
           label="מורה"
-          name="teacherId"
-          defaultValue={defaults.teacherId ?? ""}
+          value={defaults.teacherId ?? ""}
+          onChange={(v) => apply({ teacherId: v || undefined })}
           options={teachers.map((t) => ({ value: t.id, label: t.name }))}
-          maxSuggestions={40}
+          maxSuggestions={80}
         />
         <Combobox
           label="מקצוע"
-          name="subject"
-          defaultValue={defaults.subject ?? ""}
+          value={defaults.subject ?? ""}
+          onChange={(v) => apply({ subject: v || undefined })}
           options={subjects.map((s) => ({ value: s, label: s }))}
         />
-        <div className="flex items-end sm:col-span-2 lg:col-span-5">
-          <Button type="submit" className="w-full sm:w-auto">
-            <Icon name="search" className="text-[18px]" />
-            החל סינון
-          </Button>
-        </div>
-      </form>
+      </div>
     </Section>
   );
 }

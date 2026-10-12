@@ -58,6 +58,11 @@ function teacherFullName(ta: unknown): string {
   return teacher?.full_name ?? "";
 }
 
+function teacherIdOf(ta: unknown): string | null {
+  const assignment = one<{ teacher_id?: string }>(ta);
+  return assignment?.teacher_id ?? null;
+}
+
 function dayLabel(dayOfWeek: number): string {
   const name = DAY_OF_WEEK_LABELS[dayOfWeek];
   return name ? `יום ${name}` : "";
@@ -750,6 +755,11 @@ export default async function ReportsPage({ searchParams }: Props) {
               l.lesson_number,
               l.period_count ?? 1
             ),
+            teacherId: teacherIdOf(l.teacher_teaching_assignments),
+            subject: lessonParentName(l),
+            classId: l.class_id,
+            trackId: l.track_id,
+            specializationId: l.specialization_id,
           }))}
           rules={rules ?? []}
           defaults={{

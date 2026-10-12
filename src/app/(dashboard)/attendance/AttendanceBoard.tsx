@@ -102,8 +102,12 @@ interface Props {
   lessons?: Array<{
     id: string;
     subject: string;
+    subjectKey?: string;
     teacherId?: string;
     teacherName?: string;
+    classId?: string | null;
+    trackId?: string | null;
+    specializationId?: string | null;
     groupLabel?: string;
     day_of_week?: number;
     lesson_number?: number;
@@ -329,8 +333,23 @@ export function AttendanceBoard({
     return { thisWeekPartial };
   }, [selectedDate, partialDates]);
 
+  const scopedLessons = useMemo(() => {
+    return lessons.filter((l) => {
+      if (teacherId && l.teacherId && l.teacherId !== teacherId) return false;
+      if (subject && l.subjectKey && l.subjectKey !== subject && !l.subject.startsWith(`${subject} ·`)) {
+        return false;
+      }
+      if (classId && l.classId && l.classId !== classId) return false;
+      if (trackId && l.trackId && l.trackId !== trackId) return false;
+      if (specializationId && l.specializationId && l.specializationId !== specializationId) {
+        return false;
+      }
+      return true;
+    });
+  }, [lessons, teacherId, subject, classId, trackId, specializationId]);
+
   const teacherLessonOptions = useMemo(() => {
-    return lessons
+    return scopedLessons
       .filter((l) => l.teacherId)
       .slice()
       .sort((a, b) => {
@@ -353,7 +372,7 @@ export function AttendanceBoard({
           keywords: [l.teacherName, l.subject, group, day, hours].filter(Boolean).join(" "),
         };
       });
-  }, [lessons]);
+  }, [scopedLessons]);
 
   function buildParams(patch: Record<string, string | undefined>) {
     const params = new URLSearchParams();
@@ -871,11 +890,12 @@ export function AttendanceBoard({
           label="שיעור"
           value={lessonId ?? ""}
           onChange={(v) => updateFilter("lessonId", v || undefined)}
-          options={lessons.map((l) => ({
+          options={scopedLessons.map((l) => ({
             value: l.id,
             label: formatLessonOptionLabel(l),
           }))}
-          emptyLabel="כל השיעורים"
+          emptyLabel={scopedLessons.length ? "כל השיעורים לפי הסינון" : "אין שיעורים לפי הסינון"}
+          maxSuggestions={Math.max(80, scopedLessons.length)}
         />
         <Combobox
           label="כיתה"
@@ -990,9 +1010,9 @@ export function AttendanceBoard({
                 );
               }}
               options={teacherLessonOptions}
-              emptyLabel="בחרי מורה ושיעור"
+              emptyLabel={teacherLessonOptions.length ? "בחרי מורה ושיעור לפי הסינון" : "אין שיעורים לפי הסינון"}
               placeholder="הקלידי שם מורה או שיעור…"
-              maxSuggestions={40}
+              maxSuggestions={Math.max(80, teacherLessonOptions.length)}
             />
           </div>
           <div className="flex items-end">

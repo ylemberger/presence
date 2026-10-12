@@ -54,6 +54,7 @@ import {
   validateIsraeliId,
   validatePhone,
 } from "@/lib/validation";
+import { hebrewDbError } from "@/lib/db/hebrew-error";
 
 function addDaysLocal(dateStr: string, days: number): string {
   const [y, m, d] = dateStr.split("-").map(Number);
@@ -1463,7 +1464,7 @@ async function replaceLessonWeeklySlots(
           "חסרה טבלת מפגשים שבועיים במסד — הריצי את supabase/patches/023_lesson_weekly_slots.sql",
       };
     }
-    return { error: clearError.message };
+    return { error: hebrewDbError(clearError, "עדכון מפגשי השבוע נכשל. לא נשמר.") };
   }
   if (slots.length === 0) return { success: true as const };
   const { error: insertError } = await supabase.from("lesson_weekly_slots").insert(
@@ -1474,7 +1475,9 @@ async function replaceLessonWeeklySlots(
       period_count: slot.periodCount,
     }))
   );
-  if (insertError) return { error: insertError.message };
+  if (insertError) {
+    return { error: hebrewDbError(insertError, "שמירת מפגשי השבוע נכשלה. לא נשמר.") };
+  }
   return { success: true as const };
 }
 
@@ -1572,7 +1575,7 @@ export async function createLessonAction(formData: FormData) {
       assignmentId,
       removeAssignment: isNewAssignment,
     });
-    return { error: error?.message ?? "יצירת שיעור נכשלה" };
+    return { error: hebrewDbError(error, "יצירת שיעור נכשלה. לא נשמר.") };
   }
 
   const slotsResult = await replaceLessonWeeklySlots(supabase, lesson.id, weeklySlots);
@@ -1602,7 +1605,7 @@ export async function createLessonAction(formData: FormData) {
         assignmentId,
         removeAssignment: isNewAssignment,
       });
-      return { error: audienceError.message };
+      return { error: hebrewDbError(audienceError, "שמירת קהל היעד של השיעור נכשלה. לא נשמר.") };
     }
   }
 
@@ -1614,7 +1617,12 @@ export async function createLessonAction(formData: FormData) {
       assignmentId,
       removeAssignment: isNewAssignment,
     });
-    return { error: (e as Error).message };
+    return {
+      error: hebrewDbError(
+        { message: e instanceof Error ? e.message : "" },
+        "פתיחת מופעי השיעור נכשלה. השיעור לא נשמר."
+      ),
+    };
   }
 
   await autoAssignStudentsToLesson(lesson.id, payload.academic_year_id);
@@ -1700,7 +1708,7 @@ export async function updateLessonAction(formData: FormData) {
       for_psychology: billing.for_psychology,
     })
     .eq("id", existing.teacher_teaching_assignment_id);
-  if (ttaError) return { error: "עדכון שיבוץ ההוראה נכשל" };
+  if (ttaError) return { error: hebrewDbError(ttaError, "עדכון שיבוץ ההוראה נכשל. לא נשמר.") };
 
   const payload = await buildLessonPayload(formData);
   if ("error" in payload) return payload;
@@ -1731,7 +1739,7 @@ export async function updateLessonAction(formData: FormData) {
           "חסרה במסד העמודה של תדירות השיעור. הריצי ב-Supabase את supabase/patches/024_lesson_number_13_and_fortnightly.sql ואז רענני את הדף.",
       };
     }
-    return { error: "עדכון השיעור נכשל" };
+    return { error: hebrewDbError(updateError, "עדכון השיעור נכשל. לא נשמר.") };
   }
 
   const slotsResult = await replaceLessonWeeklySlots(
@@ -1751,19 +1759,31 @@ export async function updateLessonAction(formData: FormData) {
   if ("error" in audienceRows) return audienceRows;
   if (audienceRows.length > 0) {
     const { error: audienceError } = await supabase.from("lesson_audience").insert(audienceRows);
-    if (audienceError) return { error: audienceError.message };
+    if (audienceError) {
+      return { error: hebrewDbError(audienceError, "עדכון קהל היעד נכשל. לא נשמר.") };
+    }
   }
 
   try {
     await syncLessonOccurrences(lessonId, supabase);
   } catch (e) {
-    return { error: (e as Error).message };
+    return {
+      error: hebrewDbError(
+        { message: e instanceof Error ? e.message : "" },
+        "עדכון מופעי השיעור נכשל. השיעור לא נשמר כמו שביקשת."
+      ),
+    };
   }
 
   try {
     await refreshAutomaticAssignmentsForLesson(lessonId, payload.academic_year_id);
   } catch (e) {
-    return { error: e instanceof Error ? e.message : "עדכון שיוכי התלמידות נכשל" };
+    return {
+      error: hebrewDbError(
+        { message: e instanceof Error ? e.message : "" },
+        "עדכון שיוכי התלמידות נכשל. לא נשמר."
+      ),
+    };
   }
 
   if (existing.activity_range_id && existing.activity_range_id !== payload.activity_range_id) {

@@ -1,5 +1,4 @@
 import { PageHeader } from "@/components/ui/PageHeader";
-import { PrintButton } from "@/components/ui/PrintButton";
 import { cannotWriteEmail, isViewerEmail } from "@/lib/auth/allowed-emails";
 import {
   audienceForLesson,
@@ -319,12 +318,6 @@ export default async function StudentsPage() {
             : canWrite
               ? "כרטסת קבועה עם מחזור. שיבוץ (שכבה/כיתה/מסלול) לפי השנה שנבחרה למעלה. בארכיון רואים את מה שהיה באותה שנה."
               : "צפייה בתלמידות ובכרטיסים. אין הוספה ואין עריכה."
-        }
-        actions={
-          <PrintButton
-            label="הדפסת רשימה"
-            documentTitle={`תלמידות${activeYear?.name ? `-${activeYear.name}` : ""}`}
-          />
         }
       />
       </div>
