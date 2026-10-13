@@ -6,6 +6,7 @@ import {
   studentMatchesLesson,
 } from "@/lib/lessons/autoAssign";
 import { formatLessonOptionLabel } from "@/lib/lessons/hours";
+import { embeddedTeacher } from "@/lib/supabase/embed";
 import { createClient, requireAuthenticatedUser } from "@/lib/supabase/server";
 import { getActiveAcademicYear, getAllAcademicYears } from "@/lib/utils";
 import { filterFixedGrades } from "@/lib/years/grades";
@@ -127,7 +128,7 @@ export default async function StudentsPage() {
       supabase
         .from("lessons")
         .select(
-          "id, subject, day_of_week, lesson_number, period_count, billing_type, for_psychology, grade_id, class_id, track_id, specialization_id, subjects(name)"
+          "id, subject, day_of_week, lesson_number, period_count, billing_type, for_psychology, grade_id, class_id, track_id, specialization_id, subjects(name), teacher_teaching_assignments(teacher_id, teachers(full_name))"
         )
         .eq("academic_year_id", activeYear.id)
         .order("subject"),
@@ -164,26 +165,7 @@ export default async function StudentsPage() {
       };
     }
 
-    const lessons = (yearLessons ?? []).map((lesson) => {
-      const embedded = lesson.subjects as { name: string } | { name: string }[] | null;
-      const subjectName = Array.isArray(embedded)
-        ? embedded[0]?.name ?? null
-        : embedded?.name ?? null;
-      return {
-        id: lesson.id as string,
-        subjectKey: (subjectName || String(lesson.subject ?? "")).trim(),
-        label: formatLessonOptionLabel({
-          subject: String(lesson.subject ?? ""),
-          subjectName,
-          day_of_week: lesson.day_of_week as number | null,
-          lesson_number: lesson.lesson_number as number | null,
-          period_count: (lesson.period_count as number | null) ?? 1,
-          billing_type: lesson.billing_type as string | null,
-        }),
-      };
-    });
-
-    const yearLessonIds = lessons.map((l) => l.id);
+    const yearLessonIds = (yearLessons ?? []).map((lesson) => lesson.id as string);
     const [openLessonAssignments, audienceRes, exclusionRes] = await Promise.all([
       fetchOpenLessonAssignments(supabase, yearLessonIds),
       yearLessonIds.length > 0
@@ -200,6 +182,47 @@ export default async function StudentsPage() {
         : Promise.resolve({ data: [] as { student_id: string; lesson_id: string }[], error: null }),
     ]);
     const audienceByLesson = audienceMapFromRows(audienceRes.data ?? []);
+
+    const lessons = (yearLessons ?? []).map((lesson) => {
+      const embedded = lesson.subjects as { name: string } | { name: string }[] | null;
+      const subjectName = Array.isArray(embedded)
+        ? embedded[0]?.name ?? null
+        : embedded?.name ?? null;
+      const teacher = embeddedTeacher(lesson.teacher_teaching_assignments);
+      const audience = audienceForLesson(
+        {
+          id: lesson.id as string,
+          grade_id: (lesson.grade_id as string | null) ?? null,
+          class_id: (lesson.class_id as string | null) ?? null,
+          track_id: (lesson.track_id as string | null) ?? null,
+          specialization_id: (lesson.specialization_id as string | null) ?? null,
+        },
+        audienceByLesson
+      );
+      const teacherName = teacher?.fullName ?? "";
+      return {
+        id: lesson.id as string,
+        subjectKey: (subjectName || String(lesson.subject ?? "")).trim(),
+        label: formatLessonOptionLabel({
+          subject: String(lesson.subject ?? ""),
+          subjectName,
+          day_of_week: lesson.day_of_week as number | null,
+          lesson_number: lesson.lesson_number as number | null,
+          period_count: (lesson.period_count as number | null) ?? 1,
+          billing_type: lesson.billing_type as string | null,
+        }),
+        teacherId: teacher?.id || null,
+        teacherName,
+        gradeIds: audience.grade_ids.length
+          ? audience.grade_ids
+          : lesson.grade_id
+            ? [String(lesson.grade_id)]
+            : [],
+        classIds: audience.class_ids,
+        trackIds: audience.track_ids,
+        specializationIds: audience.specialization_ids,
+      };
+    });
     const exclusionError = "error" in exclusionRes ? exclusionRes.error : null;
     const excluded = new Set(
       (exclusionError ? [] : exclusionRes.data ?? []).map(

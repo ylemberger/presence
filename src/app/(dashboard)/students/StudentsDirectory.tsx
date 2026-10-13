@@ -4,7 +4,7 @@ import { useMemo, useState } from "react";
 import Link from "next/link";
 import { Button } from "@/components/ui/Button";
 import { Input, Select } from "@/components/ui/Input";
-import { MultiSelect } from "@/components/ui/MultiSelect";
+import { SearchMultiSelect } from "@/components/ui/SearchMultiSelect";
 import { StatusPill } from "@/components/ui/PageHeader";
 import { Modal } from "@/components/ui/Modal";
 import { StudentsForm } from "./StudentsForm";
@@ -199,14 +199,67 @@ function StudentNameCell({
   );
 }
 
+type FilterLesson = {
+  id: string;
+  subjectKey: string;
+  label: string;
+  teacherId?: string | null;
+  teacherName?: string;
+  gradeIds?: string[];
+  classIds?: string[];
+  trackIds?: string[];
+  specializationIds?: string[];
+};
+
 interface YearOptions {
   yearId: string;
   grades: Grade[];
   classes: Class[];
   tracks: Track[];
   specializations: Specialization[];
-  lessons?: { id: string; subjectKey: string; label: string }[];
+  lessons?: FilterLesson[];
   assignedLessonIdsByStudent?: Record<string, string[]>;
+}
+
+function lessonFitsFilters(
+  lesson: FilterLesson,
+  f: {
+    gradeIds: string[];
+    classIds: string[];
+    trackIds: string[];
+    specIds: string[];
+    teacherIds: string[];
+    subjectKeys: string[];
+    lessonIds: string[];
+  },
+  except?: "grade" | "class" | "track" | "spec" | "teacher" | "subject" | "lesson"
+): boolean {
+  if (except !== "teacher" && f.teacherIds.length > 0) {
+    if (!lesson.teacherId || !f.teacherIds.includes(lesson.teacherId)) return false;
+  }
+  if (except !== "subject" && f.subjectKeys.length > 0) {
+    if (!f.subjectKeys.includes(lesson.subjectKey)) return false;
+  }
+  if (except !== "grade" && f.gradeIds.length > 0) {
+    const ids = lesson.gradeIds ?? [];
+    if (!ids.some((id) => f.gradeIds.includes(id))) return false;
+  }
+  if (except !== "class" && f.classIds.length > 0) {
+    const ids = lesson.classIds ?? [];
+    if (!ids.some((id) => f.classIds.includes(id))) return false;
+  }
+  if (except !== "track" && f.trackIds.length > 0) {
+    const ids = lesson.trackIds ?? [];
+    if (!ids.some((id) => f.trackIds.includes(id))) return false;
+  }
+  if (except !== "spec" && f.specIds.length > 0) {
+    const ids = lesson.specializationIds ?? [];
+    if (!ids.some((id) => f.specIds.includes(id))) return false;
+  }
+  if (except !== "lesson" && f.lessonIds.length > 0) {
+    if (!f.lessonIds.includes(lesson.id)) return false;
+  }
+  return true;
 }
 
 export function StudentsDirectory({
@@ -229,6 +282,7 @@ export function StudentsDirectory({
   const [specIds, setSpecIds] = useState<string[]>([]);
   const [subjectKeys, setSubjectKeys] = useState<string[]>([]);
   const [lessonIds, setLessonIds] = useState<string[]>([]);
+  const [teacherIds, setTeacherIds] = useState<string[]>([]);
   const [psychology, setPsychology] = useState<"all" | "yes" | "no">("all");
   const [status, setStatus] = useState<"all" | "active" | "inactive">("all");
   const [sortKey, setSortKey] = useState<SortKey>("name");
@@ -247,6 +301,16 @@ export function StudentsDirectory({
     [yearOptions]
   );
 
+  const filterDims = {
+    gradeIds,
+    classIds,
+    trackIds,
+    specIds,
+    teacherIds,
+    subjectKeys,
+    lessonIds,
+  };
+
   const classFilterOptions = useMemo(() => {
     const list = (yearOptions?.classes ?? []).filter(
       (c) => gradeIds.length === 0 || gradeIds.includes(c.grade_id)
@@ -262,30 +326,71 @@ export function StudentsDirectory({
       }));
   }, [yearOptions, gradeIds, gradeNameById]);
 
+  const teacherFilterOptions = useMemo(() => {
+    const byId = new Map<string, string>();
+    for (const lesson of yearOptions?.lessons ?? []) {
+      if (!lessonFitsFilters(lesson, filterDims, "teacher")) continue;
+      if (lesson.teacherId && lesson.teacherName) {
+        byId.set(lesson.teacherId, lesson.teacherName);
+      }
+    }
+    return [...byId.entries()]
+      .sort((a, b) => a[1].localeCompare(b[1], "he"))
+      .map(([value, label]) => ({ value, label }));
+  }, [yearOptions, gradeIds, classIds, trackIds, specIds, subjectKeys, lessonIds]);
+
   const subjectFilterOptions = useMemo(() => {
-    const names = new Set(
-      (yearOptions?.lessons ?? [])
-        .map((l) => l.subjectKey)
-        .filter((name) => name.length > 0)
-    );
+    const names = new Set<string>();
+    for (const lesson of yearOptions?.lessons ?? []) {
+      if (!lessonFitsFilters(lesson, filterDims, "subject")) continue;
+      if (lesson.subjectKey) names.add(lesson.subjectKey);
+    }
     return [...names]
       .sort((a, b) => a.localeCompare(b, "he"))
       .map((name) => ({ value: name, label: name }));
-  }, [yearOptions]);
+  }, [yearOptions, gradeIds, classIds, trackIds, specIds, teacherIds, lessonIds]);
 
   const lessonFilterOptions = useMemo(() => {
-    const list = (yearOptions?.lessons ?? []).filter(
-      (l) => subjectKeys.length === 0 || subjectKeys.includes(l.subjectKey)
-    );
-    return [...list]
+    return (yearOptions?.lessons ?? [])
+      .filter((lesson) => lessonFitsFilters(lesson, filterDims, "lesson"))
       .sort((a, b) => a.label.localeCompare(b.label, "he"))
-      .map((l) => ({ value: l.id, label: l.label }));
-  }, [yearOptions, subjectKeys]);
+      .map((lesson) => ({
+        value: lesson.id,
+        label: lesson.label,
+        description: lesson.teacherName ? `מורה: ${lesson.teacherName}` : undefined,
+        keywords: [lesson.subjectKey, lesson.teacherName, lesson.label].filter(Boolean).join(" "),
+      }));
+  }, [yearOptions, gradeIds, classIds, trackIds, specIds, teacherIds, subjectKeys]);
 
   const lessonSubjectById = useMemo(
     () => new Map((yearOptions?.lessons ?? []).map((l) => [l.id, l.subjectKey])),
     [yearOptions]
   );
+  const lessonTeacherById = useMemo(
+    () => new Map((yearOptions?.lessons ?? []).map((l) => [l.id, l.teacherId ?? ""])),
+    [yearOptions]
+  );
+
+  function pruneLessonFilters(next: Partial<typeof filterDims>) {
+    const merged = { ...filterDims, ...next };
+    const still = (yearOptions?.lessons ?? []).filter((lesson) =>
+      lessonFitsFilters(lesson, merged)
+    );
+    const okSubjects = new Set(still.map((l) => l.subjectKey));
+    const okLessons = new Set(still.map((l) => l.id));
+    const okTeachers = new Set(
+      still.map((l) => l.teacherId).filter((id): id is string => Boolean(id))
+    );
+    if (!("teacherIds" in next)) {
+      setTeacherIds((prev) => prev.filter((id) => okTeachers.has(id)));
+    }
+    if (!("subjectKeys" in next)) {
+      setSubjectKeys((prev) => prev.filter((k) => okSubjects.has(k)));
+    }
+    if (!("lessonIds" in next)) {
+      setLessonIds((prev) => prev.filter((id) => okLessons.has(id)));
+    }
+  }
 
   const filtered = useMemo(() => {
     const q = query.trim();
@@ -309,6 +414,13 @@ export function StudentsDirectory({
       const assignedLessonIds = yearOptions?.assignedLessonIdsByStudent?.[s.id] ?? [];
       if (lessonIds.length > 0 && !lessonIds.some((id) => assignedLessonIds.includes(id))) {
         return false;
+      }
+      if (teacherIds.length > 0) {
+        const takesTeacher = assignedLessonIds.some((id) => {
+          const tid = lessonTeacherById.get(id);
+          return Boolean(tid && teacherIds.includes(tid));
+        });
+        if (!takesTeacher) return false;
       }
       if (subjectKeys.length > 0) {
         const takesSubject = assignedLessonIds.some((id) => {
@@ -344,8 +456,10 @@ export function StudentsDirectory({
     psychology,
     lessonIds,
     subjectKeys,
+    teacherIds,
     yearOptions,
     lessonSubjectById,
+    lessonTeacherById,
   ]);
 
   const sorted = useMemo(() => {
@@ -424,6 +538,15 @@ export function StudentsDirectory({
           .join(", ")
       );
     }
+    if (teacherIds.length) {
+      bits.push(
+        teacherIds
+          .map((id) => yearOptions?.lessons?.find((l) => l.teacherId === id)?.teacherName)
+          .filter(Boolean)
+          .filter((name, i, arr) => arr.indexOf(name) === i)
+          .join(", ")
+      );
+    }
     if (subjectKeys.length) bits.push(subjectKeys.join(", "));
     if (lessonIds.length) {
       bits.push(
@@ -447,6 +570,7 @@ export function StudentsDirectory({
     classIds,
     trackIds,
     specIds,
+    teacherIds,
     subjectKeys,
     lessonIds,
     psychology,
@@ -461,6 +585,7 @@ export function StudentsDirectory({
       classIds.length ||
       trackIds.length ||
       specIds.length ||
+      teacherIds.length ||
       subjectKeys.length ||
       lessonIds.length ||
       psychology !== "all" ||
@@ -525,89 +650,116 @@ export function StudentsDirectory({
         </Button>
         </div>
       </div>
-      <div className="grid gap-3 border-b border-outline-variant/30 bg-surface-container-low/60 px-5 py-4 print:hidden md:grid-cols-2 xl:grid-cols-4">
-        <div className="xl:col-span-4">
-          <p className="mb-2 flex items-center gap-2 font-title-lg text-title-lg text-primary">
-            <Icon name="filter_list" className="text-secondary" />
+      <div className="flex flex-col gap-4 border-b border-outline-variant/30 bg-surface-container-low/60 px-5 py-4 print:hidden">
+        <div>
+          <p className="mb-2 flex flex-wrap items-center gap-2 font-title-lg text-title-lg text-primary">
+            <Icon name="search" className="text-secondary" />
             חיפוש וסינון
-            <span className="rounded-full bg-secondary-container px-2 py-0.5 font-caption text-caption font-semibold text-primary">
-              אפשר לבחור כמה בכל שדה
-            </span>
           </p>
           <Input
-            label="חיפוש חופשי"
+            label="חיפוש תלמידה"
             placeholder="שם, תעודת זהות, כיתה, מסלול או התמחות"
             value={query}
             onChange={(e) => setQuery(e.target.value)}
           />
         </div>
-        <MultiSelect
-          label="שכבות"
-          name="gradeId"
-          values={gradeIds}
-          onChange={(next) => {
-            setGradeIds(next);
-            setClassIds((prev) =>
-              prev.filter((id) => {
-                const cls = yearOptions?.classes.find((c) => c.id === id);
-                return cls && (next.length === 0 || next.includes(cls.grade_id));
-              })
-            );
-          }}
-          options={(yearOptions?.grades ?? []).map((g) => ({
-            value: g.id,
-            label: g.name,
-          }))}
-        />
-        <MultiSelect
-          label="כיתות"
-          name="classId"
-          values={classIds}
-          onChange={setClassIds}
-          options={classFilterOptions}
-        />
-        <MultiSelect
-          label="מסלולים"
-          name="trackId"
-          values={trackIds}
-          onChange={setTrackIds}
-          options={(yearOptions?.tracks ?? []).map((t) => ({
-            value: t.id,
-            label: t.name,
-          }))}
-        />
-        <MultiSelect
-          label="התמחויות"
-          name="specId"
-          values={specIds}
-          onChange={setSpecIds}
-          options={(yearOptions?.specializations ?? []).map((s) => ({
-            value: s.id,
-            label: s.name,
-          }))}
-        />
-        <MultiSelect
-          label="מקצועות"
-          name="subjectKey"
-          values={subjectKeys}
-          onChange={(next) => {
-            setSubjectKeys(next);
-            setLessonIds((prev) =>
-              prev.filter((id) => {
-                const lesson = yearOptions?.lessons?.find((l) => l.id === id);
-                return lesson && (next.length === 0 || next.includes(lesson.subjectKey));
-              })
-            );
-          }}
-          options={subjectFilterOptions}
-        />
-        <MultiSelect
-          label="שיעורים"
-          name="lessonId"
-          values={lessonIds}
-          onChange={setLessonIds}
-          options={lessonFilterOptions}
-        />
+
+        <div>
+          <p className="mb-2 font-label-md text-label-md text-primary">שיבוץ</p>
+          <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+            <SearchMultiSelect
+              label="שכבות"
+              values={gradeIds}
+              onChange={(next) => {
+                setGradeIds(next);
+                setClassIds((prev) =>
+                  prev.filter((id) => {
+                    const cls = yearOptions?.classes.find((c) => c.id === id);
+                    return cls && (next.length === 0 || next.includes(cls.grade_id));
+                  })
+                );
+                pruneLessonFilters({ gradeIds: next });
+              }}
+              options={(yearOptions?.grades ?? []).map((g) => ({
+                value: g.id,
+                label: g.name,
+              }))}
+            />
+            <SearchMultiSelect
+              label="כיתות"
+              values={classIds}
+              onChange={(next) => {
+                setClassIds(next);
+                pruneLessonFilters({ classIds: next });
+              }}
+              options={classFilterOptions}
+            />
+            <SearchMultiSelect
+              label="מסלולים"
+              values={trackIds}
+              onChange={(next) => {
+                setTrackIds(next);
+                pruneLessonFilters({ trackIds: next });
+              }}
+              options={(yearOptions?.tracks ?? []).map((t) => ({
+                value: t.id,
+                label: t.name,
+              }))}
+            />
+            <SearchMultiSelect
+              label="התמחויות"
+              values={specIds}
+              onChange={(next) => {
+                setSpecIds(next);
+                pruneLessonFilters({ specIds: next });
+              }}
+              options={(yearOptions?.specializations ?? []).map((s) => ({
+                value: s.id,
+                label: s.name,
+              }))}
+            />
+          </div>
+        </div>
+
+        <div>
+          <p className="mb-2 font-label-md text-label-md text-primary">
+            לימודים — הקלידי להשלמת מורה, מקצוע או שיעור
+          </p>
+          <div className="grid gap-3 md:grid-cols-3">
+            <SearchMultiSelect
+              label="מורות"
+              values={teacherIds}
+              onChange={(next) => {
+                setTeacherIds(next);
+                pruneLessonFilters({ teacherIds: next });
+              }}
+              options={teacherFilterOptions}
+              placeholder="חיפוש לפי שם מורה…"
+            />
+            <SearchMultiSelect
+              label="מקצועות"
+              values={subjectKeys}
+              onChange={(next) => {
+                setSubjectKeys(next);
+                pruneLessonFilters({ subjectKeys: next });
+              }}
+              options={subjectFilterOptions}
+              placeholder="חיפוש מקצוע…"
+            />
+            <SearchMultiSelect
+              label="שיעורים"
+              values={lessonIds}
+              onChange={(next) => {
+                setLessonIds(next);
+                pruneLessonFilters({ lessonIds: next });
+              }}
+              options={lessonFilterOptions}
+              placeholder="חיפוש שיעור או מורה…"
+            />
+          </div>
+        </div>
+
+        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
         <Select
           label="פסיכולוגיה"
           value={psychology}
@@ -628,16 +780,18 @@ export function StudentsDirectory({
             { value: "inactive", label: "לא פעילות" },
           ]}
         />
-        <div className="xl:col-span-4 rounded-xl border-2 border-secondary bg-secondary-container/50 px-4 py-3">
-          <p className="mb-2 flex flex-wrap items-center gap-2 font-title-lg text-title-lg text-primary">
+        </div>
+
+        <div className="rounded-lg border border-secondary/50 bg-secondary-container/40 px-4 py-3">
+          <p className="mb-2 flex flex-wrap items-center gap-2 font-label-md text-label-md text-primary">
             <Icon name="sort" className="text-secondary" />
-            מיון הרשימה
-            <span className="rounded-full bg-primary px-2.5 py-0.5 font-caption text-caption font-bold text-white">
+            מיון
+            <span className="rounded-full bg-primary px-2 py-0.5 font-caption text-[11px] font-bold text-white">
               {SORT_OPTIONS.find((o) => o.value === sortKey)?.label} ·{" "}
               {sortDir === "asc" ? "עולה" : "יורד"}
             </span>
           </p>
-          <div className="flex flex-wrap items-center gap-2">
+          <div className="flex flex-wrap items-center gap-1.5">
             {SORT_OPTIONS.map((opt) => {
               const active = sortKey === opt.value;
               return (
@@ -647,31 +801,32 @@ export function StudentsDirectory({
                   onClick={() => toggleSort(opt.value)}
                   className={
                     active
-                      ? "inline-flex items-center gap-1 rounded-full bg-primary px-3 py-1.5 font-label-md text-label-md font-bold text-white shadow-tactile-sm"
-                      : "inline-flex items-center gap-1 rounded-full border border-outline-variant bg-surface-container-lowest px-3 py-1.5 font-label-md text-label-md text-on-surface hover:border-primary hover:text-primary"
+                      ? "inline-flex items-center gap-1 rounded-full bg-primary px-2.5 py-1 font-caption text-caption font-bold text-white"
+                      : "inline-flex items-center gap-1 rounded-full border border-outline-variant bg-surface-container-lowest px-2.5 py-1 font-caption text-caption text-on-surface hover:border-primary hover:text-primary"
                   }
                 >
                   {opt.label}
                   {active ? (
                     <Icon
                       name={sortDir === "asc" ? "arrow_upward" : "arrow_downward"}
-                      className="text-[16px]"
+                      className="text-[14px]"
                     />
                   ) : null}
                 </button>
               );
             })}
-            <Button
+            <button
               type="button"
-              variant={sortDir === "desc" ? "primary" : "outline"}
+              className="inline-flex items-center gap-1 rounded-full border border-outline-variant bg-surface-container-lowest px-2.5 py-1 font-caption text-caption text-primary"
               onClick={() => setSortDir((d) => (d === "asc" ? "desc" : "asc"))}
             >
-              <Icon name={sortDir === "asc" ? "arrow_upward" : "arrow_downward"} className="text-[18px]" />
-              {sortDir === "asc" ? "סדר עולה" : "סדר יורד"}
-            </Button>
+              <Icon name={sortDir === "asc" ? "arrow_upward" : "arrow_downward"} className="text-[14px]" />
+              {sortDir === "asc" ? "עולה" : "יורד"}
+            </button>
           </div>
         </div>
-        <div className="flex items-end xl:col-span-4">
+
+        <div className="flex items-end">
           <div className="flex w-full flex-wrap items-center justify-between gap-3">
             <p className="text-body-md text-on-surface">
               {hasActiveFilter ? (
@@ -697,6 +852,7 @@ export function StudentsDirectory({
                   setClassIds([]);
                   setTrackIds([]);
                   setSpecIds([]);
+                  setTeacherIds([]);
                   setSubjectKeys([]);
                   setLessonIds([]);
                   setPsychology("all");
