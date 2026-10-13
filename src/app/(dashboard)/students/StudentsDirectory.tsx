@@ -287,6 +287,7 @@ export function StudentsDirectory({
   const [status, setStatus] = useState<"all" | "active" | "inactive">("all");
   const [sortKey, setSortKey] = useState<SortKey>("name");
   const [sortDir, setSortDir] = useState<"asc" | "desc">("asc");
+  const [filtersOpen, setFiltersOpen] = useState(false);
   const [modalOpen, setModalOpen] = useState(false);
   const [yearError, setYearError] = useState<string | null>(null);
   const [printCols, setPrintCols] = useState<Record<PrintColId, boolean>>(() =>
@@ -651,18 +652,39 @@ export function StudentsDirectory({
         </div>
       </div>
       <div className="flex flex-col gap-4 border-b border-outline-variant/30 bg-surface-container-low/60 px-5 py-4 print:hidden">
-        <div>
-          <p className="mb-2 flex flex-wrap items-center gap-2 font-title-lg text-title-lg text-primary">
-            <Icon name="search" className="text-secondary" />
-            חיפוש וסינון
-          </p>
+        <div className="rounded-xl border border-outline-variant/40 bg-surface-container-lowest">
+          <button
+            type="button"
+            className="flex w-full items-center justify-between gap-3 px-4 py-3 text-right"
+            aria-expanded={filtersOpen}
+            onClick={() => setFiltersOpen((open) => !open)}
+          >
+            <span className="flex min-w-0 flex-wrap items-center gap-2">
+              <Icon name="search" className="text-secondary" />
+              <span className="font-title-lg text-title-lg text-primary">חיפוש וסינון</span>
+              {hasActiveFilter ? (
+                <span className="rounded-full bg-primary px-2 py-0.5 font-caption text-[11px] font-bold text-white">
+                  {filtered.length} לפי הסינון
+                </span>
+              ) : (
+                <span className="font-caption text-caption text-on-surface-variant">
+                  לחצי לפתיחה
+                </span>
+              )}
+            </span>
+            <Icon
+              name="expand_more"
+              className={filtersOpen ? "rotate-180 text-primary" : "text-on-surface-variant"}
+            />
+          </button>
+          {filtersOpen ? (
+            <div className="flex flex-col gap-4 border-t border-outline-variant/30 px-4 py-4">
           <Input
             label="חיפוש תלמידה"
             placeholder="שם, תעודת זהות, כיתה, מסלול או התמחות"
             value={query}
             onChange={(e) => setQuery(e.target.value)}
           />
-        </div>
 
         <div>
           <p className="mb-2 font-label-md text-label-md text-primary">שיבוץ</p>
@@ -780,6 +802,9 @@ export function StudentsDirectory({
             { value: "inactive", label: "לא פעילות" },
           ]}
         />
+        </div>
+            </div>
+          ) : null}
         </div>
 
         <div className="rounded-lg border border-secondary/50 bg-secondary-container/40 px-4 py-3">
