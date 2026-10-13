@@ -50,6 +50,7 @@ import {
   requireId,
   requireIsoDate,
   requireText,
+  requireUuid,
   validateEmail,
   validateIsraeliId,
   validatePhone,
@@ -861,6 +862,78 @@ export async function createStudentAction(formData: FormData) {
 
   revalidatePath("/students");
   revalidatePath(`/students/${student.id}`);
+  return { success: true };
+}
+
+/**
+ * Student who left: never DELETE the students row (CASCADE would wipe
+ * attendance and more). Only this student_id: close open class placement,
+ * delete her lesson links, mark inactive.
+ */
+export async function leaveStudentAction(studentId: string) {
+  const actionAuth = await createActionClient();
+  if ("error" in actionAuth) return { error: actionAuth.error };
+  const supabase = actionAuth.supabase;
+  const sid = requireUuid(studentId, "תלמידה");
+  if (isError(sid)) return sid;
+
+  const { data: student, error: loadError } = await supabase
+    .from("students")
+    .select("id")
+    .eq("id", sid)
+    .maybeSingle();
+  if (loadError) return { error: hebrewDbError(loadError, "טעינת התלמידה נכשלה") };
+  if (!student?.id || student.id !== sid) return { error: "התלמידה לא נמצאה" };
+
+  const today = todayIso();
+  const { data: openPlacements, error: openError } = await supabase
+    .from("student_assignments")
+    .select("id, start_date")
+    .eq("student_id", sid)
+    .is("end_date", null);
+  if (openError) return { error: hebrewDbError(openError, "סגירת השיבוץ נכשלה") };
+
+  for (const row of openPlacements ?? []) {
+    const endDate = row.start_date && row.start_date > today ? row.start_date : today;
+    const { error: closeError } = await supabase
+      .from("student_assignments")
+      .update({ end_date: endDate })
+      .eq("id", row.id)
+      .eq("student_id", sid)
+      .is("end_date", null);
+    if (closeError) return { error: hebrewDbError(closeError, "סגירת השיבוץ נכשלה") };
+  }
+
+  const { error: unlinkError } = await supabase
+    .from("student_lesson_assignments")
+    .delete()
+    .eq("student_id", sid);
+  if (unlinkError) return { error: hebrewDbError(unlinkError, "הסרת השיוך לשיעורים נכשלה") };
+
+  const { error: exclusionError } = await supabase
+    .from("student_lesson_exclusions")
+    .delete()
+    .eq("student_id", sid);
+  if (exclusionError && !/student_lesson_exclusions|schema cache|PGRST205|42P01/i.test(exclusionError.message)) {
+    return { error: hebrewDbError(exclusionError, "הסרת החרגות השיעור נכשלה") };
+  }
+
+  const { data: deactivated, error: deactivateError } = await supabase
+    .from("students")
+    .update({ is_active: false })
+    .eq("id", sid)
+    .select("id");
+  if (deactivateError) return { error: hebrewDbError(deactivateError, "עדכון התלמידה נכשל") };
+  if (!deactivated?.some((row) => row.id === sid)) {
+    return { error: "התלמידה לא עודכנה" };
+  }
+
+  revalidatePath("/students");
+  revalidatePath(`/students/${sid}`);
+  revalidatePath("/attendance");
+  revalidatePath("/reports");
+  revalidatePath("/lessons");
+  revalidatePath("/timetable");
   return { success: true };
 }
 

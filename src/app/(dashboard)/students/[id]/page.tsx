@@ -18,6 +18,8 @@ import {
 } from "@/lib/lessons/autoAssign";
 import { formatLessonOptionLabel } from "@/lib/lessons/hours";
 import { formatSubjectLessonLabel } from "@/lib/lessons/subject-label";
+import { DeleteButton } from "@/components/ui/DeleteButton";
+import { leaveStudentAction } from "../../actions";
 import { StudentDetailForms } from "./StudentDetailForms";
 import { StudentLessonAssignments } from "./StudentLessonAssignments";
 import { StudentPersonalNote } from "./StudentPersonalNote";
@@ -729,8 +731,14 @@ export default async function StudentDetailPage({ params }: Props) {
               </dl>
             </div>
           </div>
-          <div className="print:hidden">
+          <div className="print:hidden flex flex-col items-stretch gap-2">
             <PrintButton documentTitle={`כרטיס-${displayName}`} />
+            <DeleteButton
+              label="תלמידה עזבה"
+              redirectTo="/students"
+              confirmMessage={`התלמידה ${displayName} תסומן כלא פעילה, יוסרו רק השיוכים שלה לשיעורים, ושיבוץ הכיתה הפתוח ייסגר. לא יימחקו שיעורים, נוכחות, מבחני השלמה או תלמידות אחרות. להמשיך?`}
+              onDelete={() => leaveStudentAction(id)}
+            />
           </div>
         </div>
       </section>

@@ -10,6 +10,15 @@ export function requireId(value: FormDataEntryValue | null, label: string): stri
   return text;
 }
 
+const UUID_RE =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+export function requireUuid(value: FormDataEntryValue | string | null, label: string): string | { error: string } {
+  const text = String(value ?? "").trim();
+  if (!UUID_RE.test(text)) return { error: `${label} אינו תקין` };
+  return text;
+}
+
 export function requireIsoDate(value: FormDataEntryValue | null, label: string): string | { error: string } {
   const text = String(value ?? "").trim().slice(0, 10);
   if (!/^\d{4}-\d{2}-\d{2}$/.test(text)) return { error: `יש לבחור ${label}` };

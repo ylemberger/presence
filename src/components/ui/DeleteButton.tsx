@@ -9,12 +9,14 @@ interface DeleteButtonProps {
   onDelete: () => Promise<{ error?: string }>;
   label?: string;
   confirmMessage?: string;
+  redirectTo?: string;
 }
 
 export function DeleteButton({
   onDelete,
   label = "מחק",
   confirmMessage = "האם את בטוחה שברצונך למחוק?",
+  redirectTo,
 }: DeleteButtonProps) {
   const { canWrite } = useAccess();
   const router = useRouter();
@@ -30,6 +32,11 @@ export function DeleteButton({
       const result = await onDelete();
       if (result?.error) {
         setError(result.error);
+        return;
+      }
+      if (redirectTo) {
+        router.push(redirectTo);
+        router.refresh();
         return;
       }
       await router.refresh();
