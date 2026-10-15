@@ -1,8 +1,16 @@
 -- הרצה ב-Supabase SQL Editor של **מערכת השכר בלבד** (לא פרויקט הנוכחות).
 -- מטרה: anon יכול רק לקרוא salary_records. אין כתיבה/מחיקה/עדכון.
 -- בטוח להרצה חוזרת.
+-- אם מופיעה הודעה שהטבלה חסרה — זה הפרויקט הלא נכון (נוכחות במקום שכר).
 
-alter table if exists salary_records enable row level security;
+do $$
+begin
+  if to_regclass('public.salary_records') is null then
+    raise exception 'salary_records לא קיימת כאן. זה לא פרויקט השכר — אל תריצי את הסקריפט במסד הנוכחות.';
+  end if;
+end $$;
+
+alter table salary_records enable row level security;
 
 drop policy if exists salary_records_anon_select on salary_records;
 create policy salary_records_anon_select

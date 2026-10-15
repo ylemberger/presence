@@ -1,4 +1,3 @@
-import { cannotWriteEmail } from "@/lib/auth/allowed-emails";
 import { requireAuthenticatedUser } from "@/lib/supabase/server";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { Section } from "@/components/ui/Section";
@@ -64,8 +63,8 @@ function SettingsTableHead({ columns }: { columns: string[] }) {
 }
 
 export default async function SettingsPage() {
-  const { user } = await requireAuthenticatedUser();
-  const canWrite = !cannotWriteEmail(user.email);
+  const { accessRole } = await requireAuthenticatedUser();
+  const canWrite = accessRole === "editor";
   const activeYear = await getActiveAcademicYear();
   const years = await getAllAcademicYears();
   const supabase = await createClient();

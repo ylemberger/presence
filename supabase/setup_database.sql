@@ -319,8 +319,58 @@ alter table student_lesson_assignments enable row level security;
 alter table attendance enable row level security;
 alter table attendance_change_log enable row level security;
 
--- View-only accounts (see src/lib/auth/allowed-emails.ts) may read the student
--- and teacher lists. They cannot write, and cannot read attendance or other tables.
+create table if not exists public.app_access_emails (
+  email text primary key,
+  role text not null check (role in ('editor', 'viewer', 'read_all')),
+  created_at timestamptz not null default now()
+);
+
+alter table public.app_access_emails enable row level security;
+
+insert into public.app_access_emails (email, role) values
+  ('sara.m@bybs.org.il', 'viewer'),
+  ('shaindi.s@bybs.org.il', 'viewer'),
+  ('h.babad@bybs.org.il', 'viewer'),
+  ('machshev@bybs.org.il', 'viewer'),
+  ('zipora.e@bybs.org.il', 'read_all'),
+  ('sby7935@gmail.com', 'read_all'),
+  ('t025959714@gmail.com', 'editor'),
+  ('yehudit.b@bybs.org.il', 'editor'),
+  ('y.lemberger@bybs.org.il', 'editor')
+on conflict (email) do nothing;
+
+create or replace function public.access_role()
+returns text
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  select role
+  from public.app_access_emails
+  where email = lower(trim(coalesce(auth.jwt() ->> 'email', '')))
+  limit 1;
+$$;
+
+revoke all on function public.access_role() from public;
+revoke all on function public.access_role() from anon;
+grant execute on function public.access_role() to authenticated;
+
+create or replace function public.has_app_access()
+returns boolean
+language sql
+stable
+security invoker
+set search_path = public
+as $$
+  select public.access_role() is not null;
+$$;
+
+revoke all on function public.has_app_access() from public;
+revoke all on function public.has_app_access() from anon;
+grant execute on function public.has_app_access() to authenticated;
+
+-- List-only viewers: student/teacher lists (and lessons for a teacher card).
 create or replace function public.is_attendance_viewer()
 returns boolean
 language sql
@@ -328,16 +378,7 @@ stable
 security invoker
 set search_path = public
 as $$
-  select lower(coalesce(
-    auth.jwt() ->> 'email',
-    auth.jwt() -> 'user_metadata' ->> 'email',
-    ''
-  )) in (
-    'sara.m@bybs.org.il',
-    'shaindi.s@bybs.org.il',
-    'h.babad@bybs.org.il',
-    'machshev@bybs.org.il'
-  );
+  select public.access_role() is not distinct from 'viewer';
 $$;
 
 revoke all on function public.is_attendance_viewer() from public;
@@ -351,14 +392,7 @@ stable
 security invoker
 set search_path = public
 as $$
-  select lower(coalesce(
-    auth.jwt() ->> 'email',
-    auth.jwt() -> 'user_metadata' ->> 'email',
-    ''
-  )) in (
-    'zipora.e@bybs.org.il',
-    'sby7935@gmail.com'
-  );
+  select public.access_role() is not distinct from 'read_all';
 $$;
 
 revoke all on function public.is_attendance_read_only() from public;
@@ -372,12 +406,43 @@ stable
 security invoker
 set search_path = public
 as $$
-  select public.is_attendance_viewer() or public.is_attendance_read_only();
+  select public.access_role() is distinct from 'editor';
 $$;
 
 revoke all on function public.cannot_write_attendance() from public;
 revoke all on function public.cannot_write_attendance() from anon;
 grant execute on function public.cannot_write_attendance() to authenticated;
+
+create policy "select_own_app_access_emails"
+  on public.app_access_emails
+  for select
+  to authenticated
+  using (email = lower(trim(coalesce(auth.jwt() ->> 'email', ''))));
+
+create policy "select_all_app_access_emails_editors"
+  on public.app_access_emails
+  for select
+  to authenticated
+  using (public.access_role() = 'editor');
+
+create policy "authenticated_insert_app_access_emails"
+  on public.app_access_emails
+  for insert
+  to authenticated
+  with check (public.access_role() = 'editor');
+
+create policy "authenticated_update_app_access_emails"
+  on public.app_access_emails
+  for update
+  to authenticated
+  using (public.access_role() = 'editor')
+  with check (public.access_role() = 'editor');
+
+create policy "authenticated_delete_app_access_emails"
+  on public.app_access_emails
+  for delete
+  to authenticated
+  using (public.access_role() = 'editor');
 
 do $$
 declare
@@ -398,9 +463,9 @@ begin
       'teachers', 'teacher_source_records', 'teacher_teaching_assignments',
       'lessons'
     ) then
-      select_using := 'true';
+      select_using := 'public.has_app_access()';
     else
-      select_using := 'not public.is_attendance_viewer()';
+      select_using := 'public.has_app_access() and not public.is_attendance_viewer()';
     end if;
     execute format('create policy "authenticated_select_%s" on %I for select to authenticated using (%s)', tbl, tbl, select_using);
     execute format('create policy "authenticated_insert_%s" on %I for insert to authenticated with check (not public.cannot_write_attendance())', tbl, tbl);
@@ -960,7 +1025,7 @@ begin
     select 1 from pg_policies
     where tablename = 'makeup_exams' and policyname = 'authenticated_select_makeup_exams'
   ) then
-    create policy "authenticated_select_makeup_exams" on makeup_exams for select to authenticated using (not public.is_attendance_viewer());
+    create policy "authenticated_select_makeup_exams" on makeup_exams for select to authenticated using (public.has_app_access() and not public.is_attendance_viewer());
     create policy "authenticated_insert_makeup_exams" on makeup_exams for insert to authenticated with check (not public.cannot_write_attendance());
     create policy "authenticated_update_makeup_exams" on makeup_exams for update to authenticated using (not public.cannot_write_attendance()) with check (not public.cannot_write_attendance());
     create policy "authenticated_delete_makeup_exams" on makeup_exams for delete to authenticated using (not public.cannot_write_attendance());
@@ -997,7 +1062,7 @@ begin
     select 1 from pg_policies
     where tablename = 'attendance_notes' and policyname = 'authenticated_select_attendance_notes'
   ) then
-    create policy "authenticated_select_attendance_notes" on attendance_notes for select to authenticated using (not public.is_attendance_viewer());
+    create policy "authenticated_select_attendance_notes" on attendance_notes for select to authenticated using (public.has_app_access() and not public.is_attendance_viewer());
     create policy "authenticated_insert_attendance_notes" on attendance_notes for insert to authenticated with check (not public.cannot_write_attendance());
     create policy "authenticated_update_attendance_notes" on attendance_notes for update to authenticated using (not public.cannot_write_attendance()) with check (not public.cannot_write_attendance());
     create policy "authenticated_delete_attendance_notes" on attendance_notes for delete to authenticated using (not public.cannot_write_attendance());
@@ -1040,7 +1105,7 @@ begin
     select 1 from pg_policies
     where tablename = 'attendance_pools' and policyname = 'authenticated_select_attendance_pools'
   ) then
-    create policy "authenticated_select_attendance_pools" on attendance_pools for select to authenticated using (not public.is_attendance_viewer());
+    create policy "authenticated_select_attendance_pools" on attendance_pools for select to authenticated using (public.has_app_access() and not public.is_attendance_viewer());
     create policy "authenticated_insert_attendance_pools" on attendance_pools for insert to authenticated with check (not public.cannot_write_attendance());
     create policy "authenticated_update_attendance_pools" on attendance_pools for update to authenticated using (not public.cannot_write_attendance()) with check (not public.cannot_write_attendance());
     create policy "authenticated_delete_attendance_pools" on attendance_pools for delete to authenticated using (not public.cannot_write_attendance());
@@ -1053,7 +1118,7 @@ begin
     select 1 from pg_policies
     where tablename = 'attendance_pool_members' and policyname = 'authenticated_select_attendance_pool_members'
   ) then
-    create policy "authenticated_select_attendance_pool_members" on attendance_pool_members for select to authenticated using (not public.is_attendance_viewer());
+    create policy "authenticated_select_attendance_pool_members" on attendance_pool_members for select to authenticated using (public.has_app_access() and not public.is_attendance_viewer());
     create policy "authenticated_insert_attendance_pool_members" on attendance_pool_members for insert to authenticated with check (not public.cannot_write_attendance());
     create policy "authenticated_update_attendance_pool_members" on attendance_pool_members for update to authenticated using (not public.cannot_write_attendance()) with check (not public.cannot_write_attendance());
     create policy "authenticated_delete_attendance_pool_members" on attendance_pool_members for delete to authenticated using (not public.cannot_write_attendance());
@@ -1080,7 +1145,7 @@ begin
       and policyname = 'authenticated_select_student_lesson_exclusions'
   ) then
     create policy "authenticated_select_student_lesson_exclusions"
-      on student_lesson_exclusions for select to authenticated using (not public.is_attendance_viewer());
+      on student_lesson_exclusions for select to authenticated using (public.has_app_access() and not public.is_attendance_viewer());
     create policy "authenticated_insert_student_lesson_exclusions"
       on student_lesson_exclusions for insert to authenticated with check (not public.cannot_write_attendance());
     create policy "authenticated_update_student_lesson_exclusions"
@@ -1093,4 +1158,28 @@ end $$;
 alter table student_assignments drop column if exists teaching_type_id;
 alter table teachers drop column if exists teaching_type_id;
 drop table if exists teaching_types cascade;
+
+do $$
+declare
+  t record;
+begin
+  for t in
+    select tablename
+    from pg_tables
+    where schemaname = 'public'
+  loop
+    execute format('revoke all on table public.%I from anon', t.tablename);
+    execute format('revoke all on table public.%I from public', t.tablename);
+    execute format(
+      'grant select, insert, update, delete on table public.%I to authenticated',
+      t.tablename
+    );
+  end loop;
+  execute 'revoke all on all sequences in schema public from anon';
+  execute 'revoke all on all sequences in schema public from public';
+  execute 'grant usage, select on all sequences in schema public to authenticated';
+  execute 'alter default privileges in schema public revoke all on tables from anon';
+  execute 'alter default privileges in schema public revoke all on tables from public';
+  execute 'alter default privileges in schema public grant select, insert, update, delete on tables to authenticated';
+end $$;
 

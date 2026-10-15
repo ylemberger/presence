@@ -67,6 +67,14 @@ export interface AttendanceRule {
   max_allowed_absence_percent: number;
 }
 
+export type AccessRole = "editor" | "viewer" | "read_all";
+
+export interface AppAccessEmail {
+  email: string;
+  role: AccessRole;
+  created_at: string;
+}
+
 export interface Student {
   id: string;
   full_name: string;

@@ -1,7 +1,7 @@
 import { createServerClient } from "@supabase/ssr";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
-import { cannotWriteEmail, isAllowedLoginEmail } from "@/lib/auth/allowed-emails";
+import { fetchAccessRole } from "@/lib/auth/allowed-emails";
 
 export async function createClient() {
   const cookieStore = await cookies();
@@ -35,11 +35,15 @@ export async function requireAuthenticatedUser() {
     data: { user },
   } = await supabase.auth.getUser();
 
-  if (!user || !isAllowedLoginEmail(user.email)) {
+  if (!user) {
+    redirect("/login?error=unauthorized");
+  }
+  const accessRole = await fetchAccessRole(supabase, user.email);
+  if (!accessRole) {
     redirect("/login?error=unauthorized");
   }
 
-  return { supabase, user };
+  return { supabase, user, accessRole };
 }
 
 /** For Server Actions — requires an allowed, authenticated user. */
@@ -51,11 +55,15 @@ export async function createActionClient(): Promise<
     data: { user },
   } = await supabase.auth.getUser();
 
-  if (!user || !isAllowedLoginEmail(user.email)) {
+  if (!user) {
+    return { error: "אין הרשאה. התחברי מחדש." };
+  }
+  const accessRole = await fetchAccessRole(supabase, user.email);
+  if (!accessRole) {
     return { error: "אין הרשאה. התחברי מחדש." };
   }
 
-  if (cannotWriteEmail(user.email)) {
+  if (accessRole !== "editor") {
     return { error: "לחשבון הזה יש הרשאת צפייה בלבד." };
   }
 

@@ -14,7 +14,7 @@
 
 - **סכימה מלאה:** [`supabase/setup_database.sql`](supabase/setup_database.sql) — קובץ יחיד לפרויקט חדש.
 - **שינוי סכימה:** עדכן את `setup_database.sql` + הוסף patch ב-`supabase/patches/` למסד קיים (ראי [`supabase/README.md`](supabase/README.md)).
-- **RLS:** כל הטבלאות — `authenticated` בלבד. אין גישה לאנונימי.
+- **RLS:** כל הטבלאות — רק מי שב-`app_access_emails`. אין גישה לאנונימי. מייל מ-JWT בלבד.
 - **טריגרים קיימים:** ביקורת נוכחות, מניעת חפיפת שיבוצים, שנה פעילה יחידה.
 - **מחיקה:** ב-UI — בדיקת הפניות לפני מחיקה. CASCADE רק לפעולות על-שנה.
 
@@ -39,7 +39,7 @@
 
 1. האם זה משפיע על נתונים היסטוריים? אם כן — אל תדרוס, הוסף רשומה חדשה.
 2. האם נדרש שינוי סכימה? אם כן — עדכן `setup_database.sql` + patch ב-`supabase/patches/`, ואל תערוך ידנית טבלאות בפרודקשן.
-3. האם יש RLS/policy? שמור על authenticated-only.
+3. האם יש RLS/policy? שמור על `app_access_emails` + JWT email בלבד. אין גישה לאנונימי.
 
 ## פריסה
 

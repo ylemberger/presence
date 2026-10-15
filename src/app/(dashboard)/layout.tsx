@@ -6,7 +6,6 @@ import { AttendanceReminderBanner } from "@/components/attendance/AttendanceRemi
 import { UserAvatar } from "@/components/layout/UserAvatar";
 import { requireAuthenticatedUser } from "@/lib/supabase/server";
 import { AccessProvider } from "@/components/auth/AccessProvider";
-import { cannotWriteEmail, isViewerEmail } from "@/lib/auth/allowed-emails";
 import { authUserProfile } from "@/lib/auth/user-profile";
 import { getActiveAcademicYear, getAllAcademicYears } from "@/lib/utils";
 import { getPendingAttendanceSummary, EMPTY_PENDING_SUMMARY } from "@/lib/attendance/pending";
@@ -17,10 +16,10 @@ export default async function DashboardLayout({
 }: {
   children: React.ReactNode;
 }) {
-  const { user } = await requireAuthenticatedUser();
+  const { user, accessRole } = await requireAuthenticatedUser();
   const profile = authUserProfile(user);
-  const listOnly = isViewerEmail(user.email);
-  const canWrite = !cannotWriteEmail(user.email);
+  const listOnly = accessRole === "viewer";
+  const canWrite = accessRole === "editor";
 
   const [activeYear, years] = await Promise.all([
     getActiveAcademicYear(),

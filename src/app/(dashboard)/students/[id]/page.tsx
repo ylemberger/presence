@@ -5,7 +5,6 @@ import { StatusPill } from "@/components/ui/PageHeader";
 import { Section } from "@/components/ui/Section";
 import { PrintButton } from "@/components/ui/PrintButton";
 import { SeminarPrintHeader } from "@/components/print/SeminarPrintHeader";
-import { isViewerEmail } from "@/lib/auth/allowed-emails";
 import { createClient, requireAuthenticatedUser } from "@/lib/supabase/server";
 import { getActiveAcademicYear } from "@/lib/utils";
 import { filterFixedGrades } from "@/lib/years/grades";
@@ -75,9 +74,8 @@ function embeddedName(
 }
 
 export default async function StudentDetailPage({ params }: Props) {
-  const { user } = await requireAuthenticatedUser();
-  const listOnly = isViewerEmail(user.email);
-  if (listOnly) redirect("/students");
+  const { accessRole } = await requireAuthenticatedUser();
+  if (accessRole === "viewer") redirect("/students");
 
   const { id } = params;
   const supabase = await createClient();

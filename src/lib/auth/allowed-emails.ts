@@ -2,6 +2,8 @@ let cachedAllowedEmails: Set<string> | null = null;
 let cachedViewerEmails: Set<string> | null = null;
 let cachedReadAllEmails: Set<string> | null = null;
 
+export type AccessRole = "editor" | "viewer" | "read_all";
+
 /** List-only: students and teachers lists. No student card, no writes. */
 const BUILTIN_VIEWER_EMAILS = [
   "sara.m@bybs.org.il",
@@ -10,7 +12,7 @@ const BUILTIN_VIEWER_EMAILS = [
   "machshev@bybs.org.il",
 ];
 
-/** All pages, including student cards. No writes. Wins over ALLOWED_LOGIN_EMAILS. */
+/** All pages, including student cards. No writes. */
 const BUILTIN_READ_ALL_EMAILS = ["zipora.e@bybs.org.il", "sby7935@gmail.com"];
 
 function parseEmailList(raw: string): string[] {
@@ -18,6 +20,10 @@ function parseEmailList(raw: string): string[] {
     .split(",")
     .map((email) => email.trim().toLowerCase())
     .filter(Boolean);
+}
+
+export function jwtEmail(email: string | null | undefined): string {
+  return String(email ?? "").trim().toLowerCase();
 }
 
 function getAllowedLoginEmails(): Set<string> {
@@ -44,32 +50,80 @@ function getReadAllEmails(): Set<string> {
   return cachedReadAllEmails;
 }
 
+/** Used only if app_access_emails is missing (patch 028 not run yet). */
+export function legacyAccessRole(email: string | null | undefined): AccessRole | null {
+  const normalized = jwtEmail(email);
+  if (!normalized) return null;
+  if (getViewerEmails().has(normalized)) return "viewer";
+  if (getReadAllEmails().has(normalized)) return "read_all";
+  const allowed = getAllowedLoginEmails();
+  if (allowed.size === 0) return null;
+  if (allowed.has(normalized)) return "editor";
+  return null;
+}
+
+function isMissingAccessTable(error: { message?: string; code?: string } | null | undefined): boolean {
+  if (!error) return false;
+  return /app_access_emails|schema cache|PGRST205|42P01/i.test(
+    `${error.message ?? ""} ${error.code ?? ""}`
+  );
+}
+
+type AccessLookup = {
+  from: (table: string) => {
+    select: (columns: string) => {
+      eq: (
+        column: string,
+        value: string
+      ) => {
+        maybeSingle: () => Promise<{
+          data: { role?: string } | null;
+          error: { message?: string; code?: string } | null;
+        }>;
+      };
+    };
+  };
+};
+
+export async function fetchAccessRole(
+  supabase: unknown,
+  email: string | null | undefined
+): Promise<AccessRole | null> {
+  const normalized = jwtEmail(email);
+  if (!normalized) return null;
+  const client = supabase as AccessLookup;
+  const { data, error } = await client
+    .from("app_access_emails")
+    .select("role")
+    .eq("email", normalized)
+    .maybeSingle();
+  if (error) {
+    if (isMissingAccessTable(error)) return legacyAccessRole(normalized);
+    return null;
+  }
+  if (data?.role === "editor" || data?.role === "viewer" || data?.role === "read_all") {
+    return data.role;
+  }
+  return null;
+}
+
 export function isViewerEmail(email: string | null | undefined): boolean {
-  if (!email) return false;
-  return getViewerEmails().has(email.trim().toLowerCase());
+  return legacyAccessRole(email) === "viewer";
 }
 
 export function isReadOnlyAllEmail(email: string | null | undefined): boolean {
-  if (!email) return false;
-  return getReadAllEmails().has(email.trim().toLowerCase());
+  return legacyAccessRole(email) === "read_all";
 }
 
-/** Cannot create, edit, sync, or change the active year. */
 export function cannotWriteEmail(email: string | null | undefined): boolean {
-  return isViewerEmail(email) || isReadOnlyAllEmail(email);
+  const role = legacyAccessRole(email);
+  return role !== "editor";
 }
 
-/** Full editors from ALLOWED_LOGIN_EMAILS, plus view-only accounts. */
 export function isAllowedLoginEmail(email: string | null | undefined): boolean {
-  if (!email) return false;
-  const normalized = email.trim().toLowerCase();
-  if (getViewerEmails().has(normalized) || getReadAllEmails().has(normalized)) return true;
-  const allowed = getAllowedLoginEmails();
-  if (allowed.size === 0) return false;
-  return allowed.has(normalized);
+  return legacyAccessRole(email) !== null;
 }
 
-/** Pages a view-only account may open. Student cards stay closed. A teacher card is allowed. */
 export function viewerMayOpenPath(pathname: string): boolean {
   if (pathname === "/students" || pathname === "/teachers") return true;
   return /^\/teachers\/[^/]+$/.test(pathname);

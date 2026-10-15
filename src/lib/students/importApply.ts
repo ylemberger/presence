@@ -105,7 +105,7 @@ function studentFields(row: ParsedStudentImportRow) {
   };
 }
 
-/** Import rollback only: drop students created in this run. Not a product delete. */
+/** Import rollback: never physically delete students. Deactivate rows created in this run. */
 async function rollbackImport(
   supabase: SupabaseClient,
   createdStudentIds: string[],
@@ -123,7 +123,7 @@ async function rollbackImport(
     await supabase.from("students").update(snap.fields).eq("id", snap.id);
   }
   if (createdStudentIds.length > 0) {
-    await supabase.from("students").delete().in("id", createdStudentIds);
+    await supabase.from("students").update({ is_active: false }).in("id", createdStudentIds);
   }
 }
 

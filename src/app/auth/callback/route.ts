@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
-import { isAllowedLoginEmail } from "@/lib/auth/allowed-emails";
+import { fetchAccessRole, viewerMayOpenPath } from "@/lib/auth/allowed-emails";
 import { safeRedirectPath } from "@/lib/auth/safe-redirect";
 
 export async function GET(request: Request) {
@@ -47,21 +47,25 @@ export async function GET(request: Request) {
     data: { user },
   } = await supabase.auth.getUser();
 
-  if (!isAllowedLoginEmail(user?.email)) {
+  const accessRole = await fetchAccessRole(supabase, user?.email);
+  if (!accessRole) {
     await supabase.auth.signOut();
     return NextResponse.redirect(`${origin}/login?error=unauthorized`);
   }
+
+  const dest =
+    accessRole === "viewer" && !viewerMayOpenPath(next) ? "/students" : next;
 
   const forwardedHost = request.headers.get("x-forwarded-host");
   const isLocalEnv = process.env.NODE_ENV === "development" || isLocalHost;
 
   if (isLocalEnv) {
-    return NextResponse.redirect(`${origin}${next}`);
+    return NextResponse.redirect(`${origin}${dest}`);
   }
 
   if (forwardedHost && !forwardedHost.includes("localhost")) {
-    return NextResponse.redirect(`https://${forwardedHost}${next}`);
+    return NextResponse.redirect(`https://${forwardedHost}${dest}`);
   }
 
-  return NextResponse.redirect(`${origin}${next}`);
+  return NextResponse.redirect(`${origin}${dest}`);
 }

@@ -1,6 +1,6 @@
 import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
-import { isAllowedLoginEmail, isViewerEmail, viewerMayOpenPath } from "@/lib/auth/allowed-emails";
+import { fetchAccessRole, viewerMayOpenPath } from "@/lib/auth/allowed-emails";
 
 export async function updateSession(request: NextRequest) {
   let supabaseResponse = NextResponse.next({ request });
@@ -33,7 +33,9 @@ export async function updateSession(request: NextRequest) {
   const isLoginPage = request.nextUrl.pathname.startsWith("/login");
   const isAuthCallback = request.nextUrl.pathname.startsWith("/auth/callback");
 
-  if (user && !isAllowedLoginEmail(user.email) && !isAuthCallback) {
+  const accessRole = user ? await fetchAccessRole(supabase, user.email) : null;
+
+  if (user && !accessRole && !isAuthCallback) {
     await supabase.auth.signOut();
     const url = request.nextUrl.clone();
     url.pathname = "/login";
@@ -51,7 +53,7 @@ export async function updateSession(request: NextRequest) {
     return NextResponse.redirect(url);
   }
 
-  if (user && isViewerEmail(user.email) && !isLoginPage && !isAuthCallback) {
+  if (user && accessRole === "viewer" && !isLoginPage && !isAuthCallback) {
     if (!viewerMayOpenPath(request.nextUrl.pathname)) {
       const url = request.nextUrl.clone();
       url.pathname = "/students";
@@ -62,7 +64,7 @@ export async function updateSession(request: NextRequest) {
 
   if (user && isLoginPage) {
     const url = request.nextUrl.clone();
-    url.pathname = isViewerEmail(user.email) ? "/students" : "/";
+    url.pathname = accessRole === "viewer" ? "/students" : "/";
     return NextResponse.redirect(url);
   }
 

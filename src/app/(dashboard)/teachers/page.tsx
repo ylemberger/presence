@@ -1,5 +1,4 @@
 import { PageHeader } from "@/components/ui/PageHeader";
-import { cannotWriteEmail, isViewerEmail } from "@/lib/auth/allowed-emails";
 import { createClient, requireAuthenticatedUser } from "@/lib/supabase/server";
 import { getActiveAcademicYear } from "@/lib/utils";
 import { BILLING_TYPE_LABELS } from "@/lib/constants";
@@ -49,9 +48,9 @@ function sumMeetingLabels(labels: string[]): string {
 }
 
 export default async function TeachersPage() {
-  const { user } = await requireAuthenticatedUser();
-  const listOnly = isViewerEmail(user.email);
-  const canWrite = !cannotWriteEmail(user.email);
+  const { accessRole } = await requireAuthenticatedUser();
+  const listOnly = accessRole === "viewer";
+  const canWrite = accessRole === "editor";
   const activeYear = await getActiveAcademicYear();
   const supabase = await createClient();
 

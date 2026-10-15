@@ -1,5 +1,4 @@
 import { PageHeader } from "@/components/ui/PageHeader";
-import { cannotWriteEmail, isViewerEmail } from "@/lib/auth/allowed-emails";
 import {
   audienceForLesson,
   audienceMapFromRows,
@@ -326,9 +325,9 @@ export default async function StudentsPage() {
   const yearIdx = allYears.findIndex((y) => y.id === activeYear?.id);
   const previousYear = yearIdx >= 0 ? allYears[yearIdx + 1] : allYears[1];
 
-  const { user } = await requireAuthenticatedUser();
-  const listOnly = isViewerEmail(user.email);
-  const canWrite = !cannotWriteEmail(user.email);
+  const { accessRole } = await requireAuthenticatedUser();
+  const listOnly = accessRole === "viewer";
+  const canWrite = accessRole === "editor";
 
   return (
     <div>
