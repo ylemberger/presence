@@ -21,6 +21,14 @@ const SELECTED: Record<AttendanceStatus, string> = {
   absent: "bg-attendance-absent text-white border-attendance-absent shadow-tactile-md",
 };
 
+const SAVED: Record<AttendanceStatus, string> = {
+  present:
+    "bg-attendance-present text-white border-attendance-present shadow-tactile-md ring-2 ring-attendance-present/70",
+  late: "bg-attendance-late text-primary border-attendance-late shadow-tactile-md ring-2 ring-attendance-late/80",
+  absent:
+    "bg-attendance-absent text-white border-attendance-absent shadow-tactile-md ring-2 ring-attendance-absent/70",
+};
+
 const IDLE: Record<AttendanceStatus, string> = {
   present:
     "border-outline-variant bg-surface-container-lowest text-on-surface-variant hover:border-attendance-present hover:bg-attendance-present/10 hover:text-attendance-present",
@@ -60,22 +68,20 @@ export function AttendanceStatusPicker({
       {STATUS_ORDER.map((option) => {
         const selected = value === option;
         const isSaving = selected && phase === "saving";
-        const isSaved = selected && phase === "saved";
         const isError = selected && phase === "error";
 
         return (
           <button
             key={option}
             type="button"
-            disabled={locked || isSaving}
+            disabled={locked}
             onClick={() => onPick(option)}
             className={cn(
-              "relative flex flex-1 items-center justify-center gap-1.5 rounded-lg border font-label-md text-label-md transition-all duration-150 active:scale-95",
+              "relative flex flex-1 items-center justify-center gap-1.5 rounded-lg border font-label-md text-label-md transition-colors duration-150 active:scale-95",
               "min-h-[44px] touch-manipulation",
               compact ? "px-2 py-2" : "px-3 py-2.5",
-              selected ? SELECTED[option] : IDLE[option],
-              isSaving && "animate-pulse opacity-90",
-              isSaved && "ring-2 ring-white ring-offset-1 ring-offset-surface",
+              selected ? (isSaving ? SELECTED[option] : SAVED[option]) : IDLE[option],
+              isSaving && "attendance-pending",
               isError && "ring-2 ring-error ring-offset-1"
             )}
             aria-pressed={selected}
@@ -86,17 +92,6 @@ export function AttendanceStatusPicker({
               className={cn(compact ? "text-[18px]" : "text-[20px]")}
             />
             <span>{ATTENDANCE_STATUS_LABELS[option]}</span>
-            {isSaving && (
-              <span className="absolute -top-1 left-1/2 h-1.5 w-1.5 -translate-x-1/2 rounded-full bg-white animate-ping" />
-            )}
-            {isSaved && (
-              <span
-                className="absolute -bottom-0.5 left-1/2 -translate-x-1/2 text-caption font-normal opacity-90"
-                aria-hidden
-              >
-                ✓
-              </span>
-            )}
           </button>
         );
       })}

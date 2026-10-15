@@ -234,6 +234,30 @@ body {
   }
 }
 
+@keyframes attendancePending {
+  0%,
+  100% {
+    opacity: 1;
+    filter: saturate(1) brightness(1);
+  }
+  50% {
+    opacity: 0.48;
+    filter: saturate(1.15) brightness(1.08);
+  }
+}
+
+.attendance-pending {
+  animation: attendancePending 0.55s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .attendance-pending {
+    animation: none;
+    outline: 2px dashed color-mix(in srgb, currentColor 55%, transparent);
+    outline-offset: 1px;
+  }
+}
+
 @keyframes blob {
   0% {
     transform: translate(0, 0) scale(1);

@@ -164,6 +164,33 @@ function linkedOccurrenceIds(row: DayLessonRow | undefined, fallbackId?: string)
   return row?.id ? [row.id] : [];
 }
 
+function lessonAttendanceTone(markedCount: number, studentCount: number) {
+  const complete = studentCount > 0 && markedCount >= studentCount;
+  const started = markedCount > 0;
+  if (complete) {
+    return {
+      complete: true as const,
+      started: true as const,
+      card: "border-attendance-present/55 bg-attendance-present/20",
+      meta: "text-attendance-present",
+    };
+  }
+  if (started) {
+    return {
+      complete: false as const,
+      started: true as const,
+      card: "border-attendance-late/55 bg-attendance-late/20",
+      meta: "text-attendance-late",
+    };
+  }
+  return {
+    complete: false as const,
+    started: false as const,
+    card: "border-outline-variant/50 bg-surface-container-lowest",
+    meta: "text-on-surface-variant",
+  };
+}
+
 export function AttendanceBoard({
   yearId,
   monthFrom,
@@ -229,6 +256,10 @@ export function AttendanceBoard({
   const rowRefs = useRef<(HTMLDivElement | null)[]>([]);
   const touchStartX = useRef<number | null>(null);
   const undoTimer = useRef<number | null>(null);
+  const cellPhaseRef = useRef(cellPhase);
+  cellPhaseRef.current = cellPhase;
+  const saveGen = useRef<Record<DraftKey, number>>({});
+  const hydratedOccurrenceId = useRef<string | undefined>(undefined);
 
   useEffect(() => {
     setDayOccurrences(dayOccurrencesProp);
@@ -271,6 +302,8 @@ export function AttendanceBoard({
     if (!activeOccurrenceId) {
       setDraft({});
       setReasons({});
+      setCellPhase({});
+      hydratedOccurrenceId.current = undefined;
       return;
     }
     const linked = linkedOccurrenceIds(
@@ -296,13 +329,36 @@ export function AttendanceBoard({
       nextDraft[k] = row?.status ?? null;
       nextReasons[k] = row?.reason ?? null;
     }
-    setDraft(nextDraft);
-    setReasons(nextReasons);
-    setCellPhase({});
-    setMessage(null);
 
-    const firstUnmarked = lessonStudents.findIndex((s) => !byKey.has(keyOf(s.id, activeOccurrenceId)));
-    setFocusedIdx(firstUnmarked >= 0 ? firstUnmarked : 0);
+    const occurrenceChanged = hydratedOccurrenceId.current !== activeOccurrenceId;
+    hydratedOccurrenceId.current = activeOccurrenceId;
+
+    if (occurrenceChanged) {
+      setDraft(nextDraft);
+      setReasons(nextReasons);
+      setCellPhase({});
+      setMessage(null);
+      const firstUnmarked = lessonStudents.findIndex(
+        (s) => !byKey.has(keyOf(s.id, activeOccurrenceId))
+      );
+      setFocusedIdx(firstUnmarked >= 0 ? firstUnmarked : 0);
+      return;
+    }
+
+    setDraft((prev) => {
+      const merged = { ...nextDraft };
+      for (const [k, phase] of Object.entries(cellPhaseRef.current)) {
+        if (phase === "saving") merged[k] = prev[k] ?? merged[k];
+      }
+      return merged;
+    });
+    setReasons((prev) => {
+      const merged = { ...nextReasons };
+      for (const [k, phase] of Object.entries(cellPhaseRef.current)) {
+        if (phase === "saving") merged[k] = prev[k] ?? merged[k];
+      }
+      return merged;
+    });
   }, [lessonStudents, attendance, activeOccurrenceId, dayOccurrences]);
 
   useEffect(() => {
@@ -474,17 +530,17 @@ export function AttendanceBoard({
         return;
       }
 
+      if (cellPhaseRef.current[k] === "saving" && previous === status) return;
+
+      saveGen.current[k] = (saveGen.current[k] ?? 0) + 1;
+      const gen = saveGen.current[k];
+
       setDraft((prev) => ({ ...prev, [k]: status }));
       if (status !== "absent") {
         setReasons((prev) => ({ ...prev, [k]: null }));
       }
       setCellPhase((prev) => ({ ...prev, [k]: "saving" }));
       setMessage(null);
-
-      if (prevWeekBlocked) {
-        setMessage("יש להשלים קודם את נוכחות השבוע הקודם של השיעור הזה.");
-        return;
-      }
 
       if (previous === null) bumpMarkedCount(occurrenceId, 1);
 
@@ -508,6 +564,8 @@ export function AttendanceBoard({
               status,
               status === "absent" ? reason ?? null : null
             );
+      if (saveGen.current[k] !== gen) return;
+
       if (result && "error" in result && result.error) {
         if (previous === null) bumpMarkedCount(occurrenceId, -1);
         setDraft((prev) => ({ ...prev, [k]: previous }));
@@ -519,7 +577,6 @@ export function AttendanceBoard({
       }
 
       setCellPhase((prev) => ({ ...prev, [k]: "saved" }));
-      window.setTimeout(() => setCellPhase((prev) => ({ ...prev, [k]: "idle" })), 900);
       showUndo({
         studentId: sid,
         occurrenceId,
@@ -569,10 +626,14 @@ export function AttendanceBoard({
     );
 
     const next = { ...draft };
+    const saving: Record<DraftKey, AttendancePickerPhase> = {};
     for (const s of lessonStudents) {
-      next[keyOf(s.id, activeOccurrenceId)] = status;
+      const k = keyOf(s.id, activeOccurrenceId);
+      next[k] = status;
+      saving[k] = "saving";
     }
     setDraft(next);
+    setCellPhase(saving);
     setDayOccurrences((prev) =>
       prev.map((o) =>
         o.id === activeOccurrenceId ? { ...o, markedCount: o.studentCount } : o
@@ -584,6 +645,11 @@ export function AttendanceBoard({
       setMessage(result.error);
       router.refresh();
     } else {
+      const saved: Record<DraftKey, AttendancePickerPhase> = {};
+      for (const s of lessonStudents) {
+        saved[keyOf(s.id, activeOccurrenceId)] = "saved";
+      }
+      setCellPhase(saved);
       setMessage(`נשמר — ${lessonStudents.length} תלמידות`);
     }
     setBulkSaving(false);
@@ -610,6 +676,11 @@ export function AttendanceBoard({
     const next = { ...draft };
     for (const s of unmarked) next[keyOf(s.id, activeOccurrenceId)] = "absent";
     setDraft(next);
+    setCellPhase((prev) => {
+      const saving = { ...prev };
+      for (const s of unmarked) saving[keyOf(s.id, activeOccurrenceId)] = "saving";
+      return saving;
+    });
     setDayOccurrences((prev) =>
       prev.map((o) =>
         o.id === activeOccurrenceId
@@ -622,6 +693,11 @@ export function AttendanceBoard({
       setMessage(result.error);
       router.refresh();
     } else {
+      setCellPhase((prev) => {
+        const saved = { ...prev };
+        for (const s of unmarked) saved[keyOf(s.id, activeOccurrenceId)] = "saved";
+        return saved;
+      });
       setMessage(`סומנו ${unmarked.length} נעדרות (מי שלא סומנה)`);
     }
     setBulkSaving(false);
@@ -1072,7 +1148,7 @@ export function AttendanceBoard({
               </p>
               <div className="flex max-h-48 flex-col gap-1 overflow-y-auto">
                 {selectedLessonOccurrences.map((o) => {
-                  const complete = o.studentCount > 0 && o.markedCount >= o.studentCount;
+                  const tone = lessonAttendanceTone(o.markedCount, o.studentCount);
                   const selected = o.id === activeOccurrenceId;
                   const cancelled = Boolean(o.cancelled);
                   return (
@@ -1082,9 +1158,8 @@ export function AttendanceBoard({
                         "flex items-center gap-1 rounded-md border px-1 py-0.5",
                         cancelled
                           ? "border-outline-variant/30 bg-surface-container-low/50 opacity-80"
-                          : selected
-                            ? "border-secondary bg-secondary-container/40"
-                            : "border-outline-variant/40"
+                          : tone.card,
+                        !cancelled && selected && "ring-2 ring-secondary/50"
                       )}
                     >
                       <button
@@ -1106,8 +1181,8 @@ export function AttendanceBoard({
                             </span>
                           ) : null}
                         </span>
-                        <span className="font-caption text-caption text-on-surface-variant">
-                          {cancelled ? "—" : `${o.markedCount}/${o.studentCount}${complete ? " ✓" : ""}`}
+                        <span className={cn("font-caption text-caption", cancelled ? "text-on-surface-variant" : tone.meta)}>
+                          {cancelled ? "—" : `${o.markedCount}/${o.studentCount}${tone.complete ? " ✓" : ""}`}
                         </span>
                       </button>
                       {canWrite && cancelled ? (
@@ -1195,7 +1270,7 @@ export function AttendanceBoard({
                 const selected =
                   o.id === activeOccurrenceId ||
                   Boolean(activeOccurrenceId && o.linkedOccurrenceIds?.includes(activeOccurrenceId));
-                const complete = o.studentCount > 0 && o.markedCount >= o.studentCount;
+                const tone = lessonAttendanceTone(o.markedCount, o.studentCount);
                 const hasNote = lessonIdsWithNotes.includes(o.lessonId);
                 return (
                   <button
@@ -1203,10 +1278,9 @@ export function AttendanceBoard({
                     type="button"
                     onClick={() => selectLesson(o.id)}
                     className={cn(
-                      "relative flex min-w-0 flex-col gap-0.5 overflow-hidden rounded-md border px-2 py-1.5 text-right",
-                      selected
-                        ? "border-secondary bg-secondary-container/40"
-                        : "border-outline-variant/50 bg-surface-container-lowest hover:border-secondary/50"
+                      "relative flex min-w-0 flex-col gap-0.5 overflow-hidden rounded-md border px-2 py-1.5 text-right hover:brightness-[0.98]",
+                      tone.card,
+                      selected && "ring-2 ring-secondary/55"
                     )}
                   >
                     <span className="truncate font-label-md text-label-md text-primary">
@@ -1219,9 +1293,9 @@ export function AttendanceBoard({
                       {o.teacherName || "ללא מורה"}
                       {o.groupLabel ? ` · ${o.groupLabel}` : ""}
                     </span>
-                    <span className="font-caption text-caption text-on-surface-variant">
+                    <span className={cn("font-caption text-caption", tone.meta)}>
                       {o.markedCount}/{o.studentCount}
-                      {complete ? " ✓" : ""}
+                      {tone.complete ? " ✓" : tone.started ? " · חלקי" : ""}
                       {hasNote ? " · הערה" : ""}
                     </span>
                   </button>
@@ -1417,9 +1491,11 @@ export function AttendanceBoard({
             <div className="space-y-1">
               {lessonStudents.map((student, idx) => {
                 const k = keyOf(student.id, activeOccurrenceId!);
-                const marked = draft[k] != null;
                 const focused = focusedIdx === idx;
                 const status = draft[k];
+                const phase = cellPhase[k] ?? "idle";
+                const pending = phase === "saving";
+                const confirmed = Boolean(status) && !pending && phase !== "error";
 
                 return (
                   <div
@@ -1433,13 +1509,20 @@ export function AttendanceBoard({
                     className={cn(
                       "flex flex-wrap items-center gap-2 rounded-md border px-2 py-1 outline-none transition-colors",
                       status === "present" &&
-                        "border-outline-variant/50 border-s-4 border-s-attendance-present bg-attendance-present/10",
+                        "border-outline-variant/50 border-s-4 border-s-attendance-present",
+                      status === "present" &&
+                        (confirmed ? "bg-attendance-present/25" : "bg-attendance-present/15"),
                       status === "late" &&
-                        "border-outline-variant/50 border-s-4 border-s-attendance-late bg-attendance-late/15",
+                        "border-outline-variant/50 border-s-4 border-s-attendance-late",
+                      status === "late" &&
+                        (confirmed ? "bg-attendance-late/30" : "bg-attendance-late/15"),
                       status === "absent" &&
-                        "border-outline-variant/50 border-s-4 border-s-attendance-absent bg-error-container/15",
+                        "border-outline-variant/50 border-s-4 border-s-attendance-absent",
+                      status === "absent" &&
+                        (confirmed ? "bg-error-container/35" : "bg-error-container/15"),
                       !status &&
                         "border-outline-variant/40 bg-surface-container-lowest opacity-90 hover:border-secondary/40",
+                      pending && "attendance-pending",
                       focused && "ring-2 ring-secondary/40"
                     )}
                   >
