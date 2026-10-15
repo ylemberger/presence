@@ -107,11 +107,12 @@ export function StudentDetailForms({ studentId, yearData, current }: Props) {
   return (
     <div>
       <p className="mb-3 font-caption text-caption text-on-surface-variant">
-        שינוי כיתה/מסלול/התמחות/פסיכולוגיה נעשה רק בהעברה. השיבוץ הקודם נסגר ונשמר בהיסטוריה.
+        שינוי כיתה/מסלול/התמחות/פסיכולוגיה נעשה רק בהעברה. חובה לבחור מאיזה תאריך השיבוץ
+        החדש בתוקף — השיבוץ הנוכחי נסגר יום לפני ונשמר בהיסטוריה.
       </p>
       <form onSubmit={handleTransfer} className="flex flex-col gap-3">
         <HebrewDateInput
-          label="בתוקף מתאריך"
+          label="מאיזה תאריך ישתנה השיבוץ"
           name="transfer_date"
           defaultValue={todayIso()}
           required

@@ -22,14 +22,23 @@ import {
 
 import { useAccess } from "@/components/auth/AccessProvider";
 
+function settingsUrl(monthIso: string) {
+  const params = new URLSearchParams();
+  params.set("tab", "holidays");
+  params.set("month", monthIso);
+  return `/settings?${params.toString()}`;
+}
+
 export function HolidayCalendar({
   yearId,
   periods,
   ranges = [],
+  initialMonthIso,
 }: {
   yearId: string;
   periods: HolidayPeriod[];
   ranges?: Array<{ start_date: string; end_date: string }>;
+  initialMonthIso?: string;
 }) {
   const { canWrite } = useAccess();
   const router = useRouter();
@@ -98,9 +107,9 @@ export function HolidayCalendar({
     <div className="grid grid-cols-1 gap-gutter xl:grid-cols-12">
       <div className="p-6 xl:col-span-7">
         <p className="mb-4 font-body-sm text-body-sm text-on-surface-variant">
-          החודשים מסודרים מתשרי עד אלול של אותה שנה עברית. אלול שלפני ראש השנה שייך לשנה
-          הקודמת. ימים בטווח פעילות = לימודים; מחוץ לטווח = אין לימודים; צביעה = חופשה או
-          ביטול. בחרי סוג ולחצי על ימים, או הוסיפי טווח למטה.
+          בבחירת תשפ״ז, אלול שבראש הרשימה הוא שלפני ראש השנה (אוגוסט–ספטמבר) — שם הלימודים
+          של תחילת השנה. ימים בטווח פעילות = לימודים; מחוץ לטווח = אין לימודים; צביעה = חופשה
+          או ביטול.
         </p>
         {canWrite ? (
         <>
@@ -143,10 +152,14 @@ export function HolidayCalendar({
         </>
         ) : null}
         <HebrewMonthCalendar
+          initialMonthIso={initialMonthIso}
           holidayDates={vacation}
           cancelledDates={cancelled}
           studyRanges={ranges}
           onSelectDate={canWrite ? handleDayClick : undefined}
+          onMonthRangeChange={(from) => {
+            router.replace(settingsUrl(from), { scroll: false });
+          }}
         />
         {loading && (
           <p className="mt-3 font-caption text-caption text-on-surface-variant">שומר…</p>

@@ -8,6 +8,7 @@ import {
   formatDatePair,
   formatGregorianDate,
   formatHebrewDate,
+  academicViewYear,
   hebrewMonthFromIso,
   hebrewMonthOptionsForYear,
   hebrewWeekdayLabels,
@@ -58,9 +59,10 @@ export function HebrewDateRangePicker({
     [seedIso]
   );
 
+  const viewYear = academicViewYear(cursor.year, cursor.month);
   const monthOptions = useMemo(
-    () => hebrewMonthOptionsForYear(cursor.year),
-    [cursor.year]
+    () => hebrewMonthOptionsForYear(viewYear),
+    [viewYear]
   );
 
   const previewEnd = end || (start && hoverIso ? hoverIso : "");
@@ -232,29 +234,31 @@ export function HebrewDateRangePicker({
           <div className="flex flex-wrap items-center justify-center gap-2">
             <select
               className="rounded-xl border border-stone-200 bg-white px-2 py-2 text-sm"
-              value={cursor.month}
+              value={`${cursor.year}-${cursor.month}`}
               aria-label="חודש עברי"
-              onChange={(e) =>
-                setCursor((c) => ({ ...c, month: parseInt(e.target.value, 10) }))
-              }
+              onChange={(e) => {
+                const [y, m] = e.target.value.split("-").map(Number);
+                setCursor({ year: y, month: m });
+              }}
             >
               {monthOptions.map((opt) => (
-                <option key={opt.month} value={opt.month}>
+                <option key={opt.value} value={opt.value}>
                   {opt.label}
                 </option>
               ))}
             </select>
             <select
               className="rounded-xl border border-stone-200 bg-white px-2 py-2 text-sm"
-              value={cursor.year}
+              value={viewYear}
               aria-label="שנה עברית"
               onChange={(e) => {
                 const year = parseInt(e.target.value, 10);
                 const months = hebrewMonthOptionsForYear(year);
-                const nextMonth = months.some((m) => m.month === cursor.month)
-                  ? cursor.month
-                  : (months[0]?.month ?? 7);
-                setCursor({ year, month: nextMonth });
+                const match =
+                  months.find((m) => m.month === cursor.month) ??
+                  months.find((m) => m.month === 7) ??
+                  months[0];
+                if (match) setCursor({ year: match.year, month: match.month });
               }}
             >
               {yearOptions.map((opt) => (

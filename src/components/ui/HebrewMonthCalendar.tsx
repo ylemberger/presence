@@ -8,6 +8,7 @@ import {
   formatGregorianDate,
   formatGregorianDayMonth,
   formatGregorianRange,
+  academicViewYear,
   hebrewMonthFromIso,
   hebrewMonthOptionsForYear,
   hebrewWeekdayLabels,
@@ -66,9 +67,11 @@ export function HebrewMonthCalendar({
   const partialSet = useMemo(() => new Set(partialDates), [partialDates]);
 
   useEffect(() => {
-    if (initialMonthIso) {
-      setCursor(hebrewMonthFromIso(initialMonthIso));
-    }
+    if (!initialMonthIso) return;
+    const next = hebrewMonthFromIso(initialMonthIso);
+    setCursor((prev) =>
+      prev.year === next.year && prev.month === next.month ? prev : next
+    );
   }, [initialMonthIso]);
 
   const month = useMemo(
@@ -76,10 +79,11 @@ export function HebrewMonthCalendar({
     [cursor.year, cursor.month]
   );
 
+  const viewYear = academicViewYear(cursor.year, cursor.month);
   const yearOptions = useMemo(() => hebrewYearOptions(today, 25), [today]);
   const monthOptions = useMemo(
-    () => hebrewMonthOptionsForYear(cursor.year),
-    [cursor.year]
+    () => hebrewMonthOptionsForYear(viewYear),
+    [viewYear]
   );
 
   function goTo(year: number, monthNum: number) {
@@ -114,11 +118,14 @@ export function HebrewMonthCalendar({
         <select
           className={navSelectClass}
           aria-label="חודש עברי"
-          value={cursor.month}
-          onChange={(e) => goTo(cursor.year, Number(e.target.value))}
+          value={`${cursor.year}-${cursor.month}`}
+          onChange={(e) => {
+            const [y, m] = e.target.value.split("-").map(Number);
+            goTo(y, m);
+          }}
         >
           {monthOptions.map((opt) => (
-            <option key={opt.month} value={opt.month}>
+            <option key={opt.value} value={opt.value}>
               {opt.label}
             </option>
           ))}
@@ -126,14 +133,15 @@ export function HebrewMonthCalendar({
         <select
           className={navSelectClass}
           aria-label="שנה עברית"
-          value={cursor.year}
+          value={viewYear}
           onChange={(e) => {
             const year = Number(e.target.value);
             const months = hebrewMonthOptionsForYear(year);
-            const nextMonth = months.some((m) => m.month === cursor.month)
-              ? cursor.month
-              : (months[0]?.month ?? 7);
-            goTo(year, nextMonth);
+            const match =
+              months.find((m) => m.month === cursor.month) ??
+              months.find((m) => m.month === 7) ??
+              months[0];
+            if (match) goTo(match.year, match.month);
           }}
         >
           {yearOptions.map((opt) => (
@@ -270,7 +278,7 @@ export function HebrewMonthCalendar({
                   !cancelled &&
                   !hasLessons &&
                   inStudies &&
-                  "bg-primary/5 text-on-surface hover:bg-primary/10",
+                  "bg-primary/15 text-primary hover:bg-primary/20",
                 !selected &&
                   !holiday &&
                   !cancelled &&

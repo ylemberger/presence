@@ -1,7 +1,6 @@
 import { requireAuthenticatedUser } from "@/lib/supabase/server";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { Section } from "@/components/ui/Section";
-import { Tabs } from "@/components/ui/Tabs";
 import { getActiveAcademicYear, getAllAcademicYears } from "@/lib/utils";
 import { createClient } from "@/lib/supabase/server";
 import {
@@ -29,6 +28,7 @@ import {
 } from "../actions";
 import { SettingsForms } from "./SettingsForms";
 import { HolidayCalendar } from "./HolidayCalendar";
+import { SettingsTabs } from "./SettingsTabs";
 import { RepairPromotionsButton } from "./RepairPromotionsButton";
 import {
   EditableActivityRangeRow,
@@ -62,7 +62,17 @@ function SettingsTableHead({ columns }: { columns: string[] }) {
   );
 }
 
-export default async function SettingsPage() {
+const SETTINGS_TABS = ["year", "structure", "ranges", "holidays", "rules"] as const;
+
+function isIsoDate(value: string | undefined): value is string {
+  return Boolean(value && /^\d{4}-\d{2}-\d{2}$/.test(value));
+}
+
+export default async function SettingsPage({
+  searchParams,
+}: {
+  searchParams: { tab?: string; month?: string };
+}) {
   const { accessRole } = await requireAuthenticatedUser();
   const canWrite = accessRole === "editor";
   const activeYear = await getActiveAcademicYear();
@@ -343,6 +353,7 @@ export default async function SettingsPage() {
               start_date: r.start_date,
               end_date: r.end_date,
             }))}
+            initialMonthIso={isIsoDate(searchParams.month) ? searchParams.month : undefined}
           />
         </>
       )}
@@ -389,8 +400,13 @@ export default async function SettingsPage() {
         description="ניהול תצורת המערכת, שנות לימוד, שכבות, מסלולים, טווחי פעילות, לוח חופשות וכללי נוכחות."
         size="headline"
       />
-      <Tabs
-        variant="underline"
+      <SettingsTabs
+        defaultTab={
+          SETTINGS_TABS.includes(searchParams.tab as (typeof SETTINGS_TABS)[number])
+            ? searchParams.tab
+            : undefined
+        }
+        monthIso={isIsoDate(searchParams.month) ? searchParams.month : undefined}
         tabs={[
           { id: "year", label: "שנים אקדמיות", content: yearPanel },
           { id: "structure", label: "שכבות וכיתות", content: structurePanel },

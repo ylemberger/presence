@@ -192,12 +192,12 @@ export function hebrewMonthsInYear(year: number): number {
   return 12;
 }
 
-/** Tishrei → Elul of that Hebrew year (not Nisan-first). */
+/** Tishrei → Av of that Hebrew year (Elul of this year is the next year's opening month). */
 export function hebrewMonthNumbersForYear(year: number): number[] {
   const leap = hebrewMonthsInYear(year) === 13;
   return leap
-    ? [7, 8, 9, 10, 11, 12, 13, 1, 2, 3, 4, 5, 6]
-    : [7, 8, 9, 10, 11, 12, 1, 2, 3, 4, 5, 6];
+    ? [7, 8, 9, 10, 11, 12, 13, 1, 2, 3, 4, 5]
+    : [7, 8, 9, 10, 11, 12, 1, 2, 3, 4, 5];
 }
 
 export function hebrewMonthName(year: number, month: number): string {
@@ -208,15 +208,32 @@ export function hebrewMonthName(year: number, month: number): string {
   return parts.slice(0, -1).join(" ");
 }
 
+/** Year shown in the calendar dropdown: Elul belongs with the following Tishrei. */
+export function academicViewYear(year: number, month: number): number {
+  return month === 6 ? year + 1 : year;
+}
+
+/**
+ * School-year months for Hebrew year Y: Elul of Y-1, then Tishrei→Av of Y.
+ * That Elul is when studies before Rosh Hashanah actually fall.
+ */
 export function hebrewMonthOptionsForYear(year: number): Array<{
+  year: number;
   month: number;
   label: string;
+  value: string;
 }> {
-  return hebrewMonthNumbersForYear(year).map((month) => {
-    const grid = buildHebrewMonth(year, month);
+  const rows: Array<{ year: number; month: number }> = [
+    { year: year - 1, month: 6 },
+    ...hebrewMonthNumbersForYear(year).map((month) => ({ year, month })),
+  ];
+  return rows.map(({ year: y, month }) => {
+    const grid = buildHebrewMonth(y, month);
     return {
+      year: y,
       month,
-      label: `${hebrewMonthName(year, month)} · ${formatGregorianRange(grid.rangeStart, grid.rangeEnd)}`,
+      value: `${y}-${month}`,
+      label: `${hebrewMonthName(y, month)} · ${formatGregorianRange(grid.rangeStart, grid.rangeEnd)}`,
     };
   });
 }
@@ -303,14 +320,18 @@ function findHebrewMonthNumber(year: number, token: string): number | null {
   };
   const needle = aliases[token.replace(/[״"׳'\s]/g, "")] ?? token.replace(/[״"׳'\s]/g, "");
   if (!needle) return null;
-  const options = hebrewMonthOptionsForYear(year);
-  const exact = options.find((opt) => opt.label.replace(/[״"׳'\s]/g, "") === needle);
-  if (exact) return exact.month;
-  const partial = options.find((opt) => {
-    const label = opt.label.replace(/[״"׳'\s]/g, "");
-    return label.includes(needle) || needle.includes(label);
-  });
-  return partial?.month ?? null;
+  const months = [7, 8, 9, 10, 11, 12, 13, 1, 2, 3, 4, 5, 6];
+  for (const month of months) {
+    try {
+      const hd = new HDate(1, month, year);
+      if (hd.getFullYear() !== year || hd.getMonth() !== month) continue;
+      const name = hebrewMonthName(year, month).replace(/[״"׳'\s]/g, "");
+      if (name === needle || name.includes(needle) || needle.includes(name)) return month;
+    } catch {
+      /* skip invalid month numbers in non-leap years */
+    }
+  }
+  return null;
 }
 
 /**
