@@ -138,6 +138,7 @@ interface Props {
   partialDates?: string[];
   holidayDates?: string[];
   cancelledDates?: string[];
+  studyRanges?: Array<{ start_date: string; end_date: string }>;
   insightsByStudent?: Record<string, StudentInsight>;
   pastGaps?: GapItem[];
   lessonIdsWithNotes?: string[];
@@ -197,6 +198,7 @@ export function AttendanceBoard({
   partialDates = [],
   holidayDates = [],
   cancelledDates = [],
+  studyRanges = [],
   insightsByStudent = {},
   pastGaps = [],
   lessonIdsWithNotes = [],
@@ -1240,6 +1242,7 @@ export function AttendanceBoard({
               partialDates={partialDates}
               holidayDates={holidayDates}
               cancelledDates={cancelledDates}
+              studyRanges={studyRanges}
               onSelectDate={selectDate}
               onMonthRangeChange={(from, to) => {
                 navigate(buildParams({ from, to, date: selectedDate, occurrenceId: undefined }));
@@ -1416,7 +1419,7 @@ export function AttendanceBoard({
                 const k = keyOf(student.id, activeOccurrenceId!);
                 const marked = draft[k] != null;
                 const focused = focusedIdx === idx;
-                const absent = draft[k] === "absent";
+                const status = draft[k];
 
                 return (
                   <div
@@ -1429,10 +1432,14 @@ export function AttendanceBoard({
                     onFocus={() => setFocusedIdx(idx)}
                     className={cn(
                       "flex flex-wrap items-center gap-2 rounded-md border px-2 py-1 outline-none transition-colors",
-                      absent
-                        ? "border-outline-variant/50 border-s-4 border-s-attendance-absent bg-error-container/10"
-                        : "border-outline-variant/40 bg-surface-container-lowest hover:border-secondary/40",
-                      !marked && !absent && "opacity-90",
+                      status === "present" &&
+                        "border-outline-variant/50 border-s-4 border-s-attendance-present bg-attendance-present/10",
+                      status === "late" &&
+                        "border-outline-variant/50 border-s-4 border-s-attendance-late bg-attendance-late/15",
+                      status === "absent" &&
+                        "border-outline-variant/50 border-s-4 border-s-attendance-absent bg-error-container/15",
+                      !status &&
+                        "border-outline-variant/40 bg-surface-container-lowest opacity-90 hover:border-secondary/40",
                       focused && "ring-2 ring-secondary/40"
                     )}
                   >

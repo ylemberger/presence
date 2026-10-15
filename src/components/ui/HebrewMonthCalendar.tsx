@@ -12,6 +12,7 @@ import {
   hebrewMonthOptionsForYear,
   hebrewWeekdayLabels,
   hebrewYearOptions,
+  isIsoInAnyRange,
   shiftHebrewMonth,
   todayIso,
 } from "@/lib/dates/hebrew";
@@ -29,6 +30,8 @@ export interface HebrewMonthCalendarProps {
   holidayDates?: string[];
   /** cancelled study days (different color from vacation) */
   cancelledDates?: string[];
+  /** Activity ranges — days inside are studies, days outside are off. */
+  studyRanges?: Array<{ start_date: string; end_date: string }>;
   onSelectDate?: (iso: string) => void;
   onMonthRangeChange?: (rangeStart: string, rangeEnd: string) => void;
   /** Compact month grid used on the attendance screen. */
@@ -49,6 +52,7 @@ export function HebrewMonthCalendar({
   partialDates = [],
   holidayDates = [],
   cancelledDates = [],
+  studyRanges = [],
   onSelectDate,
   onMonthRangeChange,
   compact = false,
@@ -128,7 +132,7 @@ export function HebrewMonthCalendar({
             const months = hebrewMonthOptionsForYear(year);
             const nextMonth = months.some((m) => m.month === cursor.month)
               ? cursor.month
-              : (months[0]?.month ?? 1);
+              : (months[0]?.month ?? 7);
             goTo(year, nextMonth);
           }}
         >
@@ -175,17 +179,25 @@ export function HebrewMonthCalendar({
           </span>
         </>
       )}
-      {holidayDates.length > 0 && (
-        <span className="inline-flex items-center gap-1.5">
-          <span className="h-2.5 w-2.5 rounded-sm bg-holiday-vacation" />
-          חופשה
-        </span>
-      )}
-      {cancelledDates.length > 0 && (
-        <span className="inline-flex items-center gap-1.5">
-          <span className="h-2.5 w-2.5 rounded-sm bg-holiday-cancelled" />
-          ביטול לימודים
-        </span>
+      <span className="inline-flex items-center gap-1.5">
+        <span className="h-2.5 w-2.5 rounded-sm bg-holiday-vacation" />
+        חופשה
+      </span>
+      <span className="inline-flex items-center gap-1.5">
+        <span className="h-2.5 w-2.5 rounded-sm bg-holiday-cancelled" />
+        ביטול לימודים
+      </span>
+      {studyRanges.length > 0 && (
+        <>
+          <span className="inline-flex items-center gap-1.5">
+            <span className="h-2.5 w-2.5 rounded-sm bg-primary/15" />
+            לימודים
+          </span>
+          <span className="inline-flex items-center gap-1.5">
+            <span className="h-2.5 w-2.5 rounded-sm bg-surface-container ring-1 ring-outline-variant/40" />
+            אין לימודים
+          </span>
+        </>
       )}
     </div>
   );
@@ -216,38 +228,55 @@ export function HebrewMonthCalendar({
           const cancelled = cancelledSet.has(day.iso);
           const hasLessons = count > 0;
           const isToday = day.iso === today;
+          const inStudies =
+            studyRanges.length === 0 || isIsoInAnyRange(day.iso, studyRanges);
 
           return (
             <button
               key={day.iso}
               type="button"
               onClick={() => onSelectDate?.(day.iso)}
-              aria-label={`${formatGregorianDate(day.iso)}${hasLessons ? `, ${lessonCountLabel(count)}` : ""}${complete ? ", הושלם" : ""}${partial ? ", ממתין לרישום" : ""}${cancelled ? ", ביטול לימודים" : holiday ? ", חופשה" : ""}`}
+              aria-label={`${formatGregorianDate(day.iso)}${hasLessons ? `, ${lessonCountLabel(count)}` : ""}${complete ? ", הושלם" : ""}${partial ? ", ממתין לרישום" : ""}${cancelled ? ", ביטול לימודים" : holiday ? ", חופשה" : inStudies ? ", לימודים" : ", אין לימודים"}`}
               className={cn(
                 "relative flex flex-col items-center justify-center rounded-xl text-center transition-colors",
                 compact ? "min-h-12 px-0.5 py-1" : "min-h-16 px-1 py-1.5",
                 selected && "bg-primary-container font-semibold text-white shadow-tactile-sm",
-                !selected && complete && "bg-[var(--day-completed)] text-attendance-present",
-                !selected && partial && "bg-[var(--day-partial)] text-attendance-late",
                 !selected &&
+                  cancelled &&
+                  "bg-holiday-cancelled/80 text-primary hover:bg-holiday-cancelled",
+                !selected &&
+                  holiday &&
+                  !cancelled &&
+                  "bg-holiday-vacation/80 text-on-secondary-container hover:bg-holiday-vacation",
+                !selected &&
+                  !holiday &&
+                  !cancelled &&
+                  complete &&
+                  "bg-[var(--day-completed)] text-attendance-present",
+                !selected &&
+                  !holiday &&
+                  !cancelled &&
+                  partial &&
+                  "bg-[var(--day-partial)] text-attendance-late",
+                !selected &&
+                  !holiday &&
+                  !cancelled &&
                   hasLessons &&
                   !complete &&
                   !partial &&
                   "bg-primary/10 text-primary hover:bg-primary/15",
                 !selected &&
-                  cancelled &&
-                  !hasLessons &&
-                  "bg-holiday-cancelled/80 text-primary hover:bg-holiday-cancelled",
-                !selected &&
-                  holiday &&
-                  !cancelled &&
-                  !hasLessons &&
-                  "bg-holiday-vacation/80 text-on-secondary-container hover:bg-holiday-vacation",
-                !selected &&
-                  !hasLessons &&
                   !holiday &&
                   !cancelled &&
-                  "text-on-surface hover:bg-surface-container",
+                  !hasLessons &&
+                  inStudies &&
+                  "bg-primary/5 text-on-surface hover:bg-primary/10",
+                !selected &&
+                  !holiday &&
+                  !cancelled &&
+                  !hasLessons &&
+                  !inStudies &&
+                  "bg-surface-container text-on-surface-variant/70 hover:bg-surface-container-high",
                 isToday && !selected && "ring-1 ring-inset ring-primary/50"
               )}
             >

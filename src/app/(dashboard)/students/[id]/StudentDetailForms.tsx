@@ -7,6 +7,7 @@ import { Combobox } from "@/components/ui/Combobox";
 import { HebrewDateInput } from "@/components/ui/HebrewDateInput";
 import { transferStudentAction } from "../../actions";
 import { Icon } from "@/components/ui/Icon";
+import { todayIso } from "@/lib/dates/hebrew";
 import type {
   AcademicYear,
   Grade,
@@ -23,19 +24,35 @@ interface YearData {
   specializations: Specialization[];
 }
 
+export type CurrentPlacement = {
+  grade_id: string;
+  class_id: string;
+  track_id: string;
+  specialization_id: string | null;
+  secondary_specialization_id: string | null;
+  is_psychology: boolean;
+};
+
 interface Props {
   studentId: string;
   yearData: YearData;
+  current?: CurrentPlacement | null;
 }
 
 import { useAccess } from "@/components/auth/AccessProvider";
 
-export function StudentDetailForms({ studentId, yearData }: Props) {
+export function StudentDetailForms({ studentId, yearData, current }: Props) {
   const { canWrite } = useAccess();
   const router = useRouter();
   const [error, setError] = useState<string | null>(null);
-  const [gradeId, setGradeId] = useState("");
-  const [classId, setClassId] = useState("");
+  const [gradeId, setGradeId] = useState(current?.grade_id ?? "");
+  const [classId, setClassId] = useState(current?.class_id ?? "");
+  const [trackId, setTrackId] = useState(current?.track_id ?? "");
+  const [specId, setSpecId] = useState(current?.specialization_id ?? "");
+  const [secondarySpecId, setSecondarySpecId] = useState(
+    current?.secondary_specialization_id ?? ""
+  );
+  const [psychology, setPsychology] = useState(Boolean(current?.is_psychology));
 
   const gradeNameById = useMemo(
     () => new Map(yearData.grades.map((g) => [g.id, g.name])),
@@ -61,17 +78,23 @@ export function StudentDetailForms({ studentId, yearData }: Props) {
     const form = e.currentTarget;
     setError(null);
     try {
+      if (!gradeId || !classId || !trackId || !specId) {
+        setError("יש לבחור שכבה, כיתה, מסלול והתמחות");
+        return;
+      }
       const fd = new FormData(form);
       fd.set("student_id", studentId);
       fd.set("academic_year_id", yearData.year.id);
-      if (gradeId) fd.set("grade_id", gradeId);
-      if (classId) fd.set("class_id", classId);
+      fd.set("grade_id", gradeId);
+      fd.set("class_id", classId);
+      fd.set("track_id", trackId);
+      fd.set("specialization_id", specId);
+      fd.set("secondary_specialization_id", secondarySpecId);
+      if (psychology) fd.set("is_psychology", "on");
+      else fd.delete("is_psychology");
       const result = await transferStudentAction(fd);
       if (result && "error" in result && result.error) setError(result.error);
       else {
-        form.reset();
-        setGradeId("");
-        setClassId("");
         router.refresh();
       }
     } catch (err) {
@@ -87,7 +110,12 @@ export function StudentDetailForms({ studentId, yearData }: Props) {
         שינוי כיתה/מסלול/התמחות/פסיכולוגיה נעשה רק בהעברה. השיבוץ הקודם נסגר ונשמר בהיסטוריה.
       </p>
       <form onSubmit={handleTransfer} className="flex flex-col gap-3">
-        <HebrewDateInput label="בתוקף מתאריך" name="transfer_date" required />
+        <HebrewDateInput
+          label="בתוקף מתאריך"
+          name="transfer_date"
+          defaultValue={todayIso()}
+          required
+        />
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
           <Combobox
             label="שכבה"
@@ -120,6 +148,8 @@ export function StudentDetailForms({ studentId, yearData }: Props) {
             label="מסלול"
             name="track_id"
             required
+            value={trackId}
+            onChange={setTrackId}
             options={yearData.tracks.map((t) => ({ value: t.id, label: t.name }))}
             emptyLabel="בחרי"
           />
@@ -127,12 +157,16 @@ export function StudentDetailForms({ studentId, yearData }: Props) {
             label="התמחות"
             name="specialization_id"
             required
+            value={specId}
+            onChange={setSpecId}
             options={yearData.specializations.map((s) => ({ value: s.id, label: s.name }))}
             emptyLabel={yearData.specializations.length ? "בחרי" : "אין התמחויות בהגדרות"}
           />
           <Combobox
             label="התמחות נוספת"
             name="secondary_specialization_id"
+            value={secondarySpecId}
+            onChange={setSecondarySpecId}
             options={yearData.specializations.map((s) => ({ value: s.id, label: s.name }))}
             emptyLabel="ללא"
           />
@@ -141,6 +175,8 @@ export function StudentDetailForms({ studentId, yearData }: Props) {
           <input
             type="checkbox"
             name="is_psychology"
+            checked={psychology}
+            onChange={(e) => setPsychology(e.target.checked)}
             className="rounded border-outline-variant"
           />
           פסיכולוגיה

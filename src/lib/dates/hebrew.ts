@@ -183,33 +183,42 @@ export function daysInHebrewMonth(year: number, month: number): number {
 }
 
 export function hebrewMonthsInYear(year: number): number {
-  let count = 12;
-  for (let month = 1; month <= 14; month++) {
-    try {
-      const hd = new HDate(1, month, year);
-      if (hd.getFullYear() !== year) break;
-      count = month;
-    } catch {
-      break;
-    }
+  try {
+    const adar2 = new HDate(1, 13, year);
+    if (adar2.getFullYear() === year && adar2.getMonth() === 13) return 13;
+  } catch {
+    /* non-leap */
   }
-  return count;
+  return 12;
+}
+
+/** Tishrei → Elul of that Hebrew year (not Nisan-first). */
+export function hebrewMonthNumbersForYear(year: number): number[] {
+  const leap = hebrewMonthsInYear(year) === 13;
+  return leap
+    ? [7, 8, 9, 10, 11, 12, 13, 1, 2, 3, 4, 5, 6]
+    : [7, 8, 9, 10, 11, 12, 1, 2, 3, 4, 5, 6];
+}
+
+export function hebrewMonthName(year: number, month: number): string {
+  const first = new HDate(1, month, year);
+  const withoutDay = first.renderGematriya(true).replace(/^א׳\s*/, "").trim();
+  const parts = withoutDay.split(/\s+/).filter(Boolean);
+  if (parts.length <= 1) return withoutDay;
+  return parts.slice(0, -1).join(" ");
 }
 
 export function hebrewMonthOptionsForYear(year: number): Array<{
   month: number;
   label: string;
 }> {
-  const total = hebrewMonthsInYear(year);
-  const options: Array<{ month: number; label: string }> = [];
-  for (let month = 1; month <= total; month++) {
-    const first = new HDate(1, month, year);
-    options.push({
+  return hebrewMonthNumbersForYear(year).map((month) => {
+    const grid = buildHebrewMonth(year, month);
+    return {
       month,
-      label: first.renderGematriya(true).replace(/^א׳\s*/, ""),
-    });
-  }
-  return options;
+      label: `${hebrewMonthName(year, month)} · ${formatGregorianRange(grid.rangeStart, grid.rangeEnd)}`,
+    };
+  });
 }
 
 export function hebrewYearOptions(centerIso: string, span = 20): Array<{
@@ -361,6 +370,13 @@ export function isIsoInRange(iso: string, start: string, end: string): boolean {
   const lo = start <= bound ? start : bound;
   const hi = start <= bound ? bound : start;
   return iso >= lo && iso <= hi;
+}
+
+export function isIsoInAnyRange(
+  iso: string,
+  ranges: Array<{ start_date: string; end_date: string }>
+): boolean {
+  return ranges.some((range) => isIsoInRange(iso, range.start_date, range.end_date));
 }
 
 export function formatDate(date: string | Date | null | undefined): string {

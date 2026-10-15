@@ -39,6 +39,10 @@ export function hebrewDbError(error: DbErrorLike, fallback: string): string {
     return "חסר שדה חובה. מלאי את כל השדות ושמרי שוב. לא נשמר.";
   }
 
+  if (msg.includes("overlap") || msg.includes("חפיפ")) {
+    return "לתלמידה כבר יש שיבוץ בטווח התאריכים הזה. בחרי תאריך העברה אחרי תחילת השיבוץ הנוכחי.";
+  }
+
   if (code === "23514" || msg.includes("check constraint")) {
     if (msg.includes("period_span")) {
       return "מספר השיעור והרצף חורגים מטווח השיעורים ביום (1 עד 13). לא נשמר.";

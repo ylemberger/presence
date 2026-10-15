@@ -18,6 +18,7 @@ import {
 import { formatLessonOptionLabel } from "@/lib/lessons/hours";
 import { formatSubjectLessonLabel } from "@/lib/lessons/subject-label";
 import { LeaveStudentButton } from "./LeaveStudentButton";
+import { StudentEditDetails } from "./StudentEditDetails";
 import { StudentDetailForms } from "./StudentDetailForms";
 import { StudentLessonAssignments } from "./StudentLessonAssignments";
 import { StudentPersonalNote } from "./StudentPersonalNote";
@@ -730,6 +731,29 @@ export default async function StudentDetailPage({ params }: Props) {
           </div>
           <div className="print:hidden flex flex-col items-stretch gap-2">
             <PrintButton documentTitle={`כרטיס-${displayName}`} />
+            {accessRole === "editor" ? (
+              <StudentEditDetails
+                studentId={id}
+                student={{
+                  first_name: student.first_name ?? "",
+                  last_name: student.last_name ?? "",
+                  identity_number: student.identity_number ?? "",
+                  mi: student.mi ?? null,
+                  cohort_number: student.cohort_number ?? 1,
+                  birth_date: student.birth_date ?? null,
+                  birth_date_hebrew: student.birth_date_hebrew ?? null,
+                  address: student.address ?? null,
+                  city: student.city ?? null,
+                  phone: student.phone ?? null,
+                  father_phone: student.father_phone ?? null,
+                  mother_phone: student.mother_phone ?? null,
+                  student_phone: student.student_phone ?? null,
+                  high_school: student.high_school ?? null,
+                  chetz_program: Boolean(student.chetz_program),
+                  is_active: Boolean(student.is_active),
+                }}
+              />
+            ) : null}
             <LeaveStudentButton studentId={id} studentName={displayName} />
           </div>
         </div>
@@ -909,7 +933,28 @@ export default async function StudentDetailPage({ params }: Props) {
               accent="featured"
               className="print:hidden"
             >
-              <StudentDetailForms studentId={id} yearData={yearData} />
+              <StudentDetailForms
+                key={
+                  currentAssignmentRow
+                    ? `${currentAssignmentRow.id}:${currentAssignmentRow.specialization_id}:${currentAssignmentRow.class_id}`
+                    : "none"
+                }
+                studentId={id}
+                yearData={yearData}
+                current={
+                  currentAssignmentRow
+                    ? {
+                        grade_id: currentAssignmentRow.grade_id,
+                        class_id: currentAssignmentRow.class_id,
+                        track_id: currentAssignmentRow.track_id,
+                        specialization_id: currentAssignmentRow.specialization_id,
+                        secondary_specialization_id:
+                          currentAssignmentRow.secondary_specialization_id,
+                        is_psychology: Boolean(currentAssignmentRow.is_psychology),
+                      }
+                    : null
+                }
+              />
             </Section>
           )}
 

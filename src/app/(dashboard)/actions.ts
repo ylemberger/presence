@@ -953,10 +953,14 @@ export async function updateStudentAction(id: string, formData: FormData) {
     if (isError(birthOk)) return birthOk;
   }
 
+  const identity = validateIsraeliId(String(formData.get("identity_number") ?? ""));
+  if (isError(identity)) return identity;
+
   const patch: Record<string, unknown> = {
     first_name: firstName,
     last_name: lastName,
     full_name: buildStudentFullName(firstName, lastName),
+    identity_number: identity,
     is_active: formData.get("is_active") === "on",
     mi: parseOptionalText(formData.get("mi"), 40),
     birth_date: birthDateRaw || null,
@@ -974,7 +978,10 @@ export async function updateStudentAction(id: string, formData: FormData) {
     patch.cohort_number = cohortNumber;
   }
   const { error } = await supabase.from("students").update(patch).eq("id", id);
-  if (error) return { error: error.message };
+  if (error) {
+    if (error.code === "23505") return { error: "מספר תעודת זהות כבר קיים במערכת" };
+    return { error: hebrewDbError(error, "שמירת פרטי התלמידה נכשלה") };
+  }
   revalidatePath("/students");
   revalidatePath(`/students/${id}`);
   return { success: true };
@@ -1169,23 +1176,64 @@ export async function transferStudentAction(formData: FormData) {
     .from("student_assignments")
     .select("*")
     .eq("student_id", placement.student_id)
+    .eq("academic_year_id", placement.academic_year_id)
     .is("end_date", null)
     .maybeSingle();
 
   if (currentAssignment) {
-    const endDate = addDaysLocal(placement.start_date, -1);
-    const { error: closeError } = await supabase
-      .from("student_assignments")
-      .update({ end_date: endDate })
-      .eq("id", currentAssignment.id);
-    if (closeError) return { error: closeError.message };
-  }
+    if (placement.start_date < currentAssignment.start_date) {
+      return { error: "תאריך ההעברה לא יכול להיות לפני תחילת השיבוץ הנוכחי" };
+    }
 
-  const { error } = await supabase.from("student_assignments").insert({
-    ...placement,
-    end_date: null,
-  });
-  if (error) return { error: error.message };
+    const samePlacement =
+      currentAssignment.grade_id === placement.grade_id &&
+      currentAssignment.class_id === placement.class_id &&
+      currentAssignment.track_id === placement.track_id &&
+      (currentAssignment.specialization_id ?? null) === placement.specialization_id &&
+      (currentAssignment.secondary_specialization_id ?? null) ===
+        placement.secondary_specialization_id &&
+      Boolean(currentAssignment.is_psychology) === placement.is_psychology;
+    if (samePlacement) {
+      return { error: "לא בוצע שינוי בשיבוץ. בחרי התמחות, כיתה או מסלול אחרים." };
+    }
+
+    const nextPlacement = {
+      grade_id: placement.grade_id,
+      class_id: placement.class_id,
+      track_id: placement.track_id,
+      specialization_id: placement.specialization_id,
+      secondary_specialization_id: placement.secondary_specialization_id,
+      is_psychology: placement.is_psychology,
+    };
+
+    // Same calendar day: correct the open assignment (cannot close+open — overlap + end<start).
+    if (placement.start_date === currentAssignment.start_date) {
+      const { error: updateError } = await supabase
+        .from("student_assignments")
+        .update(nextPlacement)
+        .eq("id", currentAssignment.id);
+      if (updateError) return { error: hebrewDbError(updateError, "ההעברה נכשלה") };
+    } else {
+      const endDate = addDaysLocal(placement.start_date, -1);
+      const { error: closeError } = await supabase
+        .from("student_assignments")
+        .update({ end_date: endDate })
+        .eq("id", currentAssignment.id);
+      if (closeError) return { error: hebrewDbError(closeError, "סגירת השיבוץ הקודם נכשלה") };
+
+      const { error } = await supabase.from("student_assignments").insert({
+        ...placement,
+        end_date: null,
+      });
+      if (error) return { error: hebrewDbError(error, "ההעברה נכשלה") };
+    }
+  } else {
+    const { error } = await supabase.from("student_assignments").insert({
+      ...placement,
+      end_date: null,
+    });
+    if (error) return { error: hebrewDbError(error, "ההעברה נכשלה") };
+  }
 
   await refreshAutomaticLessonAssignmentsForStudent(
     placement.student_id,

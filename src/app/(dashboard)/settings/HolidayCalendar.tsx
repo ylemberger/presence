@@ -25,9 +25,11 @@ import { useAccess } from "@/components/auth/AccessProvider";
 export function HolidayCalendar({
   yearId,
   periods,
+  ranges = [],
 }: {
   yearId: string;
   periods: HolidayPeriod[];
+  ranges?: Array<{ start_date: string; end_date: string }>;
 }) {
   const { canWrite } = useAccess();
   const router = useRouter();
@@ -96,8 +98,9 @@ export function HolidayCalendar({
     <div className="grid grid-cols-1 gap-gutter xl:grid-cols-12">
       <div className="p-6 xl:col-span-7">
         <p className="mb-4 font-body-sm text-body-sm text-on-surface-variant">
-          חודש עברי שלם בכל פעם. בחרי סוג, ואז לחצי על ימים בלוח כדי לצבוע. אפשר גם להוסיף
-          טווח למטה. מגדירים בתחילת השנה — ואפשר לתקן גם באמצע.
+          החודשים מסודרים מתשרי עד אלול של אותה שנה עברית. אלול שלפני ראש השנה שייך לשנה
+          הקודמת. ימים בטווח פעילות = לימודים; מחוץ לטווח = אין לימודים; צביעה = חופשה או
+          ביטול. בחרי סוג ולחצי על ימים, או הוסיפי טווח למטה.
         </p>
         {canWrite ? (
         <>
@@ -142,6 +145,7 @@ export function HolidayCalendar({
         <HebrewMonthCalendar
           holidayDates={vacation}
           cancelledDates={cancelled}
+          studyRanges={ranges}
           onSelectDate={canWrite ? handleDayClick : undefined}
         />
         {loading && (

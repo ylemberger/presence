@@ -27,6 +27,7 @@ import {
 } from "@/lib/attendance/previous-week";
 import { AttendanceReminderBanner } from "@/components/attendance/AttendanceReminderBanner";
 import { embedOne, embeddedTeacher } from "@/lib/supabase/embed";
+import { compareStudentsByLastName } from "@/lib/students/sort";
 import {
   AttendanceBoard,
   type AttendanceMode,
@@ -77,11 +78,11 @@ export default async function AttendancePage({ searchParams }: Props) {
   const catalog = await getYearCatalog(activeYear.id);
   const poolCatalog = await fetchAttendancePools(supabase, activeYear.id);
 
-  const [{ data: yearStudents }, { data: monthOccurrencesRaw }, { data: holidayRows }, { data: audienceRows }, { data: yearLessonRows }, { data: studentLinks }, { data: selectedLessonOccRaw }] =
+  const [{ data: yearStudents }, { data: monthOccurrencesRaw }, { data: holidayRows }, { data: audienceRows }, { data: yearLessonRows }, { data: studentLinks }, { data: selectedLessonOccRaw }, { data: activityRangeRows }] =
     await Promise.all([
     supabase
       .from("student_assignments")
-      .select("student_id, class_id, track_id, specialization_id, students(id, full_name, is_active)")
+      .select("student_id, class_id, track_id, specialization_id, students(id, full_name, first_name, last_name, is_active)")
       .eq("academic_year_id", activeYear.id)
       .is("end_date", null),
     supabase
@@ -128,6 +129,7 @@ export default async function AttendancePage({ searchParams }: Props) {
       : Promise.resolve({
           data: [] as { id: string; occurrence_date: string; lesson_id: string; status: string }[],
         }),
+    supabase.from("activity_ranges").select("start_date, end_date"),
   ]);
 
   type LessonJoin = {
@@ -250,14 +252,19 @@ export default async function AttendancePage({ searchParams }: Props) {
 
   const dayOccurrences = monthOccurrences.filter((o) => o.date === selectedDate);
 
-  const allStudentsMap = new Map<string, { id: string; full_name: string }>();
+  type AttendanceName = {
+    id: string;
+    full_name: string;
+    first_name?: string | null;
+    last_name?: string | null;
+    is_active?: boolean;
+  };
+  const allStudentsMap = new Map<string, AttendanceName>();
   for (const row of yearStudents ?? []) {
-    const s = row.students as unknown as { id: string; full_name: string; is_active: boolean } | null;
-    if (s?.is_active) allStudentsMap.set(s.id, { id: s.id, full_name: s.full_name });
+    const s = row.students as unknown as AttendanceName | null;
+    if (s?.is_active) allStudentsMap.set(s.id, s);
   }
-  const allStudents = [...allStudentsMap.values()].sort((a, b) =>
-    a.full_name.localeCompare(b.full_name, "he")
-  );
+  const allStudents = [...allStudentsMap.values()].sort(compareStudentsByLastName);
 
   const selectedRaw =
     params.occurrenceId && dayOccurrences.find((o) => o.id === params.occurrenceId)
@@ -266,7 +273,7 @@ export default async function AttendancePage({ searchParams }: Props) {
         ? dayOccurrences[0]
         : null;
 
-  let lessonStudents: { id: string; full_name: string }[] = [];
+  let lessonStudents: AttendanceName[] = [];
 
   const monthOccIds = monthOccurrences.map((o) => o.id);
   const monthLessonIds = [...new Set(monthOccurrences.map((o) => o.lessonId))];
@@ -276,7 +283,7 @@ export default async function AttendancePage({ searchParams }: Props) {
     monthLessonIds.length > 0
       ? supabase
           .from("student_lesson_assignments")
-          .select("lesson_id, student_id, start_date, end_date, students(id, full_name, is_active)")
+          .select("lesson_id, student_id, start_date, end_date, students(id, full_name, first_name, last_name, is_active)")
           .in("lesson_id", monthLessonIds)
       : Promise.resolve({ data: [] as never[] }),
     monthOccIds.length > 0
@@ -321,15 +328,15 @@ export default async function AttendancePage({ searchParams }: Props) {
 
   if (selectedOcc) {
     const lessonIds = new Set(selectedOcc.linkedLessonIds);
-    const map = new Map<string, { id: string; full_name: string }>();
+    const map = new Map<string, AttendanceName>();
     for (const link of monthLinks ?? []) {
       if (!lessonIds.has(link.lesson_id)) continue;
       if (link.start_date > selectedOcc.date) continue;
       if (link.end_date && link.end_date < selectedOcc.date) continue;
-      const s = link.students as unknown as { id: string; full_name: string; is_active: boolean } | null;
-      if (s?.is_active) map.set(s.id, { id: s.id, full_name: s.full_name });
+      const s = link.students as unknown as AttendanceName | null;
+      if (s?.is_active) map.set(s.id, s);
     }
-    lessonStudents = [...map.values()].sort((a, b) => a.full_name.localeCompare(b.full_name, "he"));
+    lessonStudents = [...map.values()].sort(compareStudentsByLastName);
 
     if (params.studentId) {
       lessonStudents = lessonStudents.filter((s) => s.id === params.studentId);
@@ -530,7 +537,7 @@ export default async function AttendancePage({ searchParams }: Props) {
     const [{ data: yearLinks }, { data: yearAtt }] = await Promise.all([
       supabase
         .from("student_lesson_assignments")
-        .select("lesson_id, student_id, start_date, end_date, students(id, full_name, is_active)")
+        .select("lesson_id, student_id, start_date, end_date, students(id, full_name, first_name, last_name, is_active)")
         .eq("lesson_id", params.lessonId),
       supabase
         .from("attendance")
@@ -649,6 +656,10 @@ export default async function AttendancePage({ searchParams }: Props) {
         partialDates={partialDates}
         holidayDates={holidaySets.vacation}
         cancelledDates={holidaySets.cancelled}
+        studyRanges={(activityRangeRows ?? []).map((r) => ({
+          start_date: r.start_date,
+          end_date: r.end_date,
+        }))}
         insightsByStudent={insightsByStudent}
         pastGaps={pastGaps}
         lessonIdsWithNotes={lessonIdsWithNotes}

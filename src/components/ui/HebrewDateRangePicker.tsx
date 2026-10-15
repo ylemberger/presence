@@ -251,7 +251,10 @@ export function HebrewDateRangePicker({
               onChange={(e) => {
                 const year = parseInt(e.target.value, 10);
                 const months = hebrewMonthOptionsForYear(year);
-                setCursor({ year, month: months[0]?.month ?? 1 });
+                const nextMonth = months.some((m) => m.month === cursor.month)
+                  ? cursor.month
+                  : (months[0]?.month ?? 7);
+                setCursor({ year, month: nextMonth });
               }}
             >
               {yearOptions.map((opt) => (

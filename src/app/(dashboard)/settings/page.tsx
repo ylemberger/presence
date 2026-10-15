@@ -336,7 +336,14 @@ export default async function SettingsPage() {
             זה אותו לוח לכל השנים. ימים שמולאו בשנה הקודמת מופיעים גם כאן, ומשפיעים
             על מופעי שיעור בכל שנה.
           </p>
-          <HolidayCalendar yearId={yearId} periods={holidays.data ?? []} />
+          <HolidayCalendar
+            yearId={yearId}
+            periods={holidays.data ?? []}
+            ranges={(ranges.data ?? []).map((r) => ({
+              start_date: r.start_date,
+              end_date: r.end_date,
+            }))}
+          />
         </>
       )}
     </Section>
