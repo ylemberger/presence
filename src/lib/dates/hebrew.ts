@@ -385,12 +385,21 @@ export function parseFlexibleDate(raw: string, contextIso = todayIso()): string 
   return hDateToIso(new HDate(day, month, year));
 }
 
+/** Calendar day `YYYY-MM-DD`, even if Postgres returned a timestamp. */
+export function toIsoDay(value: string | Date | null | undefined): string {
+  if (!value) return "";
+  if (value instanceof Date) return toIsoDate(value);
+  return String(value).slice(0, 10);
+}
+
 export function isIsoInRange(iso: string, start: string, end: string): boolean {
-  if (!start) return false;
-  const bound = end || start;
-  const lo = start <= bound ? start : bound;
-  const hi = start <= bound ? bound : start;
-  return iso >= lo && iso <= hi;
+  const day = toIsoDay(iso);
+  const from = toIsoDay(start);
+  if (!day || !from) return false;
+  const bound = toIsoDay(end) || from;
+  const lo = from <= bound ? from : bound;
+  const hi = from <= bound ? bound : from;
+  return day >= lo && day <= hi;
 }
 
 export function isIsoInAnyRange(
@@ -436,5 +445,9 @@ export function isDateInRange(
   startDate: string,
   endDate: string | null
 ): boolean {
-  return date >= startDate && (endDate === null || date <= endDate);
+  const d = toIsoDay(date);
+  const s = toIsoDay(startDate);
+  if (!d || !s) return false;
+  const e = endDate ? toIsoDay(endDate) : "";
+  return d >= s && (!e || d <= e);
 }

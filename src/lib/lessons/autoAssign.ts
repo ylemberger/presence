@@ -1,6 +1,12 @@
 import { createClient } from "@/lib/supabase/server";
 import { addDays, todayIso } from "@/lib/dates/hebrew";
 
+type Supabase = Awaited<ReturnType<typeof createClient>>;
+
+async function dbOf(db?: Supabase): Promise<Supabase> {
+  return db ?? (await createClient());
+}
+
 export type LessonAudienceIds = {
   grade_ids: string[];
   class_ids: string[];
@@ -235,7 +241,7 @@ function isMissingExclusionTable(error: { message?: string; code?: string } | nu
 }
 
 async function excludedStudentIdsForLesson(
-  supabase: Awaited<ReturnType<typeof createClient>>,
+  supabase: Supabase,
   lessonId: string
 ): Promise<Set<string>> {
   const { data, error } = await supabase
@@ -250,7 +256,7 @@ async function excludedStudentIdsForLesson(
 }
 
 async function excludedLessonIdsForStudent(
-  supabase: Awaited<ReturnType<typeof createClient>>,
+  supabase: Supabase,
   studentId: string
 ): Promise<Set<string>> {
   const { data, error } = await supabase
@@ -267,9 +273,10 @@ async function excludedLessonIdsForStudent(
 export async function autoAssignStudentsToLesson(
   lessonId: string,
   academicYearId: string,
-  startDate?: string
+  startDate?: string,
+  db?: Supabase
 ) {
-  const supabase = await createClient();
+  const supabase = await dbOf(db);
   const excludedStudents = await excludedStudentIdsForLesson(supabase, lessonId);
 
   const [{ data: lesson }, { data: placements }, { data: existingLinks }, { data: audience }] =
@@ -347,10 +354,11 @@ export async function autoAssignStudentsToLesson(
 /** Close automatic links that no longer match the lesson audience, then add missing ones. */
 export async function refreshAutomaticAssignmentsForLesson(
   lessonId: string,
-  academicYearId: string
+  academicYearId: string,
+  db?: Supabase
 ) {
-  const supabase = await createClient();
-  const result = await autoAssignStudentsToLesson(lessonId, academicYearId);
+  const supabase = await dbOf(db);
+  const result = await autoAssignStudentsToLesson(lessonId, academicYearId, undefined, supabase);
 
   const [{ data: lesson }, { data: placements }, { data: existingLinks }, { data: audience }] =
     await Promise.all([
@@ -408,9 +416,10 @@ export async function refreshAutomaticLessonAssignmentsForStudent(
   studentId: string,
   academicYearId: string,
   placement: Placement,
-  effectiveFrom: string
+  effectiveFrom: string,
+  db?: Supabase
 ) {
-  const supabase = await createClient();
+  const supabase = await dbOf(db);
   const closeDate = addDays(effectiveFrom, -1);
   const excludedLessons = await excludedLessonIdsForStudent(supabase, studentId);
 

@@ -31,9 +31,10 @@ import {
 import { applyStudentImportRows } from "@/lib/students/importApply";
 import type { AttendanceStatus, HolidayKind } from "@/types/database";
 import { todayIso, formatHebrewDate } from "@/lib/dates/hebrew";
+import { embedOne } from "@/lib/supabase/embed";
 import { resolveOrCreateSubject } from "@/lib/lessons/subjects";
 import { fingerprintForLesson } from "@/lib/attendance/pools";
-import { previousWeekBlockMessage } from "@/lib/attendance/previous-week";
+import { previousWeekStartBlockMessage } from "@/lib/attendance/previous-week";
 import {
   FLEXIBLE_RANGE_FORM_VALUE,
   isFlexibleActivityRange,
@@ -857,7 +858,8 @@ export async function createStudentAction(formData: FormData) {
       secondary_specialization_id: secondarySpecId,
       is_psychology: isPsychology,
     },
-    startDate
+    startDate,
+    supabase
   );
 
   revalidatePath("/students");
@@ -1246,7 +1248,8 @@ export async function transferStudentAction(formData: FormData) {
       secondary_specialization_id: placement.secondary_specialization_id,
       is_psychology: placement.is_psychology,
     },
-    placement.start_date
+    placement.start_date,
+    supabase
   );
 
   revalidatePath(`/students/${placement.student_id}`);
@@ -1746,7 +1749,7 @@ export async function createLessonAction(formData: FormData) {
     };
   }
 
-  await autoAssignStudentsToLesson(lesson.id, payload.academic_year_id);
+  await autoAssignStudentsToLesson(lesson.id, payload.academic_year_id, undefined, supabase);
 
   revalidateLessonPaths();
   return { success: true };
@@ -1897,7 +1900,7 @@ export async function updateLessonAction(formData: FormData) {
   }
 
   try {
-    await refreshAutomaticAssignmentsForLesson(lessonId, payload.academic_year_id);
+    await refreshAutomaticAssignmentsForLesson(lessonId, payload.academic_year_id, supabase);
   } catch (e) {
     return {
       error: hebrewDbError(
@@ -2257,7 +2260,7 @@ async function tryMarkOccurrenceComplete(
     .or(`end_date.is.null,end_date.gte.${occ.occurrence_date}`);
 
   const studentIds = (links ?? [])
-    .filter((l) => (l.students as unknown as { is_active: boolean } | null)?.is_active)
+    .filter((l) => embedOne<{ is_active: boolean }>(l.students)?.is_active)
     .map((l) => l.student_id);
   if (studentIds.length === 0) return;
 
@@ -2280,7 +2283,7 @@ export async function syncLessonStudentsAction(lessonId: string, academicYearId:
   if ("error" in actionAuth) return { error: actionAuth.error };
 
   try {
-    const result = await autoAssignStudentsToLesson(lessonId, academicYearId);
+    const result = await autoAssignStudentsToLesson(lessonId, academicYearId, undefined, actionAuth.supabase);
     revalidatePath("/attendance");
     revalidatePath("/students");
     revalidatePath("/lessons");
@@ -2416,7 +2419,7 @@ export async function upsertAttendanceAction(
   const actionAuth = await createActionClient();
   if ("error" in actionAuth) return { error: actionAuth.error };
   const supabase = actionAuth.supabase;
-  const blocked = await previousWeekBlockMessage(supabase, [occurrenceId]);
+  const blocked = await previousWeekStartBlockMessage(supabase, [occurrenceId]);
   if (blocked) return { error: blocked };
   const payload: {
     student_id: string;
@@ -2451,7 +2454,7 @@ export async function bulkAttendanceAction(
   const actionAuth = await createActionClient();
   if ("error" in actionAuth) return { error: actionAuth.error };
   const supabase = actionAuth.supabase;
-  const blocked = await previousWeekBlockMessage(
+  const blocked = await previousWeekStartBlockMessage(
     supabase,
     updates.map((u) => u.occurrenceId)
   );
@@ -2649,7 +2652,7 @@ export async function copyPreviousAttendanceAction(
     .single();
   if (!current) return { error: "מופע לא נמצא" };
 
-  const blocked = await previousWeekBlockMessage(supabase, [
+  const blocked = await previousWeekStartBlockMessage(supabase, [
     occurrenceId,
     ...alsoOccurrenceIds,
   ]);
@@ -2681,7 +2684,7 @@ export async function copyPreviousAttendanceAction(
 
   const eligible = new Set(
     (links ?? [])
-      .filter((l) => (l.students as unknown as { is_active: boolean } | null)?.is_active)
+      .filter((l) => embedOne<{ is_active: boolean }>(l.students)?.is_active)
       .map((l) => l.student_id)
   );
 

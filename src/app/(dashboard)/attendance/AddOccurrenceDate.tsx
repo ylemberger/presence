@@ -30,7 +30,8 @@ export function AddOccurrenceDate({ lessonId }: { lessonId: string }) {
       if (result && "date" in result && result.date) {
         const occ = "occurrenceId" in result ? result.occurrenceId : "";
         router.push(
-          `/attendance?date=${encodeURIComponent(result.date)}${occ ? `&occurrenceId=${encodeURIComponent(occ)}` : ""}`
+          `/attendance?date=${encodeURIComponent(result.date)}${occ ? `&occurrenceId=${encodeURIComponent(occ)}` : ""}`,
+          { scroll: false }
         );
         router.refresh();
         setOpen(false);

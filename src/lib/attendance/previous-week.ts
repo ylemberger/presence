@@ -1,4 +1,5 @@
-import { addDays, startOfWeekSunday } from "@/lib/dates/hebrew";
+import { addDays, isDateInRange, startOfWeekSunday } from "@/lib/dates/hebrew";
+import { embedOne } from "@/lib/supabase/embed";
 import type { createClient } from "@/lib/supabase/server";
 
 type Supabase = Awaited<ReturnType<typeof createClient>>;
@@ -69,11 +70,9 @@ export async function findIncompletePreviousWeekOccurrences(
   const incomplete: IncompletePreviousOccurrence[] = [];
   for (const occ of prevOccs) {
     const students = (links ?? []).filter((link) => {
-      const active = (link.students as unknown as { is_active: boolean } | null)?.is_active;
+      const active = embedOne<{ is_active: boolean }>(link.students)?.is_active;
       if (!active) return false;
-      if (link.start_date > occ.occurrence_date) return false;
-      if (link.end_date && link.end_date < occ.occurrence_date) return false;
-      return true;
+      return isDateInRange(occ.occurrence_date, link.start_date, link.end_date);
     });
     if (students.length === 0) continue;
     const allMarked = students.every((s) => markedSet.has(`${occ.id}::${s.student_id}`));
@@ -96,6 +95,18 @@ export function blockingPreviousWeekGaps(
   return incomplete.filter((o) => o.gapHandling !== "continued");
 }
 
+export async function occurrenceHasAttendance(
+  supabase: Supabase,
+  occurrenceId: string
+): Promise<boolean> {
+  const { count, error } = await supabase
+    .from("attendance")
+    .select("id", { count: "exact", head: true })
+    .eq("lesson_occurrence_id", occurrenceId);
+  if (error) return false;
+  return (count ?? 0) > 0;
+}
+
 export async function previousWeekBlockMessage(
   supabase: Supabase,
   occurrenceIds: string[]
@@ -108,4 +119,18 @@ export async function previousWeekBlockMessage(
     }
   }
   return null;
+}
+
+/** Block only starting a new occurrence — not correcting marks that already exist. */
+export async function previousWeekStartBlockMessage(
+  supabase: Supabase,
+  occurrenceIds: string[]
+): Promise<string | null> {
+  const unique = [...new Set(occurrenceIds.filter(Boolean))];
+  const unstarted: string[] = [];
+  for (const id of unique) {
+    if (!(await occurrenceHasAttendance(supabase, id))) unstarted.push(id);
+  }
+  if (unstarted.length === 0) return null;
+  return previousWeekBlockMessage(supabase, unstarted);
 }

@@ -52,7 +52,7 @@ export function MakeupFilters({
       if (value && value !== "all") params.set(key, value);
     }
     params.set("run", "1");
-    router.push(`/makeup?${params.toString()}`);
+    router.push(`/makeup?${params.toString()}`, { scroll: false });
   }
 
   return (

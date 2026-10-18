@@ -266,7 +266,7 @@ export function LessonsForm({
       }
 
       if (editing) {
-        if (cancelHref) router.push(cancelHref);
+        if (cancelHref) router.push(cancelHref, { scroll: false });
         else router.refresh();
         onCreated?.();
         return;
@@ -764,7 +764,7 @@ export function LessonsForm({
             variant="outline"
             size="lg"
             onClick={() => {
-              router.push(cancelHref);
+              router.push(cancelHref, { scroll: false });
               onCancel?.();
             }}
           >

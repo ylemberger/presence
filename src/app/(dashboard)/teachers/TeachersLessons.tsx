@@ -1,6 +1,7 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { useRememberedText } from "@/lib/ui/remembered-text";
 import Link from "next/link";
 import { Icon } from "@/components/ui/Icon";
 
@@ -20,8 +21,15 @@ export function TeachersLessons({
   rows: TeacherLessonRow[];
   viewOnly?: boolean;
 }) {
-  const [query, setQuery] = useState("");
+  const [query, setQuery] = useRememberedText("presence-search:teacher-lessons");
   const [open, setOpen] = useState(false);
+  const revealedQuery = useRef(false);
+
+  useEffect(() => {
+    if (revealedQuery.current || !query.trim()) return;
+    revealedQuery.current = true;
+    setOpen(true);
+  }, [query]);
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();

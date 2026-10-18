@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import { useRememberedText } from "@/lib/ui/remembered-text";
 import Link from "next/link";
 import { StatusPill } from "@/components/ui/PageHeader";
 import { Icon } from "@/components/ui/Icon";
@@ -31,7 +32,7 @@ export function TeachersDirectory({
   teachers: TeacherDirectoryRow[];
   viewOnly?: boolean;
 }) {
-  const [query, setQuery] = useState("");
+  const [query, setQuery] = useRememberedText("presence-search:teachers");
   const [showAll, setShowAll] = useState(false);
 
   const filtered = useMemo(() => {

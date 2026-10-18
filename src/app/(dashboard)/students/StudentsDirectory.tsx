@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { Button } from "@/components/ui/Button";
 import { Input, Select } from "@/components/ui/Input";
@@ -14,6 +14,7 @@ import { Icon } from "@/components/ui/Icon";
 import { PrintButton } from "@/components/ui/PrintButton";
 import { SeminarPrintHeader } from "@/components/print/SeminarPrintHeader";
 import * as XLSX from "xlsx";
+import { useRememberedText } from "@/lib/ui/remembered-text";
 
 const PRINT_COLUMNS = [
   { id: "name", label: "שם", defaultOn: true },
@@ -275,7 +276,8 @@ export function StudentsDirectory({
   canWrite?: boolean;
   yearName?: string;
 }) {
-  const [query, setQuery] = useState("");
+  const [query, setQuery] = useRememberedText("presence-search:students");
+  const revealedQuery = useRef(false);
   const [gradeIds, setGradeIds] = useState<string[]>([]);
   const [classIds, setClassIds] = useState<string[]>([]);
   const [trackIds, setTrackIds] = useState<string[]>([]);
@@ -288,6 +290,12 @@ export function StudentsDirectory({
   const [sortKey, setSortKey] = useState<SortKey>("name");
   const [sortDir, setSortDir] = useState<"asc" | "desc">("asc");
   const [filtersOpen, setFiltersOpen] = useState(false);
+
+  useEffect(() => {
+    if (revealedQuery.current || !query.trim()) return;
+    revealedQuery.current = true;
+    setFiltersOpen(true);
+  }, [query]);
   const [modalOpen, setModalOpen] = useState(false);
   const [yearError, setYearError] = useState<string | null>(null);
   const [printCols, setPrintCols] = useState<Record<PrintColId, boolean>>(() =>

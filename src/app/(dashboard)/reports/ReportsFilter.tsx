@@ -231,7 +231,7 @@ export function ReportsFilter({
       if (value) params.set(key, value);
     }
     params.set("run", "1");
-    router.push(`/reports?${params.toString()}`);
+    router.push(`/reports?${params.toString()}`, { scroll: false });
   }
 
   const selectedTeacherStillListed =

@@ -10,10 +10,7 @@ interface AttendanceReminderBannerProps {
   compact?: boolean;
 }
 
-/**
- * Full-width Stitch banner: bg-surface with a left accent border in attendance-late,
- * a circular icon chip and a linked call to action.
- */
+/** Reminder for pending attendance. Compact = header pill; default = one-line strip. */
 export function AttendanceReminderBanner({
   summary,
   compact,
@@ -58,72 +55,52 @@ export function AttendanceReminderBanner({
   }
 
   const isLate = summary.pastPending > 0;
+  const title =
+    summary.partialCount > 0
+      ? `${summary.partialCount} שיעורים סומנו חלקית`
+      : isLate
+        ? `${summary.pastPending} שיעורים ממתינים לסימון`
+        : `${summary.todayPending} שיעורים היום ממתינים לסימון`;
+  const weekHint =
+    summary.incompleteWeeks.length > 0
+      ? `שבוע ${formatHebrewDate(summary.incompleteWeeks[0].weekStart)} עדיין פתוח${
+          summary.incompleteWeeks.length > 1
+            ? ` · ועוד ${summary.incompleteWeeks.length - 1}`
+            : ""
+        }`
+      : first
+        ? `הבא: ${formatHebrewDate(first.date)} · ${first.subject}`
+        : null;
 
   return (
     <div
       className={cn(
-        "print:hidden card-hover flex flex-col gap-3 rounded-r-lg rounded-l-md border-l-4 bg-surface p-4 shadow-tactile-sm sm:flex-row sm:items-center sm:justify-between",
-        isLate ? "border-attendance-late" : "border-secondary"
+        "print:hidden flex items-center gap-2 rounded-lg border px-2.5 py-1.5",
+        isLate
+          ? "border-attendance-late/30 bg-attendance-late/10"
+          : "border-secondary/25 bg-secondary/5"
       )}
       role="status"
     >
-      <div className="flex items-start gap-3">
-        <div
-          className={cn(
-            "flex h-10 w-10 shrink-0 items-center justify-center rounded-full",
-            isLate
-              ? "bg-attendance-late/10 text-attendance-late"
-              : "bg-secondary/10 text-secondary"
-          )}
-          aria-hidden
-        >
-          <Icon name="notification_important" />
-        </div>
-        <div>
-          <p className="font-body-lg text-body-lg font-medium text-primary">
-            {summary.partialCount > 0
-              ? `יש ${summary.partialCount} שיעורים שסומנו רק חלקית — השלימי לפני רישום השבוע`
-              : isLate
-                ? `ישנם ${summary.pastPending} שיעורים ממתינים לרישום נוכחות`
-                : `ישנם ${summary.todayPending} שיעורים היום ממתינים לרישום`}
-          </p>
-          {summary.incompleteWeeks.length > 0 && (
-            <p className="mt-1 text-caption text-on-surface-variant">
-              לא מולאה נוכחות מלאה לשבוע{" "}
-              {formatHebrewDate(summary.incompleteWeeks[0].weekStart)} –{" "}
-              {formatHebrewDate(summary.incompleteWeeks[0].weekEnd)}
-              {summary.incompleteWeeks.length > 1
-                ? ` ועוד ${summary.incompleteWeeks.length - 1} שבועות`
-                : ""}
-              .
-            </p>
-          )}
-          {summary.items.length > 0 && (
-            <ul className="mt-1 space-y-0.5 text-caption text-on-surface-variant">
-              {summary.items.slice(0, 3).map((item) => (
-                <li key={item.id}>
-                  <Link
-                    href={`/attendance?date=${item.date}&occurrenceId=${item.id}`}
-                    className="font-medium text-primary hover:underline"
-                  >
-                    {formatHebrewDate(item.date)} · {item.subject}
-                  </Link>
-                  <span className="text-on-surface-variant">
-                    {" "}
-                    ({item.marked}/{item.total})
-                  </span>
-                </li>
-              ))}
-            </ul>
-          )}
-        </div>
-      </div>
+      <span
+        className={cn(
+          "h-1.5 w-1.5 shrink-0 rounded-full",
+          isLate ? "bg-attendance-late" : "bg-secondary"
+        )}
+        aria-hidden
+      />
+      <p className="min-w-0 flex-1 truncate font-caption text-caption text-on-surface">
+        <span className="font-semibold text-primary">{title}</span>
+        {weekHint ? (
+          <span className="text-on-surface-variant"> · {weekHint}</span>
+        ) : null}
+      </p>
       <Link
         href={href}
-        className="inline-flex shrink-0 items-center gap-1 self-end text-label-md text-secondary transition-colors hover:underline sm:self-auto"
+        className="inline-flex shrink-0 items-center gap-0.5 rounded-md px-2 py-0.5 font-label-md text-label-md text-secondary transition-colors hover:bg-surface-container-lowest"
       >
         לרישום
-        <Icon name="arrow_back" className="text-[18px]" />
+        <Icon name="arrow_back" className="text-[16px]" />
       </Link>
     </div>
   );

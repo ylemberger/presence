@@ -4,6 +4,7 @@ import { getActiveAcademicYear, getYearCatalog } from "@/lib/utils";
 import {
   buildHebrewMonth,
   hebrewMonthFromIso,
+  isDateInRange,
   todayIso,
 } from "@/lib/dates/hebrew";
 import {
@@ -243,9 +244,7 @@ export default async function AttendancePage({ searchParams }: Props) {
     monthOccurrences = monthOccurrences.filter((o) =>
       links.some(
         (la) =>
-          la.lesson_id === o.lessonId &&
-          la.start_date <= o.date &&
-          (la.end_date === null || la.end_date >= o.date)
+          la.lesson_id === o.lessonId && isDateInRange(o.date, la.start_date, la.end_date)
       )
     );
   }
@@ -261,7 +260,7 @@ export default async function AttendancePage({ searchParams }: Props) {
   };
   const allStudentsMap = new Map<string, AttendanceName>();
   for (const row of yearStudents ?? []) {
-    const s = row.students as unknown as AttendanceName | null;
+    const s = embedOne<AttendanceName>(row.students);
     if (s?.is_active) allStudentsMap.set(s.id, s);
   }
   const allStudents = [...allStudentsMap.values()].sort(compareStudentsByLastName);
@@ -294,16 +293,31 @@ export default async function AttendancePage({ searchParams }: Props) {
       : Promise.resolve({ data: [] as never[] }),
   ]);
 
+  function rosterStudent(link: {
+    student_id: string;
+    students: unknown;
+  }): AttendanceName | null {
+    const s =
+      embedOne<AttendanceName>(link.students) ?? allStudentsMap.get(link.student_id) ?? null;
+    if (!s?.is_active) return null;
+    return { ...s, id: s.id || link.student_id };
+  }
+
+  function linkCoversDate(
+    link: { start_date: string; end_date: string | null },
+    date: string
+  ): boolean {
+    return isDateInRange(date, link.start_date, link.end_date);
+  }
+
   const studentCounts = new Map<string, number>();
   const markedCounts = new Map<string, number>();
   for (const occ of dayOccurrences) {
     let count = 0;
     for (const link of monthLinks ?? []) {
       if (link.lesson_id !== occ.lessonId) continue;
-      const active = (link.students as unknown as { is_active: boolean } | null)?.is_active;
-      if (!active) continue;
-      if (link.start_date > occ.date) continue;
-      if (link.end_date && link.end_date < occ.date) continue;
+      if (!rosterStudent(link)) continue;
+      if (!linkCoversDate(link, occ.date)) continue;
       count++;
     }
     studentCounts.set(occ.id, count);
@@ -331,10 +345,9 @@ export default async function AttendancePage({ searchParams }: Props) {
     const map = new Map<string, AttendanceName>();
     for (const link of monthLinks ?? []) {
       if (!lessonIds.has(link.lesson_id)) continue;
-      if (link.start_date > selectedOcc.date) continue;
-      if (link.end_date && link.end_date < selectedOcc.date) continue;
-      const s = link.students as unknown as AttendanceName | null;
-      if (s?.is_active) map.set(s.id, s);
+      if (!linkCoversDate(link, selectedOcc.date)) continue;
+      const s = rosterStudent(link);
+      if (s) map.set(s.id, s);
     }
     lessonStudents = [...map.values()].sort(compareStudentsByLastName);
 
@@ -361,10 +374,8 @@ export default async function AttendancePage({ searchParams }: Props) {
       let count = 0;
       for (const link of monthLinks ?? []) {
         if (link.lesson_id !== occ.lessonId) continue;
-        const active = (link.students as unknown as { is_active: boolean } | null)?.is_active;
-        if (!active) continue;
-        if (link.start_date > occ.date) continue;
-        if (link.end_date && link.end_date < occ.date) continue;
+        if (!rosterStudent(link)) continue;
+        if (!linkCoversDate(link, occ.date)) continue;
         count++;
       }
       monthStudentCounts.set(occ.id, count);
@@ -546,11 +557,8 @@ export default async function AttendancePage({ searchParams }: Props) {
     ]);
     selectedLessonOccurrences = yearOccs.map((o) => {
       const students = (yearLinks ?? []).filter((link) => {
-        const active = (link.students as unknown as { is_active: boolean } | null)?.is_active;
-        if (!active) return false;
-        if (link.start_date > o.occurrence_date) return false;
-        if (link.end_date && link.end_date < o.occurrence_date) return false;
-        return true;
+        if (!rosterStudent(link)) return false;
+        return linkCoversDate(link, o.occurrence_date);
       });
       const marked = (yearAtt ?? []).filter((a) => a.lesson_occurrence_id === o.id).length;
       return {
@@ -630,7 +638,9 @@ export default async function AttendancePage({ searchParams }: Props) {
         subjects={subjects}
         lessons={lessonOptions}
         selectedLessonOccurrences={selectedLessonOccurrences}
-        prevWeekBlocked={prevWeekIncomplete.length > 0}
+        prevWeekBlocked={
+          prevWeekIncomplete.length > 0 && (selectedOcc?.markedCount ?? 0) === 0
+        }
         prevWeekIncomplete={prevWeekIncomplete}
         allStudents={allStudents}
         monthOccurrences={monthOccurrences}

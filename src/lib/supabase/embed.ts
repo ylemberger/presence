@@ -5,6 +5,13 @@ export function embedOne<T>(value: unknown): T | null {
   return value as T;
 }
 
+/** Student embed: skip only when is_active is explicitly false. */
+export function embedActiveStudent<T extends { is_active?: boolean }>(value: unknown): T | null {
+  const student = embedOne<T>(value);
+  if (!student || student.is_active === false) return null;
+  return student;
+}
+
 export function embeddedTeacher(
   teachingAssignment: unknown
 ): { id: string; fullName: string } | null {

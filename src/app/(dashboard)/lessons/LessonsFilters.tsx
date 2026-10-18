@@ -39,7 +39,7 @@ export function LessonsFilters({
     }
     if (keepEdit) params.set("edit", keepEdit);
     const q = params.toString();
-    router.push(q ? `/lessons?${q}` : "/lessons");
+    router.push(q ? `/lessons?${q}` : "/lessons", { scroll: false });
   }
 
   return (

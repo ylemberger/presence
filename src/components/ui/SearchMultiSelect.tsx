@@ -47,12 +47,23 @@ export function SearchMultiSelect({
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
   const [box, setBox] = useState<{ top: number; left: number; width: number } | null>(null);
+  const labelMemory = useRef<Map<string, string>>(new Map());
+
+  useEffect(() => {
+    for (const opt of options) labelMemory.current.set(opt.value, opt.label);
+  }, [options]);
 
   const selected = useMemo(
-    () => options.filter((opt) => values.includes(opt.value)),
+    () =>
+      values.map((id) => {
+        const opt = options.find((item) => item.value === id);
+        if (opt) return opt;
+        const remembered = labelMemory.current.get(id);
+        return remembered ? { value: id, label: remembered } : null;
+      }).filter((opt): opt is SearchMultiOption => opt !== null),
     [options, values]
   );
-  const selectedCount = selected.length;
+  const selectedCount = values.length;
 
   const matches = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -62,9 +73,9 @@ export function SearchMultiSelect({
   const closedLabel =
     selectedCount === 0
       ? "הכל"
-      : selectedCount === 1
-        ? selected[0].label
-        : `${selectedCount} נבחרו`;
+    : selectedCount === 1
+      ? selected[0]?.label ?? "1 נבחר"
+      : `${selectedCount} נבחרו`;
 
   const updateBox = useCallback(() => {
     const el = inputRef.current;

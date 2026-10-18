@@ -130,7 +130,7 @@ export function LessonsCalendar({
                             const params = new URLSearchParams(monthQuery);
                             params.delete("edit");
                             const q = params.toString();
-                            router.push(q ? `/lessons?${q}` : "/lessons");
+                            router.push(q ? `/lessons?${q}` : "/lessons", { scroll: false });
                           }
                           return result;
                         }}

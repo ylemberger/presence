@@ -46,7 +46,7 @@ export function LessonsFormDialog({
   function close() {
     setOpen(false);
     if (startOpen && cancelHref) {
-      router.push(cancelHref);
+      router.push(cancelHref, { scroll: false });
     }
   }
 

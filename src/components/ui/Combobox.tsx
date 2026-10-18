@@ -50,14 +50,7 @@ function optionMatches(opt: ComboboxOption, q: string) {
   return tokens.every((tok) => hay.includes(tok));
 }
 
-function labelOf(
-  options: ComboboxOption[],
-  value: string,
-  emptyLabel: string
-) {
-  if (!value) return emptyLabel;
-  const opt = options.find((o) => o.value === value);
-  if (!opt) return emptyLabel;
+function optionLabel(opt: ComboboxOption) {
   return opt.selectedLabel ?? opt.label;
 }
 
@@ -83,11 +76,27 @@ export function Combobox({
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
   const [internal, setInternal] = useState(defaultValue);
+  /** Chosen value shown immediately, until the parent props catch up after a fetch. */
+  const [pending, setPending] = useState<string | null>(null);
   const [highlight, setHighlight] = useState(0);
   const [box, setBox] = useState<{ top: number; left: number; width: number } | null>(null);
-  const selected = value !== undefined ? value : internal;
+  const labelMemory = useRef<Map<string, string>>(new Map());
+  const selected = pending !== null ? pending : value !== undefined ? value : internal;
 
-  const selectedLabel = labelOf(options, selected, emptyLabel);
+  useEffect(() => {
+    for (const opt of options) labelMemory.current.set(opt.value, optionLabel(opt));
+  }, [options]);
+
+  useEffect(() => {
+    if (pending !== null && value === pending) setPending(null);
+  }, [pending, value]);
+
+  const matched = options.find((opt) => opt.value === selected);
+  const selectedLabel = !selected
+    ? emptyLabel
+    : matched
+      ? optionLabel(matched)
+      : labelMemory.current.get(selected) ?? emptyLabel;
 
   const matches = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -120,6 +129,9 @@ export function Combobox({
 
   function commit(next: string) {
     if (value === undefined) setInternal(next);
+    else setPending(next);
+    const picked = options.find((opt) => opt.value === next);
+    if (picked) labelMemory.current.set(next, optionLabel(picked));
     onChange?.(next);
     setQuery("");
     setOpen(false);

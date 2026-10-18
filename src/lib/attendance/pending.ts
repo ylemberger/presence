@@ -1,6 +1,7 @@
 import { cache } from "react";
 import { createClient } from "@/lib/supabase/server";
-import { addDays, startOfWeekSunday, todayIso } from "@/lib/dates/hebrew";
+import { addDays, isDateInRange, startOfWeekSunday, todayIso } from "@/lib/dates/hebrew";
+import { embedOne } from "@/lib/supabase/embed";
 import { formatSubjectLessonLabel } from "@/lib/lessons/subject-label";
 
 export type PendingOccurrence = {
@@ -102,10 +103,9 @@ export const getPendingAttendanceSummary = cache(
       let total = 0;
       for (const link of links ?? []) {
         if (link.lesson_id !== o.lesson_id) continue;
-        const active = (link.students as unknown as { is_active: boolean } | null)?.is_active;
+        const active = embedOne<{ is_active: boolean }>(link.students)?.is_active;
         if (!active) continue;
-        if (link.start_date > o.occurrence_date) continue;
-        if (link.end_date && link.end_date < o.occurrence_date) continue;
+        if (!isDateInRange(o.occurrence_date, link.start_date, link.end_date)) continue;
         total++;
       }
       if (total === 0) continue;

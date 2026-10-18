@@ -146,6 +146,16 @@ interface Props {
 
 type DraftKey = string;
 
+type ExtraFilter =
+  | "class"
+  | "track"
+  | "spec"
+  | "teacher"
+  | "subject"
+  | "student"
+  | "lesson"
+  | "mode";
+
 type UndoItem = {
   studentId: string;
   occurrenceId: string;
@@ -248,9 +258,17 @@ export function AttendanceBoard({
   const [gapQueue, setGapQueue] = useState<GapItem[]>([]);
   /** Session-local: after the user acts on a gap, do not re-open it until attendance is filled. */
   const [suppressedGapIds, setSuppressedGapIds] = useState<string[]>([]);
-  const [filtersOpen, setFiltersOpen] = useState(
-    Boolean(classId || trackId || specializationId || subject || studentId || lessonId)
-  );
+  const [openFilters, setOpenFilters] = useState<ExtraFilter[]>(() => {
+    const open: ExtraFilter[] = [];
+    if (classId) open.push("class");
+    if (trackId) open.push("track");
+    if (specializationId) open.push("spec");
+    if (teacherId) open.push("teacher");
+    if (subject) open.push("subject");
+    if (studentId) open.push("student");
+    if (mode === "single") open.push("mode");
+    return open;
+  });
   const [focusedIdx, setFocusedIdx] = useState(0);
   const [undo, setUndo] = useState<UndoItem | null>(null);
   const rowRefs = useRef<(HTMLDivElement | null)[]>([]);
@@ -260,6 +278,7 @@ export function AttendanceBoard({
   cellPhaseRef.current = cellPhase;
   const saveGen = useRef<Record<DraftKey, number>>({});
   const hydratedOccurrenceId = useRef<string | undefined>(undefined);
+  const autoSyncedLesson = useRef<string | null>(null);
 
   useEffect(() => {
     setDayOccurrences(dayOccurrencesProp);
@@ -271,6 +290,19 @@ export function AttendanceBoard({
       : undefined;
 
   const activeLesson = dayOccurrences.find((o) => o.id === activeOccurrenceId);
+
+  useEffect(() => {
+    if (!canWrite || !activeLesson) return;
+    const lessonIdToSync = activeLesson.lessonId;
+    if (autoSyncedLesson.current === lessonIdToSync) return;
+    autoSyncedLesson.current = lessonIdToSync;
+    void (async () => {
+      const result = await syncLessonStudentsAction(lessonIdToSync, yearId);
+      if (result && "success" in result && (result.assigned ?? 0) > 0) {
+        router.refresh();
+      }
+    })();
+  }, [canWrite, activeLesson, yearId, router]);
 
   useEffect(() => {
     setNote(noteBody);
@@ -364,15 +396,20 @@ export function AttendanceBoard({
   useEffect(() => {
     if (dayOccurrences.length === 1 && !selectedOccurrenceId) {
       const params = buildParams({ occurrenceId: dayOccurrences[0].id });
-      router.replace(`/attendance?${params.toString()}`);
+      router.replace(`/attendance?${params.toString()}`, { scroll: false });
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [dayOccurrences.length, selectedOccurrenceId, selectedDate]);
 
+  const scrollRowIntoView = useRef(false);
   useEffect(() => {
     const el = rowRefs.current[focusedIdx];
-    el?.scrollIntoView({ block: "nearest", behavior: "smooth" });
-    el?.focus();
+    if (!el) return;
+    if (scrollRowIntoView.current) {
+      scrollRowIntoView.current = false;
+      el.scrollIntoView({ block: "nearest" });
+    }
+    el.focus({ preventScroll: true });
   }, [focusedIdx, activeOccurrenceId]);
 
   const countsByDate = useMemo(() => {
@@ -461,7 +498,18 @@ export function AttendanceBoard({
   }
 
   function navigate(params: URLSearchParams) {
-    router.push(`/attendance?${params.toString()}`);
+    router.push(`/attendance?${params.toString()}`, { scroll: false });
+  }
+
+  function moveFocus(idx: number) {
+    scrollRowIntoView.current = true;
+    setFocusedIdx(idx);
+  }
+
+  function toggleFilter(key: ExtraFilter) {
+    setOpenFilters((prev) =>
+      prev.includes(key) ? prev.filter((item) => item !== key) : [...prev, key]
+    );
   }
 
   function selectDate(iso: string) {
@@ -587,7 +635,7 @@ export function AttendanceBoard({
 
       const idx = lessonStudents.findIndex((s) => s.id === sid);
       if (idx >= 0 && idx < lessonStudents.length - 1) {
-        setFocusedIdx(idx + 1);
+        moveFocus(idx + 1);
       }
     },
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -862,16 +910,16 @@ export function AttendanceBoard({
       void pickStatus(student.id, activeOccurrenceId, "absent");
     } else if (key === "arrowdown" || (key === "tab" && !e.shiftKey)) {
       e.preventDefault();
-      setFocusedIdx(Math.min(lessonStudents.length - 1, idx + 1));
+      moveFocus(Math.min(lessonStudents.length - 1, idx + 1));
     } else if (key === "arrowup" || (key === "tab" && e.shiftKey)) {
       e.preventDefault();
-      setFocusedIdx(Math.max(0, idx - 1));
+      moveFocus(Math.max(0, idx - 1));
     } else if (key === "enter") {
       e.preventDefault();
       const first = lessonStudents.findIndex(
         (s) => draft[keyOf(s.id, activeOccurrenceId)] == null
       );
-      if (first >= 0) setFocusedIdx(first);
+      if (first >= 0) moveFocus(first);
     }
   }
 
@@ -908,113 +956,32 @@ export function AttendanceBoard({
   const unmarkedCount = Math.max(0, lessonStudents.length - markedInLesson);
 
   const selectedLessonMeta = lessons.find((l) => l.id === lessonId);
-
-  const filtersPanel = (
-    <div className="space-y-3">
-      <div className="flex flex-wrap gap-2">
-        {(
-          [
-            ["group", "כל התלמידות"],
-            ["single", "תלמידה בודדת"],
-          ] as const
-        ).map(([value, label]) => (
-          <button
-            key={value}
-            type="button"
-            onClick={() =>
-              navigate(
-                buildParams({
-                  mode: value,
-                  occurrenceId: undefined,
-                })
-              )
-            }
-            className={cn(
-              "rounded-lg px-3 py-1.5 font-label-md text-label-md transition-colors",
-              mode === value
-                ? "bg-primary text-on-primary shadow-tactile-sm"
-                : "bg-surface-container-low text-on-surface-variant ring-1 ring-outline-variant/40 hover:bg-surface-container"
-            )}
-          >
-            {label}
-          </button>
-        ))}
-      </div>
-      <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
-        <Combobox
-          label="תלמידה"
-          value={studentId ?? ""}
-          onChange={(v) => updateFilter("studentId", v || undefined)}
-          options={allStudents.map((s) => ({ value: s.id, label: s.full_name }))}
-          emptyLabel="כל התלמידות"
-        />
-        <Combobox
-          label="שיעור"
-          value={lessonId ?? ""}
-          onChange={(v) => updateFilter("lessonId", v || undefined)}
-          options={scopedLessons.map((l) => ({
-            value: l.id,
-            label: formatLessonOptionLabel(l),
-          }))}
-          emptyLabel={scopedLessons.length ? "כל השיעורים לפי הסינון" : "אין שיעורים לפי הסינון"}
-          maxSuggestions={Math.max(80, scopedLessons.length)}
-        />
-        <Combobox
-          label="כיתה"
-          value={classId ?? ""}
-          onChange={(v) => updateFilter("classId", v || undefined)}
-          options={classes.map((c) => ({ value: c.id, label: c.name }))}
-        />
-        <Combobox
-          label="מסלול"
-          value={trackId ?? ""}
-          onChange={(v) => updateFilter("trackId", v || undefined)}
-          options={tracks.map((t) => ({ value: t.id, label: t.name }))}
-        />
-        <Combobox
-          label="התמחות"
-          value={specializationId ?? ""}
-          onChange={(v) => updateFilter("specializationId", v || undefined)}
-          options={specializations.map((s) => ({ value: s.id, label: s.name }))}
-        />
-        <Combobox
-          label="מורה"
-          value={teacherId ?? ""}
-          onChange={(v) => {
-            const nextTeacher = v || undefined;
-            const keepLesson =
-              nextTeacher &&
-              lessonId &&
-              lessons.find((l) => l.id === lessonId)?.teacherId === nextTeacher
-                ? lessonId
-                : undefined;
-            navigate(
-              buildParams({
-                teacherId: nextTeacher,
-                lessonId: keepLesson,
-                occurrenceId: undefined,
-              })
-            );
-          }}
-          options={teachers.map((t) => ({ value: t.id, label: t.name }))}
-          emptyLabel="כל המורות"
-          maxSuggestions={40}
-        />
-        <Combobox
-          label="מקצוע"
-          value={subject ?? ""}
-          onChange={(v) => updateFilter("subject", v || undefined)}
-          options={subjects.map((s) => ({ value: s, label: s }))}
-        />
-      </div>
-      <p className="font-caption text-caption text-on-surface-variant">
-        הסינון מצמצם את היומן לימים ולשיעורים שתואמים לחיפוש — כולל שיוכים של תלמידה ספציפית.
-      </p>
-      <p className="font-caption text-caption text-on-surface-variant/70">
-        מקלדת: נ/N נוכחת · ע/A איחור · ן/X נעדרה · ↑↓ מעבר
-      </p>
-    </div>
-  );
+  const filterChips: { key: ExtraFilter; label: string; valueLabel?: string }[] = [
+    { key: "class", label: "כיתה", valueLabel: classes.find((c) => c.id === classId)?.name },
+    { key: "track", label: "מסלול", valueLabel: tracks.find((t) => t.id === trackId)?.name },
+    {
+      key: "spec",
+      label: "התמחות",
+      valueLabel: specializations.find((s) => s.id === specializationId)?.name,
+    },
+    { key: "subject", label: "מקצוע", valueLabel: subject },
+    { key: "teacher", label: "מורה", valueLabel: teachers.find((t) => t.id === teacherId)?.name },
+    {
+      key: "student",
+      label: "תלמידה",
+      valueLabel: allStudents.find((s) => s.id === studentId)?.full_name,
+    },
+    {
+      key: "lesson",
+      label: "שיעור ביומן",
+      valueLabel: selectedLessonMeta?.subject,
+    },
+    {
+      key: "mode",
+      label: "תצוגה",
+      valueLabel: mode === "single" ? "תלמידה בודדת" : undefined,
+    },
+  ];
 
   return (
     <div className="flex flex-col gap-stack_lg" onTouchStart={onTouchStart} onTouchEnd={onTouchEnd}>
@@ -1055,43 +1022,210 @@ export function AttendanceBoard({
         </span>
       </div>
 
-      <div className="rounded-xl border border-secondary/30 bg-secondary-container/30 p-4 print:hidden">
-        <div className="grid gap-3 lg:grid-cols-3">
-          <div className="lg:col-span-2">
-            <Combobox
-              label="מורה ושיעור"
-              value={lessonId ?? ""}
-              onChange={(v) => {
-                const picked = lessons.find((l) => l.id === v);
-                navigate(
-                  buildParams({
-                    teacherId: picked?.teacherId || undefined,
-                    lessonId: v || undefined,
-                    occurrenceId: undefined,
-                  })
-                );
-              }}
-              options={teacherLessonOptions}
-              emptyLabel={teacherLessonOptions.length ? "בחרי מורה ושיעור לפי הסינון" : "אין שיעורים לפי הסינון"}
-              placeholder="הקלידי שם מורה או שיעור…"
-              maxSuggestions={Math.max(80, teacherLessonOptions.length)}
-            />
-          </div>
-          <div className="flex items-end">
-            <Button
-              type="button"
-              variant="secondary"
-              className="w-full"
-              onClick={() => setFiltersOpen((v) => !v)}
-            >
-              <Icon name="filter_list" className="text-[18px]" />
-              {filtersOpen ? "הסתר סינון נוסף" : "סינון נוסף (כיתה / מסלול / …)"}
-            </Button>
-          </div>
+      <div className="overflow-hidden rounded-2xl border border-outline-variant/40 bg-surface-container-lowest shadow-tactile-sm print:hidden">
+        <div className="border-b border-outline-variant/25 bg-secondary-container/30 px-4 py-3">
+          <p className="font-title-lg text-title-lg text-primary">חיפוש מורה ושיעור</p>
+          <p className="mt-0.5 font-body-sm text-body-sm text-on-surface-variant">
+            הקלידי שם. מה שכתבת נשאר בשדה עד שהרשימה עולה. לסינון מדויק לחצי על אחת האפשרויות מתחת.
+          </p>
         </div>
-        <p className="mt-3 font-body-sm text-body-sm text-on-surface-variant">
-          רק מורות עם שיעורים בשנה הפעילה. אותה מורה יכולה להופיע כמה פעמים — ליד כל שורה כתובים השיעור והקבוצה.
-        </p>
+        <div className="px-4 py-4">
+          <Combobox
+            label="שם מורה, שיעור או קבוצה"
+            value={lessonId ?? ""}
+            onChange={(v) => {
+              const picked = lessons.find((l) => l.id === v);
+              navigate(
+                buildParams({
+                  teacherId: picked?.teacherId || undefined,
+                  lessonId: v || undefined,
+                  occurrenceId: undefined,
+                })
+              );
+            }}
+            options={teacherLessonOptions}
+            emptyLabel=""
+            placeholder={
+              teacherLessonOptions.length
+                ? "למשל: שם המורה או שם השיעור…"
+                : "אין שיעורים לפי הסינון"
+            }
+            fieldSize="lg"
+            maxSuggestions={Math.max(80, teacherLessonOptions.length)}
+          />
+          <p className="mt-2 font-caption text-caption text-on-surface-variant">
+            רק מורות עם שיעורים בשנה הפעילה. אותה מורה יכולה להופיע כמה פעמים — ליד כל שורה כתובים השיעור והקבוצה.
+          </p>
+
+          <div className="mt-4">
+            <p className="mb-2 font-label-md text-label-md text-primary">סינון מדויק</p>
+            <div className="flex flex-wrap gap-2">
+              {filterChips.map((chip) => {
+                const open = openFilters.includes(chip.key);
+                const active = Boolean(chip.valueLabel);
+                return (
+                  <button
+                    key={chip.key}
+                    type="button"
+                    aria-expanded={open}
+                    onClick={() => toggleFilter(chip.key)}
+                    className={cn(
+                      "inline-flex max-w-full items-center gap-1.5 rounded-full border px-3 py-1 text-right font-label-md text-label-md transition-colors",
+                      active
+                        ? "border-primary bg-primary text-white"
+                        : open
+                          ? "border-secondary/50 bg-secondary-container text-primary"
+                          : "border-outline-variant/70 bg-surface-container-lowest text-on-surface hover:border-secondary/40 hover:bg-secondary-container/50"
+                    )}
+                  >
+                    <span className="truncate">
+                      {active ? `${chip.label}: ${chip.valueLabel}` : chip.label}
+                    </span>
+                    <Icon
+                      name="expand_more"
+                      className={cn("shrink-0 text-[16px]", open && "rotate-180")}
+                    />
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
+          {openFilters.length > 0 && (
+            <div className="mt-3 grid gap-3 rounded-xl border border-outline-variant/30 bg-surface-container-low/50 p-3 sm:grid-cols-2">
+              {openFilters.includes("mode") && (
+                <div className="sm:col-span-2">
+                  <p className="mb-2 font-label-md text-label-md text-on-surface">תצוגת היומן</p>
+                  <div className="flex flex-wrap gap-2">
+                    {(
+                      [
+                        ["group", "כל התלמידות"],
+                        ["single", "תלמידה בודדת"],
+                      ] as const
+                    ).map(([value, label]) => (
+                      <button
+                        key={value}
+                        type="button"
+                        onClick={() =>
+                          navigate(
+                            buildParams({
+                              mode: value,
+                              occurrenceId: undefined,
+                            })
+                          )
+                        }
+                        className={cn(
+                          "rounded-lg px-3 py-1.5 font-label-md text-label-md transition-colors",
+                          mode === value
+                            ? "bg-primary text-on-primary shadow-tactile-sm"
+                            : "bg-surface-container-lowest text-on-surface-variant ring-1 ring-outline-variant/40 hover:bg-surface-container"
+                        )}
+                      >
+                        {label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+              {openFilters.includes("student") && (
+                <Combobox
+                  label="תלמידה"
+                  value={studentId ?? ""}
+                  onChange={(v) => updateFilter("studentId", v || undefined)}
+                  options={allStudents.map((s) => ({ value: s.id, label: s.full_name }))}
+                  emptyLabel="כל התלמידות"
+                  placeholder="הקלידי שם תלמידה…"
+                />
+              )}
+              {openFilters.includes("lesson") && (
+                <Combobox
+                  label="שיעור ביומן"
+                  value={lessonId ?? ""}
+                  onChange={(v) => updateFilter("lessonId", v || undefined)}
+                  options={scopedLessons.map((l) => ({
+                    value: l.id,
+                    label: formatLessonOptionLabel(l),
+                  }))}
+                  emptyLabel={scopedLessons.length ? "כל השיעורים לפי הסינון" : "אין שיעורים לפי הסינון"}
+                  placeholder="הקלידי שם שיעור…"
+                  maxSuggestions={Math.max(80, scopedLessons.length)}
+                />
+              )}
+              {openFilters.includes("class") && (
+                <Combobox
+                  label="כיתה"
+                  value={classId ?? ""}
+                  onChange={(v) => updateFilter("classId", v || undefined)}
+                  options={classes.map((c) => ({ value: c.id, label: c.name }))}
+                  emptyLabel="כל הכיתות"
+                  placeholder="הקלידי שם כיתה…"
+                />
+              )}
+              {openFilters.includes("track") && (
+                <Combobox
+                  label="מסלול"
+                  value={trackId ?? ""}
+                  onChange={(v) => updateFilter("trackId", v || undefined)}
+                  options={tracks.map((t) => ({ value: t.id, label: t.name }))}
+                  emptyLabel="כל המסלולים"
+                  placeholder="הקלידי שם מסלול…"
+                />
+              )}
+              {openFilters.includes("spec") && (
+                <Combobox
+                  label="התמחות"
+                  value={specializationId ?? ""}
+                  onChange={(v) => updateFilter("specializationId", v || undefined)}
+                  options={specializations.map((s) => ({ value: s.id, label: s.name }))}
+                  emptyLabel="כל ההתמחויות"
+                  placeholder="הקלידי שם התמחות…"
+                />
+              )}
+              {openFilters.includes("teacher") && (
+                <Combobox
+                  label="מורה"
+                  value={teacherId ?? ""}
+                  onChange={(v) => {
+                    const nextTeacher = v || undefined;
+                    const keepLesson =
+                      nextTeacher &&
+                      lessonId &&
+                      lessons.find((l) => l.id === lessonId)?.teacherId === nextTeacher
+                        ? lessonId
+                        : undefined;
+                    navigate(
+                      buildParams({
+                        teacherId: nextTeacher,
+                        lessonId: keepLesson,
+                        occurrenceId: undefined,
+                      })
+                    );
+                  }}
+                  options={teachers.map((t) => ({ value: t.id, label: t.name }))}
+                  emptyLabel="כל המורות"
+                  placeholder="הקלידי שם מורה…"
+                  maxSuggestions={40}
+                />
+              )}
+              {openFilters.includes("subject") && (
+                <Combobox
+                  label="מקצוע"
+                  value={subject ?? ""}
+                  onChange={(v) => updateFilter("subject", v || undefined)}
+                  options={subjects.map((s) => ({ value: s, label: s }))}
+                  emptyLabel="כל המקצועות"
+                  placeholder="הקלידי שם מקצוע…"
+                />
+              )}
+              <p className="font-caption text-caption text-on-surface-variant sm:col-span-2">
+                הסינון מצמצם את היומן לימים ולשיעורים שתואמים לחיפוש — כולל שיוכים של תלמידה ספציפית.
+              </p>
+            </div>
+          )}
+          <p className="mt-3 font-caption text-caption text-on-surface-variant/70">
+            מקלדת: נ/N נוכחת · ע/A איחור · ן/X נעדרה · ↑↓ מעבר
+          </p>
+        </div>
       </div>
 
       {(classId || trackId || specializationId || teacherId || subject || studentId || lessonId) && (
@@ -1124,19 +1258,6 @@ export function AttendanceBoard({
           </Button>
         </div>
       )}
-
-      {filtersOpen && (
-        <div className="overflow-hidden rounded-xl border border-outline-variant/30 bg-surface-container-lowest p-4 shadow-tactile-md print:hidden">
-          {filtersPanel}
-        </div>
-      )}
-
-      <div className="print:hidden md:hidden">
-        <Button type="button" variant="secondary" className="w-full" onClick={() => setFiltersOpen(true)}>
-          <Icon name="filter_list" className="text-[18px]" />
-          סינון מלא
-        </Button>
-      </div>
 
       <div className="grid grid-cols-1 items-start gap-gutter print:hidden xl:grid-cols-12">
         <section className="order-2 rounded-xl border border-outline-variant/30 bg-surface-container-lowest p-3 shadow-tactile-md xl:order-1 xl:col-span-7">

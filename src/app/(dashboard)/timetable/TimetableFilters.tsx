@@ -84,7 +84,7 @@ export function TimetableFilters({
     if (psych === "no") params.set("forPsychology", "no");
     if (defaults.week) params.set("week", defaults.week);
 
-    router.push(`/timetable?${params.toString()}`);
+    router.push(`/timetable?${params.toString()}`, { scroll: false });
   }
 
   return (

@@ -10,6 +10,7 @@ import { authUserProfile } from "@/lib/auth/user-profile";
 import { getActiveAcademicYear, getAllAcademicYears } from "@/lib/utils";
 import { getPendingAttendanceSummary, EMPTY_PENDING_SUMMARY } from "@/lib/attendance/pending";
 import { Icon } from "@/components/ui/Icon";
+import { ScrollKeeper } from "@/components/layout/ScrollKeeper";
 
 export default async function DashboardLayout({
   children,
@@ -35,6 +36,7 @@ export default async function DashboardLayout({
     <div className="flex min-h-screen">
       <Suspense fallback={null}>
         <NavigationProgress />
+        <ScrollKeeper />
       </Suspense>
       <Sidebar
         activeYearName={activeYear?.name}
