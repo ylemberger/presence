@@ -7,16 +7,13 @@ import {
   buildHebrewMonth,
   formatGregorianDate,
   formatGregorianDayMonth,
-  formatGregorianRange,
-  academicViewYear,
   hebrewMonthFromIso,
-  hebrewMonthOptionsForYear,
   hebrewWeekdayLabels,
-  hebrewYearOptions,
   isIsoInAnyRange,
   shiftHebrewMonth,
   todayIso,
 } from "@/lib/dates/hebrew";
+import { HebrewMonthYearNav } from "@/components/ui/HebrewMonthYearNav";
 
 export interface HebrewMonthCalendarProps {
   initialMonthIso?: string;
@@ -79,13 +76,6 @@ export function HebrewMonthCalendar({
     [cursor.year, cursor.month]
   );
 
-  const viewYear = academicViewYear(cursor.year, cursor.month);
-  const yearOptions = useMemo(() => hebrewYearOptions(today, 25), [today]);
-  const monthOptions = useMemo(
-    () => hebrewMonthOptionsForYear(viewYear),
-    [viewYear]
-  );
-
   function goTo(year: number, monthNum: number) {
     setCursor({ year, month: monthNum });
     const grid = buildHebrewMonth(year, monthNum);
@@ -97,65 +87,26 @@ export function HebrewMonthCalendar({
     goTo(next.year, next.month);
   }
 
-  const navSelectClass =
-    "rounded-lg border border-outline-variant bg-surface-container-lowest px-2 py-1.5 font-label-md text-label-md text-on-surface focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary";
-
   const toolbar = (
-    <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+    <div className="mb-3 flex items-start justify-between gap-2">
       <button
         type="button"
         onClick={() => navigate(1)}
-        className="rounded-md p-1 text-on-surface-variant transition-colors hover:bg-surface-container"
+        className="mt-1 rounded-md p-1 text-on-surface-variant transition-colors hover:bg-surface-container"
         aria-label="חודש הבא"
       >
         <Icon name="chevron_right" />
       </button>
-      <div className="flex min-w-0 flex-col items-center justify-center gap-1">
-        <p className="font-caption text-caption text-on-surface-variant">
-          {formatGregorianRange(month.rangeStart, month.rangeEnd)}
-        </p>
-        <div className="flex min-w-0 flex-wrap items-center justify-center gap-2">
-        <select
-          className={navSelectClass}
-          aria-label="חודש עברי"
-          value={`${cursor.year}-${cursor.month}`}
-          onChange={(e) => {
-            const [y, m] = e.target.value.split("-").map(Number);
-            goTo(y, m);
-          }}
-        >
-          {monthOptions.map((opt) => (
-            <option key={opt.value} value={opt.value}>
-              {opt.label}
-            </option>
-          ))}
-        </select>
-        <select
-          className={navSelectClass}
-          aria-label="שנה עברית"
-          value={viewYear}
-          onChange={(e) => {
-            const year = Number(e.target.value);
-            const months = hebrewMonthOptionsForYear(year);
-            const match =
-              months.find((m) => m.month === cursor.month) ??
-              months.find((m) => m.month === 7) ??
-              months[0];
-            if (match) goTo(match.year, match.month);
-          }}
-        >
-          {yearOptions.map((opt) => (
-            <option key={opt.year} value={opt.year}>
-              {opt.label}
-            </option>
-          ))}
-        </select>
-        </div>
-      </div>
+      <HebrewMonthYearNav
+        year={cursor.year}
+        month={cursor.month}
+        onChange={goTo}
+        compact={compact}
+      />
       <button
         type="button"
         onClick={() => navigate(-1)}
-        className="rounded-md p-1 text-on-surface-variant transition-colors hover:bg-surface-container"
+        className="mt-1 rounded-md p-1 text-on-surface-variant transition-colors hover:bg-surface-container"
         aria-label="חודש קודם"
       >
         <Icon name="chevron_left" />

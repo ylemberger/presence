@@ -12,6 +12,7 @@ import { Icon } from "@/components/ui/Icon";
 import { TeacherEditForm } from "../TeacherEditForm";
 import { salaryDisplayFields } from "@/lib/teachers/salary-display";
 import { teacherIdsSharingName } from "@/lib/teachers/name-group";
+import { fetchAssignmentsByLessons } from "@/lib/supabase/paged";
 
 interface Props {
   params: { id: string };
@@ -77,14 +78,15 @@ export default async function TeacherDetailPage({ params }: Props) {
 
   const lessonIds = lessonsRows.map((l: any) => l.id);
 
-  const { data: slaRows } = await supabase
-    .from("student_lesson_assignments")
-    .select("lesson_id, student_id")
-    .in("lesson_id", lessonIds.length > 0 ? lessonIds : ["00000000-0000-0000-0000-000000000000"])
-    .is("end_date", null);
+  const slaRows = await fetchAssignmentsByLessons<{ lesson_id: string; student_id: string }>(
+    supabase,
+    lessonIds,
+    "lesson_id, student_id",
+    true
+  );
 
   const studentCountByLesson = new Map<string, Set<string>>();
-  for (const row of slaRows ?? []) {
+  for (const row of slaRows) {
     const key = row.lesson_id as string;
     const set = studentCountByLesson.get(key) ?? new Set<string>();
     set.add(row.student_id as string);

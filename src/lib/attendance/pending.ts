@@ -2,6 +2,7 @@ import { cache } from "react";
 import { createClient } from "@/lib/supabase/server";
 import { addDays, isDateInRange, startOfWeekSunday, todayIso } from "@/lib/dates/hebrew";
 import { embedOne } from "@/lib/supabase/embed";
+import { fetchAssignmentsByLessons } from "@/lib/supabase/paged";
 import { formatSubjectLessonLabel } from "@/lib/lessons/subject-label";
 
 export type PendingOccurrence = {
@@ -79,11 +80,18 @@ export const getPendingAttendanceSummary = cache(
     const lessonIds = [...new Set(occs.map((o) => o.lesson_id))];
     const occIds = occs.map((o) => o.id);
 
-    const [{ data: links }, { data: attendance }] = await Promise.all([
-      supabase
-        .from("student_lesson_assignments")
-        .select("lesson_id, student_id, start_date, end_date, students(is_active)")
-        .in("lesson_id", lessonIds),
+    const [links, { data: attendance }] = await Promise.all([
+      fetchAssignmentsByLessons<{
+        lesson_id: string;
+        student_id: string;
+        start_date: string;
+        end_date: string | null;
+        students: unknown;
+      }>(
+        supabase,
+        lessonIds,
+        "lesson_id, student_id, start_date, end_date, students(is_active)"
+      ),
       supabase
         .from("attendance")
         .select("lesson_occurrence_id")
@@ -101,10 +109,10 @@ export const getPendingAttendanceSummary = cache(
     const items: PendingOccurrence[] = [];
     for (const o of occs) {
       let total = 0;
-      for (const link of links ?? []) {
+      for (const link of links) {
         if (link.lesson_id !== o.lesson_id) continue;
-        const active = embedOne<{ is_active: boolean }>(link.students)?.is_active;
-        if (!active) continue;
+        const active = embedOne<{ is_active?: boolean }>(link.students);
+        if (active?.is_active === false) continue;
         if (!isDateInRange(o.occurrence_date, link.start_date, link.end_date)) continue;
         total++;
       }

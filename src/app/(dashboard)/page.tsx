@@ -2,7 +2,9 @@ import Link from "next/link";
 import { Card } from "@/components/ui/Card";
 import { getActiveAcademicYear, getYearCatalog } from "@/lib/utils";
 import { createClient } from "@/lib/supabase/server";
-import { todayIso, formatHebrewDate, addDays } from "@/lib/dates/hebrew";
+import { todayIso, formatHebrewDate, addDays, isDateInRange } from "@/lib/dates/hebrew";
+import { embedOne } from "@/lib/supabase/embed";
+import { fetchAssignmentsByLessons } from "@/lib/supabase/paged";
 import {
   evaluateAbsenceAgainstRule,
   summarizeAttendance,
@@ -99,11 +101,17 @@ export default async function DashboardPage() {
     if (todayRows.length > 0) {
       const lessonIds = [...new Set(todayRows.map((o) => o.lesson_id))];
       const occIds = todayRows.map((o) => o.id);
-      const [{ data: links }, { data: att }] = await Promise.all([
-        supabase
-          .from("student_lesson_assignments")
-          .select("lesson_id, student_id, start_date, end_date, students(is_active)")
-          .in("lesson_id", lessonIds),
+      const [links, { data: att }] = await Promise.all([
+        fetchAssignmentsByLessons<{
+          lesson_id: string;
+          start_date: string;
+          end_date: string | null;
+          students: unknown;
+        }>(
+          supabase,
+          lessonIds,
+          "lesson_id, student_id, start_date, end_date, students(is_active)"
+        ),
         supabase.from("attendance").select("lesson_occurrence_id").in("lesson_occurrence_id", occIds),
       ]);
 
@@ -119,11 +127,11 @@ export default async function DashboardPage() {
           ? lesson.subjects[0]?.name
           : lesson.subjects?.name;
         let total = 0;
-        for (const link of links ?? []) {
+        for (const link of links) {
           if (link.lesson_id !== o.lesson_id) continue;
-          if (!(link.students as unknown as { is_active: boolean } | null)?.is_active) continue;
-          if (link.start_date > today) continue;
-          if (link.end_date && link.end_date < today) continue;
+          const student = embedOne<{ is_active?: boolean }>(link.students);
+          if (student?.is_active === false) continue;
+          if (!isDateInRange(today, link.start_date, link.end_date)) continue;
           total++;
         }
         const marked = (att ?? []).filter((a) => a.lesson_occurrence_id === o.id).length;

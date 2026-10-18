@@ -35,6 +35,7 @@ import {
   teacherIdsSharingName,
   uniqueTeachersByName,
 } from "@/lib/teachers/name-group";
+import { fetchAssignmentsByLessons } from "@/lib/supabase/paged";
 import type { LessonTemplateCard } from "./LessonsCalendar";
 import type { LessonFormTeacher } from "./LessonsForm";
 
@@ -175,17 +176,15 @@ export default async function LessonsPage({ searchParams }: Props) {
     a.localeCompare(b, "he")
   );
 
-  const { data: slaRows } =
-    filteredIds.length === 0
-      ? { data: [] as { lesson_id: string }[] }
-      : await supabase
-          .from("student_lesson_assignments")
-          .select("lesson_id")
-          .in("lesson_id", filteredIds)
-          .is("end_date", null);
+  const slaRows = await fetchAssignmentsByLessons<{ lesson_id: string }>(
+    supabase,
+    filteredIds,
+    "lesson_id",
+    true
+  );
 
   const studentCountByLesson = new Map<string, number>();
-  for (const row of slaRows ?? []) {
+  for (const row of slaRows) {
     studentCountByLesson.set(row.lesson_id, (studentCountByLesson.get(row.lesson_id) ?? 0) + 1);
   }
 

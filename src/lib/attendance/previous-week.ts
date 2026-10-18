@@ -1,5 +1,6 @@
 import { addDays, isDateInRange, startOfWeekSunday } from "@/lib/dates/hebrew";
 import { embedOne } from "@/lib/supabase/embed";
+import { fetchAssignmentsByLessons } from "@/lib/supabase/paged";
 import type { createClient } from "@/lib/supabase/server";
 
 type Supabase = Awaited<ReturnType<typeof createClient>>;
@@ -52,11 +53,17 @@ export async function findIncompletePreviousWeekOccurrences(
   const lessonId = current.lesson_id;
   const occIds = prevOccs.map((o) => o.id);
 
-  const [{ data: links }, { data: marked }] = await Promise.all([
-    supabase
-      .from("student_lesson_assignments")
-      .select("student_id, start_date, end_date, students(is_active)")
-      .eq("lesson_id", lessonId),
+  const [links, { data: marked }] = await Promise.all([
+    fetchAssignmentsByLessons<{
+      student_id: string;
+      start_date: string;
+      end_date: string | null;
+      students: unknown;
+    }>(
+      supabase,
+      [lessonId],
+      "student_id, start_date, end_date, students(is_active)"
+    ),
     supabase
       .from("attendance")
       .select("student_id, lesson_occurrence_id")
@@ -69,9 +76,9 @@ export async function findIncompletePreviousWeekOccurrences(
 
   const incomplete: IncompletePreviousOccurrence[] = [];
   for (const occ of prevOccs) {
-    const students = (links ?? []).filter((link) => {
-      const active = embedOne<{ is_active: boolean }>(link.students)?.is_active;
-      if (!active) return false;
+    const students = links.filter((link) => {
+      const active = embedOne<{ is_active?: boolean }>(link.students);
+      if (active?.is_active === false) return false;
       return isDateInRange(occ.occurrence_date, link.start_date, link.end_date);
     });
     if (students.length === 0) continue;

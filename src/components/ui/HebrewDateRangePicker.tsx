@@ -6,18 +6,16 @@ import { cn } from "@/lib/cn";
 import {
   buildHebrewMonth,
   formatDatePair,
-  formatGregorianDate,
+  formatGregorianDayMonth,
   formatHebrewDate,
-  academicViewYear,
   hebrewMonthFromIso,
-  hebrewMonthOptionsForYear,
   hebrewWeekdayLabels,
-  hebrewYearOptions,
   isIsoInRange,
   parseFlexibleDate,
   shiftHebrewMonth,
   todayIso,
 } from "@/lib/dates/hebrew";
+import { HebrewMonthYearNav } from "@/components/ui/HebrewMonthYearNav";
 
 interface HebrewDateRangePickerProps {
   startName: string;
@@ -52,17 +50,6 @@ export function HebrewDateRangePicker({
   const month = useMemo(
     () => buildHebrewMonth(cursor.year, cursor.month),
     [cursor.year, cursor.month]
-  );
-
-  const yearOptions = useMemo(
-    () => hebrewYearOptions(seedIso, 25),
-    [seedIso]
-  );
-
-  const viewYear = academicViewYear(cursor.year, cursor.month);
-  const monthOptions = useMemo(
-    () => hebrewMonthOptionsForYear(viewYear),
-    [viewYear]
   );
 
   const previewEnd = end || (start && hoverIso ? hoverIso : "");
@@ -220,63 +207,31 @@ export function HebrewDateRangePicker({
         </label>
       </div>
 
-      <div className="overflow-hidden rounded-2xl border border-stone-200/80 bg-white shadow-[0_8px_30px_rgb(28,43,48,0.04)]">
-        <div className="flex flex-wrap items-center justify-between gap-2 border-b border-stone-100 px-4 py-3">
-          <Button
-            variant="secondary"
-            size="sm"
-            type="button"
-            onClick={() => setCursor((c) => shiftHebrewMonth(c.year, c.month, -1))}
-          >
-            חודש קודם
-          </Button>
-
-          <div className="flex flex-wrap items-center justify-center gap-2">
-            <select
-              className="rounded-xl border border-stone-200 bg-white px-2 py-2 text-sm"
-              value={`${cursor.year}-${cursor.month}`}
-              aria-label="חודש עברי"
-              onChange={(e) => {
-                const [y, m] = e.target.value.split("-").map(Number);
-                setCursor({ year: y, month: m });
-              }}
+      <div className="overflow-hidden rounded-2xl border border-outline-variant/40 bg-surface-container-lowest shadow-tactile-sm">
+        <div className="border-b border-outline-variant/30 bg-secondary-container/25 px-4 py-4">
+          <HebrewMonthYearNav
+            year={cursor.year}
+            month={cursor.month}
+            onChange={(year, monthNum) => setCursor({ year, month: monthNum })}
+          />
+          <div className="mt-3 flex justify-between gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              type="button"
+              onClick={() => setCursor((c) => shiftHebrewMonth(c.year, c.month, -1))}
             >
-              {monthOptions.map((opt) => (
-                <option key={opt.value} value={opt.value}>
-                  {opt.label}
-                </option>
-              ))}
-            </select>
-            <select
-              className="rounded-xl border border-stone-200 bg-white px-2 py-2 text-sm"
-              value={viewYear}
-              aria-label="שנה עברית"
-              onChange={(e) => {
-                const year = parseInt(e.target.value, 10);
-                const months = hebrewMonthOptionsForYear(year);
-                const match =
-                  months.find((m) => m.month === cursor.month) ??
-                  months.find((m) => m.month === 7) ??
-                  months[0];
-                if (match) setCursor({ year: match.year, month: match.month });
-              }}
+              חודש קודם
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              type="button"
+              onClick={() => setCursor((c) => shiftHebrewMonth(c.year, c.month, 1))}
             >
-              {yearOptions.map((opt) => (
-                <option key={opt.year} value={opt.year}>
-                  {opt.label}
-                </option>
-              ))}
-            </select>
+              חודש הבא
+            </Button>
           </div>
-
-          <Button
-            variant="secondary"
-            size="sm"
-            type="button"
-            onClick={() => setCursor((c) => shiftHebrewMonth(c.year, c.month, 1))}
-          >
-            חודש הבא
-          </Button>
         </div>
 
         <div className="grid grid-cols-7 gap-px bg-stone-100 p-px">
@@ -316,9 +271,9 @@ export function HebrewDateRangePicker({
                   isEnd && "rounded-l-lg"
                 )}
               >
-                <div className="text-sm font-semibold text-slate-800">{day.label}</div>
-                <div className="text-[10px] text-slate-400">
-                  {formatGregorianDate(day.iso).slice(0, 5)}
+                <div className="text-sm font-semibold text-on-surface">{day.label}</div>
+                <div className="text-[10px] text-on-surface-variant" title={formatHebrewDate(day.iso)}>
+                  {formatGregorianDayMonth(day.iso)}
                 </div>
               </button>
             );

@@ -14,6 +14,7 @@ import type { AttendanceStatus } from "@/types/database";
 import { formatSubjectLessonLabel } from "@/lib/lessons/subject-label";
 import { fetchAttendancePools, calcUnitForLesson } from "@/lib/attendance/pools";
 import { embeddedTeacher } from "@/lib/supabase/embed";
+import { fetchAllPages } from "@/lib/supabase/paged";
 import { MakeupForms } from "./MakeupForms";
 import { MakeupFilters, type MakeupFilterStatus } from "./MakeupFilters";
 import { Icon } from "@/components/ui/Icon";
@@ -100,11 +101,19 @@ export default async function MakeupPage({ searchParams }: Props) {
       .from("student_assignments")
       .select("student_id, start_date, end_date")
       .eq("academic_year_id", activeYear.id),
-    supabase
-      .from("student_lesson_assignments")
-      .select("student_id, lesson_id, start_date, end_date, lessons!inner(academic_year_id)")
-      .eq("lessons.academic_year_id", activeYear.id)
-      .is("end_date", null),
+    fetchAllPages<{
+      student_id: string;
+      lesson_id: string;
+      start_date: string;
+      end_date: string | null;
+    }>((from, to) =>
+      supabase
+        .from("student_lesson_assignments")
+        .select("student_id, lesson_id, start_date, end_date, lessons!inner(academic_year_id)")
+        .eq("lessons.academic_year_id", activeYear.id)
+        .is("end_date", null)
+        .range(from, to)
+    ).then((data) => ({ data })),
     supabase
       .from("lesson_occurrences")
       .select("id, occurrence_date, status, lesson_id, lessons!inner(academic_year_id)")

@@ -208,9 +208,36 @@ export function hebrewMonthName(year: number, month: number): string {
   return parts.slice(0, -1).join(" ");
 }
 
-/** Year shown in the calendar dropdown: Elul belongs with the following Tishrei. */
+/** Hebrew year name from Tishrei, e.g. תשפ״ז. */
+export function hebrewYearLabel(year: number): string {
+  const sample = new HDate(1, 7, year);
+  const parts = sample.renderGematriya(true).trim().split(/\s+/);
+  return parts[parts.length - 1] ?? String(year);
+}
+
+/**
+ * School year shown in the calendar.
+ * Elul belongs to the new year: Elul of year Y-1 opens school year Y
+ * (the Tishrei that follows it), then Tishrei through Av of Y.
+ */
 export function academicViewYear(year: number, month: number): number {
   return month === 6 ? year + 1 : year;
+}
+
+/** Month row in the school-year list. Elul is named with its own Hebrew year. */
+export function schoolMonthLabel(calendarYear: number, month: number): string {
+  const name = `${hebrewMonthName(calendarYear, month)} ${hebrewYearLabel(calendarYear)}`;
+  if (month !== 6) return name;
+  return `${name} · פותח את ${hebrewYearLabel(calendarYear + 1)}`;
+}
+
+/** One sentence that states where this month sits in the school year. */
+export function schoolYearNote(calendarYear: number, month: number): string {
+  const school = hebrewYearLabel(academicViewYear(calendarYear, month));
+  if (month === 6) {
+    return `אלול ${hebrewYearLabel(calendarYear)} פותח את שנת הלימודים ${school}. אלול שלפני ראש השנה שייך לשנה החדשה.`;
+  }
+  return `שנת לימודים ${school}. אלול שלפני ראש השנה נכלל בה, ואחריו תשרי עד אב.`;
 }
 
 /**
@@ -227,15 +254,12 @@ export function hebrewMonthOptionsForYear(year: number): Array<{
     { year: year - 1, month: 6 },
     ...hebrewMonthNumbersForYear(year).map((month) => ({ year, month })),
   ];
-  return rows.map(({ year: y, month }) => {
-    const grid = buildHebrewMonth(y, month);
-    return {
-      year: y,
-      month,
-      value: `${y}-${month}`,
-      label: `${hebrewMonthName(y, month)} · ${formatGregorianRange(grid.rangeStart, grid.rangeEnd)}`,
-    };
-  });
+  return rows.map(({ year: y, month }) => ({
+    year: y,
+    month,
+    value: `${y}-${month}`,
+    label: schoolMonthLabel(y, month),
+  }));
 }
 
 export function hebrewYearOptions(centerIso: string, span = 20): Array<{
@@ -245,12 +269,7 @@ export function hebrewYearOptions(centerIso: string, span = 20): Array<{
   const centerYear = isoToHDate(centerIso).getFullYear();
   const options: Array<{ year: number; label: string }> = [];
   for (let year = centerYear - span; year <= centerYear + span; year++) {
-    const sample = new HDate(1, 7, year);
-    const parts = sample.renderGematriya(true).split(" ");
-    options.push({
-      year,
-      label: parts[parts.length - 1] ?? String(year),
-    });
+    options.push({ year, label: hebrewYearLabel(year) });
   }
   return options;
 }

@@ -717,7 +717,8 @@ export function LessonsForm({
           <div className="mt-4 rounded-xl border border-outline-variant/40 bg-surface-container-low/60 p-4">
             <p className="mb-3 font-label-md text-label-md text-primary">טווח גמיש</p>
             <p className="mb-3 font-caption text-caption text-on-surface-variant">
-              בחרי בלוח תאריך התחלה ואז תאריך סיום. ליום אחד — לחצי פעמיים על אותו תאריך,
+              בחרי חודש ושנת לימודים בלוח, ואז תאריך התחלה ותאריך סיום. התאריכים עבריים.
+              אלול שלפני ראש השנה פותח את השנה החדשה. ליום אחד — לחצי פעמיים על אותו תאריך,
               או «יום אחד בלבד».
             </p>
             <HebrewDateRangePicker

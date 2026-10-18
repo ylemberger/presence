@@ -28,6 +28,7 @@ import {
 } from "@/lib/attendance/previous-week";
 import { AttendanceReminderBanner } from "@/components/attendance/AttendanceReminderBanner";
 import { embedOne, embeddedTeacher } from "@/lib/supabase/embed";
+import { fetchAssignmentsByLessons } from "@/lib/supabase/paged";
 import { compareStudentsByLastName } from "@/lib/students/sort";
 import {
   AttendanceBoard,
@@ -278,13 +279,18 @@ export default async function AttendancePage({ searchParams }: Props) {
   const monthLessonIds = [...new Set(monthOccurrences.map((o) => o.lessonId))];
 
   // Single bundled fetch for links + month attendance (perf)
-  const [{ data: monthLinks }, { data: monthAttendance }] = await Promise.all([
-    monthLessonIds.length > 0
-      ? supabase
-          .from("student_lesson_assignments")
-          .select("lesson_id, student_id, start_date, end_date, students(id, full_name, first_name, last_name, is_active)")
-          .in("lesson_id", monthLessonIds)
-      : Promise.resolve({ data: [] as never[] }),
+  const [monthLinks, monthAttendanceRes] = await Promise.all([
+    fetchAssignmentsByLessons<{
+      lesson_id: string;
+      student_id: string;
+      start_date: string;
+      end_date: string | null;
+      students: unknown;
+    }>(
+      supabase,
+      monthLessonIds,
+      "lesson_id, student_id, start_date, end_date, students(id, full_name, first_name, last_name, is_active)"
+    ),
     monthOccIds.length > 0
       ? supabase
           .from("attendance")
@@ -292,14 +298,15 @@ export default async function AttendancePage({ searchParams }: Props) {
           .in("lesson_occurrence_id", monthOccIds)
       : Promise.resolve({ data: [] as never[] }),
   ]);
+  const monthAttendance = monthAttendanceRes.data;
 
   function rosterStudent(link: {
     student_id: string;
     students: unknown;
   }): AttendanceName | null {
-    const s =
-      embedOne<AttendanceName>(link.students) ?? allStudentsMap.get(link.student_id) ?? null;
-    if (!s?.is_active) return null;
+    const embedded = embedOne<AttendanceName>(link.students);
+    const s = embedded ?? allStudentsMap.get(link.student_id) ?? null;
+    if (!s || s.is_active === false) return null;
     return { ...s, id: s.id || link.student_id };
   }
 
@@ -314,7 +321,7 @@ export default async function AttendancePage({ searchParams }: Props) {
   const markedCounts = new Map<string, number>();
   for (const occ of dayOccurrences) {
     let count = 0;
-    for (const link of monthLinks ?? []) {
+    for (const link of monthLinks) {
       if (link.lesson_id !== occ.lessonId) continue;
       if (!rosterStudent(link)) continue;
       if (!linkCoversDate(link, occ.date)) continue;
@@ -343,7 +350,7 @@ export default async function AttendancePage({ searchParams }: Props) {
   if (selectedOcc) {
     const lessonIds = new Set(selectedOcc.linkedLessonIds);
     const map = new Map<string, AttendanceName>();
-    for (const link of monthLinks ?? []) {
+    for (const link of monthLinks) {
       if (!lessonIds.has(link.lesson_id)) continue;
       if (!linkCoversDate(link, selectedOcc.date)) continue;
       const s = rosterStudent(link);
@@ -372,7 +379,7 @@ export default async function AttendancePage({ searchParams }: Props) {
     const monthMarkedCounts = new Map<string, number>();
     for (const occ of monthOccurrences) {
       let count = 0;
-      for (const link of monthLinks ?? []) {
+      for (const link of monthLinks) {
         if (link.lesson_id !== occ.lessonId) continue;
         if (!rosterStudent(link)) continue;
         if (!linkCoversDate(link, occ.date)) continue;
@@ -429,12 +436,11 @@ export default async function AttendancePage({ searchParams }: Props) {
       const eligible = lessonOccs
         .filter((o) => {
           if (o.date > selectedOcc.date) return false;
-          return (monthLinks ?? []).some(
+          return monthLinks.some(
             (link) =>
               link.lesson_id === o.lessonId &&
               link.student_id === student.id &&
-              link.start_date <= o.date &&
-              (link.end_date === null || link.end_date >= o.date)
+              linkCoversDate(link, o.date)
           );
         })
         .map((o) => {
@@ -545,18 +551,25 @@ export default async function AttendancePage({ searchParams }: Props) {
   if (params.lessonId && (selectedLessonOccRaw ?? []).length > 0) {
     const yearOccs = selectedLessonOccRaw ?? [];
     const yearOccIds = yearOccs.map((o) => o.id);
-    const [{ data: yearLinks }, { data: yearAtt }] = await Promise.all([
-      supabase
-        .from("student_lesson_assignments")
-        .select("lesson_id, student_id, start_date, end_date, students(id, full_name, first_name, last_name, is_active)")
-        .eq("lesson_id", params.lessonId),
+    const [yearLinks, { data: yearAtt }] = await Promise.all([
+      fetchAssignmentsByLessons<{
+        lesson_id: string;
+        student_id: string;
+        start_date: string;
+        end_date: string | null;
+        students: unknown;
+      }>(
+        supabase,
+        [params.lessonId],
+        "lesson_id, student_id, start_date, end_date, students(id, full_name, first_name, last_name, is_active)"
+      ),
       supabase
         .from("attendance")
         .select("student_id, lesson_occurrence_id")
         .in("lesson_occurrence_id", yearOccIds),
     ]);
     selectedLessonOccurrences = yearOccs.map((o) => {
-      const students = (yearLinks ?? []).filter((link) => {
+      const students = yearLinks.filter((link) => {
         if (!rosterStudent(link)) return false;
         return linkCoversDate(link, o.occurrence_date);
       });

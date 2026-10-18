@@ -1,5 +1,6 @@
 import { createClient } from "@/lib/supabase/server";
-import { addDays, todayIso } from "@/lib/dates/hebrew";
+import { addDays, todayIso, toIsoDay } from "@/lib/dates/hebrew";
+import { fetchAllPages } from "@/lib/supabase/paged";
 
 type Supabase = Awaited<ReturnType<typeof createClient>>;
 
@@ -116,7 +117,7 @@ function placementFromRow(p: {
   specialization_id: string | null;
   secondary_specialization_id?: string | null;
   grade_id: string;
-  is_psychology?: boolean;
+  is_psychology?: boolean | null;
 }): Placement {
   return {
     class_id: p.class_id,
@@ -279,32 +280,50 @@ export async function autoAssignStudentsToLesson(
   const supabase = await dbOf(db);
   const excludedStudents = await excludedStudentIdsForLesson(supabase, lessonId);
 
-  const [{ data: lesson }, { data: placements }, { data: existingLinks }, { data: audience }] =
-    await Promise.all([
-      supabase
-        .from("lessons")
-        .select(
-          "id, class_id, track_id, specialization_id, billing_type, grade_id, for_psychology, activity_ranges(start_date)"
-        )
-        .eq("id", lessonId)
-        .single(),
+  const [{ data: lesson }, placements, existingLinks, { data: audience }] = await Promise.all([
+    supabase
+      .from("lessons")
+      .select(
+        "id, class_id, track_id, specialization_id, billing_type, grade_id, for_psychology, activity_ranges(start_date)"
+      )
+      .eq("id", lessonId)
+      .single(),
+    fetchAllPages<{
+      student_id: string;
+      class_id: string;
+      track_id: string;
+      specialization_id: string;
+      secondary_specialization_id: string | null;
+      grade_id: string;
+      is_psychology: boolean | null;
+    }>((from, to) =>
       supabase
         .from("student_assignments")
         .select(
           "student_id, class_id, track_id, specialization_id, secondary_specialization_id, grade_id, is_psychology"
         )
         .eq("academic_year_id", academicYearId)
-        .is("end_date", null),
+        .is("end_date", null)
+        .range(from, to)
+    ),
+    fetchAllPages<{
+      id: string;
+      student_id: string;
+      start_date: string;
+      assignment_type: string;
+    }>((from, to) =>
       supabase
         .from("student_lesson_assignments")
         .select("id, student_id, start_date, assignment_type")
         .eq("lesson_id", lessonId)
-        .is("end_date", null),
-      supabase
-        .from("lesson_audience")
-        .select("lesson_id, grade_id, class_id, track_id, specialization_id")
-        .eq("lesson_id", lessonId),
-    ]);
+        .is("end_date", null)
+        .range(from, to)
+    ),
+    supabase
+      .from("lesson_audience")
+      .select("lesson_id, grade_id, class_id, track_id, specialization_id")
+      .eq("lesson_id", lessonId),
+  ]);
 
   if (!lesson) return { assigned: 0 };
 
@@ -316,8 +335,8 @@ export async function autoAssignStudentsToLesson(
 
   const scoped = withAudience(lesson, audience ?? []);
 
-  const already = new Set((existingLinks ?? []).map((r) => r.student_id));
-  const rows = (placements ?? [])
+  const already = new Set(existingLinks.map((r) => r.student_id));
+  const rows = placements
     .filter((p) => studentMatchesLesson(placementFromRow(p), scoped))
     .filter((p) => !already.has(p.student_id))
     .filter((p) => !excludedStudents.has(p.student_id))
@@ -334,8 +353,8 @@ export async function autoAssignStudentsToLesson(
     if (error) throw new Error(error.message);
   }
 
-  const toBackfill = (existingLinks ?? []).filter(
-    (r) => r.assignment_type === "automatic" && r.start_date > effectiveFrom
+  const toBackfill = existingLinks.filter(
+    (r) => r.assignment_type === "automatic" && toIsoDay(r.start_date) > effectiveFrom
   );
   if (toBackfill.length > 0) {
     const { error } = await supabase
@@ -360,42 +379,60 @@ export async function refreshAutomaticAssignmentsForLesson(
   const supabase = await dbOf(db);
   const result = await autoAssignStudentsToLesson(lessonId, academicYearId, undefined, supabase);
 
-  const [{ data: lesson }, { data: placements }, { data: existingLinks }, { data: audience }] =
-    await Promise.all([
-      supabase
-        .from("lessons")
-        .select("id, class_id, track_id, specialization_id, billing_type, grade_id, for_psychology")
-        .eq("id", lessonId)
-        .maybeSingle(),
+  const [{ data: lesson }, placements, existingLinks, { data: audience }] = await Promise.all([
+    supabase
+      .from("lessons")
+      .select("id, class_id, track_id, specialization_id, billing_type, grade_id, for_psychology")
+      .eq("id", lessonId)
+      .maybeSingle(),
+    fetchAllPages<{
+      student_id: string;
+      class_id: string;
+      track_id: string;
+      specialization_id: string;
+      secondary_specialization_id: string | null;
+      grade_id: string;
+      is_psychology: boolean | null;
+    }>((from, to) =>
       supabase
         .from("student_assignments")
         .select(
           "student_id, class_id, track_id, specialization_id, secondary_specialization_id, grade_id, is_psychology"
         )
         .eq("academic_year_id", academicYearId)
-        .is("end_date", null),
+        .is("end_date", null)
+        .range(from, to)
+    ),
+    fetchAllPages<{
+      id: string;
+      student_id: string;
+      start_date: string;
+      assignment_type: string;
+    }>((from, to) =>
       supabase
         .from("student_lesson_assignments")
         .select("id, student_id, start_date, assignment_type")
         .eq("lesson_id", lessonId)
         .eq("assignment_type", "automatic")
-        .is("end_date", null),
-      supabase
-        .from("lesson_audience")
-        .select("lesson_id, grade_id, class_id, track_id, specialization_id")
-        .eq("lesson_id", lessonId),
-    ]);
+        .is("end_date", null)
+        .range(from, to)
+    ),
+    supabase
+      .from("lesson_audience")
+      .select("lesson_id, grade_id, class_id, track_id, specialization_id")
+      .eq("lesson_id", lessonId),
+  ]);
 
   if (!lesson) return { ...result, closed: 0 };
 
   const scoped = withAudience(lesson, audience ?? []);
   const matching = new Set(
-    (placements ?? [])
+    placements
       .filter((p) => studentMatchesLesson(placementFromRow(p), scoped))
       .map((p) => p.student_id)
   );
 
-  const toClose = (existingLinks ?? []).filter((row) => !matching.has(row.student_id));
+  const toClose = existingLinks.filter((row) => !matching.has(row.student_id));
   if (toClose.length === 0) return { ...result, closed: 0 };
 
   const today = todayIso();
