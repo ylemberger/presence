@@ -13,6 +13,7 @@ import { TeacherEditForm } from "../TeacherEditForm";
 import { salaryDisplayFields } from "@/lib/teachers/salary-display";
 import { teacherIdsSharingName } from "@/lib/teachers/name-group";
 import { fetchAssignmentsByLessons } from "@/lib/supabase/paged";
+import { displayTeacherEmail, displayTeacherPhone } from "@/lib/teachers/contact";
 
 interface Props {
   params: { id: string };
@@ -117,8 +118,12 @@ export default async function TeacherDetailPage({ params }: Props) {
 
   const initial = teacher.full_name?.[0] ?? "?";
   const identityLabel = identities.length > 0 ? identities.join(" · ") : (teacher.identity_number ?? "—");
-  const displayPhone = group.find((row) => row.phone)?.phone ?? teacher.phone;
-  const displayEmail = group.find((row) => row.email)?.email ?? teacher.email;
+  const displayPhone =
+    group.map((row) => displayTeacherPhone(row.phone)).find((value) => Boolean(value)) ??
+    displayTeacherPhone(teacher.phone);
+  const displayEmail =
+    group.map((row) => displayTeacherEmail(row.email)).find((value) => Boolean(value)) ??
+    displayTeacherEmail(teacher.email);
 
   return (
     <div className="flex flex-col gap-gutter">
@@ -201,8 +206,8 @@ export default async function TeacherDetailPage({ params }: Props) {
             <TeacherEditForm
               teacherId={teacher.id}
               fullName={teacher.full_name}
-              phone={teacher.phone}
-              email={teacher.email}
+              phone={displayPhone}
+              email={displayEmail}
             />
           )}
         </Section>

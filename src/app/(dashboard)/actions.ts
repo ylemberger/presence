@@ -1291,15 +1291,16 @@ export async function updateTeacherAction(formData: FormData) {
     email = parsed;
   }
 
-  const { error } = await supabase
-    .from("teachers")
-    .update({
-      full_name: fullName,
-      phone,
-      email,
-      is_local: true,
-    })
-    .eq("id", id);
+  const patch: {
+    full_name: string;
+    is_local: boolean;
+    phone?: string;
+    email?: string;
+  } = { full_name: fullName, is_local: true };
+  if (phone) patch.phone = phone;
+  if (email) patch.email = email;
+
+  const { error } = await supabase.from("teachers").update(patch).eq("id", id);
   if (error) return { error: error.message };
   revalidatePath("/teachers");
   revalidatePath(`/teachers/${id}`);

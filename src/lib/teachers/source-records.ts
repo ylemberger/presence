@@ -19,12 +19,28 @@ export type TeacherSourceRow = {
   salary_meetings?: number | null;
 };
 
+const PAGE_SIZE = 1000;
+
 export async function fetchTeacherSourceRecords(
   supabase: SupabaseClient
 ): Promise<TeacherSourceRow[]> {
   for (const select of SOURCE_SELECTS) {
-    const { data, error } = await supabase.from("teacher_source_records").select(select);
-    if (!error) return (data ?? []) as TeacherSourceRow[];
+    const rows: TeacherSourceRow[] = [];
+    let failed = false;
+    for (let from = 0; from < 50000; from += PAGE_SIZE) {
+      const { data, error } = await supabase
+        .from("teacher_source_records")
+        .select(select)
+        .range(from, from + PAGE_SIZE - 1);
+      if (error) {
+        failed = true;
+        break;
+      }
+      const batch = (data ?? []) as TeacherSourceRow[];
+      rows.push(...batch);
+      if (batch.length < PAGE_SIZE) return rows;
+    }
+    if (!failed) return rows;
   }
   return [];
 }

@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo } from "react";
 import { useRememberedText } from "@/lib/ui/remembered-text";
 import Link from "next/link";
 import { StatusPill } from "@/components/ui/PageHeader";
@@ -20,8 +20,6 @@ export type TeacherDirectoryRow = {
   salaryMeetings: string;
 };
 
-const PREVIEW_LIMIT = 50;
-
 const HEADERS = ["מורה", "קשר", "שיבוצי שכר", "סטטוס", ""] as const;
 const VIEW_HEADERS = ["מורה", "קשר", "שיבוצי שכר", "סטטוס"] as const;
 
@@ -33,7 +31,6 @@ export function TeachersDirectory({
   viewOnly?: boolean;
 }) {
   const [query, setQuery] = useRememberedText("presence-search:teachers");
-  const [showAll, setShowAll] = useState(false);
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -57,14 +54,15 @@ export function TeachersDirectory({
     });
   }, [teachers, query]);
 
-  const visible = showAll ? filtered : filtered.slice(0, PREVIEW_LIMIT);
-
   return (
     <div className="flex h-full min-w-0 flex-col overflow-x-hidden rounded-xl bg-surface-container-lowest p-stack_md shadow-tactile-md">
       <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
         <h3 className="flex items-center gap-2 font-title-lg text-title-lg text-primary">
           <Icon name="list_alt" className="text-primary-container" />
           רשימת מורות
+          <span className="font-body-md text-body-md font-normal text-on-surface-variant">
+            {filtered.length}
+          </span>
         </h3>
         <div className="relative w-full max-w-64">
           <Icon name="search" className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-outline-variant" />
@@ -99,7 +97,7 @@ export function TeachersDirectory({
             </tr>
           </thead>
           <tbody>
-            {visible.map((t) => (
+            {filtered.map((t) => (
               <tr
                 key={t.id}
                 className="group border-b border-surface-variant transition-colors hover:bg-surface-variant/50"
@@ -165,15 +163,6 @@ export function TeachersDirectory({
         )}
       </div>
 
-      {filtered.length > PREVIEW_LIMIT && (
-        <button
-          type="button"
-          onClick={() => setShowAll((v) => !v)}
-          className="mt-4 w-full text-center font-label-md text-label-md text-secondary hover:underline"
-        >
-          {showAll ? "הצג פחות" : "הצג הכל"}
-        </button>
-      )}
     </div>
   );
 }

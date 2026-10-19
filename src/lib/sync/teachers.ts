@@ -1,5 +1,11 @@
 import { createClient } from "@/lib/supabase/server";
 import { createSalaryReadClient } from "@/lib/sync/salary-client";
+import {
+  displayTeacherEmail,
+  displayTeacherPhone,
+  storedEmail,
+  storedPhone,
+} from "@/lib/teachers/contact";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 export interface SyncResult {
@@ -183,9 +189,12 @@ export async function syncTeacherSourceRecords(
 
     let { data: teacher } = await supabase
       .from("teachers")
-      .select("id, phone, email")
+      .select("id, phone, email, full_name, is_local")
       .eq("identity_number", identity)
       .maybeSingle();
+
+    const phoneToStore = storedPhone(phone);
+    const emailToStore = storedEmail(email, identity);
 
     if (!teacher) {
       const { data: created, error: createError } = await supabase
@@ -193,11 +202,11 @@ export async function syncTeacherSourceRecords(
         .insert({
           full_name: fullName,
           identity_number: identity,
-          phone,
-          email,
+          phone: phoneToStore,
+          email: emailToStore,
           is_local: false,
         })
-        .select("id, phone, email")
+        .select("id, phone, email, full_name, is_local")
         .single();
       if (createError || !created) {
         result.skippedInvalid++;
@@ -206,22 +215,30 @@ export async function syncTeacherSourceRecords(
       teacher = created;
       result.teachersCreated++;
     } else {
-      const patch: { phone?: string | null; email?: string | null } = {};
-      if (!teacher.phone && phone) patch.phone = phone;
-      if (!teacher.email && email) patch.email = email;
+      const patch: { phone?: string; email?: string; full_name?: string } = {};
+      if (!displayTeacherPhone(teacher.phone) && displayTeacherPhone(phoneToStore)) {
+        patch.phone = phoneToStore;
+      }
+      if (!displayTeacherEmail(teacher.email) && displayTeacherEmail(emailToStore)) {
+        patch.email = emailToStore;
+      }
+      if (!teacher.is_local && teacher.full_name.trim() !== fullName) {
+        patch.full_name = fullName;
+      }
       if (Object.keys(patch).length > 0) {
         await supabase.from("teachers").update(patch).eq("id", teacher.id);
       }
     }
 
+    const sourceWrite = { ...payload, teacher_id: teacher.id };
     const existing = existingByExternal.get(externalId);
     if (existing) {
       let { error: updateError } = await supabase
         .from("teacher_source_records")
-        .update(payload)
+        .update(sourceWrite)
         .eq("id", existing.id);
       if (updateError && isMissingColumnError(updateError)) {
-        const { payload: _ignored, ...coreOnly } = payload;
+        const { payload: _ignored, teacher_id: _teacherId, ...coreOnly } = sourceWrite;
         ({ error: updateError } = await supabase
           .from("teacher_source_records")
           .update(coreOnly)
@@ -239,12 +256,12 @@ export async function syncTeacherSourceRecords(
       .from("teacher_source_records")
       .insert({
         external_id: externalId,
-        ...payload,
+        ...sourceWrite,
       })
       .select("id")
       .single();
     if (insertSourceError && isMissingColumnError(insertSourceError)) {
-      const { payload: _ignored, ...coreOnly } = payload;
+      const { payload: _ignored, teacher_id: _teacherId, ...coreOnly } = sourceWrite;
       ({ data: inserted, error: insertSourceError } = await supabase
         .from("teacher_source_records")
         .insert({

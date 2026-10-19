@@ -13,6 +13,9 @@ import {
 } from "@/lib/teachers/source-records";
 import { embedOne } from "@/lib/supabase/embed";
 import { teacherNameKey, uniqueTeachersByName } from "@/lib/teachers/name-group";
+import { displayTeacherEmail, displayTeacherPhone } from "@/lib/teachers/contact";
+import { fetchAllPages } from "@/lib/supabase/paged";
+import type { Teacher } from "@/types/database";
 
 type AssignmentRow = {
   id: string;
@@ -54,16 +57,18 @@ export default async function TeachersPage() {
   const activeYear = await getActiveAcademicYear();
   const supabase = await createClient();
 
-  const { data: teachers } = await supabase.from("teachers").select("*").order("full_name");
+  const teachers = await fetchAllPages<Teacher>((from, to) =>
+    supabase.from("teachers").select("*").order("full_name").range(from, to)
+  );
 
   const sourceRows = await fetchTeacherSourceRecords(supabase);
 
   const identityToTeacherId = new Map(
-    (teachers ?? []).map((t) => [t.identity_number, t.id])
+    teachers.map((t) => [t.identity_number, t.id])
   );
   const sourcesByTeacher = groupSourceRowsByTeacher(sourceRows, identityToTeacherId);
 
-  const flatRows: TeacherDirectoryRow[] = (teachers ?? []).map((t) => {
+  const flatRows: TeacherDirectoryRow[] = teachers.map((t) => {
     const sources = sourcesByTeacher.get(t.id) ?? [];
     const fields = sources.map((s) => salaryDisplayFields(s));
     const meetings = fields
@@ -73,8 +78,8 @@ export default async function TeachersPage() {
       id: t.id,
       full_name: t.full_name,
       identity_number: t.identity_number,
-      phone: t.phone,
-      email: t.email,
+      phone: displayTeacherPhone(t.phone),
+      email: displayTeacherEmail(t.email),
       is_local: t.is_local,
       salarySubjects: uniqueJoined(fields.map((f) => f.subject)),
       salaryTracks: uniqueJoined(fields.map((f) => f.track)),
