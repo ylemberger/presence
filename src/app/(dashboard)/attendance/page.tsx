@@ -77,6 +77,7 @@ export default async function AttendancePage({ searchParams }: Props) {
   const monthFrom = params.from || month.rangeStart;
   const monthTo = params.to || month.rangeEnd;
 
+  const pendingSummaryPromise = getPendingAttendanceSummary(activeYear.id);
   const catalog = await getYearCatalog(activeYear.id);
   const poolCatalog = await fetchAttendancePools(supabase, activeYear.id);
 
@@ -317,21 +318,41 @@ export default async function AttendancePage({ searchParams }: Props) {
     return isDateInRange(date, link.start_date, link.end_date);
   }
 
+  const linksByLesson = new Map<string, typeof monthLinks>();
+  for (const link of monthLinks) {
+    const list = linksByLesson.get(link.lesson_id);
+    if (list) list.push(link);
+    else linksByLesson.set(link.lesson_id, [link]);
+  }
+  const markedCountByOccurrence = new Map<string, number>();
+  const attendanceByPair = new Map<string, NonNullable<typeof monthAttendance>[number]>();
+  for (const row of monthAttendance ?? []) {
+    markedCountByOccurrence.set(
+      row.lesson_occurrence_id,
+      (markedCountByOccurrence.get(row.lesson_occurrence_id) ?? 0) + 1
+    );
+    attendanceByPair.set(`${row.lesson_occurrence_id}::${row.student_id}`, row);
+  }
+
+  function linksFor(lessonId: string) {
+    return linksByLesson.get(lessonId) ?? [];
+  }
+
+  function countRoster(lessonId: string, date: string) {
+    let count = 0;
+    for (const link of linksFor(lessonId)) {
+      if (!rosterStudent(link)) continue;
+      if (!linkCoversDate(link, date)) continue;
+      count++;
+    }
+    return count;
+  }
+
   const studentCounts = new Map<string, number>();
   const markedCounts = new Map<string, number>();
   for (const occ of dayOccurrences) {
-    let count = 0;
-    for (const link of monthLinks) {
-      if (link.lesson_id !== occ.lessonId) continue;
-      if (!rosterStudent(link)) continue;
-      if (!linkCoversDate(link, occ.date)) continue;
-      count++;
-    }
-    studentCounts.set(occ.id, count);
-    markedCounts.set(
-      occ.id,
-      (monthAttendance ?? []).filter((a) => a.lesson_occurrence_id === occ.id).length
-    );
+    studentCounts.set(occ.id, countRoster(occ.lessonId, occ.date));
+    markedCounts.set(occ.id, markedCountByOccurrence.get(occ.id) ?? 0);
   }
 
   const dayBlocks = mergeAttendanceBlocks(
@@ -348,13 +369,13 @@ export default async function AttendancePage({ searchParams }: Props) {
     (dayBlocks.length === 1 ? dayBlocks[0] : null);
 
   if (selectedOcc) {
-    const lessonIds = new Set(selectedOcc.linkedLessonIds);
     const map = new Map<string, AttendanceName>();
-    for (const link of monthLinks) {
-      if (!lessonIds.has(link.lesson_id)) continue;
-      if (!linkCoversDate(link, selectedOcc.date)) continue;
-      const s = rosterStudent(link);
-      if (s) map.set(s.id, s);
+    for (const lessonId of selectedOcc.linkedLessonIds) {
+      for (const link of linksFor(lessonId)) {
+        if (!linkCoversDate(link, selectedOcc.date)) continue;
+        const s = rosterStudent(link);
+        if (s) map.set(s.id, s);
+      }
     }
     lessonStudents = [...map.values()].sort(compareStudentsByLastName);
 
@@ -378,18 +399,8 @@ export default async function AttendancePage({ searchParams }: Props) {
     const monthStudentCounts = new Map<string, number>();
     const monthMarkedCounts = new Map<string, number>();
     for (const occ of monthOccurrences) {
-      let count = 0;
-      for (const link of monthLinks) {
-        if (link.lesson_id !== occ.lessonId) continue;
-        if (!rosterStudent(link)) continue;
-        if (!linkCoversDate(link, occ.date)) continue;
-        count++;
-      }
-      monthStudentCounts.set(occ.id, count);
-      monthMarkedCounts.set(
-        occ.id,
-        (monthAttendance ?? []).filter((a) => a.lesson_occurrence_id === occ.id).length
-      );
+      monthStudentCounts.set(occ.id, countRoster(occ.lessonId, occ.date));
+      monthMarkedCounts.set(occ.id, markedCountByOccurrence.get(occ.id) ?? 0);
     }
 
     const occsByDate = new Map<string, typeof monthOccurrences>();
@@ -401,9 +412,7 @@ export default async function AttendancePage({ searchParams }: Props) {
     for (const [date, occs] of occsByDate) {
       if (params.studentId) {
         const allDone = occs.every((o) =>
-          (monthAttendance ?? []).some(
-            (a) => a.lesson_occurrence_id === o.id && a.student_id === params.studentId
-          )
+          attendanceByPair.has(`${o.id}::${params.studentId}`)
         );
         if (allDone) completeDates.push(date);
         else partialDates.push(date);
@@ -436,17 +445,12 @@ export default async function AttendancePage({ searchParams }: Props) {
       const eligible = lessonOccs
         .filter((o) => {
           if (o.date > selectedOcc.date) return false;
-          return monthLinks.some(
-            (link) =>
-              link.lesson_id === o.lessonId &&
-              link.student_id === student.id &&
-              linkCoversDate(link, o.date)
+          return linksFor(o.lessonId).some(
+            (link) => link.student_id === student.id && linkCoversDate(link, o.date)
           );
         })
         .map((o) => {
-          const att = (monthAttendance ?? []).find(
-            (a) => a.lesson_occurrence_id === o.id && a.student_id === student.id
-          );
+          const att = attendanceByPair.get(`${o.id}::${student.id}`);
           return {
             occurrenceId: o.id,
             occurrenceDate: o.date,
@@ -589,7 +593,7 @@ export default async function AttendancePage({ searchParams }: Props) {
     : [];
   const prevWeekIncomplete = blockingPreviousWeekGaps(prevWeekIncompleteRaw);
 
-  const pendingSummary = await getPendingAttendanceSummary(activeYear.id);
+  const pendingSummary = await pendingSummaryPromise;
   const holidaySets = holidayDatesByKind(holidayRows ?? []);
 
   // Gentle gap nudge only for the lesson the user is about to fill — not every pending lesson.

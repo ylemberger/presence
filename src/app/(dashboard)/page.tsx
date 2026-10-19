@@ -23,6 +23,9 @@ export default async function DashboardPage() {
   const activeYear = await getActiveAcademicYear();
   const supabase = await createClient();
   const today = todayIso();
+  const pendingSummaryPromise = activeYear
+    ? getPendingAttendanceSummary(activeYear.id)
+    : Promise.resolve(EMPTY_PENDING_SUMMARY);
 
   let stats = { students: 0, classes: 0, lessons: 0, unmarked: 0, markedThisWeek: 0 };
   let todayLessons: Array<{
@@ -236,9 +239,7 @@ export default async function DashboardPage() {
     };
   }
 
-  const pendingSummary = activeYear
-    ? await getPendingAttendanceSummary(activeYear.id)
-    : EMPTY_PENDING_SUMMARY;
+  const pendingSummary = await pendingSummaryPromise;
 
   const kpis = [
     {

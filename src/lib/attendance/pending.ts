@@ -106,11 +106,17 @@ export const getPendingAttendanceSummary = cache(
       );
     }
 
+    const linksByLesson = new Map<string, typeof links>();
+    for (const link of links) {
+      const list = linksByLesson.get(link.lesson_id);
+      if (list) list.push(link);
+      else linksByLesson.set(link.lesson_id, [link]);
+    }
+
     const items: PendingOccurrence[] = [];
     for (const o of occs) {
       let total = 0;
-      for (const link of links) {
-        if (link.lesson_id !== o.lesson_id) continue;
+      for (const link of linksByLesson.get(o.lesson_id) ?? []) {
         const active = embedOne<{ is_active?: boolean }>(link.students);
         if (active?.is_active === false) continue;
         if (!isDateInRange(o.occurrence_date, link.start_date, link.end_date)) continue;

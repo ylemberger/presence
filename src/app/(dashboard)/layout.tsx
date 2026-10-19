@@ -2,13 +2,12 @@ import { Suspense } from "react";
 import { Sidebar } from "@/components/layout/Sidebar";
 import { YearSelector } from "@/components/layout/YearSelector";
 import { NavigationProgress } from "@/components/layout/NavigationProgress";
-import { AttendanceReminderBanner } from "@/components/attendance/AttendanceReminderBanner";
 import { UserAvatar } from "@/components/layout/UserAvatar";
 import { requireAuthenticatedUser } from "@/lib/supabase/server";
 import { AccessProvider } from "@/components/auth/AccessProvider";
 import { authUserProfile } from "@/lib/auth/user-profile";
 import { getActiveAcademicYear, getAllAcademicYears } from "@/lib/utils";
-import { getPendingAttendanceSummary, EMPTY_PENDING_SUMMARY } from "@/lib/attendance/pending";
+import { PendingBanner, PendingSidebar } from "@/components/layout/PendingChrome";
 import { Icon } from "@/components/ui/Icon";
 import { ScrollKeeper } from "@/components/layout/ScrollKeeper";
 
@@ -27,10 +26,13 @@ export default async function DashboardLayout({
     getAllAcademicYears(),
   ]);
 
-  const pending =
-    listOnly || !activeYear
-      ? EMPTY_PENDING_SUMMARY
-      : await getPendingAttendanceSummary(activeYear.id);
+  const sidebarProps = {
+    activeYearName: activeYear?.name,
+    userEmail: profile.email,
+    userName: profile.displayName,
+    userAvatarUrl: profile.avatarUrl,
+    viewOnly: listOnly,
+  };
 
   return (
     <div className="flex min-h-screen">
@@ -38,14 +40,9 @@ export default async function DashboardLayout({
         <NavigationProgress />
         <ScrollKeeper />
       </Suspense>
-      <Sidebar
-        activeYearName={activeYear?.name}
-        attendancePendingCount={listOnly ? 0 : pending.pendingCount}
-        userEmail={profile.email}
-        userName={profile.displayName}
-        userAvatarUrl={profile.avatarUrl}
-        viewOnly={listOnly}
-      />
+      <Suspense fallback={<Sidebar {...sidebarProps} attendancePendingCount={0} />}>
+        <PendingSidebar {...sidebarProps} yearId={listOnly ? null : activeYear?.id ?? null} />
+      </Suspense>
       {/* Main Content Area — offset right by the fixed sidebar width */}
       <main className="relative mr-[var(--sidebar-width)] flex min-h-screen w-[calc(100%-var(--sidebar-width))] min-w-0 flex-1 flex-col transition-[margin,width] duration-200 print:mr-0 print:w-full">
         {/* TopAppBar */}
@@ -61,7 +58,9 @@ export default async function DashboardLayout({
             )}
           </div>
           <div className="flex items-center gap-3">
-            {listOnly ? null : <AttendanceReminderBanner summary={pending} compact />}
+            <Suspense fallback={null}>
+              <PendingBanner yearId={listOnly ? null : activeYear?.id ?? null} />
+            </Suspense>
             <button
               type="button"
               className="text-on-surface-variant transition-colors hover:text-secondary"

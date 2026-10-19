@@ -38,20 +38,20 @@ export async function fetchAssignmentsByLessons<T>(
   openOnly = false
 ): Promise<T[]> {
   if (lessonIds.length === 0) return [];
-  const rows: T[] = [];
-  for (const chunk of chunkIds(lessonIds)) {
-    const page = await fetchAllPages<T>((from, to) => {
-      let query = supabase
-        .from("student_lesson_assignments")
-        .select(columns)
-        .in("lesson_id", chunk);
-      if (openOnly) query = query.is("end_date", null);
-      return query.range(from, to) as PromiseLike<{
-        data: T[] | null;
-        error: { message: string } | null;
-      }>;
-    });
-    rows.push(...page);
-  }
-  return rows;
+  const pages = await Promise.all(
+    chunkIds(lessonIds).map((chunk) =>
+      fetchAllPages<T>((from, to) => {
+        let query = supabase
+          .from("student_lesson_assignments")
+          .select(columns)
+          .in("lesson_id", chunk);
+        if (openOnly) query = query.is("end_date", null);
+        return query.range(from, to) as PromiseLike<{
+          data: T[] | null;
+          error: { message: string } | null;
+        }>;
+      })
+    )
+  );
+  return pages.flat();
 }
