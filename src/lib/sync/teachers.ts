@@ -1,11 +1,14 @@
 import { createClient } from "@/lib/supabase/server";
 import { createSalaryReadClient } from "@/lib/sync/salary-client";
 import {
+  displayIdentityNumber,
   displayTeacherEmail,
   displayTeacherPhone,
   storedEmail,
   storedPhone,
 } from "@/lib/teachers/contact";
+import { teacherNameKey } from "@/lib/teachers/name-group";
+import { fetchAllPages } from "@/lib/supabase/paged";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 export interface SyncResult {
@@ -19,6 +22,10 @@ export interface SyncResult {
 type SalaryRow = {
   id?: string | number | null;
   teacher_name?: string | null;
+  full_name?: string | null;
+  name?: string | null;
+  first_name?: string | null;
+  last_name?: string | null;
   tz?: string | null;
   phone?: string | null;
   email?: string | null;
@@ -41,7 +48,7 @@ function externalIdFor(row: SalaryRow): string {
   return [
     "salary",
     text(row.tz),
-    text(row.teacher_name),
+    rowFullName(row),
     text(row.subject),
     text(row.track),
     text(row.year),
@@ -53,11 +60,27 @@ function digits(raw: string | null | undefined): string {
   return String(raw ?? "").replace(/\D/g, "");
 }
 
-function teacherIdentity(row: SalaryRow): string {
-  const tz = digits(row.tz);
-  if (tz.length >= 5) return tz.padStart(9, "0").slice(-9);
-  if (row.id != null && String(row.id).trim() !== "") return `salary:${row.id}`;
-  return `salary:${text(row.teacher_name) || "unknown"}`;
+function rowFullName(row: SalaryRow): string {
+  const direct = text(row.teacher_name) || text(row.full_name) || text(row.name);
+  if (direct) return direct;
+  return [text(row.first_name), text(row.last_name)].filter(Boolean).join(" ");
+}
+
+type SyncedTeacher = {
+  id: string;
+  phone: string | null;
+  email: string | null;
+  full_name: string;
+  is_local: boolean;
+  identity_number: string;
+};
+
+/** One teacher per name. A real identity number wins when the same name already exists. */
+function preferNamedTeacher(current: SyncedTeacher, candidate: SyncedTeacher): SyncedTeacher {
+  const currentId = displayIdentityNumber(current.identity_number);
+  const candidateId = displayIdentityNumber(candidate.identity_number);
+  if (candidateId && !currentId) return candidate;
+  return current;
 }
 
 function usablePhone(raw: string | null | undefined): string | null {
@@ -111,7 +134,8 @@ function sourceRecordWrite(row: SalaryRow, identity: string, fullName: string) {
 
 /**
  * Pull every salary row that has a teacher name, including rows whose contract
- * is not approved yet. Never updates or deletes the salary system.
+ * is not approved yet. The same name is one teacher, even when salary has
+ * several rows. Never updates or deletes the salary system.
  * Never deletes local teachers and never clears is_local.
  */
 export async function syncTeacherSourceRecords(
@@ -131,20 +155,23 @@ export async function syncTeacherSourceRecords(
   const rows: SalaryRow[] = [];
   const pageSize = 1000;
   const salarySelects = [
+    "id, teacher_name, full_name, name, first_name, last_name, tz, phone, email, subject, track, year, semester, meetings, is_approved",
     "id, teacher_name, tz, phone, email, subject, track, year, semester, meetings, is_approved",
     "id, teacher_name, tz, phone, email, subject, track, year, semester, is_approved",
   ];
-  let salarySelect = salarySelects[0];
+  let selectIndex = 0;
   for (let from = 0; ; from += pageSize) {
     const { data: remote, error: remoteError } = await salary.client
       .from("salary_records")
-      .select(salarySelect)
+      .select(salarySelects[selectIndex])
+      .order("id", { ascending: true })
       .range(from, from + pageSize - 1);
 
     if (remoteError) {
-      if (salarySelect === salarySelects[0] && from === 0) {
-        salarySelect = salarySelects[1];
-        from -= pageSize;
+      if (from === 0 && selectIndex < salarySelects.length - 1 && isMissingColumnError(remoteError)) {
+        selectIndex++;
+        rows.length = 0;
+        from = -pageSize;
         continue;
       }
       throw new Error("לא ניתן לקרוא מורות ממערכת השכר.");
@@ -162,6 +189,7 @@ export async function syncTeacherSourceRecords(
     const { data, error: existingError } = await supabase
       .from("teacher_source_records")
       .select("id, external_id")
+      .order("id", { ascending: true })
       .range(from, from + pageSize - 1);
     if (existingError) {
       throw new Error("קריאת רשומות מקור נכשלה.");
@@ -174,25 +202,35 @@ export async function syncTeacherSourceRecords(
     existingSource.map((r) => [r.external_id, r])
   );
 
+  const knownTeachers = await fetchAllPages<SyncedTeacher>((from, to) =>
+    supabase
+      .from("teachers")
+      .select("id, phone, email, full_name, is_local, identity_number")
+      .order("full_name", { ascending: true })
+      .range(from, to)
+  );
+  const teachersByName = new Map<string, SyncedTeacher>();
+  for (const known of knownTeachers) {
+    const key = teacherNameKey(known.full_name);
+    if (!key) continue;
+    const previous = teachersByName.get(key);
+    teachersByName.set(key, previous ? preferNamedTeacher(previous, known) : known);
+  }
+
   for (const row of rows) {
-    const fullName = text(row.teacher_name);
-    if (!fullName) {
+    const fullName = rowFullName(row);
+    const nameKey = teacherNameKey(fullName);
+    if (!fullName || !nameKey) {
       result.skippedInvalid++;
       continue;
     }
 
     const externalId = externalIdFor(row);
-    const identity = teacherIdentity(row);
+    let teacher = teachersByName.get(nameKey);
+    const identity = teacher?.identity_number ?? `name:${nameKey}`;
     const phone = usablePhone(row.phone);
     const email = usableEmail(row.email);
     const payload = sourceRecordWrite(row, identity, fullName);
-
-    let { data: teacher } = await supabase
-      .from("teachers")
-      .select("id, phone, email, full_name, is_local")
-      .eq("identity_number", identity)
-      .maybeSingle();
-
     const phoneToStore = storedPhone(phone);
     const emailToStore = storedEmail(email, identity);
 
@@ -206,24 +244,22 @@ export async function syncTeacherSourceRecords(
           email: emailToStore,
           is_local: false,
         })
-        .select("id, phone, email, full_name, is_local")
+        .select("id, phone, email, full_name, is_local, identity_number")
         .single();
       if (createError || !created) {
         result.skippedInvalid++;
         continue;
       }
       teacher = created;
+      teachersByName.set(nameKey, teacher);
       result.teachersCreated++;
     } else {
-      const patch: { phone?: string; email?: string; full_name?: string } = {};
+      const patch: { phone?: string; email?: string } = {};
       if (!displayTeacherPhone(teacher.phone) && displayTeacherPhone(phoneToStore)) {
         patch.phone = phoneToStore;
       }
       if (!displayTeacherEmail(teacher.email) && displayTeacherEmail(emailToStore)) {
         patch.email = emailToStore;
-      }
-      if (!teacher.is_local && teacher.full_name.trim() !== fullName) {
-        patch.full_name = fullName;
       }
       if (Object.keys(patch).length > 0) {
         await supabase.from("teachers").update(patch).eq("id", teacher.id);

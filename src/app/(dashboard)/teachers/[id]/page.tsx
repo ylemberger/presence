@@ -13,7 +13,7 @@ import { TeacherEditForm } from "../TeacherEditForm";
 import { salaryDisplayFields } from "@/lib/teachers/salary-display";
 import { teacherIdsSharingName } from "@/lib/teachers/name-group";
 import { fetchAssignmentsByLessons } from "@/lib/supabase/paged";
-import { displayTeacherEmail, displayTeacherPhone } from "@/lib/teachers/contact";
+import { displayIdentityNumber, displayTeacherEmail, displayTeacherPhone } from "@/lib/teachers/contact";
 
 interface Props {
   params: { id: string };
@@ -117,7 +117,11 @@ export default async function TeacherDetailPage({ params }: Props) {
   });
 
   const initial = teacher.full_name?.[0] ?? "?";
-  const identityLabel = identities.length > 0 ? identities.join(" · ") : (teacher.identity_number ?? "—");
+  const identityLabel =
+    identities
+      .map((value) => displayIdentityNumber(value))
+      .filter((value): value is string => Boolean(value))
+      .join(" · ") || "—";
   const displayPhone =
     group.map((row) => displayTeacherPhone(row.phone)).find((value) => Boolean(value)) ??
     displayTeacherPhone(teacher.phone);

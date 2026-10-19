@@ -16,7 +16,19 @@ export function storedEmail(raw: string | null | undefined, identity: string): s
   const email = String(raw ?? "").trim();
   if (/^[^@]+@[^@]+\.[^@]+$/i.test(email)) return email;
   const local = identity.replace(/[^A-Za-z0-9._-]/g, "") || "teacher";
-  return `${local}@local.invalid`;
+  let hash = 0;
+  for (const ch of identity) hash = (hash * 33 + (ch.codePointAt(0) ?? 0)) >>> 0;
+  return `${local}.${hash.toString(16)}@local.invalid`;
+}
+
+/** A real identity number. Shared placeholders and salary keys are hidden. */
+export function displayIdentityNumber(value: string | null | undefined): string | null {
+  const digitsOnly = digits(value);
+  if (digitsOnly.length < 8 || digitsOnly.length > 9) return null;
+  const normalized = digitsOnly.padStart(9, "0").slice(-9);
+  if (/^(\d)\1{8}$/.test(normalized)) return null;
+  if (!/^\d+$/.test(String(value ?? "").trim())) return null;
+  return normalized;
 }
 
 export function displayTeacherPhone(phone: string | null | undefined): string | null {

@@ -15,6 +15,7 @@ const WRITE_METHODS = new Set([
 type SalarySelectBuilder = {
   select: (columns: string) => SalarySelectBuilder;
   eq: (column: string, value: unknown) => SalarySelectBuilder;
+  order: (column: string, options?: { ascending?: boolean }) => SalarySelectBuilder;
   range: (
     from: number,
     to: number

@@ -13,7 +13,7 @@ import {
 } from "@/lib/teachers/source-records";
 import { embedOne } from "@/lib/supabase/embed";
 import { teacherNameKey, uniqueTeachersByName } from "@/lib/teachers/name-group";
-import { displayTeacherEmail, displayTeacherPhone } from "@/lib/teachers/contact";
+import { displayIdentityNumber, displayTeacherEmail, displayTeacherPhone } from "@/lib/teachers/contact";
 import { fetchAllPages } from "@/lib/supabase/paged";
 import type { Teacher } from "@/types/database";
 
@@ -103,9 +103,9 @@ export default async function TeachersPage() {
   const namedRows: TeacherDirectoryRow[] = uniqueTeachersByName(flatRows).map((option) => {
     const members = membersByName.get(teacherNameKey(option.name)) ?? [];
     const identity =
-      members.find((member) => /\d{5,}/.test(member.identity_number))?.identity_number ??
-      members[0]?.identity_number ??
-      "";
+      members
+        .map((member) => displayIdentityNumber(member.identity_number))
+        .find((value): value is string => Boolean(value)) ?? "—";
     return {
       id: option.id,
       full_name: option.name,
