@@ -11,6 +11,7 @@ import {
   cancelOccurrenceAction,
   copyPreviousAttendanceAction,
   restoreCancelledOccurrenceAction,
+  resetOccurrenceAttendanceAction,
   restoreOccurrencesAction,
   syncLessonStudentsAction,
   upsertAttendanceAction,
@@ -250,6 +251,7 @@ export function AttendanceBoard({
   const [syncing, setSyncing] = useState(false);
   const [copying, setCopying] = useState(false);
   const [reopening, setReopening] = useState(false);
+  const [resetting, setResetting] = useState(false);
   const [cancellingId, setCancellingId] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
   const [note, setNote] = useState(noteBody);
@@ -827,6 +829,37 @@ export function AttendanceBoard({
       router.refresh();
     }
     setReopening(false);
+  }
+
+  async function resetAttendance() {
+    if (!canWrite || !activeLesson || resetting) return;
+    const ids = linkedOccurrenceIds(activeLesson, activeOccurrenceId);
+    if (ids.length === 0) return;
+    const confirmed = window.confirm(
+      "לאפס את הנוכחות של השיעור הזה? הסימונים יימחקו, והשיעור עצמו יישאר בלוח כשיעור שעדיין לא מולא."
+    );
+    if (!confirmed) return;
+    setResetting(true);
+    setMessage(null);
+    const result = await resetOccurrenceAttendanceAction(ids);
+    if (result && "error" in result && result.error) {
+      setMessage(result.error);
+    } else {
+      setDraft({});
+      setReasons({});
+      setCellPhase({});
+      setUndo(null);
+      setDayOccurrences((prev) =>
+        prev.map((o) =>
+          ids.includes(o.id) || o.id === activeLesson.id
+            ? { ...o, status: "scheduled", markedCount: 0 }
+            : o
+        )
+      );
+      setMessage("הנוכחות אופסה. השיעור נשאר בלוח ואפשר למלא אותו מחדש.");
+      router.refresh();
+    }
+    setResetting(false);
   }
 
   async function syncStudents() {
@@ -1505,11 +1538,25 @@ export function AttendanceBoard({
                     type="button"
                     size="sm"
                     variant="secondary"
-                    disabled={reopening}
+                    disabled={reopening || resetting}
                     onClick={() => void reopenForEdits()}
                   >
                     <Icon name="undo" className="text-[16px]" />
                     {reopening ? "מחזירה…" : "החזירי לעריכה"}
+                  </Button>
+                )}
+                {canWrite &&
+                  activeLesson.status !== "cancelled" &&
+                  (activeLesson.status === "completed" || markedInLesson > 0) && (
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="secondary"
+                    disabled={resetting || reopening}
+                    onClick={() => void resetAttendance()}
+                  >
+                    <Icon name="restart_alt" className="text-[16px]" />
+                    {resetting ? "מאפסת…" : "אפסי נוכחות"}
                   </Button>
                 )}
                 {canWrite && activeOccurrenceId && activeLesson.status !== "cancelled" && (
@@ -1528,7 +1575,7 @@ export function AttendanceBoard({
             </div>
             {activeLesson.status === "completed" && (
               <p className="mb-2 font-caption text-caption text-on-surface-variant">
-                השיעור סומן כהושלם. אפשר להמשיך לתקן סימונים, או להחזיר לעריכה אם עוד לא סיימת — הסימונים הקיימים נשמרים.
+                השיעור סומן כהושלם. «החזירי לעריכה» שומרת את הסימונים. «אפסי נוכחות» מוחקת את הסימונים ומשאירה את השיעור בלוח.
               </p>
             )}
             <div className="flex flex-wrap items-center gap-1.5">

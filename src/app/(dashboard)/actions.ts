@@ -2240,6 +2240,61 @@ export async function restoreOccurrencesAction(occurrenceIds: string[]) {
   return { success: true };
 }
 
+/** Clear marks for these occurrences and return them to not-yet-filled. The lesson and the occurrence stay. */
+export async function resetOccurrenceAttendanceAction(occurrenceIds: string[]) {
+  const ids = [
+    ...new Set(
+      occurrenceIds
+        .map((id) => requireUuid(id, "מופע"))
+        .filter((id): id is string => typeof id === "string")
+    ),
+  ];
+  if (ids.length === 0) return { error: "חסר מופע" };
+
+  const actionAuth = await createActionClient();
+  if ("error" in actionAuth) return { error: actionAuth.error };
+  const supabase = actionAuth.supabase;
+
+  const { data: occs, error: loadError } = await supabase
+    .from("lesson_occurrences")
+    .select("id, status")
+    .in("id", ids);
+  if (loadError || !occs?.length) return { error: "לא נמצא המופע" };
+
+  const resetIds = occs.filter((row) => row.status !== "cancelled").map((row) => row.id);
+  if (resetIds.length === 0) {
+    return { error: "שיעור שלא התקיים לא מתאפס מכאן. אפשר להחזירו ללוח." };
+  }
+
+  const { count: planned, error: countError } = await supabase
+    .from("attendance")
+    .select("id", { count: "exact", head: true })
+    .in("lesson_occurrence_id", resetIds);
+  if (countError) return { error: "לא ניתן לאפס את הנוכחות" };
+
+  const { error: deleteError, count: cleared } = await supabase
+    .from("attendance")
+    .delete({ count: "exact" })
+    .in("lesson_occurrence_id", resetIds);
+  if (deleteError) return { error: "לא ניתן לאפס את הנוכחות" };
+  if (planned != null && cleared != null && cleared !== planned) {
+    return { error: "לא כל הסימונים נמחקו. נסי שוב." };
+  }
+
+  const { error: statusError } = await supabase
+    .from("lesson_occurrences")
+    .update({ status: "scheduled", gap_handling: null })
+    .in("id", resetIds);
+  if (statusError) return { error: "הסימונים נמחקו, אבל לא ניתן לעדכן את מצב השיעור" };
+
+  revalidatePath("/lessons");
+  revalidatePath("/attendance");
+  revalidatePath("/reports");
+  revalidatePath("/makeup");
+  revalidatePath("/");
+  return { success: true as const, cleared: cleared ?? planned ?? 0 };
+}
+
 // --- Attendance ---
 
 async function tryMarkOccurrenceComplete(
