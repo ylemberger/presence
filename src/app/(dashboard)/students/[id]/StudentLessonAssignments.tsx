@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/Button";
 import { Combobox } from "@/components/ui/Combobox";
@@ -8,9 +8,9 @@ import { HebrewDateInput } from "@/components/ui/HebrewDateInput";
 import { DeleteButton } from "@/components/ui/DeleteButton";
 import {
   createStudentLessonAssignmentAction,
-  excludeStudentFromLessonAction,
+  deleteStudentLessonAssignmentAction,
 } from "../../actions";
-import { formatDate } from "@/lib/dates/hebrew";
+import { formatDate, todayIso } from "@/lib/dates/hebrew";
 import { formatLessonOptionLabel } from "@/lib/lessons/hours";
 import { Icon } from "@/components/ui/Icon";
 
@@ -48,12 +48,21 @@ export function StudentLessonAssignments({
   const [error, setError] = useState<string | null>(null);
   const [mismatchWarning, setMismatchWarning] = useState<string | null>(null);
   const [pendingForm, setPendingForm] = useState<FormData | null>(null);
-  const [removeLessonId, setRemoveLessonId] = useState("");
+  const savingRef = useRef(false);
+  const [saving, setSaving] = useState(false);
 
-  const openAssignments = assignments.filter((a) => !a.end_date);
-  const closedAssignments = assignments.filter((a) => a.end_date);
+  const today = todayIso();
+  const currentAssignments = assignments.filter(
+    (a) => !a.end_date || a.end_date.slice(0, 10) >= today
+  );
+  const pastAssignments = assignments.filter(
+    (a) => a.end_date && a.end_date.slice(0, 10) < today
+  );
 
   async function submit(fd: FormData, force: boolean) {
+    if (savingRef.current) return false;
+    savingRef.current = true;
+    setSaving(true);
     if (force) fd.set("force_mismatch", "1");
     else fd.delete("force_mismatch");
 
@@ -61,11 +70,15 @@ export function StudentLessonAssignments({
     try {
       result = await createStudentLessonAssignmentAction(fd);
     } catch {
+      savingRef.current = false;
+      setSaving(false);
       setError("לא ניתן לשייך את התלמידה לשיעור");
       setMismatchWarning(null);
       setPendingForm(null);
       return false;
     }
+    savingRef.current = false;
+    setSaving(false);
     if (result && "error" in result && result.error) {
       if ("code" in result && result.code === "mismatch") {
         setMismatchWarning(result.error);
@@ -95,28 +108,15 @@ export function StudentLessonAssignments({
     if (ok) form.reset();
   }
 
-  async function handleRemove(e: React.FormEvent<HTMLFormElement>) {
-    e.preventDefault();
-    if (!removeLessonId) {
-      setError("יש לבחור שיעור להסרה");
-      return;
-    }
-    setError(null);
-    const result = await excludeStudentFromLessonAction(studentId, removeLessonId);
-    if (result?.error) {
-      setError(result.error);
-      return;
-    }
-    setRemoveLessonId("");
-    router.refresh();
+  function removeLink(assignmentId: string) {
+    return deleteStudentLessonAssignmentAction(assignmentId, studentId);
   }
 
   return (
     <div className="flex flex-col gap-4">
       {canWrite ? (
       <p className="font-caption text-caption text-on-surface-variant">
-        אפשר לשייך לשיעור ספציפי, ואפשר גם להסיר שיוך לשיעור ספציפי. הסרה לא מוחקת נוכחות מהעבר, והשיוך
-        האוטומטי לא יחזיר את התלמידה לשיעור הזה.
+        אפשר לשייך לשיעור ספציפי פעם אחת. שיוך שכבר קיים לא נשמר שוב. «הסר שיוך» מוריד את השורה הזו. התלמידה ונוכחות שכבר סומנה נשארות.
       </p>
       ) : null}
       {canWrite ? (
@@ -132,31 +132,12 @@ export function StudentLessonAssignments({
           <HebrewDateInput label="מתאריך" name="start_date" required />
           <HebrewDateInput label="עד תאריך" name="end_date" allowEmpty />
         </div>
-        <Button type="submit" className="mt-2 w-full">
+        <Button type="submit" className="mt-2 w-full" disabled={saving}>
           <Icon name="add" className="text-[18px]" />
-          שיוך לשיעור
+          {saving ? "שומרת…" : "שיוך לשיעור"}
         </Button>
       </form>
       ) : null}
-
-      {canWrite && openAssignments.length > 0 && (
-        <form
-          onSubmit={handleRemove}
-          className="flex flex-col gap-3 rounded-lg border border-outline-variant/40 bg-surface-container-low p-3"
-        >
-          <Combobox
-            label="הסרת שיוך משיעור"
-            name="remove_lesson_id"
-            value={removeLessonId}
-            onChange={setRemoveLessonId}
-            options={openAssignments.map((a) => ({ value: a.lesson_id, label: a.subject }))}
-            emptyLabel="בחרי שיעור להסרה"
-          />
-          <Button type="submit" variant="danger" className="w-full">
-            הסר שיוך לשיעור זה
-          </Button>
-        </form>
-      )}
 
       {error && (
         <p className="rounded-lg bg-error-container/60 px-3 py-2 font-body-sm text-body-sm text-on-error-container">
@@ -182,7 +163,7 @@ export function StudentLessonAssignments({
         </div>
       ) : (
         <ul className="flex flex-col gap-2 font-body-md text-body-md">
-          {openAssignments.map((a) => (
+          {currentAssignments.map((a) => (
             <li
               key={a.id}
               className="flex items-center justify-between gap-3 rounded-lg border border-outline-variant/30 bg-surface-container-low p-3"
@@ -190,26 +171,38 @@ export function StudentLessonAssignments({
               <div className="min-w-0">
                 <div className="font-semibold text-on-surface">{a.subject}</div>
                 <div className="font-caption text-caption text-on-surface-variant">
-                  {a.assignment_type === "manual" ? "ידני" : "אוטומטי"} · {formatDate(a.start_date)} →
-                  פתוח
+                  {a.assignment_type === "manual" ? "ידני" : "אוטומטי"} · {formatDate(a.start_date)} →{" "}
+                  {a.end_date ? formatDate(a.end_date) : "פתוח"}
                 </div>
               </div>
-              <DeleteButton
-                label="הסר שיוך"
-                onDelete={() => excludeStudentFromLessonAction(studentId, a.lesson_id)}
-              />
+              {canWrite ? (
+                <DeleteButton
+                  label="הסר שיוך"
+                  confirmMessage="יוסר השיוך הזה לשיעור. נוכחות שכבר סומנה נשארת, והתלמידה לא נמחקת."
+                  onDelete={() => removeLink(a.id)}
+                />
+              ) : null}
             </li>
           ))}
-          {closedAssignments.map((a) => (
+          {pastAssignments.map((a) => (
             <li
               key={a.id}
-              className="rounded-lg border border-outline-variant/20 bg-surface-container-lowest p-3 text-on-surface-variant"
+              className="flex items-center justify-between gap-3 rounded-lg border border-outline-variant/20 bg-surface-container-lowest p-3 text-on-surface-variant"
             >
-              <div className="font-semibold">{a.subject}</div>
-              <div className="font-caption text-caption">
-                {a.assignment_type === "manual" ? "ידני" : "אוטומטי"} · {formatDate(a.start_date)} →{" "}
-                {a.end_date ? formatDate(a.end_date) : "פתוח"}
+              <div className="min-w-0">
+                <div className="font-semibold">{a.subject}</div>
+                <div className="font-caption text-caption">
+                  {a.assignment_type === "manual" ? "ידני" : "אוטומטי"} · {formatDate(a.start_date)} →{" "}
+                  {a.end_date ? formatDate(a.end_date) : "פתוח"}
+                </div>
               </div>
+              {canWrite && a.assignment_type === "manual" ? (
+                <DeleteButton
+                  label="הסר שיוך"
+                  confirmMessage="יוסר השיוך הזה לשיעור. נוכחות שכבר סומנה נשארת, והתלמידה לא נמחקת."
+                  onDelete={() => removeLink(a.id)}
+                />
+              ) : null}
             </li>
           ))}
         </ul>

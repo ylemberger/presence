@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/Button";
 import { Combobox } from "@/components/ui/Combobox";
@@ -25,9 +25,12 @@ export function AssignStudentToLesson({
   const [mismatchWarning, setMismatchWarning] = useState<string | null>(null);
   const [pendingForm, setPendingForm] = useState<FormData | null>(null);
   const [saving, setSaving] = useState(false);
+  const savingRef = useRef(false);
   if (!canWrite) return null;
 
   async function submit(fd: FormData, force: boolean) {
+    if (savingRef.current) return false;
+    savingRef.current = true;
     fd.set("lesson_id", lessonId);
     if (force) fd.set("force_mismatch", "1");
     else fd.delete("force_mismatch");
@@ -36,12 +39,14 @@ export function AssignStudentToLesson({
     try {
       result = await createStudentLessonAssignmentAction(fd);
     } catch {
+      savingRef.current = false;
       setSaving(false);
       setError("לא ניתן לשייך את התלמידה לשיעור");
       setMismatchWarning(null);
       setPendingForm(null);
       return false;
     }
+    savingRef.current = false;
     setSaving(false);
     if (result && "error" in result && result.error) {
       if ("code" in result && result.code === "mismatch") {

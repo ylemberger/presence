@@ -1096,34 +1096,27 @@ export async function createStudentLessonAssignmentAction(formData: FormData) {
 
   const { data: existingRows, error: existingError } = await supabase
     .from("student_lesson_assignments")
-    .select("id, start_date")
+    .select("id, start_date, end_date")
     .eq("student_id", studentId)
-    .eq("lesson_id", lessonId)
-    .is("end_date", null);
+    .eq("lesson_id", lessonId);
   if (existingError) {
     return { error: hebrewDbError(existingError, "לא ניתן לשייך את התלמידה לשיעור") };
   }
 
-  const openRows = existingRows ?? [];
-  if (openRows.length === 0) {
-    const { error } = await supabase.from("student_lesson_assignments").insert({
-      student_id: studentId,
-      lesson_id: lessonId,
-      assignment_type: "manual",
-      start_date: startDate,
-      end_date: endDate,
-    });
-    if (error) return { error: hebrewDbError(error, "לא ניתן לשייך את התלמידה לשיעור") };
-  } else {
-    const earliest = openRows.reduce((best, row) => {
-      const start = String(row.start_date).slice(0, 10);
-      return start < best.start ? { id: row.id, start } : best;
-    }, { id: openRows[0].id, start: String(openRows[0].start_date).slice(0, 10) });
-    if (startDate < earliest.start) {
+  const newEnd = endDate ?? "9999-12-31";
+  const overlapping = (existingRows ?? []).filter((row) => {
+    const start = String(row.start_date).slice(0, 10);
+    const end = row.end_date ? String(row.end_date).slice(0, 10) : "9999-12-31";
+    return start <= newEnd && startDate <= end;
+  });
+  if (overlapping.length > 0) {
+    const only = overlapping.length === 1 ? overlapping[0] : null;
+    const onlyStart = only ? String(only.start_date).slice(0, 10) : "";
+    if (only && !only.end_date && !endDate && startDate < onlyStart) {
       const { error } = await supabase
         .from("student_lesson_assignments")
         .update({ start_date: startDate })
-        .eq("id", earliest.id);
+        .eq("id", only.id);
       if (error) {
         return {
           error: hebrewDbError(
@@ -1132,7 +1125,21 @@ export async function createStudentLessonAssignmentAction(formData: FormData) {
           ),
         };
       }
+    } else {
+      return {
+        error:
+          "התלמידה כבר משויכת לשיעור הזה בתאריכים האלה. לא נוסף שיוך נוסף. שיוך מיותר אפשר להסיר מהרשימה.",
+      };
     }
+  } else {
+    const { error } = await supabase.from("student_lesson_assignments").insert({
+      student_id: studentId,
+      lesson_id: lessonId,
+      assignment_type: "manual",
+      start_date: startDate,
+      end_date: endDate,
+    });
+    if (error) return { error: hebrewDbError(error, "לא ניתן לשייך את התלמידה לשיעור") };
   }
 
   await supabase
@@ -1151,9 +1158,71 @@ export async function deleteStudentLessonAssignmentAction(id: string, studentId:
   const actionAuth = await createActionClient();
   if ("error" in actionAuth) return { error: actionAuth.error };
   const supabase = actionAuth.supabase;
-  const { error } = await supabase.from("student_lesson_assignments").delete().eq("id", id);
-  if (error) return { error: hebrewDbError(error, "הסרת השיוך נכשלה") };
-  revalidatePath(`/students/${studentId}`);
+  const assignmentId = requireUuid(id, "שיוך");
+  if (isError(assignmentId)) return { error: "השיוך לא זוהה" };
+  const sid = requireUuid(studentId, "תלמידה");
+  if (isError(sid)) return { error: "התלמידה לא זוהתה" };
+
+  const { data: row, error: loadError } = await supabase
+    .from("student_lesson_assignments")
+    .select("id, lesson_id, assignment_type, start_date, end_date")
+    .eq("id", assignmentId)
+    .eq("student_id", sid)
+    .maybeSingle();
+  if (loadError) return { error: hebrewDbError(loadError, "הסרת השיוך נכשלה") };
+  if (!row) return { error: "השיוך לא נמצא" };
+
+  const start = String(row.start_date).slice(0, 10);
+  const today = todayIso();
+  const manual = row.assignment_type === "manual";
+  const notStarted = start > today;
+
+  if (manual || notStarted) {
+    const { data: deleted, error } = await supabase
+      .from("student_lesson_assignments")
+      .delete()
+      .eq("id", assignmentId)
+      .eq("student_id", sid)
+      .select("id");
+    if (error) return { error: hebrewDbError(error, "הסרת השיוך נכשלה") };
+    if ((deleted?.length ?? 0) !== 1) return { error: "הסרת השיוך נכשלה" };
+  } else {
+    const { data: updated, error } = await supabase
+      .from("student_lesson_assignments")
+      .update({ end_date: today })
+      .eq("id", assignmentId)
+      .eq("student_id", sid)
+      .select("id");
+    if (error) return { error: hebrewDbError(error, "הסרת השיוך נכשלה") };
+    if ((updated?.length ?? 0) !== 1) return { error: "הסרת השיוך נכשלה" };
+  }
+
+  const { data: rest, error: restError } = await supabase
+    .from("student_lesson_assignments")
+    .select("id, end_date")
+    .eq("student_id", sid)
+    .eq("lesson_id", row.lesson_id);
+  if (restError) {
+    return { error: "השיוך הוסר, אבל לא ניתן לבדוק אם נשארו שיוכים נוספים. רענני ונסי שוב." };
+  }
+  const stillCurrent = (rest ?? []).some((item) => {
+    if (!item.end_date) return true;
+    return String(item.end_date).slice(0, 10) >= today;
+  });
+  if (!stillCurrent) {
+    const { error: exclusionError } = await supabase.from("student_lesson_exclusions").upsert({
+      student_id: sid,
+      lesson_id: row.lesson_id,
+    });
+    if (
+      exclusionError &&
+      !/student_lesson_exclusions|schema cache|PGRST205|42P01/i.test(exclusionError.message)
+    ) {
+      return { error: "השיוך הוסר, אבל לא ניתן לחסום חזרה אוטומטית לשיעור. נסי שוב." };
+    }
+  }
+
+  revalidatePath(`/students/${sid}`);
   revalidatePath("/attendance");
   revalidatePath("/reports");
   revalidatePath("/lessons");
@@ -1180,13 +1249,30 @@ export async function excludeStudentFromLessonAction(studentId: string, lessonId
     return { error: "הסרת השיוך נכשלה" };
   }
 
-  const { error } = await supabase
+  const { data: openRows, error: openError } = await supabase
     .from("student_lesson_assignments")
-    .update({ end_date: todayIso() })
+    .select("id, start_date")
     .eq("student_id", sid)
     .eq("lesson_id", lid)
     .is("end_date", null);
-  if (error) return { error: hebrewDbError(error, "הסרת השיוך נכשלה") };
+  if (openError) return { error: hebrewDbError(openError, "הסרת השיוך נכשלה") };
+  const today = todayIso();
+  for (const row of openRows ?? []) {
+    const start = String(row.start_date).slice(0, 10);
+    if (start > today) {
+      const { error } = await supabase
+        .from("student_lesson_assignments")
+        .delete()
+        .eq("id", row.id);
+      if (error) return { error: hebrewDbError(error, "הסרת השיוך נכשלה") };
+      continue;
+    }
+    const { error } = await supabase
+      .from("student_lesson_assignments")
+      .update({ end_date: today })
+      .eq("id", row.id);
+    if (error) return { error: hebrewDbError(error, "הסרת השיוך נכשלה") };
+  }
 
   revalidatePath(`/students/${sid}`);
   revalidatePath("/attendance");

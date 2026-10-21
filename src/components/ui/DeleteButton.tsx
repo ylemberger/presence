@@ -41,7 +41,8 @@ export function DeleteButton({
       }
       await router.refresh();
     } catch (err) {
-      setError(err instanceof Error ? err.message : "מחיקה נכשלה");
+      const message = err instanceof Error ? err.message : "";
+      setError(/[\u0590-\u05FF]/.test(message) ? message : "הפעולה נכשלה");
     } finally {
       setLoading(false);
     }
