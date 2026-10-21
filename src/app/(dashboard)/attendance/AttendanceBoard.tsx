@@ -134,7 +134,7 @@ interface Props {
     reason?: string | null;
   }[];
   noteBody?: string;
-  noteLessonId?: string | null;
+  noteOccurrenceId?: string | null;
   completeDates?: string[];
   partialDates?: string[];
   holidayDates?: string[];
@@ -142,7 +142,7 @@ interface Props {
   studyRanges?: Array<{ start_date: string; end_date: string }>;
   insightsByStudent?: Record<string, StudentInsight>;
   pastGaps?: GapItem[];
-  lessonIdsWithNotes?: string[];
+  occurrenceIdsWithNotes?: string[];
 }
 
 type DraftKey = string;
@@ -231,7 +231,7 @@ export function AttendanceBoard({
   lessonStudents,
   attendance,
   noteBody = "",
-  noteLessonId = null,
+  noteOccurrenceId = null,
   completeDates = [],
   partialDates = [],
   holidayDates = [],
@@ -239,7 +239,7 @@ export function AttendanceBoard({
   studyRanges = [],
   insightsByStudent = {},
   pastGaps = [],
-  lessonIdsWithNotes = [],
+  occurrenceIdsWithNotes = [],
 }: Props) {
   const { canWrite } = useAccess();
   const router = useRouter();
@@ -308,7 +308,7 @@ export function AttendanceBoard({
 
   useEffect(() => {
     setNote(noteBody);
-  }, [noteBody]);
+  }, [noteBody, noteOccurrenceId]);
 
   useEffect(() => {
     // Only nudge when the user is filling a specific occurrence, and only for
@@ -890,16 +890,21 @@ export function AttendanceBoard({
   }
 
   async function saveNote() {
-    if (!noteLessonId) return;
+    if (!noteOccurrenceId) return false;
     setNoteSaving(true);
     const fd = new FormData();
     fd.set("academic_year_id", yearId);
     fd.set("body", note);
-    fd.set("lesson_id", noteLessonId);
+    fd.set("lesson_occurrence_id", noteOccurrenceId);
     const result = await upsertAttendanceNoteAction(fd);
-    if (result && "error" in result && result.error) setMessage(result.error);
-    else setMessage("ההערה נשמרה");
     setNoteSaving(false);
+    if (result && "error" in result && result.error) {
+      setMessage(result.error);
+      return false;
+    }
+    setMessage(note.trim() ? "ההערה נשמרה למופע הזה" : "ההערה הוסרה מהמופע הזה");
+    router.refresh();
+    return true;
   }
 
   async function setReason(sid: string, occurrenceId: string, reason: AbsenceReason | "") {
@@ -1425,7 +1430,9 @@ export function AttendanceBoard({
                   o.id === activeOccurrenceId ||
                   Boolean(activeOccurrenceId && o.linkedOccurrenceIds?.includes(activeOccurrenceId));
                 const tone = lessonAttendanceTone(o.markedCount, o.studentCount);
-                const hasNote = lessonIdsWithNotes.includes(o.lessonId);
+                const hasNote = (o.linkedOccurrenceIds ?? [o.id]).some((id) =>
+                  occurrenceIdsWithNotes.includes(id)
+                );
                 return (
                   <button
                     key={o.id}
@@ -1785,9 +1792,13 @@ export function AttendanceBoard({
       )}
 
       <Modal
-        open={noteModalOpen && Boolean(noteLessonId)}
-        title="הערה לשיעור"
-        description={activeLesson ? activeLesson.subject : undefined}
+        open={noteModalOpen && Boolean(noteOccurrenceId)}
+        title="הערה למופע הזה"
+        description={
+          activeLesson
+            ? `${activeLesson.subject} · ${formatHebrewDate(selectedDate)} · רק המפגש הזה`
+            : "רק המפגש הזה"
+        }
         onClose={() => setNoteModalOpen(false)}
       >
         <div className="space-y-3">
@@ -1796,7 +1807,7 @@ export function AttendanceBoard({
             onChange={(e) => setNote(e.target.value)}
             rows={5}
             className="w-full rounded-lg border border-outline-variant/60 bg-surface-container-lowest px-3 py-2 font-body-sm text-body-sm text-on-surface focus:border-secondary focus:outline-none focus:ring-2 focus:ring-secondary/30"
-            placeholder="הערה שנשמרת על השיעור ומוצגת בכל המופעים שלו…"
+            placeholder="נשמרת רק על המפגש הזה, לא על שאר המופעים של המקצוע. אפשר למחוק את הטקסט ולשמור כדי להסיר."
           />
           <div className="flex justify-end gap-2">
             <Button type="button" variant="secondary" onClick={() => setNoteModalOpen(false)}>
@@ -1806,8 +1817,8 @@ export function AttendanceBoard({
               type="button"
               disabled={noteSaving}
               onClick={async () => {
-                await saveNote();
-                setNoteModalOpen(false);
+                const saved = await saveNote();
+                if (saved) setNoteModalOpen(false);
               }}
             >
               {noteSaving ? "שומר…" : "שמור"}

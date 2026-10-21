@@ -1041,17 +1041,19 @@ begin
   end if;
 end $$;
 
--- General notes (not tied to a single date) for student or lesson scope
+-- Notes: one student, one whole lesson (legacy), or one specific occurrence.
 create table if not exists attendance_notes (
   id uuid primary key default gen_random_uuid(),
   academic_year_id uuid not null references academic_years(id) on delete cascade,
   student_id uuid references students(id) on delete cascade,
   lesson_id uuid references lessons(id) on delete cascade,
+  lesson_occurrence_id uuid references lesson_occurrences(id) on delete cascade,
   body text not null,
   updated_at timestamptz default now(),
-  check (
-    (student_id is not null and lesson_id is null)
-    or (student_id is null and lesson_id is not null)
+  constraint attendance_notes_one_target check (
+    (student_id is not null and lesson_id is null and lesson_occurrence_id is null)
+    or (lesson_id is not null and student_id is null and lesson_occurrence_id is null)
+    or (lesson_occurrence_id is not null and student_id is null and lesson_id is null)
   )
 );
 
@@ -1062,6 +1064,10 @@ create unique index if not exists idx_attendance_notes_student
 create unique index if not exists idx_attendance_notes_lesson
   on attendance_notes (academic_year_id, lesson_id)
   where lesson_id is not null;
+
+create unique index if not exists idx_attendance_notes_occurrence
+  on attendance_notes (lesson_occurrence_id)
+  where lesson_occurrence_id is not null;
 
 alter table attendance_notes enable row level security;
 

@@ -230,6 +230,7 @@ export interface AttendanceNote {
   academic_year_id: string;
   student_id: string | null;
   lesson_id: string | null;
+  lesson_occurrence_id: string | null;
   body: string;
   updated_at: string;
 }

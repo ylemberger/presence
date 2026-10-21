@@ -155,6 +155,23 @@ create unique index if not exists idx_attendance_notes_student
 create unique index if not exists idx_attendance_notes_lesson
   on attendance_notes (academic_year_id, lesson_id) where lesson_id is not null;
 
+-- Note on one occurrence only (patch 030). Does not delete existing notes.
+alter table attendance_notes
+  add column if not exists lesson_occurrence_id uuid references lesson_occurrences(id) on delete cascade;
+
+alter table attendance_notes drop constraint if exists attendance_notes_one_target;
+alter table attendance_notes drop constraint if exists attendance_notes_check;
+alter table attendance_notes
+  add constraint attendance_notes_one_target check (
+    (student_id is not null and lesson_id is null and lesson_occurrence_id is null)
+    or (lesson_id is not null and student_id is null and lesson_occurrence_id is null)
+    or (lesson_occurrence_id is not null and student_id is null and lesson_id is null)
+  );
+
+create unique index if not exists idx_attendance_notes_occurrence
+  on attendance_notes (lesson_occurrence_id)
+  where lesson_occurrence_id is not null;
+
 alter table attendance_notes enable row level security;
 
 do $$

@@ -481,8 +481,7 @@ export default async function AttendancePage({ searchParams }: Props) {
     const { data: note } = await supabase
       .from("attendance_notes")
       .select("body")
-      .eq("academic_year_id", activeYear.id)
-      .eq("lesson_id", selectedOcc.lessonId)
+      .eq("lesson_occurrence_id", selectedOcc.id)
       .maybeSingle();
     noteBody = note?.body ?? "";
   } else if (mode === "single" && params.studentId) {
@@ -610,21 +609,18 @@ export default async function AttendancePage({ searchParams }: Props) {
           }))
       : [];
 
-  const dayLessonIds = [
-    ...new Set(
-      dayOccurrences.map((o) => o.lessonId).filter(Boolean) as string[]
-    ),
-  ];
-  let lessonIdsWithNotes: string[] = [];
-  if (dayLessonIds.length > 0) {
+  const dayOccurrenceIds = dayBlocks.flatMap((o) =>
+    o.linkedOccurrenceIds?.length ? o.linkedOccurrenceIds : [o.id]
+  );
+  let occurrenceIdsWithNotes: string[] = [];
+  if (dayOccurrenceIds.length > 0) {
     const { data: noteRows } = await supabase
       .from("attendance_notes")
-      .select("lesson_id")
-      .eq("academic_year_id", activeYear.id)
-      .in("lesson_id", dayLessonIds)
+      .select("lesson_occurrence_id")
+      .in("lesson_occurrence_id", dayOccurrenceIds)
       .not("body", "eq", "");
-    lessonIdsWithNotes = (noteRows ?? [])
-      .map((n) => n.lesson_id)
+    occurrenceIdsWithNotes = (noteRows ?? [])
+      .map((n) => n.lesson_occurrence_id)
       .filter(Boolean) as string[];
   }
 
@@ -678,7 +674,7 @@ export default async function AttendancePage({ searchParams }: Props) {
         lessonStudents={lessonStudents}
         attendance={attendanceRecords}
         noteBody={noteBody}
-        noteLessonId={selectedOcc?.lessonId ?? null}
+        noteOccurrenceId={selectedOcc?.id ?? null}
         completeDates={completeDates}
         partialDates={partialDates}
         holidayDates={holidaySets.vacation}
@@ -689,7 +685,7 @@ export default async function AttendancePage({ searchParams }: Props) {
         }))}
         insightsByStudent={insightsByStudent}
         pastGaps={pastGaps}
-        lessonIdsWithNotes={lessonIdsWithNotes}
+        occurrenceIdsWithNotes={occurrenceIdsWithNotes}
       />
     </div>
   );

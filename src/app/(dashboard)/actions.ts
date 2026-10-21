@@ -2080,19 +2080,79 @@ export async function setOccurrenceGapHandlingAction(
   }
 }
 
+function occurrenceNoteError(error: { message?: string; code?: string } | null): string {
+  const msg = error?.message ?? "";
+  if (/lesson_occurrence_id|schema cache|PGRST204|attendance_notes_one_target|check constraint/i.test(msg)) {
+    return "הערת מופע עדיין לא פתוחה במסד. הריצי supabase/patches/030_occurrence_notes.sql ואז רענני. לא נשמר.";
+  }
+  return hebrewDbError(error, "שמירת ההערה נכשלה. לא נשמר.");
+}
+
 export async function upsertAttendanceNoteAction(formData: FormData) {
   const yearId = requireId(formData.get("academic_year_id"), "שנה");
   if (isError(yearId)) return yearId;
-  const body = requireText(formData.get("body"), "הערה");
-  if (isError(body)) return body;
+  const occurrenceRaw = String(formData.get("lesson_occurrence_id") ?? "").trim();
   const studentId = String(formData.get("student_id") ?? "").trim() || null;
   const lessonId = String(formData.get("lesson_id") ?? "").trim() || null;
-  if (!studentId && !lessonId) return { error: "חסר הקשר להערה" };
-  if (studentId && lessonId) return { error: "הערה כללית היא לתלמידה או לשיעור, לא לשניהם" };
 
   const actionAuth = await createActionClient();
   if ("error" in actionAuth) return { error: actionAuth.error };
   const supabase = actionAuth.supabase;
+
+  if (occurrenceRaw) {
+    const occurrenceId = requireUuid(occurrenceRaw, "מופע");
+    if (isError(occurrenceId)) return occurrenceId;
+    const body = String(formData.get("body") ?? "").trim();
+    const { data: occ, error: occError } = await supabase
+      .from("lesson_occurrences")
+      .select("id, lessons!inner(academic_year_id)")
+      .eq("id", occurrenceId)
+      .eq("lessons.academic_year_id", yearId)
+      .maybeSingle();
+    if (occError || !occ) return { error: "המופע לא נמצא" };
+
+    const { data: existing, error: loadError } = await supabase
+      .from("attendance_notes")
+      .select("id")
+      .eq("lesson_occurrence_id", occurrenceId)
+      .maybeSingle();
+    if (loadError) return { error: occurrenceNoteError(loadError) };
+
+    if (!body) {
+      if (!existing) {
+        revalidatePath("/attendance");
+        return { success: true };
+      }
+      const { error } = await supabase.from("attendance_notes").delete().eq("id", existing.id);
+      if (error) return { error: occurrenceNoteError(error) };
+      revalidatePath("/attendance");
+      return { success: true };
+    }
+
+    const row = {
+      academic_year_id: yearId,
+      student_id: null,
+      lesson_id: null,
+      lesson_occurrence_id: occurrenceId,
+      body,
+      updated_at: new Date().toISOString(),
+    };
+    if (existing) {
+      const { error } = await supabase.from("attendance_notes").update(row).eq("id", existing.id);
+      if (error) return { error: occurrenceNoteError(error) };
+    } else {
+      const { error } = await supabase.from("attendance_notes").insert(row);
+      if (error) return { error: occurrenceNoteError(error) };
+    }
+    revalidatePath("/attendance");
+    return { success: true };
+  }
+
+  const body = requireText(formData.get("body"), "הערה");
+  if (isError(body)) return body;
+  if (!studentId && !lessonId) return { error: "חסר הקשר להערה" };
+  if (studentId && lessonId) return { error: "הערה כללית היא לתלמידה או לשיעור, לא לשניהם" };
+
   const row = {
     academic_year_id: yearId,
     student_id: studentId,
