@@ -18,7 +18,7 @@ export type WeeklySlotRow = {
   period_count: number;
 };
 
-/** Normalize DB/form slots; keep one meeting per weekday (occurrence uniqueness is per date). */
+/** One weekly slot per weekday. periodCount is how many separate attendance meetings that day gets. */
 export function normalizeWeeklySlots(
   slots: WeeklySlot[]
 ): WeeklySlot[] | { error: string } {

@@ -14,6 +14,7 @@ import {
 import { getPendingAttendanceSummary } from "@/lib/attendance/pending";
 import { mergeAttendanceBlocks } from "@/lib/attendance/blocks";
 import { holidayDatesByKind } from "@/lib/lessons/holidays";
+import { isMissingOccurrenceHourColumn } from "@/lib/lessons/occurrences";
 import {
   audienceForLesson,
   audienceMapFromRows,
@@ -81,7 +82,7 @@ export default async function AttendancePage({ searchParams }: Props) {
   const catalog = await getYearCatalog(activeYear.id);
   const poolCatalog = await fetchAttendancePools(supabase, activeYear.id);
 
-  const [{ data: yearStudents }, { data: monthOccurrencesRaw }, { data: holidayRows }, { data: audienceRows }, { data: yearLessonRows }, { data: studentLinks }, { data: selectedLessonOccRaw }, { data: activityRangeRows }] =
+  const [{ data: yearStudents }, monthOccResult, { data: holidayRows }, { data: audienceRows }, { data: yearLessonRows }, { data: studentLinks }, { data: selectedLessonOccRaw }, { data: activityRangeRows }] =
     await Promise.all([
     supabase
       .from("student_assignments")
@@ -91,7 +92,7 @@ export default async function AttendancePage({ searchParams }: Props) {
     supabase
       .from("lesson_occurrences")
       .select(
-        `id, occurrence_date, status, lesson_id,
+        `id, occurrence_date, status, lesson_number, lesson_id,
          lessons!inner(
            id, subject, subject_id, lesson_number, period_count, billing_type, for_psychology, grade_id,
            class_id, track_id, specialization_id, academic_year_id, attendance_rule_id,
@@ -134,6 +135,27 @@ export default async function AttendancePage({ searchParams }: Props) {
         }),
     supabase.from("activity_ranges").select("start_date, end_date"),
   ]);
+
+  let monthOccurrencesRaw = monthOccResult.data;
+  if (monthOccResult.error && isMissingOccurrenceHourColumn(monthOccResult.error)) {
+    const retry = await supabase
+      .from("lesson_occurrences")
+      .select(
+        `id, occurrence_date, status, lesson_id,
+         lessons!inner(
+           id, subject, subject_id, lesson_number, period_count, billing_type, for_psychology, grade_id,
+           class_id, track_id, specialization_id, academic_year_id, attendance_rule_id,
+           subjects(name),
+           teacher_teaching_assignments(teacher_id, teachers(full_name))
+         )`
+      )
+      .eq("lessons.academic_year_id", activeYear.id)
+      .gte("occurrence_date", monthFrom)
+      .lte("occurrence_date", monthTo)
+      .neq("status", "cancelled")
+      .order("occurrence_date");
+    monthOccurrencesRaw = (retry.data ?? []).map((row) => ({ ...row, lesson_number: null }));
+  }
 
   type LessonJoin = {
     id: string;
@@ -190,8 +212,8 @@ export default async function AttendancePage({ searchParams }: Props) {
       status: o.status,
       subject: formatSubjectLessonLabel(parentName, lesson.subject),
       subjectId: lesson.subject_id ?? lesson.id,
-      lessonNumber: lesson.lesson_number ?? 0,
-      periodCount: lesson.period_count ?? 1,
+      lessonNumber: o.lesson_number ?? lesson.lesson_number ?? 0,
+      periodCount: o.lesson_number != null ? 1 : (lesson.period_count ?? 1),
       teacherName: teacher?.fullName ?? "",
       teacherId,
       lessonId: lesson.id,

@@ -35,6 +35,14 @@ export function hebrewDbError(error: DbErrorLike, fallback: string): string {
     return "אי אפשר לשמור: אחד מהערכים שנבחרו כבר לא קיים (שכבה, כיתה, מסלול, מורה או כלל נוכחות).";
   }
 
+  if (
+    /lesson_occurrences/.test(msg) &&
+    /lesson_number/.test(msg) &&
+    (code === "PGRST204" || msg.includes("schema cache") || msg.includes("column"))
+  ) {
+    return "כל שעה היא מפגש נוכחות נפרד. הריצי supabase/patches/031_occurrence_per_hour.sql ואז נסי שוב. לא נשמר.";
+  }
+
   if (code === "23502" || msg.includes("null value")) {
     return "חסר שדה חובה. מלאי את כל השדות ושמרי שוב. לא נשמר.";
   }

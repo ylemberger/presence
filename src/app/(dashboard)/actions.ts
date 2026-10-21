@@ -4,7 +4,7 @@ import { revalidatePath } from "next/cache";
 import { createActionClient, createClient } from "@/lib/supabase/server";
 import { setActiveAcademicYear, getActiveAcademicYear } from "@/lib/utils";
 import { syncTeacherSourceRecords } from "@/lib/sync/teachers";
-import { generateLessonOccurrences, applyHolidaysToAllOccurrences, syncLessonOccurrences } from "@/lib/lessons/occurrences";
+import { generateLessonOccurrences, applyHolidaysToAllOccurrences, syncLessonOccurrences, addOccurrenceMeetingsForDate } from "@/lib/lessons/occurrences";
 import { toggleHolidayDate, isMissingHolidayKind } from "@/lib/lessons/holidays";
 import {
   audienceForLesson,
@@ -2022,36 +2022,14 @@ export async function createOccurrenceAction(formData: FormData) {
     .maybeSingle();
   if (lessonError || !lesson) return { error: "השיעור לא נמצא" };
 
-  const { data: existing } = await supabase
-    .from("lesson_occurrences")
-    .select("id, status")
-    .eq("lesson_id", lessonId)
-    .eq("occurrence_date", date)
-    .maybeSingle();
-
-  if (existing) {
-    if (existing.status === "cancelled") {
-      const { error } = await supabase
-        .from("lesson_occurrences")
-        .update({ status: "scheduled", gap_handling: null })
-        .eq("id", existing.id);
-      if (error) return { error: "לא ניתן לפתוח מחדש את התאריך" };
-    }
+  try {
+    const created = await addOccurrenceMeetingsForDate(supabase, lessonId, date);
     revalidatePath("/lessons");
     revalidatePath("/attendance");
-    return { success: true, occurrenceId: existing.id, date };
+    return { success: true, occurrenceId: created.occurrenceId, date };
+  } catch (err) {
+    return { error: err instanceof Error ? err.message : "הוספת התאריך נכשלה" };
   }
-
-  const { data: created, error } = await supabase
-    .from("lesson_occurrences")
-    .insert({ lesson_id: lessonId, occurrence_date: date, status: "scheduled" })
-    .select("id")
-    .single();
-  if (error || !created) return { error: "הוספת התאריך נכשלה" };
-
-  revalidatePath("/lessons");
-  revalidatePath("/attendance");
-  return { success: true, occurrenceId: created.id, date };
 }
 
 export async function setOccurrenceGapHandlingAction(

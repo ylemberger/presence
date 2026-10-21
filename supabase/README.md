@@ -18,6 +18,7 @@
 | **שיעורים 1–13 + פעם בשבועיים** | [`patches/024_lesson_number_13_and_fortnightly.sql`](patches/024_lesson_number_13_and_fortnightly.sql) |
 | **שעת אחרי צהריים** | [`patches/029_afternoon_lesson.sql`](patches/029_afternoon_lesson.sql) |
 | **הערה למופע אחד** | [`patches/030_occurrence_notes.sql`](patches/030_occurrence_notes.sql) |
+| **מפגש נוכחות לכל שעה** | [`patches/031_occurrence_per_hour.sql`](patches/031_occurrence_per_hour.sql) — שעה 3 למשך 3 יוצרת מפגשים 3, 4 ו־5. לא מוחק סימונים. |
 | **טבלת הרשאות + RLS לפי מייל ב-JWT** | [`patches/028_app_access_emails.sql`](patches/028_app_access_emails.sql) — **חובה למסד קיים**. מחליף את 025–027. אחרי ההרצה הוסיפי עורכות מ-Vercel אם חסרות. |
 | **שיעור 10** | [`patches/020_lesson_number_10.sql`](patches/020_lesson_number_10.sql) |
 | **לוח חופשות/טווחים משותף** | [`patches/019_shared_activity_and_holiday_calendar.sql`](patches/019_shared_activity_and_holiday_calendar.sql) |

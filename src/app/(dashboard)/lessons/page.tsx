@@ -43,6 +43,7 @@ import {
   isMissingHolidayKind,
   isMissingHolidayTable,
 } from "@/lib/lessons/holidays";
+import { isMissingOccurrenceHourColumn } from "@/lib/lessons/occurrences";
 import type { LessonTemplateCard } from "./LessonsCalendar";
 import type { LessonFormTeacher } from "./LessonsForm";
 
@@ -352,19 +353,34 @@ export default async function LessonsPage({ searchParams }: Props) {
   const monthGrid = buildHebrewMonth(monthCursor.year, monthCursor.month);
   const cardById = new Map(lessonCards.map((card) => [card.id, card]));
 
-  const [monthOccurrences, holidayRows] = await Promise.all([
-    filteredIds.length === 0
-      ? Promise.resolve(
-          [] as { id: string; lesson_id: string; occurrence_date: string; status: string }[]
-        )
-      : Promise.all(
-          chunkIds(filteredIds).map((ids) =>
-            fetchAllPages<{
-              id: string;
-              lesson_id: string;
-              occurrence_date: string;
-              status: string;
-            }>((from, to) =>
+  const hourProbe = await supabase.from("lesson_occurrences").select("lesson_number").limit(1);
+  const meetingsHaveHour = !isMissingOccurrenceHourColumn(hourProbe.error);
+
+  type MonthMeetingRow = {
+    id: string;
+    lesson_id: string;
+    occurrence_date: string;
+    status: string;
+    lesson_number?: number | null;
+  };
+
+  async function loadMonthMeetings(): Promise<MonthMeetingRow[]> {
+    if (filteredIds.length === 0) return [];
+    const pages = await Promise.all(
+      chunkIds(filteredIds).map((ids) =>
+        meetingsHaveHour
+          ? fetchAllPages<MonthMeetingRow>((from, to) =>
+              supabase
+                .from("lesson_occurrences")
+                .select("id, lesson_id, occurrence_date, status, lesson_number")
+                .in("lesson_id", ids)
+                .gte("occurrence_date", monthGrid.rangeStart)
+                .lte("occurrence_date", monthGrid.rangeEnd)
+                .order("occurrence_date")
+                .order("id")
+                .range(from, to)
+            )
+          : fetchAllPages<MonthMeetingRow>((from, to) =>
               supabase
                 .from("lesson_occurrences")
                 .select("id, lesson_id, occurrence_date, status")
@@ -375,8 +391,13 @@ export default async function LessonsPage({ searchParams }: Props) {
                 .order("id")
                 .range(from, to)
             )
-          )
-        ).then((pages) => pages.flat()),
+      )
+    );
+    return pages.flat();
+  }
+
+  const [monthOccurrences, holidayRows] = await Promise.all([
+    loadMonthMeetings(),
     loadHolidayRows(supabase),
   ]);
 
@@ -386,6 +407,7 @@ export default async function LessonsPage({ searchParams }: Props) {
     if (!card || !row.id || !row.occurrence_date) continue;
     const status: CalendarMeeting["status"] =
       row.status === "completed" || row.status === "cancelled" ? row.status : "scheduled";
+    const ownHour = row.lesson_number != null;
     const list = meetingsByDate.get(row.occurrence_date) ?? [];
     list.push({
       id: row.id,
@@ -394,8 +416,8 @@ export default async function LessonsPage({ searchParams }: Props) {
       subject: card.subject,
       teacherName: card.teacherName,
       audienceLabel: card.audienceLabel,
-      lessonNumber: card.lesson_number,
-      periodCount: card.period_count ?? 1,
+      lessonNumber: ownHour ? row.lesson_number! : card.lesson_number,
+      periodCount: ownHour ? 1 : (card.period_count ?? 1),
     });
     meetingsByDate.set(row.occurrence_date, list);
   }

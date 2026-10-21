@@ -641,6 +641,7 @@ export function LessonsForm({
                   </p>
                 </div>
               ) : (
+              <div>
               <Select
                 fieldSize="lg"
                 label="מספר שעות רצופות"
@@ -659,6 +660,10 @@ export function LessonsForm({
                   label: i === 0 ? "שעה אחת" : `${i + 1} שעות`,
                 }))}
               />
+              <p className="mt-1 font-caption text-caption text-on-surface-variant">
+                כל שעה היא מפגש נוכחות נפרד. שלוש שעות = שלושה מפגשים באותו יום.
+              </p>
+              </div>
               )}
               <div className="flex items-end">
                 {weeklySlots.length > 1 ? (

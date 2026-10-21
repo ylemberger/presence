@@ -203,10 +203,15 @@ create table lesson_occurrences (
   id uuid primary key default gen_random_uuid(),
   lesson_id uuid references lessons(id) on delete cascade,
   occurrence_date date not null,
+  lesson_number integer not null,
   status text check (status in ('scheduled', 'completed', 'cancelled')) default 'scheduled',
   notes text,
-  unique(lesson_id, occurrence_date)
+  constraint lesson_occurrences_hour_check check (lesson_number between 1 and 14),
+  unique (lesson_id, occurrence_date, lesson_number)
 );
+
+comment on column lesson_occurrences.lesson_number is
+  'One attendance meeting for this hour. A lesson of 3 hours has 3 rows on the same date (start, start+1, start+2). Afternoon (14) is always one row.';
 
 create table student_lesson_assignments (
   id uuid primary key default gen_random_uuid(),

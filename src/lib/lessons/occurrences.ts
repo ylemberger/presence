@@ -1,12 +1,26 @@
 import { createClient } from "@/lib/supabase/server";
 import { parseIsoDate, toIsoDate } from "@/lib/dates/hebrew";
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { fetchAllPages } from "@/lib/supabase/paged";
+import { occupiedLessonNumbers } from "@/lib/lessons/hours";
 import { fetchHolidayDateSet, holidayDateSet, isMissingHolidayTable } from "./holidays";
 import {
+  primarySlot,
   slotsFromLessonAndRows,
   type WeeklySlot,
   type WeeklySlotRow,
 } from "./weekly-slots";
+
+export const OCCURRENCE_HOUR_PATCH =
+  "כל שעה היא מפגש נוכחות נפרד. הריצי supabase/patches/031_occurrence_per_hour.sql ואז נסי שוב.";
+
+export function isMissingOccurrenceHourColumn(
+  error: { message?: string; code?: string } | null
+): boolean {
+  if (!error) return false;
+  const msg = `${error.message ?? ""} ${error.code ?? ""}`;
+  return /lesson_number/i.test(msg) && /lesson_occurrences|schema cache|PGRST204/i.test(msg);
+}
 
 export interface GenerateOccurrencesResult {
   created: number;
@@ -55,6 +69,25 @@ function datesForSlots(
     }
   }
   return [...dates].sort();
+}
+
+/** One key per attendance meeting: date + the single hour. */
+function expectedMeetingKeys(
+  startDate: string,
+  endDate: string,
+  slots: WeeklySlot[],
+  holidays: Set<string>,
+  everyWeeks = 1
+): Set<string> {
+  const keys = new Set<string>();
+  for (const slot of slots) {
+    const hours = occupiedLessonNumbers(slot.lessonNumber, slot.periodCount);
+    for (const date of getDatesForDayOfWeek(startDate, endDate, slot.dayOfWeek, everyWeeks)) {
+      if (holidays.has(date)) continue;
+      for (const hour of hours) keys.add(`${date}|${hour}`);
+    }
+  }
+  return keys;
 }
 
 function isMissingWeeklySlotsTable(error: { message?: string; code?: string } | null): boolean {
@@ -143,7 +176,17 @@ export async function generateLessonOccurrences(
     lessons.map((l) => l.id)
   );
 
-  const rowsToInsert: { lesson_id: string; occurrence_date: string; status: "scheduled" }[] = [];
+  const hourProbe = await supabase.from("lesson_occurrences").select("lesson_number").limit(1);
+  if (hourProbe.error && isMissingOccurrenceHourColumn(hourProbe.error)) {
+    throw new Error(OCCURRENCE_HOUR_PATCH);
+  }
+
+  const rowsToInsert: {
+    lesson_id: string;
+    occurrence_date: string;
+    lesson_number: number;
+    status: "scheduled";
+  }[] = [];
 
   for (const lesson of lessons) {
     const rawRange = lesson.activity_ranges as unknown;
@@ -180,23 +223,48 @@ export async function generateLessonOccurrences(
       continue;
     }
 
-    const { data: existing } = await supabase
-      .from("lesson_occurrences")
-      .select("occurrence_date")
-      .eq("lesson_id", lesson.id)
-      .in("occurrence_date", dates);
+    const existingRows = await fetchAllPages<{
+      occurrence_date: string;
+      lesson_number: number | null;
+    }>((from, to) =>
+      supabase
+        .from("lesson_occurrences")
+        .select("occurrence_date, lesson_number")
+        .eq("lesson_id", lesson.id)
+        .gte("occurrence_date", range.start_date)
+        .lte("occurrence_date", range.end_date)
+        .order("occurrence_date")
+        .order("lesson_number")
+        .range(from, to)
+    );
 
-    const existingSet = new Set((existing ?? []).map((e) => e.occurrence_date));
-    for (const date of dates) {
-      if (existingSet.has(date)) {
-        result.skipped++;
-        continue;
+    const openDates = new Set(dates);
+    const existingSet = new Set(
+      existingRows.map((row) => `${row.occurrence_date}|${row.lesson_number ?? ""}`)
+    );
+    for (const slot of slots) {
+      const hours = occupiedLessonNumbers(slot.lessonNumber, slot.periodCount);
+      for (const date of getDatesForDayOfWeek(
+        range.start_date,
+        range.end_date,
+        slot.dayOfWeek,
+        everyWeeks
+      )) {
+        if (!openDates.has(date)) continue;
+        for (const hour of hours) {
+          const key = `${date}|${hour}`;
+          if (existingSet.has(key)) {
+            result.skipped++;
+            continue;
+          }
+          rowsToInsert.push({
+            lesson_id: lesson.id,
+            occurrence_date: date,
+            lesson_number: hour,
+            status: "scheduled",
+          });
+        }
       }
-      rowsToInsert.push({
-        lesson_id: lesson.id,
-        occurrence_date: date,
-        status: "scheduled",
-      });
     }
   }
 
@@ -205,21 +273,106 @@ export async function generateLessonOccurrences(
     const chunk = rowsToInsert.slice(i, i + chunkSize);
     const { error: insertError } = await supabase.from("lesson_occurrences").insert(chunk);
     if (insertError) {
+      if (isMissingOccurrenceHourColumn(insertError)) {
+        throw new Error(OCCURRENCE_HOUR_PATCH);
+      }
       if (insertError.code === "23505") {
         for (const row of chunk) {
           const { error: oneErr } = await supabase.from("lesson_occurrences").insert(row);
           if (!oneErr) result.created++;
           else if (oneErr.code === "23505") result.skipped++;
-          else throw new Error(oneErr.message);
+          else if (isMissingOccurrenceHourColumn(oneErr)) throw new Error(OCCURRENCE_HOUR_PATCH);
+          else throw new Error("יצירת המופעים נכשלה");
         }
         continue;
       }
-      throw new Error(insertError.message);
+      throw new Error("יצירת המופעים נכשלה");
     }
     result.created += chunk.length;
   }
 
   return result;
+}
+
+/** One calendar date of a lesson: a meeting for every hour in that day's span. */
+export async function addOccurrenceMeetingsForDate(
+  supabase: SupabaseClient,
+  lessonId: string,
+  date: string
+): Promise<{ occurrenceId: string }> {
+  const { data: lesson, error: lessonError } = await supabase
+    .from("lessons")
+    .select("id, day_of_week, lesson_number, period_count")
+    .eq("id", lessonId)
+    .maybeSingle();
+  if (lessonError || !lesson) throw new Error("השיעור לא נמצא");
+
+  const slotsByLesson = await loadSlotsForLessons(supabase, [lessonId]);
+  const slots = slotsFromLessonAndRows(lesson, slotsByLesson.get(lessonId));
+  const weekday = parseIsoDate(date).getDay();
+  const slot = slots.find((item) => item.dayOfWeek === weekday) ?? primarySlot(slots);
+  const hours = occupiedLessonNumbers(slot.lessonNumber, slot.periodCount);
+
+  const { data: existing, error: existingError } = await supabase
+    .from("lesson_occurrences")
+    .select("id, status, lesson_number")
+    .eq("lesson_id", lessonId)
+    .eq("occurrence_date", date);
+  if (existingError) {
+    if (isMissingOccurrenceHourColumn(existingError)) throw new Error(OCCURRENCE_HOUR_PATCH);
+    throw new Error("לא ניתן לקרוא את מפגשי היום");
+  }
+
+  const byHour = new Map<number, { id: string; status: string }>();
+  for (const row of existing ?? []) {
+    if (row.lesson_number == null) continue;
+    byHour.set(row.lesson_number, { id: row.id, status: row.status });
+  }
+
+  let firstId = "";
+  for (const hour of hours) {
+    const found = byHour.get(hour);
+    if (found) {
+      if (found.status === "cancelled") {
+        const { error } = await supabase
+          .from("lesson_occurrences")
+          .update({ status: "scheduled", gap_handling: null })
+          .eq("id", found.id);
+        if (error) throw new Error("לא ניתן לפתוח מחדש את המפגש");
+      }
+      if (!firstId) firstId = found.id;
+      continue;
+    }
+
+    const { data: created, error } = await supabase
+      .from("lesson_occurrences")
+      .insert({
+        lesson_id: lessonId,
+        occurrence_date: date,
+        lesson_number: hour,
+        status: "scheduled",
+      })
+      .select("id")
+      .single();
+    if (error?.code === "23505") {
+      const { data: again } = await supabase
+        .from("lesson_occurrences")
+        .select("id")
+        .eq("lesson_id", lessonId)
+        .eq("occurrence_date", date)
+        .eq("lesson_number", hour)
+        .maybeSingle();
+      if (!again?.id) throw new Error("הוספת המפגש נכשלה");
+      if (!firstId) firstId = again.id;
+      continue;
+    }
+    if (error && isMissingOccurrenceHourColumn(error)) throw new Error(OCCURRENCE_HOUR_PATCH);
+    if (error || !created) throw new Error("הוספת המפגש נכשלה");
+    if (!firstId) firstId = created.id;
+  }
+
+  if (!firstId) throw new Error("הוספת המפגש נכשלה");
+  return { occurrenceId: firstId };
 }
 
 /** After editing a lesson: create missing dates, then drop/cancel dates that no longer belong. */
@@ -252,19 +405,33 @@ export async function syncLessonOccurrences(
   const slotsByLesson = await loadSlotsForLessons(supabase, [lessonId]);
   const slots = slotsFromLessonAndRows(lesson, slotsByLesson.get(lessonId));
   const everyWeeks = lesson.repeat_every_weeks === 2 ? 2 : 1;
-  const expected = new Set(
-    datesForSlots(range.start_date, range.end_date, slots, holidays, everyWeeks)
+  const expected = expectedMeetingKeys(
+    range.start_date,
+    range.end_date,
+    slots,
+    holidays,
+    everyWeeks
   );
 
-  const { data: occs, error: occError } = await supabase
-    .from("lesson_occurrences")
-    .select("id, occurrence_date, status")
-    .eq("lesson_id", lessonId);
-  if (occError) throw occError;
-
-  const stale = (occs ?? []).filter(
-    (o) => !expected.has(o.occurrence_date) && o.status !== "cancelled"
+  const occs = await fetchAllPages<{
+    id: string;
+    occurrence_date: string;
+    status: string;
+    lesson_number: number | null;
+  }>((from, to) =>
+    supabase
+      .from("lesson_occurrences")
+      .select("id, occurrence_date, status, lesson_number")
+      .eq("lesson_id", lessonId)
+      .order("occurrence_date")
+      .order("lesson_number")
+      .range(from, to)
   );
+
+  const stale = occs.filter((o) => {
+    if (o.status === "cancelled" || o.lesson_number == null) return false;
+    return !expected.has(`${o.occurrence_date}|${o.lesson_number}`);
+  });
   if (stale.length === 0) {
     return { created: gen.created, skipped: gen.skipped, removed: 0, cancelled: 0 };
   }

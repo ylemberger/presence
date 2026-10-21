@@ -196,6 +196,8 @@ export interface LessonOccurrence {
   id: string;
   lesson_id: string;
   occurrence_date: string;
+  /** Single hour of this meeting. A 3-hour lesson has three rows on the same date. */
+  lesson_number: number;
   status: OccurrenceStatus;
   notes: string | null;
   gap_handling: "in_treatment" | "continued" | null;
