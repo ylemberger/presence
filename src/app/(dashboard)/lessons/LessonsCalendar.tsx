@@ -2,6 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { BILLING_TYPE_LABELS, DAY_OF_WEEK_LABELS } from "@/lib/constants";
+import { formatHebrewDate } from "@/lib/dates/hebrew";
 import { formatLessonHours } from "@/lib/lessons/hours";
 import { useAccess } from "@/components/auth/AccessProvider";
 import { deleteLessonAction } from "../actions";
@@ -21,6 +22,7 @@ export type LessonTemplateCard = Lesson & {
   studentCount: number;
   subjectParentName?: string;
   attendanceLocked?: boolean;
+  markedMeetings?: { id: string; date: string }[];
 };
 
 interface LessonsCalendarProps {
@@ -104,8 +106,8 @@ export function LessonsCalendar({
                   {canWrite ? (
                     <div className="flex shrink-0 flex-col items-stretch gap-1">
                       {l.attendanceLocked ? (
-                        <p className="max-w-[9rem] text-center font-caption text-caption text-on-surface-variant">
-                          לא ניתן לערוך — כבר נרשמה נוכחות
+                        <p className="max-w-[11rem] text-center font-caption text-caption text-on-surface-variant">
+                          עריכה נעולה עד שכל המפגשים בלי נוכחות
                         </p>
                       ) : (
                         <Link
@@ -138,6 +140,29 @@ export function LessonsCalendar({
                     </div>
                   ) : null}
                 </div>
+                {canWrite && l.attendanceLocked ? (
+                  <div className="mt-2 rounded-lg border border-outline-variant/40 bg-surface-container-lowest px-3 py-2">
+                    <p className="font-caption text-caption text-on-surface">
+                      כדי לשנות קהל יעד או פרטים אחרים, אפסי קודם את הנוכחות בכל מפגש
+                      שסומן. בכפתור «אפסי נוכחות» בתוך המפגש. העריכה עצמה לא מוחקת
+                      סימונים. כשלא נשאר אף מפגש מסומן, כפתור העריכה נפתח.
+                    </p>
+                    {(l.markedMeetings ?? []).length > 0 ? (
+                      <ul className="mt-2 flex max-h-36 flex-col gap-1 overflow-auto">
+                        {(l.markedMeetings ?? []).map((meeting) => (
+                          <li key={meeting.id}>
+                            <Link
+                              href={`/attendance?date=${encodeURIComponent(meeting.date)}&occurrenceId=${encodeURIComponent(meeting.id)}`}
+                              className="font-caption text-caption font-semibold text-secondary hover:underline"
+                            >
+                              {formatHebrewDate(meeting.date)} — אפסי נוכחות
+                            </Link>
+                          </li>
+                        ))}
+                      </ul>
+                    ) : null}
+                  </div>
+                ) : null}
                 {students.length > 0 && (
                   <div className="mt-2">
                     <AssignStudentToLesson lessonId={l.id} students={students} />

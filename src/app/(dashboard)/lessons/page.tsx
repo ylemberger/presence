@@ -35,7 +35,7 @@ import {
   teacherIdsSharingName,
   uniqueTeachersByName,
 } from "@/lib/teachers/name-group";
-import { fetchAssignmentsByLessons } from "@/lib/supabase/paged";
+import { chunkIds, fetchAllPages, fetchAssignmentsByLessons } from "@/lib/supabase/paged";
 import type { LessonTemplateCard } from "./LessonsCalendar";
 import type { LessonFormTeacher } from "./LessonsForm";
 
@@ -244,15 +244,29 @@ export default async function LessonsPage({ searchParams }: Props) {
       .filter((v): v is readonly [string, { id: string; full_name: string }] => Boolean(v))
   ).values()].sort((a, b) => a.full_name.localeCompare(b.full_name, "he"));
 
-  const lessonsWithAttendance = new Set<string>();
+  const markedByLesson = new Map<string, { id: string; date: string }[]>();
   const yearLessonIds = allLessons.map((l) => l.id);
   if (yearLessonIds.length > 0) {
-    const { data: markedOccurrences } = await supabase
-      .from("lesson_occurrences")
-      .select("lesson_id, attendance!inner(id)")
-      .in("lesson_id", yearLessonIds);
-    for (const row of markedOccurrences ?? []) {
-      if (row.lesson_id) lessonsWithAttendance.add(row.lesson_id);
+    const markedPages = await Promise.all(
+      chunkIds(yearLessonIds).map((ids) =>
+        fetchAllPages<{ id: string; lesson_id: string; occurrence_date: string }>(
+          (from, to) =>
+            supabase
+              .from("lesson_occurrences")
+              .select("id, lesson_id, occurrence_date, attendance!inner(id)")
+              .in("lesson_id", ids)
+              .order("occurrence_date")
+              .range(from, to)
+        )
+      )
+    );
+    const seen = new Set<string>();
+    for (const row of markedPages.flat()) {
+      if (!row.id || !row.lesson_id || seen.has(row.id)) continue;
+      seen.add(row.id);
+      const list = markedByLesson.get(row.lesson_id) ?? [];
+      list.push({ id: row.id, date: row.occurrence_date });
+      markedByLesson.set(row.lesson_id, list);
     }
   }
 
@@ -295,7 +309,8 @@ export default async function LessonsPage({ searchParams }: Props) {
         .join(" · "),
       rangeName: rangeById.get(l.activity_range_id) ?? "",
       studentCount: studentCountByLesson.get(l.id) ?? 0,
-      attendanceLocked: lessonsWithAttendance.has(l.id),
+      attendanceLocked: markedByLesson.has(l.id),
+      markedMeetings: markedByLesson.get(l.id) ?? [],
     };
   });
 
@@ -414,7 +429,10 @@ export default async function LessonsPage({ searchParams }: Props) {
             startOpen={Boolean(searchParams.edit)}
             noTeachers={formProps.teachers.length === 0}
             editNotFound={Boolean(searchParams.edit && !editingDraft)}
-            editLocked={Boolean(editingLesson && lessonsWithAttendance.has(editingLesson.id))}
+            editLocked={Boolean(editingLesson && markedByLesson.has(editingLesson.id))}
+            markedMeetings={
+              editingLesson ? markedByLesson.get(editingLesson.id) ?? [] : []
+            }
             {...formProps}
             initial={editingDraft}
             cancelHref={cancelHref}

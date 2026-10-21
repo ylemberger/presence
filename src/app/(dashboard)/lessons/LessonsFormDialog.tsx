@@ -8,12 +8,15 @@ import { Button } from "@/components/ui/Button";
 import { Icon } from "@/components/ui/Icon";
 import { Modal } from "@/components/ui/Modal";
 import { LessonsForm, type LessonsFormProps } from "./LessonsForm";
+import { formatHebrewDate } from "@/lib/dates/hebrew";
+import Link from "next/link";
 
 interface LessonsFormDialogProps extends LessonsFormProps {
   startOpen?: boolean;
   noTeachers?: boolean;
   editNotFound?: boolean;
   editLocked?: boolean;
+  markedMeetings?: { id: string; date: string }[];
 }
 
 export function LessonsFormDialog({
@@ -21,6 +24,7 @@ export function LessonsFormDialog({
   noTeachers = false,
   editNotFound = false,
   editLocked = false,
+  markedMeetings = [],
   cancelHref,
   initial,
   ...formProps
@@ -57,7 +61,7 @@ export function LessonsFormDialog({
       description={
         editing
           ? editLocked
-            ? "לשיעור הזה כבר נרשמה נוכחות, ולכן אי אפשר לשנות אותו."
+            ? "העריכה נעולה כי יש מפגשים עם נוכחות. אפסי אותם, ואז אפשר לשנות קהל יעד ושאר פרטים."
             : "כל נתוני השיעור נטענים לעריכה. השמירה מעדכנת מופעים ושיוכי תלמידות, כל עוד עדיין אין נוכחות."
           : "יצירת שיעור פותחת אוטומטית את המופעים בטווח שנבחר. ימי חופשה לא נכללים."
       }
@@ -78,9 +82,26 @@ export function LessonsFormDialog({
           השיעור לעריכה לא נמצא.
         </p>
       ) : editLocked ? (
-        <p className="rounded-lg bg-surface-container-low px-4 py-3 font-body-md text-body-md text-on-surface">
-          לא ניתן לערוך את השיעור כי כבר התחילו למלא לו נוכחות. הנוכחות, המופעים ושיוכי התלמידות נשארים כמו שהם.
-        </p>
+        <div className="rounded-lg bg-surface-container-low px-4 py-3 font-body-md text-body-md text-on-surface">
+          <p>
+            אי אפשר לשנות את השיעור כל עוד יש מפגש עם נוכחות. העריכה לא מוחקת
+            סימונים. אפסי נוכחות בכל המפגשים האלה, ואז העריכה תיפתח.
+          </p>
+          {markedMeetings.length > 0 ? (
+            <ul className="mt-3 flex max-h-48 flex-col gap-1 overflow-auto">
+              {markedMeetings.map((meeting) => (
+                <li key={meeting.id}>
+                  <Link
+                    href={`/attendance?date=${encodeURIComponent(meeting.date)}&occurrenceId=${encodeURIComponent(meeting.id)}`}
+                    className="font-semibold text-secondary hover:underline"
+                  >
+                    {formatHebrewDate(meeting.date)} — אפסי נוכחות
+                  </Link>
+                </li>
+              ))}
+            </ul>
+          ) : null}
+        </div>
       ) : (
         <LessonsForm
           key={editToken}

@@ -1813,7 +1813,7 @@ export async function updateLessonAction(formData: FormData) {
     if (await lessonHasRecordedAttendance(supabase, lessonId)) {
       return {
         error:
-          "לא ניתן לערוך שיעור אחרי שכבר נרשמה לו נוכחות. הנוכחות, המופעים ושיוכי התלמידות נשארים כמו שהם.",
+          "אי אפשר לערוך את השיעור כל עוד יש מפגש עם נוכחות. אפסי את הנוכחות בכל המפגשים שסומנו, ואז העריכה תיפתח. העריכה לא מוחקת סימונים.",
       };
     }
   } catch (e) {
