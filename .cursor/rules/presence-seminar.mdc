@@ -37,4 +37,5 @@ alwaysApply: false
 
 - סטטוסים: `present` / `absent` / `late` — איחור = נוכחות לחישוב
 - משך שיעור: כל שעה = מפגש נוכחות נפרד. שעה 3 למשך 3 = מפגשים 3, 4 ו־5. «אחרי צהריים» מפגש אחד. ראי `lesson-hour-meetings.mdc`
+- עריכת שיעור עם נוכחות: קהל יעד ולוח שעות נעולים; טווח מותר רק אם כל מפגש שסומן נשאר בתוכו. ראי `lesson-edit-with-attendance.mdc`
 - מכנה: מופעים `scheduled`/`completed` (לא `cancelled`)

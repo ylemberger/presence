@@ -105,24 +105,18 @@ export function LessonsCalendar({
                   </div>
                   {canWrite ? (
                     <div className="flex shrink-0 flex-col items-stretch gap-1">
-                      {l.attendanceLocked ? (
-                        <p className="max-w-[11rem] text-center font-caption text-caption text-on-surface-variant">
-                          עריכה נעולה עד שכל המפגשים בלי נוכחות
-                        </p>
-                      ) : (
-                        <Link
-                          href={`/lessons?${new URLSearchParams({
-                            ...(monthQuery
-                              ? Object.fromEntries(new URLSearchParams(monthQuery))
-                              : {}),
-                            edit: l.id,
-                          }).toString()}`}
-                          className="inline-flex items-center justify-center gap-1 rounded-lg border border-outline-variant bg-surface-container-lowest px-3 py-1.5 font-semibold text-caption text-primary hover:bg-surface-container-low"
-                        >
-                          <Icon name="edit" className="text-[16px]" />
-                          עריכה
-                        </Link>
-                      )}
+                      <Link
+                        href={`/lessons?${new URLSearchParams({
+                          ...(monthQuery
+                            ? Object.fromEntries(new URLSearchParams(monthQuery))
+                            : {}),
+                          edit: l.id,
+                        }).toString()}`}
+                        className="inline-flex items-center justify-center gap-1 rounded-lg border border-outline-variant bg-surface-container-lowest px-3 py-1.5 font-semibold text-caption text-primary hover:bg-surface-container-low"
+                      >
+                        <Icon name="edit" className="text-[16px]" />
+                        עריכה
+                      </Link>
                       <DeleteButton
                         label="מחק שיעור"
                         confirmMessage="יימחקו השיעור, שיבוצי התלמידות לשיעור, המופעים והנוכחות שלהם. התלמידות עצמן לא יימחקו. להמשיך?"
@@ -143,9 +137,7 @@ export function LessonsCalendar({
                 {canWrite && l.attendanceLocked ? (
                   <div className="mt-2 rounded-lg border border-outline-variant/40 bg-surface-container-lowest px-3 py-2">
                     <p className="font-caption text-caption text-on-surface">
-                      כדי לשנות קהל יעד או פרטים אחרים, אפסי קודם את הנוכחות בכל מפגש
-                      שסומן. בכפתור «אפסי נוכחות» בתוך המפגש. העריכה עצמה לא מוחקת
-                      סימונים. כשלא נשאר אף מפגש מסומן, כפתור העריכה נפתח.
+                      יש נוכחות בחלק מהמפגשים. אפשר לערוך שם, מורה, כלל וטווח. קהל יעד, יום ושעה נעולים עד שאין נוכחות. העריכה לא מוחקת סימונים.
                     </p>
                     {(l.markedMeetings ?? []).length > 0 ? (
                       <ul className="mt-2 flex max-h-36 flex-col gap-1 overflow-auto">

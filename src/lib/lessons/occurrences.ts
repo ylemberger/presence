@@ -378,7 +378,8 @@ export async function addOccurrenceMeetingsForDate(
 /** After editing a lesson: create missing dates, then drop/cancel dates that no longer belong. */
 export async function syncLessonOccurrences(
   lessonId: string,
-  supabaseClient?: SupabaseClient
+  supabaseClient?: SupabaseClient,
+  options?: { keepMarked?: boolean }
 ) {
   const supabase = supabaseClient ?? (await createClient());
   const gen = await generateLessonOccurrences(lessonId, undefined, supabase);
@@ -448,7 +449,7 @@ export async function syncLessonOccurrences(
   });
 
   const toDelete = ids.filter((id) => !attended.has(id));
-  const toCancel = ids.filter((id) => attended.has(id));
+  const toCancel = options?.keepMarked ? [] : ids.filter((id) => attended.has(id));
   let removed = 0;
   let cancelled = 0;
 

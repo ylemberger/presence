@@ -560,7 +560,7 @@ export default async function LessonsPage({ searchParams }: Props) {
             startOpen={Boolean(searchParams.edit)}
             noTeachers={formProps.teachers.length === 0}
             editNotFound={Boolean(searchParams.edit && !editingDraft)}
-            editLocked={Boolean(editingLesson && markedByLesson.has(editingLesson.id))}
+            attendanceRecorded={Boolean(editingLesson && markedByLesson.has(editingLesson.id))}
             markedMeetings={
               editingLesson ? markedByLesson.get(editingLesson.id) ?? [] : []
             }

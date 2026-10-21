@@ -15,7 +15,7 @@ interface LessonsFormDialogProps extends LessonsFormProps {
   startOpen?: boolean;
   noTeachers?: boolean;
   editNotFound?: boolean;
-  editLocked?: boolean;
+  attendanceRecorded?: boolean;
   markedMeetings?: { id: string; date: string }[];
 }
 
@@ -23,7 +23,7 @@ export function LessonsFormDialog({
   startOpen = false,
   noTeachers = false,
   editNotFound = false,
-  editLocked = false,
+  attendanceRecorded = false,
   markedMeetings = [],
   cancelHref,
   initial,
@@ -60,9 +60,9 @@ export function LessonsFormDialog({
       title={editing ? "עריכת שיעור" : "יצירת שיעור חדש"}
       description={
         editing
-          ? editLocked
-            ? "העריכה נעולה כי יש מפגשים עם נוכחות. אפסי אותם, ואז אפשר לשנות קהל יעד ושאר פרטים."
-            : "כל נתוני השיעור נטענים לעריכה. השמירה מעדכנת מופעים ושיוכי תלמידות, כל עוד עדיין אין נוכחות."
+          ? attendanceRecorded
+            ? "אפשר לשנות שם, מורה, כלל נוכחות וטווח. קהל יעד, יום ושעה נשארים כל עוד יש נוכחות. טווח חדש חייב לכלול כל מפגש שסומן."
+            : "כל נתוני השיעור נטענים לעריכה. השמירה מעדכנת מופעים ושיוכי תלמידות."
           : "יצירת שיעור פותחת אוטומטית את המופעים בטווח שנבחר. ימי חופשה לא נכללים."
       }
       onClose={close}
@@ -81,36 +81,37 @@ export function LessonsFormDialog({
         <p className="rounded-lg bg-error-container/60 px-4 py-3 font-body-md text-body-md text-on-error-container">
           השיעור לעריכה לא נמצא.
         </p>
-      ) : editLocked ? (
-        <div className="rounded-lg bg-surface-container-low px-4 py-3 font-body-md text-body-md text-on-surface">
-          <p>
-            אי אפשר לשנות את השיעור כל עוד יש מפגש עם נוכחות. העריכה לא מוחקת
-            סימונים. אפסי נוכחות בכל המפגשים האלה, ואז העריכה תיפתח.
-          </p>
-          {markedMeetings.length > 0 ? (
-            <ul className="mt-3 flex max-h-48 flex-col gap-1 overflow-auto">
-              {markedMeetings.map((meeting) => (
-                <li key={meeting.id}>
-                  <Link
-                    href={`/attendance?date=${encodeURIComponent(meeting.date)}&occurrenceId=${encodeURIComponent(meeting.id)}`}
-                    className="font-semibold text-secondary hover:underline"
-                  >
-                    {formatHebrewDate(meeting.date)} — אפסי נוכחות
-                  </Link>
-                </li>
-              ))}
-            </ul>
-          ) : null}
-        </div>
       ) : (
-        <LessonsForm
-          key={editToken}
-          {...formProps}
-          initial={initial}
-          cancelHref={editing ? cancelHref : undefined}
-          onCreated={close}
-          onCancel={close}
-        />
+        <>
+          {attendanceRecorded && markedMeetings.length > 0 ? (
+            <div className="mb-3 rounded-lg bg-surface-container-low px-4 py-3 font-body-md text-body-md text-on-surface">
+              <p>
+                יש נוכחות במפגשים האלה. העריכה לא מוחקת סימונים. כדי לשנות קהל יעד, יום או שעה, אפסי קודם את הנוכחות.
+              </p>
+              <ul className="mt-3 flex max-h-36 flex-col gap-1 overflow-auto">
+                {markedMeetings.map((meeting) => (
+                  <li key={meeting.id}>
+                    <Link
+                      href={`/attendance?date=${encodeURIComponent(meeting.date)}&occurrenceId=${encodeURIComponent(meeting.id)}`}
+                      className="font-semibold text-secondary hover:underline"
+                    >
+                      {formatHebrewDate(meeting.date)} — אפסי נוכחות
+                    </Link>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          ) : null}
+          <LessonsForm
+            key={editToken}
+            {...formProps}
+            initial={initial}
+            attendanceRecorded={attendanceRecorded}
+            cancelHref={editing ? cancelHref : undefined}
+            onCreated={close}
+            onCancel={close}
+          />
+        </>
       )}
     </Modal>
   );

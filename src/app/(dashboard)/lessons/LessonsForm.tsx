@@ -75,6 +75,8 @@ export interface LessonsFormProps {
   cancelHref?: string;
   onCreated?: () => void;
   onCancel?: () => void;
+  /** Some meetings already have marks. Audience and weekly hours stay as they are. */
+  attendanceRecorded?: boolean;
 }
 
 export function LessonsForm({
@@ -91,6 +93,7 @@ export function LessonsForm({
   cancelHref,
   onCreated,
   onCancel,
+  attendanceRecorded = false,
 }: LessonsFormProps) {
   const editing = Boolean(initial?.id);
   const router = useRouter();
@@ -248,6 +251,26 @@ export function LessonsForm({
         return;
       }
       fd.set("grade_id", gradeIds[0]);
+      const putIds = (name: string, values: string[]) => {
+        fd.delete(name);
+        for (const value of values) fd.append(name, value);
+      };
+      putIds("grade_ids", gradeIds);
+      putIds("class_ids", classIds);
+      putIds("track_ids", trackIds);
+      putIds("specialization_ids", specializationIds);
+      putIds(
+        "slot_day_of_week",
+        weeklySlots.map((slot) => String(slot.dayOfWeek))
+      );
+      putIds(
+        "slot_lesson_number",
+        weeklySlots.map((slot) => String(slot.lessonNumber))
+      );
+      putIds(
+        "slot_period_count",
+        weeklySlots.map((slot) => String(slot.periodCount))
+      );
       if (wholeGrade) fd.set("whole_grade", "1");
       if (billingType === "specialization") {
         fd.set("class_id", "");
@@ -426,6 +449,12 @@ export function LessonsForm({
 
       <div>
         <p className="mb-3 font-headline-md text-headline-md text-primary">קהל יעד</p>
+        {attendanceRecorded ? (
+          <p className="mb-3 rounded-lg bg-surface-container-low px-4 py-3 font-body-md text-body-md text-on-surface-variant">
+            קהל היעד נעול כי כבר סומנה נוכחות. אפשר עדיין לשנות שם, מורה, כלל נוכחות וטווח פעילות.
+          </p>
+        ) : null}
+        <fieldset disabled={attendanceRecorded} className="min-w-0 border-0 p-0 disabled:opacity-70">
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
           <div className="sm:col-span-2 xl:col-span-4">
             <MultiSelect
@@ -561,6 +590,7 @@ export function LessonsForm({
                 ? "כל תלמידות השכבות שנבחרו ישויכו."
                 : "תלמידה תשויך אם היא באחת השכבות, וגם עומדת בכל שאר התנאים שנבחרו (כיתה / מסלול / התמחות)."}
         </p>
+        </fieldset>
       </div>
 
       <div>
@@ -570,6 +600,12 @@ export function LessonsForm({
             אפשר כמה מפגשים בשבוע לאותו שיעור (למשל ראשון שיעורים 6–7 ורביעי שיעור 3). כל מפגש
             יוצר מופעי נוכחות נפרדים תחת אותו שיעור.
           </p>
+          {attendanceRecorded ? (
+            <p className="rounded-lg bg-surface-container-low px-4 py-3 font-body-md text-body-md text-on-surface-variant">
+              יום, שעה, משך ותדירות נעולים כי יש נוכחות. את טווח הפעילות אפשר לקצר או להאריך, כל עוד כל מפגש שסומן נשאר בתוך הטווח.
+            </p>
+          ) : null}
+          <fieldset disabled={attendanceRecorded} className="min-w-0 space-y-3 border-0 p-0 disabled:opacity-70">
           <Select
             fieldSize="lg"
             label="תדירות"
@@ -704,6 +740,7 @@ export function LessonsForm({
               הוסיפי יום נוסף בשבוע
             </Button>
           )}
+          </fieldset>
         </div>
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
           <Combobox

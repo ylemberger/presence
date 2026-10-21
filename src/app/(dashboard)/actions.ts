@@ -42,8 +42,10 @@ import {
 import {
   parseWeeklySlotsFromFormData,
   primarySlot,
+  slotsFromLessonAndRows,
   type WeeklySlot,
 } from "@/lib/lessons/weekly-slots";
+import { fetchAllPages } from "@/lib/supabase/paged";
 import {
   isError,
   parseLessonBilling,
@@ -1756,25 +1758,58 @@ export async function createLessonAction(formData: FormData) {
   return { success: true };
 }
 
-async function lessonHasRecordedAttendance(
+function idKey(ids: Array<string | null | undefined>): string {
+  return [...new Set(ids.filter((id): id is string => Boolean(id)))].sort().join(",");
+}
+
+function scheduleKey(slots: WeeklySlot[], repeatEveryWeeks: number): string {
+  const body = slots
+    .map((slot) => `${slot.dayOfWeek}:${slot.lessonNumber}:${slot.periodCount}`)
+    .join(",");
+  return `${repeatEveryWeeks === 2 ? 2 : 1}|${body}`;
+}
+
+async function markedOccurrenceDates(
   supabase: Awaited<ReturnType<typeof createClient>>,
   lessonId: string
-): Promise<boolean> {
-  const { data: occs, error: occError } = await supabase
-    .from("lesson_occurrences")
-    .select("id")
-    .eq("lesson_id", lessonId);
-  if (occError) throw new Error(occError.message);
-  if (!occs?.length) return false;
-  const { count, error } = await supabase
-    .from("attendance")
-    .select("id", { count: "exact", head: true })
-    .in(
-      "lesson_occurrence_id",
-      occs.map((o) => o.id)
-    );
-  if (error) throw new Error(error.message);
-  return (count ?? 0) > 0;
+): Promise<string[]> {
+  const rows = await fetchAllPages<{ id: string; occurrence_date: string }>((from, to) =>
+    supabase
+      .from("lesson_occurrences")
+      .select("id, occurrence_date, attendance!inner(id)")
+      .eq("lesson_id", lessonId)
+      .order("occurrence_date")
+      .order("id")
+      .range(from, to)
+  );
+  return [...new Set(rows.map((row) => row.occurrence_date.slice(0, 10)))].sort();
+}
+
+async function requestedRangeBounds(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  formData: FormData
+): Promise<{ start: string; end: string } | { error: string }> {
+  const raw = String(formData.get("activity_range_id") ?? "").trim();
+  if (raw === FLEXIBLE_RANGE_FORM_VALUE) {
+    const start = requireIsoDate(formData.get("flexible_start_date"), "תחילת הטווח הגמיש");
+    if (isError(start)) return start;
+    const endRaw = String(formData.get("flexible_end_date") ?? "").trim();
+    const end = requireIsoDate(endRaw || start, "סיום הטווח הגמיש");
+    if (isError(end)) return end;
+    if (end < start) {
+      return { error: "תאריך הסיום חייב להיות באותו יום או אחרי תאריך ההתחלה" };
+    }
+    return { start, end };
+  }
+  const rangeId = requireId(raw, "טווח פעילות");
+  if (isError(rangeId)) return rangeId;
+  const { data, error } = await supabase
+    .from("activity_ranges")
+    .select("start_date, end_date")
+    .eq("id", rangeId)
+    .maybeSingle();
+  if (error || !data?.start_date || !data.end_date) return { error: "טווח הפעילות לא נמצא" };
+  return { start: data.start_date.slice(0, 10), end: data.end_date.slice(0, 10) };
 }
 
 export async function updateLessonAction(formData: FormData) {
@@ -1788,7 +1823,7 @@ export async function updateLessonAction(formData: FormData) {
   const { data: existing, error: loadError } = await supabase
     .from("lessons")
     .select(
-      "id, academic_year_id, teacher_teaching_assignment_id, activity_range_id, grade_id, class_id, track_id, specialization_id, billing_type, for_psychology"
+      "id, academic_year_id, teacher_teaching_assignment_id, activity_range_id, grade_id, class_id, track_id, specialization_id, billing_type, for_psychology, day_of_week, lesson_number, period_count, repeat_every_weeks"
     )
     .eq("id", lessonId)
     .maybeSingle();
@@ -1808,54 +1843,126 @@ export async function updateLessonAction(formData: FormData) {
   if ("error" in billing) return billing;
   const gradeIds = parseLessonGradeIds(formData);
   if ("error" in gradeIds) return gradeIds;
+  const formSlots = parseWeeklySlotsFromFormData(formData);
+  if ("error" in formSlots) return formSlots;
+  const formRepeat = Number(formData.get("repeat_every_weeks") ?? "1") === 2 ? 2 : 1;
+  const bounds = await requestedRangeBounds(supabase, formData);
+  if ("error" in bounds) return bounds;
 
-  try {
-    if (await lessonHasRecordedAttendance(supabase, lessonId)) {
-      return {
-        error:
-          "אי אפשר לערוך את השיעור כל עוד יש מפגש עם נוכחות. אפסי את הנוכחות בכל המפגשים שסומנו, ואז העריכה תיפתח. העריכה לא מוחקת סימונים.",
-      };
-    }
-  } catch (e) {
-    return { error: e instanceof Error ? e.message : "בדיקת נוכחות קיימת נכשלה" };
+  const [{ data: audienceRows, error: audienceLoadError }, { data: slotRows, error: slotLoadError }, { data: oldRange }, markedDates] =
+    await Promise.all([
+      supabase
+        .from("lesson_audience")
+        .select("grade_id, class_id, track_id, specialization_id")
+        .eq("lesson_id", lessonId),
+      supabase
+        .from("lesson_weekly_slots")
+        .select("day_of_week, lesson_number, period_count")
+        .eq("lesson_id", lessonId),
+      existing.activity_range_id
+        ? supabase
+            .from("activity_ranges")
+            .select("start_date")
+            .eq("id", existing.activity_range_id)
+            .maybeSingle()
+        : Promise.resolve({ data: null }),
+      markedOccurrenceDates(supabase, lessonId),
+    ]);
+  if (audienceLoadError) return { error: "טעינת פרטי השיעור נכשלה" };
+  if (
+    slotLoadError &&
+    !/lesson_weekly_slots|schema cache|PGRST205|42P01/i.test(slotLoadError.message ?? "")
+  ) {
+    return { error: "טעינת פרטי השיעור נכשלה" };
+  }
+
+  const hasMarks = markedDates.length > 0;
+  const storedSlots = slotsFromLessonAndRows(existing, slotRows ?? []);
+  const audienceChanged =
+    existing.billing_type !== billing.billing_type ||
+    Boolean(existing.for_psychology) !== billing.for_psychology ||
+    idKey([existing.grade_id, ...(audienceRows ?? []).map((row) => row.grade_id)]) !==
+      idKey(gradeIds) ||
+    idKey([existing.class_id, ...(audienceRows ?? []).map((row) => row.class_id)]) !==
+      idKey(billing.class_ids) ||
+    idKey([existing.track_id, ...(audienceRows ?? []).map((row) => row.track_id)]) !==
+      idKey(billing.track_ids) ||
+    idKey([
+      existing.specialization_id,
+      ...(audienceRows ?? []).map((row) => row.specialization_id),
+    ]) !== idKey(billing.specialization_ids);
+  const scheduleChanged =
+    scheduleKey(storedSlots, existing.repeat_every_weeks === 2 ? 2 : 1) !==
+    scheduleKey(formSlots, formRepeat);
+  const outsideMarks = markedDates.filter((date) => date < bounds.start || date > bounds.end);
+
+  if (hasMarks && audienceChanged) {
+    return {
+      error:
+        "אי אפשר לשנות קהל יעד כל עוד יש נוכחות. אפשר לשנות שם, מורה וכלל נוכחות, וגם את טווח הפעילות אם כל מפגש שסומן נשאר בתוכו.",
+    };
+  }
+  if (hasMarks && scheduleChanged) {
+    return {
+      error:
+        "אי אפשר לשנות יום, שעה, משך או תדירות כל עוד יש נוכחות. שינוי כזה היה משנה מפגשים שכבר סומנו.",
+    };
+  }
+  if (outsideMarks.length > 0) {
+    const shown = outsideMarks.slice(0, 8).map((date) => formatHebrewDate(date)).join(", ");
+    return {
+      error: `אי אפשר לשנות לטווח הזה כי יש נוכחות במפגשים מחוץ לו: ${shown}. הטווח החדש חייב לכלול כל מפגש שכבר סומן.`,
+    };
   }
 
   const { error: ttaError } = await supabase
     .from("teacher_teaching_assignments")
-    .update({
-      teacher_id: teacherId,
-      subject: lessonName,
-      billing_type: billing.billing_type,
-      grade_id: gradeIds[0],
-      class_id: billing.class_id,
-      track_id: billing.track_id,
-      specialization_id: billing.specialization_id,
-      for_psychology: billing.for_psychology,
-    })
+    .update(
+      hasMarks
+        ? { teacher_id: teacherId, subject: lessonName }
+        : {
+            teacher_id: teacherId,
+            subject: lessonName,
+            billing_type: billing.billing_type,
+            grade_id: gradeIds[0],
+            class_id: billing.class_id,
+            track_id: billing.track_id,
+            specialization_id: billing.specialization_id,
+            for_psychology: billing.for_psychology,
+          }
+    )
     .eq("id", existing.teacher_teaching_assignment_id);
   if (ttaError) return { error: hebrewDbError(ttaError, "עדכון שיבוץ ההוראה נכשל. לא נשמר.") };
 
   const payload = await buildLessonPayload(formData);
   if ("error" in payload) return payload;
 
+  const lessonUpdate = hasMarks
+    ? {
+        subject_id: payload.subject_id,
+        subject: payload.subject,
+        activity_range_id: payload.activity_range_id,
+        attendance_rule_id: payload.attendance_rule_id,
+      }
+    : {
+        subject_id: payload.subject_id,
+        subject: payload.subject,
+        grade_id: payload.grade_id,
+        class_id: payload.class_id,
+        track_id: payload.track_id,
+        specialization_id: payload.specialization_id,
+        billing_type: payload.billing_type,
+        for_psychology: payload.for_psychology,
+        day_of_week: payload.day_of_week,
+        lesson_number: payload.lesson_number,
+        period_count: payload.period_count,
+        repeat_every_weeks: payload.repeat_every_weeks,
+        activity_range_id: payload.activity_range_id,
+        attendance_rule_id: payload.attendance_rule_id,
+      };
   const { error: updateError } = await supabase
     .from("lessons")
-    .update({
-      subject_id: payload.subject_id,
-      subject: payload.subject,
-      grade_id: payload.grade_id,
-      class_id: payload.class_id,
-      track_id: payload.track_id,
-      specialization_id: payload.specialization_id,
-      billing_type: payload.billing_type,
-      for_psychology: payload.for_psychology,
-      day_of_week: payload.day_of_week,
-      lesson_number: payload.lesson_number,
-      period_count: payload.period_count,
-      repeat_every_weeks: payload.repeat_every_weeks,
-      activity_range_id: payload.activity_range_id,
-      attendance_rule_id: payload.attendance_rule_id,
-    })
+    .update(lessonUpdate)
     .eq("id", lessonId);
   if (updateError) {
     if (/repeat_every_weeks|schema cache/i.test(updateError.message)) {
@@ -1867,30 +1974,32 @@ export async function updateLessonAction(formData: FormData) {
     return { error: hebrewDbError(updateError, "עדכון השיעור נכשל. לא נשמר.") };
   }
 
-  const slotsResult = await replaceLessonWeeklySlots(
-    supabase,
-    lessonId,
-    payload.weekly_slots
-  );
-  if ("error" in slotsResult) return slotsResult;
+  if (!hasMarks) {
+    const slotsResult = await replaceLessonWeeklySlots(
+      supabase,
+      lessonId,
+      payload.weekly_slots
+    );
+    if ("error" in slotsResult) return slotsResult;
 
-  const { error: clearAudienceError } = await supabase
-    .from("lesson_audience")
-    .delete()
-    .eq("lesson_id", lessonId);
-  if (clearAudienceError) return { error: "עדכון קהל היעד נכשל" };
+    const { error: clearAudienceError } = await supabase
+      .from("lesson_audience")
+      .delete()
+      .eq("lesson_id", lessonId);
+    if (clearAudienceError) return { error: "עדכון קהל היעד נכשל" };
 
-  const audienceRows = lessonAudienceRows(lessonId, payload.grade_id, formData);
-  if ("error" in audienceRows) return audienceRows;
-  if (audienceRows.length > 0) {
-    const { error: audienceError } = await supabase.from("lesson_audience").insert(audienceRows);
-    if (audienceError) {
-      return { error: hebrewDbError(audienceError, "עדכון קהל היעד נכשל. לא נשמר.") };
+    const nextAudience = lessonAudienceRows(lessonId, payload.grade_id, formData);
+    if ("error" in nextAudience) return nextAudience;
+    if (nextAudience.length > 0) {
+      const { error: audienceError } = await supabase.from("lesson_audience").insert(nextAudience);
+      if (audienceError) {
+        return { error: hebrewDbError(audienceError, "עדכון קהל היעד נכשל. לא נשמר.") };
+      }
     }
   }
 
   try {
-    await syncLessonOccurrences(lessonId, supabase);
+    await syncLessonOccurrences(lessonId, supabase, { keepMarked: hasMarks });
   } catch (e) {
     return {
       error: hebrewDbError(
@@ -1900,8 +2009,12 @@ export async function updateLessonAction(formData: FormData) {
     };
   }
 
+  const oldStart = oldRange?.start_date?.slice(0, 10) ?? "";
+  const rangeStartChanged = oldStart !== bounds.start;
   try {
-    await refreshAutomaticAssignmentsForLesson(lessonId, payload.academic_year_id, supabase);
+    if (!hasMarks || rangeStartChanged) {
+      await refreshAutomaticAssignmentsForLesson(lessonId, payload.academic_year_id, supabase);
+    }
   } catch (e) {
     return {
       error: hebrewDbError(
