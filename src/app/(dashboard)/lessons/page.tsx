@@ -2,6 +2,7 @@ import { createClient } from "@/lib/supabase/server";
 import { getActiveAcademicYear } from "@/lib/utils";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { LessonsCalendar } from "./LessonsCalendar";
+import { LessonsByDate, type CalendarMeeting } from "./LessonsByDate";
 import { type LessonFormDraft } from "./LessonsForm";
 import { LessonsFormDialog } from "./LessonsFormDialog";
 import { LessonsFilters } from "./LessonsFilters";
@@ -36,6 +37,12 @@ import {
   uniqueTeachersByName,
 } from "@/lib/teachers/name-group";
 import { chunkIds, fetchAllPages, fetchAssignmentsByLessons } from "@/lib/supabase/paged";
+import { buildHebrewMonth, hebrewMonthFromIso, parseIsoDate, todayIso } from "@/lib/dates/hebrew";
+import {
+  holidayDatesByKind,
+  isMissingHolidayKind,
+  isMissingHolidayTable,
+} from "@/lib/lessons/holidays";
 import type { LessonTemplateCard } from "./LessonsCalendar";
 import type { LessonFormTeacher } from "./LessonsForm";
 
@@ -47,7 +54,33 @@ interface Props {
     teacherId?: string;
     subject?: string;
     edit?: string;
+    date?: string;
   };
+}
+
+function resolveIsoDay(raw?: string): string {
+  if (!raw || !/^\d{4}-\d{2}-\d{2}$/.test(raw)) return todayIso();
+  const parsed = parseIsoDate(raw);
+  const [year, month, day] = raw.split("-").map(Number);
+  if (
+    Number.isNaN(parsed.getTime()) ||
+    parsed.getFullYear() !== year ||
+    parsed.getMonth() !== month - 1 ||
+    parsed.getDate() !== day
+  ) {
+    return todayIso();
+  }
+  return raw;
+}
+
+async function loadHolidayRows(supabase: Awaited<ReturnType<typeof createClient>>) {
+  const withKind = await supabase.from("holiday_periods").select("start_date, end_date, kind");
+  if (!withKind.error) return withKind.data ?? [];
+  if (!isMissingHolidayKind(withKind.error) && !isMissingHolidayTable(withKind.error)) return [];
+  if (!isMissingHolidayKind(withKind.error)) return [];
+  const plain = await supabase.from("holiday_periods").select("start_date, end_date");
+  if (plain.error) return [];
+  return (plain.data ?? []).map((row) => ({ ...row, kind: null }));
 }
 
 function one<T>(v: unknown): T | null {
@@ -314,6 +347,79 @@ export default async function LessonsPage({ searchParams }: Props) {
     };
   });
 
+  const selectedDate = resolveIsoDay(searchParams.date);
+  const monthCursor = hebrewMonthFromIso(selectedDate);
+  const monthGrid = buildHebrewMonth(monthCursor.year, monthCursor.month);
+  const cardById = new Map(lessonCards.map((card) => [card.id, card]));
+
+  const [monthOccurrences, holidayRows] = await Promise.all([
+    filteredIds.length === 0
+      ? Promise.resolve(
+          [] as { id: string; lesson_id: string; occurrence_date: string; status: string }[]
+        )
+      : Promise.all(
+          chunkIds(filteredIds).map((ids) =>
+            fetchAllPages<{
+              id: string;
+              lesson_id: string;
+              occurrence_date: string;
+              status: string;
+            }>((from, to) =>
+              supabase
+                .from("lesson_occurrences")
+                .select("id, lesson_id, occurrence_date, status")
+                .in("lesson_id", ids)
+                .gte("occurrence_date", monthGrid.rangeStart)
+                .lte("occurrence_date", monthGrid.rangeEnd)
+                .order("occurrence_date")
+                .order("id")
+                .range(from, to)
+            )
+          )
+        ).then((pages) => pages.flat()),
+    loadHolidayRows(supabase),
+  ]);
+
+  const meetingsByDate = new Map<string, CalendarMeeting[]>();
+  for (const row of monthOccurrences) {
+    const card = cardById.get(row.lesson_id);
+    if (!card || !row.id || !row.occurrence_date) continue;
+    const status: CalendarMeeting["status"] =
+      row.status === "completed" || row.status === "cancelled" ? row.status : "scheduled";
+    const list = meetingsByDate.get(row.occurrence_date) ?? [];
+    list.push({
+      id: row.id,
+      date: row.occurrence_date,
+      status,
+      subject: card.subject,
+      teacherName: card.teacherName,
+      audienceLabel: card.audienceLabel,
+      lessonNumber: card.lesson_number,
+      periodCount: card.period_count ?? 1,
+    });
+    meetingsByDate.set(row.occurrence_date, list);
+  }
+
+  const countsByDate: Record<string, number> = {};
+  const completeDates: string[] = [];
+  const partialDates: string[] = [];
+  for (const [date, list] of meetingsByDate) {
+    list.sort(
+      (a, b) => a.lessonNumber - b.lessonNumber || a.subject.localeCompare(b.subject, "he")
+    );
+    const active = list.filter((meeting) => meeting.status !== "cancelled");
+    if (active.length === 0) continue;
+    countsByDate[date] = active.length;
+    if (active.every((meeting) => meeting.status === "completed")) completeDates.push(date);
+    else partialDates.push(date);
+  }
+
+  const dayMeetings = meetingsByDate.get(selectedDate) ?? [];
+  const holidaySets = holidayDatesByKind(holidayRows);
+  const studyRanges = ((ranges.data ?? []) as { start_date?: string | null; end_date?: string | null }[])
+    .filter((range) => range.start_date && range.end_date)
+    .map((range) => ({ start_date: range.start_date as string, end_date: range.end_date as string }));
+
   const identityToTeacherId = new Map(
     (teachers.data ?? []).map((t) => [t.identity_number, t.id])
   );
@@ -347,6 +453,7 @@ export default async function LessonsPage({ searchParams }: Props) {
   }
   if (searchParams.teacherId) filterQuery.set("teacherId", searchParams.teacherId);
   if (searchParams.subject) filterQuery.set("subject", searchParams.subject);
+  filterQuery.set("date", selectedDate);
   if (searchParams.edit) filterQuery.set("edit", searchParams.edit);
 
   const editingLesson = searchParams.edit
@@ -417,12 +524,14 @@ export default async function LessonsPage({ searchParams }: Props) {
 
   const calendarQuery = new URLSearchParams(filterQuery);
   calendarQuery.delete("edit");
+  const dateBaseQuery = new URLSearchParams(filterQuery);
+  dateBaseQuery.delete("date");
 
   return (
     <div className="flex flex-col gap-stack_lg">
       <PageHeader
         title="שיעורים"
-        description="רשימת תבניות השיעור לפי הסינון. יצירת שיעור פותחת אוטומטית את המופעים בטווח שנבחר."
+        description="מופעים לפי לוח השנה, ורשימת תבניות השיעור לפי הסינון. יצירת שיעור פותחת את המופעים בטווח שנבחר."
         actions={
           <LessonsFormDialog
             key={searchParams.edit ?? "create"}
@@ -454,6 +563,19 @@ export default async function LessonsPage({ searchParams }: Props) {
           subject: searchParams.subject,
         }}
         keepEdit={searchParams.edit}
+        keepDate={selectedDate}
+      />
+
+      <LessonsByDate
+        selectedDate={selectedDate}
+        baseQuery={dateBaseQuery.toString()}
+        meetings={dayMeetings}
+        countsByDate={countsByDate}
+        completeDates={completeDates}
+        partialDates={partialDates}
+        holidayDates={holidaySets.vacation}
+        cancelledDates={holidaySets.cancelled}
+        studyRanges={studyRanges}
       />
 
       <LessonsCalendar

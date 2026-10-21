@@ -18,6 +18,7 @@ export interface LessonsFiltersProps {
     subject?: string;
   };
   keepEdit?: string;
+  keepDate?: string;
 }
 
 export function LessonsFilters({
@@ -28,6 +29,7 @@ export function LessonsFilters({
   subjects,
   defaults,
   keepEdit,
+  keepDate,
 }: LessonsFiltersProps) {
   const router = useRouter();
 
@@ -37,6 +39,7 @@ export function LessonsFilters({
     for (const key of ["classId", "trackId", "specializationId", "teacherId", "subject"] as const) {
       if (next[key]) params.set(key, next[key] as string);
     }
+    if (keepDate) params.set("date", keepDate);
     if (keepEdit) params.set("edit", keepEdit);
     const q = params.toString();
     router.push(q ? `/lessons?${q}` : "/lessons", { scroll: false });

@@ -46,7 +46,7 @@ export function LessonsCalendar({
       <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
         <h3 className="flex items-center gap-2 font-title-lg text-title-lg text-primary">
           <Icon name="view_agenda" className="text-secondary" />
-          שיעורים
+          תבניות שיעור
         </h3>
         <span className="rounded-full bg-surface-container-high px-3 py-1 font-label-md text-label-md text-on-surface-variant">
           {lessons.length} לפי הסינון
