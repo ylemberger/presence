@@ -15,7 +15,13 @@ function blob(error: DbErrorLike): string {
 export function hebrewDbError(error: DbErrorLike, fallback: string): string {
   if (!error) return fallback;
   const original = (error.message ?? "").trim();
-  if (/[\u0590-\u05FF]/.test(original)) return original;
+  const geresh = (original.match(/\u05F3/g) ?? []).length;
+  const hebrewLetters = (original.match(/[\u05D0-\u05EA]/g) ?? []).length;
+  const looksGarbled = geresh >= 4 && geresh >= hebrewLetters;
+  if (/[\u0590-\u05FF]/.test(original) && !looksGarbled) return original;
+  if (looksGarbled) {
+    return "לתלמידה כבר יש שיבוץ בטווח התאריכים הזה. בחרי תאריך העברה אחרי תחילת השיבוץ הנוכחי.";
+  }
 
   const msg = blob(error);
   const code = error.code ?? "";
@@ -25,6 +31,9 @@ export function hebrewDbError(error: DbErrorLike, fallback: string): string {
       return "מספר תעודת זהות כבר קיים במערכת. לא נשמר.";
     }
     if (msg.includes("email")) return "כתובת האימייל כבר קיימת במערכת. לא נשמר.";
+    if (msg.includes("student_lesson")) {
+      return "התלמידה כבר משויכת לשיעור הזה.";
+    }
     if (msg.includes("lesson")) {
       return "כבר קיים שיעור עם אותם פרטים. לא נשמר.";
     }
@@ -47,7 +56,16 @@ export function hebrewDbError(error: DbErrorLike, fallback: string): string {
     return "חסר שדה חובה. מלאי את כל השדות ושמרי שוב. לא נשמר.";
   }
 
-  if (msg.includes("overlap") || msg.includes("חפיפ")) {
+  if (msg.includes("invalid input syntax")) {
+    if (msg.includes("uuid")) {
+      return "אחד מהערכים שנבחרו לא זוהה. בחרי שוב מהרשימה. לא נשמר.";
+    }
+    if (msg.includes("date")) {
+      return "התאריך לא תקין. בחרי תאריך מהיומן. לא נשמר.";
+    }
+  }
+
+  if (msg.includes("overlap") || msg.includes("חפיפ") || msg.includes("check_student_assignment")) {
     return "לתלמידה כבר יש שיבוץ בטווח התאריכים הזה. בחרי תאריך העברה אחרי תחילת השיבוץ הנוכחי.";
   }
 

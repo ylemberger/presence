@@ -45,7 +45,7 @@ import {
   slotsFromLessonAndRows,
   type WeeklySlot,
 } from "@/lib/lessons/weekly-slots";
-import { fetchAllPages } from "@/lib/supabase/paged";
+import { chunkIds, fetchAllPages } from "@/lib/supabase/paged";
 import {
   isError,
   parseLessonBilling,
@@ -59,6 +59,11 @@ import {
   validatePhone,
 } from "@/lib/validation";
 import { hebrewDbError } from "@/lib/db/hebrew-error";
+
+function thrownHebrew(error: unknown, fallback: string): string {
+  const message = error instanceof Error ? error.message : "";
+  return /[\u0590-\u05FF]/.test(message) ? message : fallback;
+}
 
 function addDaysLocal(dateStr: string, days: number): string {
   const [y, m, d] = dateStr.split("-").map(Number);
@@ -849,20 +854,29 @@ export async function createStudentAction(formData: FormData) {
     return { error: `התלמידה נוצרה אך השיבוץ נכשל: ${placementError.message}` };
   }
 
-  await refreshAutomaticLessonAssignmentsForStudent(
-    student.id,
-    yearId,
-    {
-      grade_id: gradeId,
-      class_id: classId,
-      track_id: trackId,
-      specialization_id: specId,
-      secondary_specialization_id: secondarySpecId,
-      is_psychology: isPsychology,
-    },
-    startDate,
-    supabase
-  );
+  try {
+    await refreshAutomaticLessonAssignmentsForStudent(
+      student.id,
+      yearId,
+      {
+        grade_id: gradeId,
+        class_id: classId,
+        track_id: trackId,
+        specialization_id: specId,
+        secondary_specialization_id: secondarySpecId,
+        is_psychology: isPsychology,
+      },
+      startDate,
+      supabase
+    );
+  } catch (error) {
+    return {
+      error: thrownHebrew(
+        error,
+        "התלמידה נוצרה, אבל שיוך השיעורים שלה נכשל. אפשר לשייך מהכרטיס שלה."
+      ),
+    };
+  }
 
   revalidatePath("/students");
   revalidatePath(`/students/${student.id}`);
@@ -1017,38 +1031,59 @@ export async function createStudentLessonAssignmentAction(formData: FormData) {
   const actionAuth = await createActionClient();
   if ("error" in actionAuth) return { error: actionAuth.error };
   const supabase = actionAuth.supabase;
-  const studentId = requireId(formData.get("student_id"), "תלמידה");
-  if (isError(studentId)) return studentId;
-  const lessonId = requireId(formData.get("lesson_id"), "שיעור");
-  if (isError(lessonId)) return lessonId;
-  const startDate = requireText(formData.get("start_date"), "מתאריך");
+  const studentId = requireUuid(formData.get("student_id"), "תלמידה");
+  if (isError(studentId)) return { error: "יש לבחור תלמידה מהרשימה" };
+  const lessonId = requireUuid(formData.get("lesson_id"), "שיעור");
+  if (isError(lessonId)) return { error: "יש לבחור שיעור מהרשימה" };
+  const startDate = requireIsoDate(formData.get("start_date"), "מתאריך");
   if (isError(startDate)) return startDate;
+  const endRaw = String(formData.get("end_date") ?? "").trim();
+  let endDate: string | null = null;
+  if (endRaw) {
+    const parsedEnd = requireIsoDate(endRaw, "עד תאריך");
+    if (isError(parsedEnd)) return parsedEnd;
+    endDate = parsedEnd;
+  }
+  if (endDate && endDate < startDate) {
+    return { error: "תאריך הסיום חייב להיות באותו יום או אחרי תאריך ההתחלה" };
+  }
   const force = formData.get("force_mismatch") === "1";
 
-  const [{ data: lesson }, { data: placement }, { data: audience }] = await Promise.all([
-    supabase
-      .from("lessons")
-      .select(
-        "id, class_id, track_id, specialization_id, billing_type, grade_id, subject, for_psychology"
-      )
-      .eq("id", lessonId)
-      .single(),
-    supabase
-      .from("student_assignments")
-      .select(
-        "class_id, track_id, specialization_id, secondary_specialization_id, grade_id, is_psychology"
-      )
-      .eq("student_id", studentId)
-      .is("end_date", null)
-      .maybeSingle(),
-    supabase
-      .from("lesson_audience")
-      .select("lesson_id, grade_id, class_id, track_id, specialization_id")
-      .eq("lesson_id", lessonId),
-  ]);
+  const [{ data: lesson, error: lessonError }, { data: audience, error: audienceError }] =
+    await Promise.all([
+      supabase
+        .from("lessons")
+        .select(
+          "id, academic_year_id, class_id, track_id, specialization_id, billing_type, grade_id, subject, for_psychology"
+        )
+        .eq("id", lessonId)
+        .maybeSingle(),
+      supabase
+        .from("lesson_audience")
+        .select("lesson_id, grade_id, class_id, track_id, specialization_id")
+        .eq("lesson_id", lessonId),
+    ]);
 
+  if (lessonError) return { error: hebrewDbError(lessonError, "השיעור לא נמצא") };
+  if (audienceError) return { error: hebrewDbError(audienceError, "לא ניתן לקרוא את קהל השיעור") };
   if (!lesson) return { error: "השיעור לא נמצא" };
-  if (!placement) return { error: "לתלמידה אין שיבוץ פעיל בשנה הנוכחית" };
+
+  const { data: placement, error: placementError } = await supabase
+    .from("student_assignments")
+    .select(
+      "class_id, track_id, specialization_id, secondary_specialization_id, grade_id, is_psychology"
+    )
+    .eq("student_id", studentId)
+    .eq("academic_year_id", lesson.academic_year_id)
+    .is("end_date", null)
+    .maybeSingle();
+  if (placementError) {
+    if (placementError.code === "PGRST116") {
+      return { error: "לתלמידה יש יותר משיבוץ פתוח אחד בשנה הזו. צריך לסגור את הכפילות לפני שיוך לשיעור." };
+    }
+    return { error: hebrewDbError(placementError, "לא ניתן לקרוא את השיבוץ של התלמידה") };
+  }
+  if (!placement) return { error: "לתלמידה אין שיבוץ פעיל בשנה של השיעור" };
 
   const scoped = {
     ...lesson,
@@ -1059,14 +1094,47 @@ export async function createStudentLessonAssignmentAction(formData: FormData) {
     return { error: mismatch, code: "mismatch" as const };
   }
 
-  const { error } = await supabase.from("student_lesson_assignments").insert({
-    student_id: studentId,
-    lesson_id: lessonId,
-    assignment_type: "manual",
-    start_date: startDate,
-    end_date: (formData.get("end_date") as string) || null,
-  });
-  if (error) return { error: error.message };
+  const { data: existingRows, error: existingError } = await supabase
+    .from("student_lesson_assignments")
+    .select("id, start_date")
+    .eq("student_id", studentId)
+    .eq("lesson_id", lessonId)
+    .is("end_date", null);
+  if (existingError) {
+    return { error: hebrewDbError(existingError, "לא ניתן לשייך את התלמידה לשיעור") };
+  }
+
+  const openRows = existingRows ?? [];
+  if (openRows.length === 0) {
+    const { error } = await supabase.from("student_lesson_assignments").insert({
+      student_id: studentId,
+      lesson_id: lessonId,
+      assignment_type: "manual",
+      start_date: startDate,
+      end_date: endDate,
+    });
+    if (error) return { error: hebrewDbError(error, "לא ניתן לשייך את התלמידה לשיעור") };
+  } else {
+    const earliest = openRows.reduce((best, row) => {
+      const start = String(row.start_date).slice(0, 10);
+      return start < best.start ? { id: row.id, start } : best;
+    }, { id: openRows[0].id, start: String(openRows[0].start_date).slice(0, 10) });
+    if (startDate < earliest.start) {
+      const { error } = await supabase
+        .from("student_lesson_assignments")
+        .update({ start_date: startDate })
+        .eq("id", earliest.id);
+      if (error) {
+        return {
+          error: hebrewDbError(
+            error,
+            "התלמידה כבר משויכת לשיעור, אבל לא ניתן להקדים את תאריך השיוך"
+          ),
+        };
+      }
+    }
+  }
+
   await supabase
     .from("student_lesson_exclusions")
     .delete()
@@ -1084,7 +1152,7 @@ export async function deleteStudentLessonAssignmentAction(id: string, studentId:
   if ("error" in actionAuth) return { error: actionAuth.error };
   const supabase = actionAuth.supabase;
   const { error } = await supabase.from("student_lesson_assignments").delete().eq("id", id);
-  if (error) return { error: error.message };
+  if (error) return { error: hebrewDbError(error, "הסרת השיוך נכשלה") };
   revalidatePath(`/students/${studentId}`);
   revalidatePath("/attendance");
   revalidatePath("/reports");
@@ -1118,7 +1186,7 @@ export async function excludeStudentFromLessonAction(studentId: string, lessonId
     .eq("student_id", sid)
     .eq("lesson_id", lid)
     .is("end_date", null);
-  if (error) return { error: error.message };
+  if (error) return { error: hebrewDbError(error, "הסרת השיוך נכשלה") };
 
   revalidatePath(`/students/${sid}`);
   revalidatePath("/attendance");
@@ -1138,7 +1206,7 @@ function parsePlacementFields(formData: FormData) {
   if (isError(classId)) return classId;
   const trackId = requireId(formData.get("track_id"), "מסלול");
   if (isError(trackId)) return trackId;
-  const startDate = requireText(
+  const startDate = requireIsoDate(
     formData.get("start_date") ?? formData.get("transfer_date"),
     "בתוקף מתאריך"
   );
@@ -1239,23 +1307,34 @@ export async function transferStudentAction(formData: FormData) {
     if (error) return { error: hebrewDbError(error, "ההעברה נכשלה") };
   }
 
-  await refreshAutomaticLessonAssignmentsForStudent(
-    placement.student_id,
-    placement.academic_year_id,
-    {
-      grade_id: placement.grade_id,
-      class_id: placement.class_id,
-      track_id: placement.track_id,
-      specialization_id: placement.specialization_id,
-      secondary_specialization_id: placement.secondary_specialization_id,
-      is_psychology: placement.is_psychology,
-    },
-    placement.start_date,
-    supabase
-  );
+  try {
+    await refreshAutomaticLessonAssignmentsForStudent(
+      placement.student_id,
+      placement.academic_year_id,
+      {
+        grade_id: placement.grade_id,
+        class_id: placement.class_id,
+        track_id: placement.track_id,
+        specialization_id: placement.specialization_id,
+        secondary_specialization_id: placement.secondary_specialization_id,
+        is_psychology: placement.is_psychology,
+      },
+      placement.start_date,
+      supabase
+    );
+  } catch (error) {
+    return {
+      error: thrownHebrew(
+        error,
+        "השיבוץ עודכן, אבל עדכון השיעורים של התלמידה נכשל. נסי שוב."
+      ),
+    };
+  }
 
   revalidatePath(`/students/${placement.student_id}`);
   revalidatePath("/attendance");
+  revalidatePath("/lessons");
+  revalidatePath("/reports");
   return { success: true };
 }
 
@@ -2442,8 +2521,76 @@ export async function resetOccurrenceAttendanceAction(occurrenceIds: string[]) {
   revalidatePath("/attendance");
   revalidatePath("/reports");
   revalidatePath("/makeup");
+  revalidatePath("/students", "layout");
   revalidatePath("/");
   return { success: true as const, cleared: cleared ?? planned ?? 0 };
+}
+
+/** Clear every non-cancelled meeting of one lesson. The lesson, meetings, and students stay. */
+export async function resetLessonAttendanceAction(lessonId: string) {
+  const id = requireUuid(lessonId, "שיעור");
+  if (isError(id)) return { error: "השיעור לא זוהה" };
+
+  const actionAuth = await createActionClient();
+  if ("error" in actionAuth) return { error: actionAuth.error };
+  const supabase = actionAuth.supabase;
+
+  const occs: { id: string; status: string }[] = [];
+  for (let from = 0; from < 50000; from += 1000) {
+    const { data, error } = await supabase
+      .from("lesson_occurrences")
+      .select("id, status")
+      .eq("lesson_id", id)
+      .range(from, from + 999);
+    if (error) return { error: "לא ניתן לטעון את מפגשי השיעור" };
+    const batch = data ?? [];
+    occs.push(...batch);
+    if (batch.length < 1000) break;
+  }
+
+  const resetIds = occs.filter((row) => row.status !== "cancelled").map((row) => row.id);
+  if (resetIds.length === 0) {
+    return { error: "אין מפגשים לאיפוס. שיעור שלא התקיים לא מתאפס מכאן." };
+  }
+
+  let planned = 0;
+  let cleared = 0;
+  for (const chunk of chunkIds(resetIds)) {
+    const { count: chunkPlanned, error: countError } = await supabase
+      .from("attendance")
+      .select("id", { count: "exact", head: true })
+      .in("lesson_occurrence_id", chunk);
+    if (countError) return { error: "לא ניתן לאפס את הנוכחות" };
+    const { error: deleteError, count: chunkCleared } = await supabase
+      .from("attendance")
+      .delete({ count: "exact" })
+      .in("lesson_occurrence_id", chunk);
+    if (deleteError) return { error: "לא ניתן לאפס את הנוכחות" };
+    if (chunkPlanned != null && chunkCleared != null && chunkCleared !== chunkPlanned) {
+      return { error: "לא כל הסימונים נמחקו. נסי שוב." };
+    }
+    planned += chunkPlanned ?? 0;
+    cleared += chunkCleared ?? 0;
+  }
+
+  for (const chunk of chunkIds(resetIds)) {
+    const { data: updated, error: statusError } = await supabase
+      .from("lesson_occurrences")
+      .update({ status: "scheduled", gap_handling: null })
+      .in("id", chunk)
+      .select("id");
+    if (statusError || (updated?.length ?? 0) !== chunk.length) {
+      return { error: "הסימונים נמחקו, אבל לא ניתן לעדכן את מצב השיעור" };
+    }
+  }
+
+  revalidatePath("/lessons");
+  revalidatePath("/attendance");
+  revalidatePath("/reports");
+  revalidatePath("/makeup");
+  revalidatePath("/students", "layout");
+  revalidatePath("/");
+  return { success: true as const, cleared };
 }
 
 // --- Attendance ---

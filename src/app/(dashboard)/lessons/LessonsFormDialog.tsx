@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/Button";
 import { Icon } from "@/components/ui/Icon";
 import { Modal } from "@/components/ui/Modal";
 import { LessonsForm, type LessonsFormProps } from "./LessonsForm";
+import { ResetLessonAttendanceButton } from "./ResetLessonAttendanceButton";
 import { formatHebrewDate } from "@/lib/dates/hebrew";
 import Link from "next/link";
 
@@ -88,6 +89,11 @@ export function LessonsFormDialog({
               <p>
                 יש נוכחות במפגשים האלה. העריכה לא מוחקת סימונים. כדי לשנות קהל יעד, יום או שעה, אפסי קודם את הנוכחות.
               </p>
+              {initial?.id ? (
+                <div className="mt-3">
+                  <ResetLessonAttendanceButton lessonId={initial.id} />
+                </div>
+              ) : null}
               <ul className="mt-3 flex max-h-36 flex-col gap-1 overflow-auto">
                 {markedMeetings.map((meeting) => (
                   <li key={meeting.id}>
@@ -95,7 +101,7 @@ export function LessonsFormDialog({
                       href={`/attendance?date=${encodeURIComponent(meeting.date)}&occurrenceId=${encodeURIComponent(meeting.id)}`}
                       className="font-semibold text-secondary hover:underline"
                     >
-                      {formatHebrewDate(meeting.date)} — אפסי נוכחות
+                      {formatHebrewDate(meeting.date)} — אפסי את המפגש
                     </Link>
                   </li>
                 ))}

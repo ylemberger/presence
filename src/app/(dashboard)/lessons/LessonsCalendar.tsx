@@ -9,6 +9,7 @@ import { deleteLessonAction } from "../actions";
 import type { Lesson } from "@/types/database";
 import { Icon } from "@/components/ui/Icon";
 import { AssignStudentToLesson } from "./AssignStudentToLesson";
+import { ResetLessonAttendanceButton } from "./ResetLessonAttendanceButton";
 import { AddOccurrenceDate } from "../attendance/AddOccurrenceDate";
 import { DeleteButton } from "@/components/ui/DeleteButton";
 import Link from "next/link";
@@ -139,6 +140,9 @@ export function LessonsCalendar({
                     <p className="font-caption text-caption text-on-surface">
                       יש נוכחות בחלק מהמפגשים. אפשר לערוך שם, מורה, כלל וטווח. קהל יעד, יום ושעה נעולים עד שאין נוכחות. העריכה לא מוחקת סימונים.
                     </p>
+                    <div className="mt-2">
+                      <ResetLessonAttendanceButton lessonId={l.id} />
+                    </div>
                     {(l.markedMeetings ?? []).length > 0 ? (
                       <ul className="mt-2 flex max-h-36 flex-col gap-1 overflow-auto">
                         {(l.markedMeetings ?? []).map((meeting) => (
@@ -147,7 +151,7 @@ export function LessonsCalendar({
                               href={`/attendance?date=${encodeURIComponent(meeting.date)}&occurrenceId=${encodeURIComponent(meeting.id)}`}
                               className="font-caption text-caption font-semibold text-secondary hover:underline"
                             >
-                              {formatHebrewDate(meeting.date)} — אפסי נוכחות
+                              {formatHebrewDate(meeting.date)} — אפסי את המפגש
                             </Link>
                           </li>
                         ))}

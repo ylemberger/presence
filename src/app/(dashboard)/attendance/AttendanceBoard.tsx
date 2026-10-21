@@ -11,6 +11,7 @@ import {
   cancelOccurrenceAction,
   copyPreviousAttendanceAction,
   restoreCancelledOccurrenceAction,
+  resetLessonAttendanceAction,
   resetOccurrenceAttendanceAction,
   restoreOccurrencesAction,
   syncLessonStudentsAction,
@@ -836,7 +837,7 @@ export function AttendanceBoard({
     const ids = linkedOccurrenceIds(activeLesson, activeOccurrenceId);
     if (ids.length === 0) return;
     const confirmed = window.confirm(
-      "לאפס את הנוכחות של השיעור הזה? הסימונים יימחקו, והשיעור עצמו יישאר בלוח כשיעור שעדיין לא מולא."
+      "לאפס את הנוכחות של המפגש הזה בלבד? שאר המפגשים של השיעור לא משתנים. הסימונים של המפגש יימחקו, והמפגש יישאר בלוח."
     );
     if (!confirmed) return;
     setResetting(true);
@@ -856,8 +857,34 @@ export function AttendanceBoard({
             : o
         )
       );
-      setMessage("הנוכחות אופסה. השיעור נשאר בלוח ואפשר למלא אותו מחדש.");
+      setMessage("הנוכחות של המפגש אופסה. המפגש נשאר בלוח ואפשר למלא אותו מחדש.");
       router.refresh();
+    }
+    setResetting(false);
+  }
+
+  async function resetWholeLesson() {
+    if (!canWrite || !activeLesson || resetting) return;
+    const confirmed = window.confirm(
+      "יימחקו כל סימוני הנוכחות של השיעור, בכל המפגשים. המפגשים והתלמידות נשארים, והשיעור ייראה כאילו עוד לא מילאו נוכחות. להמשיך?"
+    );
+    if (!confirmed) return;
+    setResetting(true);
+    setMessage(null);
+    try {
+      const result = await resetLessonAttendanceAction(activeLesson.lessonId);
+      if (result && "error" in result && result.error) {
+        setMessage(result.error);
+      } else {
+        setDraft({});
+        setReasons({});
+        setCellPhase({});
+        setUndo(null);
+        setMessage("כל הנוכחות של השיעור אופסה. המפגשים נשארו ואפשר למלא מחדש.");
+        router.refresh();
+      }
+    } catch {
+      setMessage("לא ניתן לאפס את הנוכחות");
     }
     setResetting(false);
   }
@@ -1563,7 +1590,19 @@ export function AttendanceBoard({
                     onClick={() => void resetAttendance()}
                   >
                     <Icon name="restart_alt" className="text-[16px]" />
-                    {resetting ? "מאפסת…" : "אפסי נוכחות"}
+                    {resetting ? "מאפסת…" : "אפסי מפגש זה"}
+                  </Button>
+                )}
+                {canWrite && activeLesson.status !== "cancelled" && (
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="secondary"
+                    disabled={resetting || reopening}
+                    onClick={() => void resetWholeLesson()}
+                  >
+                    <Icon name="restart_alt" className="text-[16px]" />
+                    {resetting ? "מאפסת…" : "אפסי את כל המפגשים"}
                   </Button>
                 )}
                 {canWrite && activeOccurrenceId && activeLesson.status !== "cancelled" && (

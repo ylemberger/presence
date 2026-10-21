@@ -32,7 +32,16 @@ export function AssignStudentToLesson({
     if (force) fd.set("force_mismatch", "1");
     else fd.delete("force_mismatch");
     setSaving(true);
-    const result = await createStudentLessonAssignmentAction(fd);
+    let result: Awaited<ReturnType<typeof createStudentLessonAssignmentAction>>;
+    try {
+      result = await createStudentLessonAssignmentAction(fd);
+    } catch {
+      setSaving(false);
+      setError("לא ניתן לשייך את התלמידה לשיעור");
+      setMismatchWarning(null);
+      setPendingForm(null);
+      return false;
+    }
     setSaving(false);
     if (result && "error" in result && result.error) {
       if ("code" in result && result.code === "mismatch") {
