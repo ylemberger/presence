@@ -166,13 +166,6 @@ export function TeachersDirectory({
 
   return (
     <div className="flex h-full min-w-0 flex-col overflow-x-hidden rounded-xl bg-surface-container-lowest p-stack_md shadow-tactile-md">
-      {viewOnly ? (
-        <p className="mb-4 rounded-lg border border-secondary/30 bg-secondary-container/70 px-3 py-2 font-body-md text-body-md text-primary">
-          הרשאת קריאה בלבד. אפשר לחפש, לסנן ולייצא לאקסל לפי מה שסיננת. אי אפשר
-          להוסיף או לשנות נתונים.
-        </p>
-      ) : null}
-
       <div className="mb-4 flex flex-wrap items-start justify-between gap-3 rounded-xl border border-outline-variant/30 bg-secondary-container/30 px-4 py-3">
         <div className="min-w-0 flex-1">
           <p className="mb-1 font-label-md text-label-md text-on-surface">

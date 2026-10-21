@@ -618,12 +618,6 @@ export function StudentsDirectory({
       <SeminarPrintHeader title="רשימת תלמידות" subtitle={printSubtitle} />
       <div className="flex flex-wrap items-start justify-between gap-3 border-b border-outline-variant/30 bg-secondary-container/30 px-5 py-3 print:hidden">
         <div className="min-w-0 flex-1">
-          {!canWrite ? (
-            <p className="mb-2 rounded-lg border border-secondary/30 bg-secondary-container/70 px-3 py-2 font-body-md text-body-md text-primary">
-              הרשאת קריאה בלבד. אפשר לחפש, לסנן ולייצא לאקסל לפי מה שסיננת. אי אפשר
-              להוסיף או לשנות נתונים.
-            </p>
-          ) : null}
           <p className="mb-1 font-label-md text-label-md text-on-surface">
             הדפסה וייצוא — סמני אילו עמודות יופיעו ברשימה המודפסת ובאקסל (לפי הסינון למטה)
           </p>
