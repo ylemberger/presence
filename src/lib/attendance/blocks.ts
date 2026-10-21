@@ -1,4 +1,4 @@
-import { occupiedLessonNumbers } from "@/lib/lessons/hours";
+import { isAfternoonLesson, occupiedLessonNumbers } from "@/lib/lessons/hours";
 
 export type AttendanceBlockInput = {
   id: string;
@@ -32,6 +32,7 @@ function hourSpan(row: AttendanceBlockInput): { start: number; end: number } {
 function canMerge(a: AttendanceBlockInput, b: AttendanceBlockInput): boolean {
   if (a.date !== b.date) return false;
   if (a.audienceKey !== b.audienceKey) return false;
+  if (isAfternoonLesson(a.lessonNumber) !== isAfternoonLesson(b.lessonNumber)) return false;
   const as = hourSpan(a);
   const bs = hourSpan(b);
   return as.start <= bs.end + 1 && bs.start <= as.end + 1;

@@ -14,6 +14,7 @@ import { salaryDisplayFields } from "@/lib/teachers/salary-display";
 import { teacherIdsSharingName } from "@/lib/teachers/name-group";
 import { fetchAssignmentsByLessons } from "@/lib/supabase/paged";
 import { displayIdentityNumber, displayTeacherEmail, displayTeacherPhone } from "@/lib/teachers/contact";
+import { isAfternoonLesson } from "@/lib/lessons/hours";
 
 interface Props {
   params: { id: string };
@@ -283,7 +284,8 @@ export default async function TeacherDetailPage({ params }: Props) {
                     {audienceLabel}
                   </TableCell>
                   <TableCell className="text-on-surface-variant">
-                    {days[l.day_of_week] ?? "—"} · {l.lesson_number}
+                    {days[l.day_of_week] ?? "—"} ·{" "}
+                    {isAfternoonLesson(l.lesson_number) ? "אחרי צהריים" : l.lesson_number}
                   </TableCell>
                   {viewOnly ? null : (
                     <TableCell className="font-semibold text-primary">

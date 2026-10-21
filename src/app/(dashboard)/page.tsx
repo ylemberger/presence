@@ -13,6 +13,7 @@ import {
 import { fetchAttendancePools, calcUnitForLesson } from "@/lib/attendance/pools";
 import { getPendingAttendanceSummary, EMPTY_PENDING_SUMMARY } from "@/lib/attendance/pending";
 import { formatSubjectLessonLabel } from "@/lib/lessons/subject-label";
+import { isAfternoonLesson } from "@/lib/lessons/hours";
 import { AttendanceReminderBanner } from "@/components/attendance/AttendanceReminderBanner";
 import { cn } from "@/lib/cn";
 import { Icon } from "@/components/ui/Icon";
@@ -398,7 +399,10 @@ export default async function DashboardPage() {
                     const done = lesson.total > 0 && lesson.marked >= lesson.total;
                     const progress =
                       lesson.total > 0 ? Math.round((lesson.marked / lesson.total) * 100) : 0;
-                    const label = HEBREW_LESSON_LABEL[(lesson.lessonNumber ?? 1) - 1] ?? "?";
+                    const label = isAfternoonLesson(lesson.lessonNumber)
+                      ? "אחה״צ"
+                      : (HEBREW_LESSON_LABEL[(lesson.lessonNumber ?? 1) - 1] ??
+                        String(lesson.lessonNumber ?? "?"));
                     return (
                       <Link
                         key={lesson.id}
@@ -408,7 +412,8 @@ export default async function DashboardPage() {
                         <div className="flex min-w-0 items-center gap-4">
                           <div
                             className={cn(
-                              "flex h-12 w-12 shrink-0 items-center justify-center rounded-md font-bold",
+                              "flex h-12 shrink-0 items-center justify-center rounded-md font-bold",
+                              isAfternoonLesson(lesson.lessonNumber) ? "w-14 px-1 text-[11px]" : "w-12",
                               done
                                 ? "bg-primary-container text-white"
                                 : "bg-surface-variant text-on-surface-variant"

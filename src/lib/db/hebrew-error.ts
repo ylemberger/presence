@@ -44,8 +44,8 @@ export function hebrewDbError(error: DbErrorLike, fallback: string): string {
   }
 
   if (code === "23514" || msg.includes("check constraint")) {
-    if (msg.includes("period_span")) {
-      return "מספר השיעור והרצף חורגים מטווח השיעורים ביום (1 עד 13). לא נשמר.";
+    if (msg.includes("period_span") || msg.includes("lesson_number") || msg.includes("period_count")) {
+      return "השעה או מספר השעות הרצופות לא תקינים. שיעורים ממוספרים הם 1–13. «אחרי צהריים» היא שעה אחת בסוף היום, בלי רצף. אם השמירה של «אחרי צהריים» נכשלת — הריצי supabase/patches/029_afternoon_lesson.sql. לא נשמר.";
     }
     if (msg.includes("billing")) {
       return "סוג החיוב לא תואם לקהל היעד שנבחר. לא נשמר.";

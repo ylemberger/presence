@@ -506,10 +506,10 @@ where not exists (
   select 1 from lesson_weekly_slots s where s.lesson_id = l.id
 );
 
--- ========== שעות 1–13 + פעם בשבועיים ==========
+-- ========== שעות 1–13 + אחרי צהריים (14) + פעם בשבועיים ==========
 alter table lessons drop constraint if exists lessons_lesson_number_check;
 alter table lessons add constraint lessons_lesson_number_check
-  check (lesson_number between 1 and 13);
+  check (lesson_number between 1 and 14);
 
 alter table lessons drop constraint if exists lessons_period_count_check;
 alter table lessons add constraint lessons_period_count_check
@@ -517,7 +517,10 @@ alter table lessons add constraint lessons_period_count_check
 
 alter table lessons drop constraint if exists lessons_period_span_check;
 alter table lessons add constraint lessons_period_span_check
-  check (lesson_number + period_count - 1 between 1 and 13);
+  check (
+    (lesson_number between 1 and 13 and lesson_number + period_count - 1 between 1 and 13)
+    or (lesson_number = 14 and period_count = 1)
+  );
 
 do $$
 begin
@@ -528,7 +531,7 @@ begin
 
     alter table lesson_weekly_slots
       add constraint lesson_weekly_slots_lesson_number_check
-      check (lesson_number between 1 and 13);
+      check (lesson_number between 1 and 14);
 
     alter table lesson_weekly_slots
       add constraint lesson_weekly_slots_period_count_check
@@ -536,7 +539,10 @@ begin
 
     alter table lesson_weekly_slots
       add constraint lesson_weekly_slots_period_span_check
-      check (lesson_number + period_count - 1 between 1 and 13);
+      check (
+        (lesson_number between 1 and 13 and lesson_number + period_count - 1 between 1 and 13)
+        or (lesson_number = 14 and period_count = 1)
+      );
   end if;
 end $$;
 

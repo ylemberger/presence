@@ -6,7 +6,15 @@ import {
   formatHebrewDate,
   hebrewWeekdayLabels,
 } from "@/lib/dates/hebrew";
-import { formatLessonHours, occupiedLessonNumbers, MAX_LESSON_NUMBER } from "@/lib/lessons/hours";
+import {
+  AFTERNOON_LESSON_LABEL,
+  AFTERNOON_LESSON_NUMBER,
+  formatLessonHours,
+  isAfternoonLesson,
+  MAX_LESSON_NUMBER,
+  MAX_NUMBERED_LESSON,
+  occupiedLessonNumbers,
+} from "@/lib/lessons/hours";
 import { cn } from "@/lib/cn";
 
 export type TimetableBillingType = "mandatory" | "specialization";
@@ -17,7 +25,7 @@ export interface TimetableEntry {
   teacherName?: string;
   teacherId?: string | null;
   dayOfWeek: number; // 0-6 (ראשון-שבת)
-  lessonNumber: number; // 1–10
+  lessonNumber: number; // 1–13, or the afternoon slot
   periodCount?: number;
   billingType: TimetableBillingType;
   forPsychology?: boolean;
@@ -37,6 +45,11 @@ export function WeeklyTimetableGrid({
   columnDates?: string[];
 }) {
   const days = hebrewWeekdayLabels();
+  const numberedCount = Math.min(maxLessonNumber, MAX_NUMBERED_LESSON);
+  const hourRows = [
+    ...Array.from({ length: numberedCount }, (_, i) => i + 1),
+    AFTERNOON_LESSON_NUMBER,
+  ];
 
   const bySlot = useMemo(() => {
     const m = new Map<string, TimetableEntry[]>();
@@ -44,13 +57,14 @@ export function WeeklyTimetableGrid({
       if (e.dayOfWeek < 0 || e.dayOfWeek > 6) continue;
       const hours = occupiedLessonNumbers(e.lessonNumber, e.periodCount ?? 1);
       for (const hour of hours) {
-        if (hour < 1 || hour > maxLessonNumber) continue;
+        if (hour < 1) continue;
+        if (hour > numberedCount && !isAfternoonLesson(hour)) continue;
         const key = `${e.dayOfWeek}::${hour}`;
         m.set(key, [...(m.get(key) ?? []), e]);
       }
     }
     return m;
-  }, [entries, maxLessonNumber]);
+  }, [entries, numberedCount]);
 
   function cellClasses(e?: TimetableEntry) {
     if (!e) return "bg-surface-container-lowest";
@@ -72,7 +86,7 @@ export function WeeklyTimetableGrid({
       <table className="w-full table-fixed border-collapse font-body-md text-body-md">
         <thead>
           <tr className="bg-surface-container-low">
-            <th className="w-[4.5rem] border-b border-outline-variant/30 px-2 py-3 text-center font-label-md text-label-md text-on-surface-variant">
+            <th className="w-24 border-b border-outline-variant/30 px-2 py-3 text-center font-label-md text-label-md text-on-surface-variant">
               שעה
             </th>
             {days.map((d, dayIdx) => {
@@ -99,13 +113,13 @@ export function WeeklyTimetableGrid({
           </tr>
         </thead>
         <tbody>
-          {Array.from({ length: maxLessonNumber }, (_, i) => i + 1).map((lessonNo) => (
+          {hourRows.map((lessonNo) => (
             <tr
               key={lessonNo}
               className="odd:bg-surface-container-lowest even:bg-surface-container-low/30"
             >
-              <td className="w-[4.5rem] border-b border-outline-variant/25 px-2 py-2 text-center font-label-md text-label-md text-primary">
-                {lessonNo}
+              <td className="w-24 border-b border-outline-variant/25 px-2 py-2 text-center font-label-md text-label-md leading-tight text-primary">
+                {isAfternoonLesson(lessonNo) ? AFTERNOON_LESSON_LABEL : lessonNo}
               </td>
               {days.map((_, dayIdx) => {
                 const slotKey = `${dayIdx}::${lessonNo}`;

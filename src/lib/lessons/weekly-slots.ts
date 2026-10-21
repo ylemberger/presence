@@ -1,5 +1,10 @@
 import { DAY_OF_WEEK_LABELS } from "@/lib/constants";
-import { formatLessonHours, MAX_LESSON_NUMBER } from "@/lib/lessons/hours";
+import {
+  formatLessonHours,
+  isAfternoonLesson,
+  MAX_LESSON_NUMBER,
+  MAX_NUMBERED_LESSON,
+} from "@/lib/lessons/hours";
 
 export type WeeklySlot = {
   dayOfWeek: number;
@@ -27,7 +32,9 @@ export function normalizeWeeklySlots(
   for (const slot of slots) {
     const dayOfWeek = Number(slot.dayOfWeek);
     const lessonNumber = Number(slot.lessonNumber);
-    const periodCount = Number(slot.periodCount || 1);
+    const rawCount = Number(slot.periodCount || 1);
+    const afternoon = isAfternoonLesson(lessonNumber);
+    const periodCount = afternoon ? 1 : rawCount;
 
     if (!Number.isInteger(dayOfWeek) || dayOfWeek < 0 || dayOfWeek > 6) {
       return { error: "יום בשבוע לא תקין באחד המפגשים" };
@@ -37,19 +44,23 @@ export function normalizeWeeklySlots(
       lessonNumber < 1 ||
       lessonNumber > MAX_LESSON_NUMBER
     ) {
-      return { error: `שעת התחלה חייבת להיות בין 1 ל-${MAX_LESSON_NUMBER}` };
-    }
-    if (
-      !Number.isInteger(periodCount) ||
-      periodCount < 1 ||
-      periodCount > MAX_LESSON_NUMBER
-    ) {
-      return { error: `מספר השעות הרצופות חייב להיות בין 1 ל-${MAX_LESSON_NUMBER}` };
-    }
-    if (lessonNumber + periodCount - 1 > MAX_LESSON_NUMBER) {
       return {
-        error: `השעות הרצופות חורגות משיעור ${MAX_LESSON_NUMBER}. בחרי התחלה מוקדמת יותר או משך קצר יותר.`,
+        error: `שעת התחלה חייבת להיות שיעור 1–${MAX_NUMBERED_LESSON}, או «אחרי צהריים»`,
       };
+    }
+    if (!afternoon) {
+      if (
+        !Number.isInteger(periodCount) ||
+        periodCount < 1 ||
+        periodCount > MAX_NUMBERED_LESSON
+      ) {
+        return { error: `מספר השעות הרצופות חייב להיות בין 1 ל-${MAX_NUMBERED_LESSON}` };
+      }
+      if (lessonNumber + periodCount - 1 > MAX_NUMBERED_LESSON) {
+        return {
+          error: `השעות הרצופות חורגות משיעור ${MAX_NUMBERED_LESSON}. בחרי התחלה מוקדמת יותר או משך קצר יותר.`,
+        };
+      }
     }
     if (daysSeen.has(dayOfWeek)) {
       return {

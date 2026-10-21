@@ -8,7 +8,12 @@ import { Input, Select } from "@/components/ui/Input";
 import { DAY_OF_WEEK_LABELS, BILLING_TYPE_LABELS } from "@/lib/constants";
 import { createLessonAction, updateLessonAction } from "../actions";
 import { describeAudienceScope } from "@/lib/validation";
-import { formatLessonHours, MAX_LESSON_NUMBER } from "@/lib/lessons/hours";
+import {
+  formatLessonHours,
+  isAfternoonLesson,
+  lessonHourSelectOptions,
+  MAX_NUMBERED_LESSON,
+} from "@/lib/lessons/hours";
 import {
   formatSalaryAssignment,
   salaryAssignmentEntries,
@@ -615,14 +620,27 @@ export function LessonsForm({
                 onChange={(e) => {
                   const lessonNumber = Number(e.target.value);
                   setWeeklySlots((prev) =>
-                    prev.map((s, i) => (i === index ? { ...s, lessonNumber } : s))
+                    prev.map((s, i) =>
+                      i === index
+                        ? {
+                            ...s,
+                            lessonNumber,
+                            periodCount: isAfternoonLesson(lessonNumber) ? 1 : s.periodCount,
+                          }
+                        : s
+                    )
                   );
                 }}
-                options={Array.from({ length: MAX_LESSON_NUMBER }, (_, i) => ({
-                  value: String(i + 1),
-                  label: `שיעור ${i + 1}`,
-                }))}
+                options={lessonHourSelectOptions()}
               />
+              {isAfternoonLesson(slot.lessonNumber) ? (
+                <div className="flex items-end">
+                  <input type="hidden" name="slot_period_count" value="1" />
+                  <p className="pb-2 font-body-md text-body-md text-on-surface-variant">
+                    בלוק אחד בסוף היום, בלי מספר שעות רצופות.
+                  </p>
+                </div>
+              ) : (
               <Select
                 fieldSize="lg"
                 label="מספר שעות רצופות"
@@ -636,11 +654,12 @@ export function LessonsForm({
                     prev.map((s, i) => (i === index ? { ...s, periodCount } : s))
                   );
                 }}
-                options={Array.from({ length: MAX_LESSON_NUMBER }, (_, i) => ({
+                options={Array.from({ length: MAX_NUMBERED_LESSON }, (_, i) => ({
                   value: String(i + 1),
                   label: i === 0 ? "שעה אחת" : `${i + 1} שעות`,
                 }))}
               />
+              )}
               <div className="flex items-end">
                 {weeklySlots.length > 1 ? (
                   <Button
@@ -733,7 +752,8 @@ export function LessonsForm({
         )}
         <p className="mt-3 font-body-md text-body-md text-on-surface-variant">
           שיעור של שעתיים רצופות באותו יום: שעת התחלה 1 ומשך 2 (
-          {formatLessonHours(1, 2)}). ימי חופשה מגדירים ב־הגדרות ← לשונית «לוח חופשות».
+          {formatLessonHours(1, 2)}). «אחרי צהריים» עומדת תמיד אחרי כל השעות הממוספרות, בלי
+          רצף שעות. ימי חופשה מגדירים ב־הגדרות ← לשונית «לוח חופשות».
         </p>
       </div>
 
