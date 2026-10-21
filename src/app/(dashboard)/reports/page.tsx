@@ -39,6 +39,7 @@ interface Props {
     occurrenceId?: string;
     minAbsence?: string;
     ruleId?: string;
+    chetz?: string;
     run?: string;
   };
 }
@@ -105,6 +106,7 @@ function buildReportHref(
     "studentId",
     "minAbsence",
     "ruleId",
+    "chetz",
   ] as const) {
     const value = current[key];
     if (value) p.set(key, value);
@@ -183,7 +185,7 @@ export default async function ReportsPage({ searchParams }: Props) {
     supabase
       .from("student_assignments")
       .select(
-        "student_id, grade_id, class_id, track_id, specialization_id, secondary_specialization_id, students(id, full_name, is_active)"
+        "student_id, grade_id, class_id, track_id, specialization_id, secondary_specialization_id, students(id, full_name, is_active, chetz_program)"
       )
       .eq("academic_year_id", activeYear.id)
       .is("end_date", null),
@@ -204,10 +206,13 @@ export default async function ReportsPage({ searchParams }: Props) {
     trackId: string | null;
     specId: string | null;
     secondarySpecId: string | null;
+    chetz: boolean;
   }> = [];
   const seenStudents = new Set<string>();
   for (const row of yearPlacements ?? []) {
-    const s = one<{ id: string; full_name: string; is_active: boolean }>(row.students);
+    const s = one<{ id: string; full_name: string; is_active: boolean; chetz_program?: boolean }>(
+      row.students
+    );
     if (!s?.is_active || seenStudents.has(s.id)) continue;
     seenStudents.add(s.id);
     filterStudents.push({
@@ -218,6 +223,7 @@ export default async function ReportsPage({ searchParams }: Props) {
       trackId: row.track_id,
       specId: row.specialization_id,
       secondarySpecId: row.secondary_specialization_id,
+      chetz: Boolean(s.chetz_program),
     });
   }
   filterStudents.sort((a, b) => a.full_name.localeCompare(b.full_name, "he"));
@@ -363,14 +369,20 @@ export default async function ReportsPage({ searchParams }: Props) {
     }
 
     let studentIds: string[] = [];
+    const chetzOnly = params.chetz === "yes" ? true : params.chetz === "no" ? false : null;
     if (params.studentId) {
       studentIds = [params.studentId];
+      if (chetzOnly !== null) {
+        const picked = filterStudents.find((s) => s.id === params.studentId);
+        if (!picked || picked.chetz !== chetzOnly) studentIds = [];
+      }
     } else {
       let q = supabase
         .from("student_assignments")
-        .select("student_id")
+        .select("student_id, students!inner(chetz_program)")
         .eq("academic_year_id", activeYear.id)
         .is("end_date", null);
+      if (chetzOnly !== null) q = q.eq("students.chetz_program", chetzOnly);
       if (params.gradeId) q = q.eq("grade_id", params.gradeId);
       if (params.classId) q = q.eq("class_id", params.classId);
       if (params.trackId) q = q.eq("track_id", params.trackId);
@@ -673,6 +685,8 @@ export default async function ReportsPage({ searchParams }: Props) {
   if (filterSpecName) printFilters.push({ label: "התמחות", value: filterSpecName });
   if (filterTeacherName) printFilters.push({ label: "מורה", value: filterTeacherName });
   if (params.subject) printFilters.push({ label: "מקצוע", value: params.subject });
+  if (params.chetz === "yes") printFilters.push({ label: "תוכנית חץ", value: "לומדת חץ" });
+  if (params.chetz === "no") printFilters.push({ label: "תוכנית חץ", value: "לא לומדת חץ" });
   if (selectedLessonMeta) {
     printFilters.push({
       label: "שיעור",
@@ -777,6 +791,7 @@ export default async function ReportsPage({ searchParams }: Props) {
             studentId: params.studentId,
             lessonId: params.lessonId,
             ruleId: params.ruleId,
+            chetz: params.chetz === "yes" || params.chetz === "no" ? params.chetz : undefined,
           }}
         />
       </div>

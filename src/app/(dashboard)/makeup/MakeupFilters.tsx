@@ -22,6 +22,7 @@ interface MakeupFiltersProps {
     subject?: string;
     studentId?: string;
     status?: MakeupFilterStatus;
+    chetz?: string;
   };
 }
 
@@ -47,6 +48,7 @@ export function MakeupFilters({
       "subject",
       "studentId",
       "status",
+      "chetz",
     ] as const) {
       const value = next[key];
       if (value && value !== "all") params.set(key, value);
@@ -93,6 +95,18 @@ export function MakeupFilters({
           onChange={(v) => apply({ subject: v || undefined })}
           options={subjects.map((s) => ({ value: s, label: s }))}
           emptyLabel="כל המקצועות"
+        />
+        <Select
+          label="תוכנית חץ"
+          value={defaults.chetz ?? "all"}
+          onChange={(e) =>
+            apply({ chetz: e.target.value === "all" ? undefined : e.target.value })
+          }
+          options={[
+            { value: "all", label: "הכל" },
+            { value: "yes", label: "לומדת חץ" },
+            { value: "no", label: "לא לומדת חץ" },
+          ]}
         />
         <Combobox
           label="תלמידה"

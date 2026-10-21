@@ -28,6 +28,7 @@ interface Props {
     subject?: string;
     studentId?: string;
     status?: MakeupFilterStatus | string;
+    chetz?: string;
   };
 }
 
@@ -73,7 +74,11 @@ export default async function MakeupPage({ searchParams }: Props) {
       )
       .eq("academic_year_id", activeYear.id)
       .order("created_at", { ascending: false }),
-    supabase.from("students").select("id, full_name").eq("is_active", true).order("full_name"),
+    supabase
+      .from("students")
+      .select("id, full_name, chetz_program")
+      .eq("is_active", true)
+      .order("full_name"),
     supabase
       .from("classes")
       .select("id, name")
@@ -156,6 +161,14 @@ export default async function MakeupPage({ searchParams }: Props) {
     })
   );
   const studentName = new Map((students ?? []).map((s) => [s.id, s.full_name]));
+  const chetzByStudent = new Map(
+    (students ?? []).map((s) => [s.id, Boolean(s.chetz_program)])
+  );
+  const chetzOnly = params.chetz === "yes" ? true : params.chetz === "no" ? false : null;
+  function matchesChetz(studentId: string) {
+    if (chetzOnly === null) return true;
+    return chetzByStudent.get(studentId) === chetzOnly;
+  }
   const attendanceByStudent = new Map<string, typeof attendance>();
   for (const a of attendance ?? []) {
     const list = attendanceByStudent.get(a.student_id) ?? [];
@@ -264,6 +277,7 @@ export default async function MakeupPage({ searchParams }: Props) {
   );
 
   function matchSuggestion(s: (typeof suggestions)[number]) {
+    if (!matchesChetz(s.studentId)) return false;
     if (params.studentId && s.studentId !== params.studentId) return false;
     if (params.classId && s.classId !== params.classId) return false;
     if (params.trackId && s.trackId !== params.trackId) return false;
@@ -303,6 +317,7 @@ export default async function MakeupPage({ searchParams }: Props) {
         }
       | undefined;
 
+    if (!matchesChetz(row.student_id)) return false;
     if (params.studentId && row.student_id !== params.studentId) return false;
     if (params.classId && (lesson?.class_id ?? null) !== params.classId) return false;
     if (params.trackId && (lesson?.track_id ?? null) !== params.trackId) return false;
@@ -340,7 +355,9 @@ export default async function MakeupPage({ searchParams }: Props) {
           tracks={(tracks ?? []).map((t: any) => ({ id: t.id, name: t.name }))}
           specializations={(specializations ?? []).map((s: any) => ({ id: s.id, name: s.name }))}
           teachers={(teachers ?? []).map((t: any) => ({ id: t.id, name: t.full_name }))}
-          students={(students ?? []).map((s: any) => ({ id: s.id, full_name: s.full_name }))}
+          students={(students ?? [])
+            .filter((s) => matchesChetz(s.id))
+            .map((s) => ({ id: s.id, full_name: s.full_name }))}
           subjects={subjects}
           defaults={{
             classId: params.classId,
@@ -350,6 +367,7 @@ export default async function MakeupPage({ searchParams }: Props) {
             subject: params.subject,
             studentId: params.studentId,
             status,
+            chetz: params.chetz === "yes" || params.chetz === "no" ? params.chetz : undefined,
           }}
         />
       </div>

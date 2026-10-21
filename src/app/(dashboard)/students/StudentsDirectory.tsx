@@ -24,6 +24,7 @@ const PRINT_COLUMNS = [
   { id: "track", label: "מסלול", defaultOn: true },
   { id: "spec", label: "התמחות", defaultOn: true },
   { id: "psychology", label: "פסיכולוגיה", defaultOn: false },
+  { id: "chetz", label: "חץ", defaultOn: false },
   { id: "city", label: "עיר", defaultOn: false },
   { id: "phone", label: "טלפון", defaultOn: false },
   { id: "studentPhone", label: "פל׳ תלמידה", defaultOn: false },
@@ -97,6 +98,8 @@ function printCell(s: StudentRow, id: PrintColId): string {
         .join(" + ") || "—";
     case "psychology":
       return s.isPsychology ? "פסיכולוגיה" : "";
+    case "chetz":
+      return s.chetz_program ? "חץ" : "";
     case "city":
       return s.city ?? "";
     case "phone":
@@ -286,6 +289,7 @@ export function StudentsDirectory({
   const [lessonIds, setLessonIds] = useState<string[]>([]);
   const [teacherIds, setTeacherIds] = useState<string[]>([]);
   const [psychology, setPsychology] = useState<"all" | "yes" | "no">("all");
+  const [chetz, setChetz] = useState<"all" | "yes" | "no">("all");
   const [status, setStatus] = useState<"all" | "active" | "inactive">("all");
   const [sortKey, setSortKey] = useState<SortKey>("name");
   const [sortDir, setSortDir] = useState<"asc" | "desc">("asc");
@@ -420,6 +424,8 @@ export function StudentsDirectory({
       }
       if (psychology === "yes" && !s.isPsychology) return false;
       if (psychology === "no" && s.isPsychology) return false;
+      if (chetz === "yes" && !s.chetz_program) return false;
+      if (chetz === "no" && s.chetz_program) return false;
       const assignedLessonIds = yearOptions?.assignedLessonIdsByStudent?.[s.id] ?? [];
       if (lessonIds.length > 0 && !lessonIds.some((id) => assignedLessonIds.includes(id))) {
         return false;
@@ -451,7 +457,8 @@ export function StudentsDirectory({
         s.gradeName.includes(q) ||
         s.trackName.includes(q) ||
         s.specializationName.includes(q) ||
-        s.secondarySpecializationName.includes(q)
+        s.secondarySpecializationName.includes(q) ||
+        (s.chetz_program && q.includes("חץ"))
       );
     });
   }, [
@@ -463,6 +470,7 @@ export function StudentsDirectory({
     trackIds,
     specIds,
     psychology,
+    chetz,
     lessonIds,
     subjectKeys,
     teacherIds,
@@ -567,6 +575,8 @@ export function StudentsDirectory({
     }
     if (psychology === "yes") bits.push("פסיכולוגיה");
     if (psychology === "no") bits.push("לא פסיכולוגיה");
+    if (chetz === "yes") bits.push("לומדת חץ");
+    if (chetz === "no") bits.push("לא לומדת חץ");
     if (status === "active") bits.push("פעילות");
     if (status === "inactive") bits.push("לא פעילות");
     if (query.trim()) bits.push(`חיפוש: ${query.trim()}`);
@@ -583,6 +593,7 @@ export function StudentsDirectory({
     subjectKeys,
     lessonIds,
     psychology,
+    chetz,
     status,
     query,
     filtered.length,
@@ -598,6 +609,7 @@ export function StudentsDirectory({
       subjectKeys.length ||
       lessonIds.length ||
       psychology !== "all" ||
+      chetz !== "all" ||
       status !== "all"
   );
 
@@ -807,6 +819,16 @@ export function StudentsDirectory({
           ]}
         />
         <Select
+          label="תוכנית חץ"
+          value={chetz}
+          onChange={(e) => setChetz(e.target.value as typeof chetz)}
+          options={[
+            { value: "all", label: "הכל" },
+            { value: "yes", label: "לומדת חץ" },
+            { value: "no", label: "לא לומדת חץ" },
+          ]}
+        />
+        <Select
           label="סטטוס"
           value={status}
           onChange={(e) => setStatus(e.target.value as typeof status)}
@@ -895,6 +917,7 @@ export function StudentsDirectory({
                   setSubjectKeys([]);
                   setLessonIds([]);
                   setPsychology("all");
+                  setChetz("all");
                   setStatus("all");
                 }}
               >

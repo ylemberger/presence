@@ -3,7 +3,7 @@
 import { useMemo } from "react";
 import { useRouter } from "next/navigation";
 import { Combobox } from "@/components/ui/Combobox";
-import { Input } from "@/components/ui/Input";
+import { Input, Select } from "@/components/ui/Input";
 import { Section } from "@/components/ui/Section";
 
 interface LessonOption {
@@ -25,6 +25,7 @@ interface StudentOption {
   trackId?: string | null;
   specId?: string | null;
   secondarySpecId?: string | null;
+  chetz?: boolean;
 }
 
 type FilterValues = {
@@ -38,6 +39,7 @@ type FilterValues = {
   studentId?: string;
   lessonId?: string;
   ruleId?: string;
+  chetz?: string;
 };
 
 type LessonFilterKey = "gradeId" | "classId" | "trackId" | "specializationId" | "teacherId" | "subject" | "lessonId";
@@ -137,6 +139,8 @@ export function ReportsFilter({
       ) {
         return false;
       }
+      if (defaults.chetz === "yes" && !s.chetz) return false;
+      if (defaults.chetz === "no" && s.chetz) return false;
       if (defaults.studentId && s.id !== defaults.studentId) {
         /* keep listed in own dropdown via except — handled below */
       }
@@ -206,6 +210,8 @@ export function ReportsFilter({
         ) {
           return false;
         }
+        if (next.chetz === "yes" && !s.chetz) return false;
+        if (next.chetz === "no" && s.chetz) return false;
         if (next.lessonId || next.teacherId || next.subject) {
           return lessons.filter((l) => lessonMatches(l, next)).some((l) => studentFitsLesson(s, l));
         }
@@ -226,6 +232,7 @@ export function ReportsFilter({
       "lessonId",
       "minAbsence",
       "ruleId",
+      "chetz",
     ] as const) {
       const value = next[key];
       if (value) params.set(key, value);
@@ -289,6 +296,18 @@ export function ReportsFilter({
             onChange={(v) => apply({ subject: v || undefined })}
             options={scoped.subjects.map((s) => ({ value: s, label: s }))}
             emptyLabel={scoped.subjects.length ? "כל המקצועות לפי הסינון" : "אין מקצועות לפי הסינון"}
+          />
+          <Select
+            label="תוכנית חץ"
+            value={defaults.chetz ?? "all"}
+            onChange={(e) =>
+              apply({ chetz: e.target.value === "all" ? undefined : e.target.value })
+            }
+            options={[
+              { value: "all", label: "הכל" },
+              { value: "yes", label: "לומדת חץ" },
+              { value: "no", label: "לא לומדת חץ" },
+            ]}
           />
           <Combobox
             label="תלמידה"
