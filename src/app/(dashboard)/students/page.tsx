@@ -6,43 +6,25 @@ import {
 } from "@/lib/lessons/autoAssign";
 import { formatLessonOptionLabel } from "@/lib/lessons/hours";
 import { embeddedTeacher } from "@/lib/supabase/embed";
+import { fetchAllPages, fetchAssignmentsByLessons } from "@/lib/supabase/paged";
 import { createClient, requireAuthenticatedUser } from "@/lib/supabase/server";
 import { getActiveAcademicYear, getAllAcademicYears } from "@/lib/utils";
 import { filterFixedGrades } from "@/lib/years/grades";
 import { StudentsDirectory } from "./StudentsDirectory";
 import { RepairPromotionsButton } from "../settings/RepairPromotionsButton";
+import type { Student } from "@/types/database";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 async function fetchOpenLessonAssignments(
   supabase: SupabaseClient,
   yearLessonIds: string[]
 ): Promise<{ student_id: string; lesson_id: string }[]> {
-  if (yearLessonIds.length === 0) return [];
-  const yearSet = new Set(yearLessonIds);
-  const pageSize = 1000;
-  const rows: { student_id: string; lesson_id: string }[] = [];
-  let from = 0;
-  for (;;) {
-    const { data, error } = await supabase
-      .from("student_lesson_assignments")
-      .select("student_id, lesson_id")
-      .is("end_date", null)
-      .range(from, from + pageSize - 1);
-    if (error) {
-      console.error("student_lesson_assignments load failed", error.message);
-      break;
-    }
-    const batch = data ?? [];
-    for (const row of batch) {
-      if (yearSet.has(row.lesson_id)) {
-        rows.push({ student_id: row.student_id, lesson_id: row.lesson_id });
-      }
-    }
-    if (batch.length < pageSize) break;
-    from += pageSize;
-    if (from > 30000) break;
-  }
-  return rows;
+  return fetchAssignmentsByLessons<{ student_id: string; lesson_id: string }>(
+    supabase,
+    yearLessonIds,
+    "student_id, lesson_id",
+    true
+  );
 }
 
 type YearAssignment = {
@@ -76,10 +58,9 @@ export default async function StudentsPage() {
   const allYears = await getAllAcademicYears();
   const supabase = await createClient();
 
-  const { data: students } = await supabase
-    .from("students")
-    .select("*")
-    .order("full_name");
+  const students = await fetchAllPages<Student>((from, to) =>
+    supabase.from("students").select("*").order("full_name").range(from, to)
+  );
 
   const assignments: Record<
     string,
@@ -103,19 +84,22 @@ export default async function StudentsPage() {
 
   if (activeYear) {
     const [
-      { data: yearAssignments, error: assignmentsError },
+      yearAssignments,
       { data: grades },
       { data: classes },
       { data: tracks },
       { data: specializations },
       { data: yearLessons },
     ] = await Promise.all([
-      supabase
-        .from("student_assignments")
-        .select(
-          "student_id, grade_id, class_id, track_id, specialization_id, secondary_specialization_id, is_psychology, start_date, end_date"
-        )
-        .eq("academic_year_id", activeYear.id),
+      fetchAllPages<YearAssignment>((from, to) =>
+        supabase
+          .from("student_assignments")
+          .select(
+            "student_id, grade_id, class_id, track_id, specialization_id, secondary_specialization_id, is_psychology, start_date, end_date"
+          )
+          .eq("academic_year_id", activeYear.id)
+          .range(from, to)
+      ),
       supabase.from("grades").select("*").eq("academic_year_id", activeYear.id).order("name"),
       supabase.from("classes").select("*").eq("academic_year_id", activeYear.id).order("name"),
       supabase.from("tracks").select("*").eq("academic_year_id", activeYear.id).order("name"),
@@ -133,16 +117,12 @@ export default async function StudentsPage() {
         .order("subject"),
     ]);
 
-    if (assignmentsError) {
-      console.error("student_assignments load failed", assignmentsError.message);
-    }
-
     const gradeNameById = new Map((grades ?? []).map((g) => [g.id, g.name]));
     const classNameById = new Map((classes ?? []).map((c) => [c.id, c.name]));
     const trackNameById = new Map((tracks ?? []).map((t) => [t.id, t.name]));
     const specNameById = new Map((specializations ?? []).map((s) => [s.id, s.name]));
 
-    const picked = pickPlacementForYear((yearAssignments ?? []) as YearAssignment[]);
+    const picked = pickPlacementForYear(yearAssignments);
     for (const [studentId, a] of picked) {
       placedStudentIds.add(studentId);
       assignments[studentId] = {

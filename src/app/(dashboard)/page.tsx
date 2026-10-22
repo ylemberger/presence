@@ -5,6 +5,7 @@ import { createClient } from "@/lib/supabase/server";
 import { todayIso, formatHebrewDate, addDays, isDateInRange } from "@/lib/dates/hebrew";
 import { embedOne } from "@/lib/supabase/embed";
 import { fetchAssignmentsByLessons } from "@/lib/supabase/paged";
+import { fetchAttendanceForOccurrences } from "@/lib/attendance/load-occurrences";
 import {
   evaluateAbsenceAgainstRule,
   summarizeAttendance,
@@ -92,11 +93,12 @@ export default async function DashboardPage() {
     let unmarked = weekOccIds.length;
     let markedThisWeek = 0;
     if (weekOccIds.length > 0) {
-      const { data: marked } = await supabase
-        .from("attendance")
-        .select("lesson_occurrence_id")
-        .in("lesson_occurrence_id", weekOccIds);
-      const withAny = new Set((marked ?? []).map((m) => m.lesson_occurrence_id));
+      const marked = await fetchAttendanceForOccurrences<{ lesson_occurrence_id: string }>(
+        supabase,
+        weekOccIds,
+        "lesson_occurrence_id"
+      );
+      const withAny = new Set(marked.map((m) => m.lesson_occurrence_id));
       unmarked = weekOccIds.filter((id) => !withAny.has(id)).length;
       markedThisWeek = withAny.size;
     }
@@ -105,7 +107,7 @@ export default async function DashboardPage() {
     if (todayRows.length > 0) {
       const lessonIds = [...new Set(todayRows.map((o) => o.lesson_id))];
       const occIds = todayRows.map((o) => o.id);
-      const [links, { data: att }] = await Promise.all([
+      const [links, att] = await Promise.all([
         fetchAssignmentsByLessons<{
           lesson_id: string;
           start_date: string;
@@ -116,7 +118,11 @@ export default async function DashboardPage() {
           lessonIds,
           "lesson_id, student_id, start_date, end_date, students(is_active)"
         ),
-        supabase.from("attendance").select("lesson_occurrence_id").in("lesson_occurrence_id", occIds),
+        fetchAttendanceForOccurrences<{ lesson_occurrence_id: string }>(
+          supabase,
+          occIds,
+          "lesson_occurrence_id"
+        ),
       ]);
 
       todayLessons = todayRows.map((o) => {
@@ -138,7 +144,7 @@ export default async function DashboardPage() {
           if (!isDateInRange(today, link.start_date, link.end_date)) continue;
           total++;
         }
-        const marked = (att ?? []).filter((a) => a.lesson_occurrence_id === o.id).length;
+        const marked = att.filter((a) => a.lesson_occurrence_id === o.id).length;
         return {
           id: o.id,
           subject: formatSubjectLessonLabel(parent, lesson.subject),
@@ -173,7 +179,7 @@ export default async function DashboardPage() {
 
     if (studentIds.length > 0) {
       const ids = studentIds.map((s) => s.id);
-      const [{ data: lessonLinks }, { data: occs }, { data: attRows }, poolCatalog] = await Promise.all([
+      const [{ data: lessonLinks }, { data: occs }, poolCatalog] = await Promise.all([
         supabase
           .from("student_lesson_assignments")
           .select("student_id, lesson_id, start_date, end_date, lessons!inner(academic_year_id)")
@@ -187,9 +193,21 @@ export default async function DashboardPage() {
           .gte("occurrence_date", monthStart)
           .lte("occurrence_date", today)
           .neq("status", "cancelled"),
-        supabase.from("attendance").select("student_id, lesson_occurrence_id, status").in("student_id", ids),
         fetchAttendancePools(supabase, activeYear.id),
       ]);
+      const attRows = await fetchAttendanceForOccurrences<{
+        student_id: string;
+        lesson_occurrence_id: string;
+        status: string;
+      }>(
+        supabase,
+        (occs ?? []).map((o) => o.id),
+        "student_id, lesson_occurrence_id, status",
+        ids
+      );
+      const attByPair = new Map(
+        attRows.map((a) => [`${a.student_id}::${a.lesson_occurrence_id}`, a.status] as const)
+      );
 
       const riskList: typeof atRisk = [];
       for (const st of studentIds) {
@@ -203,9 +221,11 @@ export default async function DashboardPage() {
             occurrenceDate: o.occurrence_date,
             lessonId: o.lesson_id,
             status: o.status,
-            attendanceStatus: (attRows ?? []).find(
-              (a) => a.student_id === st.id && a.lesson_occurrence_id === o.id
-            )?.status as "present" | "absent" | "late" | undefined,
+            attendanceStatus: attByPair.get(`${st.id}::${o.id}`) as
+              | "present"
+              | "absent"
+              | "late"
+              | undefined,
           }));
         if (eligible.length < 3) continue;
         const byUnit = new Map<string, typeof eligible>();

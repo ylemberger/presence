@@ -1,9 +1,15 @@
 "use server";
 
 import { revalidatePath as nextRevalidatePath } from "next/cache";
-import { bustAttendanceShellCache } from "@/lib/attendance/shell-cache";
+import {
+  bustAttendanceShellCache,
+  bustPendingAttendanceCache,
+} from "@/lib/attendance/shell-cache";
 
 function revalidatePath(path: string, type?: "layout" | "page") {
+  if (path === "/attendance") {
+    bustPendingAttendanceCache();
+  }
   if (
     path === "/lessons" ||
     path === "/students" ||
@@ -2708,25 +2714,36 @@ async function tryMarkOccurrenceComplete(
     .single();
   if (!occ || occ.status === "cancelled") return;
 
-  const { data: links } = await supabase
-    .from("student_lesson_assignments")
-    .select("student_id, students(is_active)")
-    .eq("lesson_id", occ.lesson_id)
-    .lte("start_date", occ.occurrence_date)
-    .or(`end_date.is.null,end_date.gte.${occ.occurrence_date}`);
+  const links = await fetchAllPages<{ student_id: string; students: unknown }>((from, to) =>
+    supabase
+      .from("student_lesson_assignments")
+      .select("student_id, students(is_active)")
+      .eq("lesson_id", occ.lesson_id)
+      .lte("start_date", occ.occurrence_date)
+      .or(`end_date.is.null,end_date.gte.${occ.occurrence_date}`)
+      .range(from, to)
+  );
 
-  const studentIds = (links ?? [])
+  const studentIds = links
     .filter((l) => embedOne<{ is_active: boolean }>(l.students)?.is_active)
     .map((l) => l.student_id);
   if (studentIds.length === 0) return;
 
-  const { data: marked } = await supabase
-    .from("attendance")
-    .select("student_id")
-    .eq("lesson_occurrence_id", occurrenceId)
-    .in("student_id", studentIds);
+  const markedPages = await Promise.all(
+    chunkIds(studentIds).map((chunk) =>
+      fetchAllPages<{ student_id: string }>((from, to) =>
+        supabase
+          .from("attendance")
+          .select("student_id")
+          .eq("lesson_occurrence_id", occurrenceId)
+          .in("student_id", chunk)
+          .range(from, to)
+      )
+    )
+  );
+  const marked = markedPages.flat();
 
-  if ((marked ?? []).length >= studentIds.length) {
+  if (marked.length >= studentIds.length) {
     await supabase
       .from("lesson_occurrences")
       .update({ status: "completed", gap_handling: null })
@@ -2895,7 +2912,6 @@ export async function upsertAttendanceAction(
 
   await tryMarkOccurrenceComplete(supabase, occurrenceId);
   revalidatePath("/attendance");
-  revalidatePath("/");
   return { success: true };
 }
 
@@ -2927,12 +2943,9 @@ export async function bulkAttendanceAction(
   if (error) return { error: error.message };
 
   const occurrenceIds = [...new Set(updates.map((u) => u.occurrenceId))];
-  for (const occId of occurrenceIds) {
-    await tryMarkOccurrenceComplete(supabase, occId);
-  }
+  await Promise.all(occurrenceIds.map((occId) => tryMarkOccurrenceComplete(supabase, occId)));
 
   revalidatePath("/attendance");
-  revalidatePath("/");
   return { success: true };
 }
 

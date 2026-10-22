@@ -1,17 +1,18 @@
 /**
  * Short-lived read cache for attendance shell data (lessons, catalog, names).
- * Never store attendance marks or occurrence fill-state here.
+ * Never store attendance marks or occurrence fill-state here, except the
+ * pending-banner summary (separate key, busted after every attendance write).
  */
 
 type Entry<T> = { at: number; value: T };
 
-const TTL_MS = 45_000;
+const TTL_MS = 90_000;
 const store = new Map<string, Entry<unknown>>();
 
-export function readShellCache<T>(key: string): T | null {
+export function readShellCache<T>(key: string, ttlMs = TTL_MS): T | null {
   const hit = store.get(key);
   if (!hit) return null;
-  if (Date.now() - hit.at > TTL_MS) {
+  if (Date.now() - hit.at > ttlMs) {
     store.delete(key);
     return null;
   }
@@ -23,7 +24,18 @@ export function writeShellCache<T>(key: string, value: T): T {
   return value;
 }
 
+function deleteKeysWithPrefix(prefix: string) {
+  for (const key of [...store.keys()]) {
+    if (key.startsWith(prefix)) store.delete(key);
+  }
+}
+
 /** Call after catalog / lesson / student / teacher / settings writes — not after a single attendance mark. */
 export function bustAttendanceShellCache() {
   store.clear();
+}
+
+/** Call after attendance writes so the sidebar badge is not stale. */
+export function bustPendingAttendanceCache() {
+  deleteKeysWithPrefix("pending:");
 }

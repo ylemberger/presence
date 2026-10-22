@@ -2,8 +2,9 @@ import { cache } from "react";
 import { createClient } from "@/lib/supabase/server";
 import { addDays, isDateInRange, startOfWeekSunday, todayIso } from "@/lib/dates/hebrew";
 import { embedOne } from "@/lib/supabase/embed";
-import { fetchAssignmentsByLessons } from "@/lib/supabase/paged";
-import { formatSubjectLessonLabel } from "@/lib/lessons/subject-label";
+import { fetchAllPages, fetchAssignmentsByLessons } from "@/lib/supabase/paged";
+import { fetchAttendanceForOccurrences } from "@/lib/attendance/load-occurrences";
+import { readShellCache, writeShellCache } from "@/lib/attendance/shell-cache";
 
 export type PendingOccurrence = {
   id: string;
@@ -41,9 +42,20 @@ export const EMPTY_PENDING_SUMMARY: PendingAttendanceSummary = {
   items: [],
 };
 
+const PENDING_TTL_MS = 20_000;
+
+type PendingOccRow = {
+  id: string;
+  occurrence_date: string;
+  lesson_id: string;
+  gap_handling: string | null;
+  lessons: unknown;
+};
+
 /**
  * Incomplete lesson occurrences from lookback days through today.
- * Used for gentle reminders (sidebar badge, banner). Cached per request.
+ * Used for gentle reminders (sidebar badge, banner). Cached per request
+ * and briefly across requests; attendance writes bust that cache.
  */
 export const getPendingAttendanceSummary = cache(
   async (
@@ -59,28 +71,38 @@ export const getPendingAttendanceSummary = cache(
       incompleteWeeks: [],
       items: [],
     };
+    const cacheKey = `pending:${academicYearId}:${lookbackDays}`;
+    const cached = readShellCache<PendingAttendanceSummary>(cacheKey, PENDING_TTL_MS);
+    if (cached) return cached;
+
     const supabase = await createClient();
     const today = todayIso();
     const from = addDays(today, -lookbackDays);
 
-    const { data: occs } = await supabase
-      .from("lesson_occurrences")
-      .select(
-        `id, occurrence_date, lesson_id, gap_handling,
-         lessons!inner(id, subject, academic_year_id, subjects(name))`
-      )
-      .eq("lessons.academic_year_id", academicYearId)
-      .gte("occurrence_date", from)
-      .lte("occurrence_date", today)
-      .neq("status", "cancelled")
-      .order("occurrence_date", { ascending: false });
+    const occs = await fetchAllPages<PendingOccRow>((fromRow, toRow) =>
+      supabase
+        .from("lesson_occurrences")
+        .select(
+          `id, occurrence_date, lesson_id, gap_handling,
+           lessons!inner(id, subject, academic_year_id)`
+        )
+        .eq("lessons.academic_year_id", academicYearId)
+        .gte("occurrence_date", from)
+        .lte("occurrence_date", today)
+        .neq("status", "cancelled")
+        .order("occurrence_date", { ascending: false })
+        .range(fromRow, toRow) as PromiseLike<{
+        data: PendingOccRow[] | null;
+        error: { message: string } | null;
+      }>
+    );
 
-    if (!occs?.length) return empty;
+    if (!occs.length) return writeShellCache(cacheKey, empty);
 
     const lessonIds = [...new Set(occs.map((o) => o.lesson_id))];
     const occIds = occs.map((o) => o.id);
 
-    const [links, { data: attendance }] = await Promise.all([
+    const [links, attendance] = await Promise.all([
       fetchAssignmentsByLessons<{
         lesson_id: string;
         student_id: string;
@@ -92,14 +114,15 @@ export const getPendingAttendanceSummary = cache(
         lessonIds,
         "lesson_id, student_id, start_date, end_date, students(is_active)"
       ),
-      supabase
-        .from("attendance")
-        .select("lesson_occurrence_id")
-        .in("lesson_occurrence_id", occIds),
+      fetchAttendanceForOccurrences<{ lesson_occurrence_id: string }>(
+        supabase,
+        occIds,
+        "lesson_occurrence_id"
+      ),
     ]);
 
     const markedByOcc = new Map<string, number>();
-    for (const a of attendance ?? []) {
+    for (const a of attendance) {
       markedByOcc.set(
         a.lesson_occurrence_id,
         (markedByOcc.get(a.lesson_occurrence_id) ?? 0) + 1
@@ -126,11 +149,7 @@ export const getPendingAttendanceSummary = cache(
       const marked = markedByOcc.get(o.id) ?? 0;
       if (marked >= total) continue;
 
-      const lesson = o.lessons as unknown as {
-        subject: string;
-        subjects?: { name: string } | { name: string }[] | null;
-      };
-      const parent = Array.isArray(lesson.subjects) ? lesson.subjects[0]?.name : lesson.subjects?.name;
+      const lesson = embedOne<{ subject?: string }>(o.lessons);
       const gap =
         o.gap_handling === "in_treatment" || o.gap_handling === "continued"
           ? o.gap_handling
@@ -138,7 +157,7 @@ export const getPendingAttendanceSummary = cache(
       items.push({
         id: o.id,
         date: o.occurrence_date,
-        subject: formatSubjectLessonLabel(parent, lesson.subject),
+        subject: lesson?.subject?.trim() || "שיעור",
         lessonId: o.lesson_id,
         marked,
         total,
@@ -164,7 +183,7 @@ export const getPendingAttendanceSummary = cache(
       b.weekStart.localeCompare(a.weekStart)
     );
 
-    return {
+    const summary: PendingAttendanceSummary = {
       pendingCount: items.length,
       todayPending,
       pastPending,
@@ -173,5 +192,6 @@ export const getPendingAttendanceSummary = cache(
       incompleteWeeks,
       items: items.slice(0, 8),
     };
+    return writeShellCache(cacheKey, summary);
   }
 );
