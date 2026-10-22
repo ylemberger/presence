@@ -1,6 +1,22 @@
 "use server";
 
-import { revalidatePath } from "next/cache";
+import { revalidatePath as nextRevalidatePath } from "next/cache";
+import { bustAttendanceShellCache } from "@/lib/attendance/shell-cache";
+
+function revalidatePath(path: string, type?: "layout" | "page") {
+  if (
+    path === "/lessons" ||
+    path === "/students" ||
+    path === "/teachers" ||
+    path === "/settings" ||
+    path.startsWith("/students/") ||
+    path.startsWith("/teachers/")
+  ) {
+    bustAttendanceShellCache();
+  }
+  if (type) nextRevalidatePath(path, type);
+  else nextRevalidatePath(path);
+}
 import { createActionClient, createClient } from "@/lib/supabase/server";
 import { setActiveAcademicYear, getActiveAcademicYear } from "@/lib/utils";
 import { syncTeacherSourceRecords } from "@/lib/sync/teachers";

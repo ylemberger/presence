@@ -1,8 +1,8 @@
 "use client";
 
 import { useMemo } from "react";
-import { useRouter } from "next/navigation";
 import { Combobox } from "@/components/ui/Combobox";
+import { usePendingRouter } from "@/lib/ui/nav-pending";
 import { Input, Select } from "@/components/ui/Input";
 import { Section } from "@/components/ui/Section";
 
@@ -104,7 +104,7 @@ export function ReportsFilter({
   rules,
   defaults,
 }: ReportsFilterProps) {
-  const router = useRouter();
+  const { push } = usePendingRouter();
 
   const scoped = useMemo(() => {
     function by(except?: LessonFilterKey) {
@@ -238,7 +238,7 @@ export function ReportsFilter({
       if (value) params.set(key, value);
     }
     params.set("run", "1");
-    router.push(`/reports?${params.toString()}`, { scroll: false });
+    push(`/reports?${params.toString()}`, { scroll: false });
   }
 
   const selectedTeacherStillListed =

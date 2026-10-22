@@ -3,7 +3,7 @@
 import { Combobox } from "@/components/ui/Combobox";
 import { Select } from "@/components/ui/Input";
 import { Section } from "@/components/ui/Section";
-import { useRouter } from "next/navigation";
+import { usePendingRouter } from "@/lib/ui/nav-pending";
 
 export type MakeupFilterStatus = "all" | "open" | "done" | "blocked";
 
@@ -35,7 +35,7 @@ export function MakeupFilters({
   subjects,
   defaults,
 }: MakeupFiltersProps) {
-  const router = useRouter();
+  const { push } = usePendingRouter();
 
   function apply(patch: Partial<MakeupFiltersProps["defaults"]>) {
     const next = { ...defaults, ...patch };
@@ -54,7 +54,7 @@ export function MakeupFilters({
       if (value && value !== "all") params.set(key, value);
     }
     params.set("run", "1");
-    router.push(`/makeup?${params.toString()}`, { scroll: false });
+    push(`/makeup?${params.toString()}`, { scroll: false });
   }
 
   return (

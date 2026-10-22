@@ -1,8 +1,8 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
 import { Combobox } from "@/components/ui/Combobox";
+import { usePendingRouter } from "@/lib/ui/nav-pending";
 import { MultiSelect } from "@/components/ui/MultiSelect";
 import { Select } from "@/components/ui/Input";
 import { Section } from "@/components/ui/Section";
@@ -38,7 +38,7 @@ export function TimetableFilters({
   activityRanges,
   defaults,
 }: TimetableFiltersProps) {
-  const router = useRouter();
+  const { push } = usePendingRouter();
   const [classIds, setClassIds] = useState(defaults.classIds ?? []);
   const [trackIds, setTrackIds] = useState(defaults.trackIds ?? []);
   const classKey = (defaults.classIds ?? []).join(",");
@@ -84,7 +84,7 @@ export function TimetableFilters({
     if (psych === "no") params.set("forPsychology", "no");
     if (defaults.week) params.set("week", defaults.week);
 
-    router.push(`/timetable?${params.toString()}`, { scroll: false });
+    push(`/timetable?${params.toString()}`, { scroll: false });
   }
 
   return (

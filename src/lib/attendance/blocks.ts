@@ -12,6 +12,7 @@ export type AttendanceBlockInput = {
   periodCount: number;
   groupLabel: string;
   audienceKey: string;
+  attendanceRuleId?: string | null;
   studentCount: number;
   markedCount: number;
   status?: string;

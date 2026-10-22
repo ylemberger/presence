@@ -1,8 +1,8 @@
 "use client";
 
-import { useRouter } from "next/navigation";
 import { Combobox } from "@/components/ui/Combobox";
 import { Section } from "@/components/ui/Section";
+import { usePendingRouter } from "@/lib/ui/nav-pending";
 
 export interface LessonsFiltersProps {
   classes: { id: string; name: string }[];
@@ -31,7 +31,7 @@ export function LessonsFilters({
   keepEdit,
   keepDate,
 }: LessonsFiltersProps) {
-  const router = useRouter();
+  const { push } = usePendingRouter();
 
   function apply(patch: Partial<LessonsFiltersProps["defaults"]>) {
     const next = { ...defaults, ...patch };
@@ -42,7 +42,7 @@ export function LessonsFilters({
     if (keepDate) params.set("date", keepDate);
     if (keepEdit) params.set("edit", keepEdit);
     const q = params.toString();
-    router.push(q ? `/lessons?${q}` : "/lessons", { scroll: false });
+    push(q ? `/lessons?${q}` : "/lessons", { scroll: false });
   }
 
   return (

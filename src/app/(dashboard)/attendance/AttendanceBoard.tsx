@@ -2,9 +2,9 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/Button";
 import { Combobox } from "@/components/ui/Combobox";
+import { CheckingStatus } from "@/components/ui/CheckingStatus";
 import { HebrewMonthCalendar } from "@/components/ui/HebrewMonthCalendar";
 import {
   bulkAttendanceAction,
@@ -29,7 +29,7 @@ import {
   hebrewMonthFromIso,
   startOfWeekSunday,
 } from "@/lib/dates/hebrew";
-import { formatLessonHours, formatLessonOptionLabel } from "@/lib/lessons/hours";
+import { formatLessonHours } from "@/lib/lessons/hours";
 import { DAY_OF_WEEK_LABELS } from "@/lib/constants";
 import { ABSENCE_REASONS, type AbsenceReason } from "@/lib/attendance/reasons";
 import { Icon } from "@/components/ui/Icon";
@@ -46,6 +46,7 @@ import { AttendanceGapModal, type GapItem } from "./AttendanceGapModal";
 import { HebrewDateInput } from "@/components/ui/HebrewDateInput";
 import { useAccess } from "@/components/auth/AccessProvider";
 import { Modal } from "@/components/ui/Modal";
+import { usePendingRouter } from "@/lib/ui/nav-pending";
 
 export type AttendanceMode = "single" | "group";
 
@@ -244,7 +245,7 @@ export function AttendanceBoard({
   occurrenceIdsWithNotes = [],
 }: Props) {
   const { canWrite } = useAccess();
-  const router = useRouter();
+  const { isPending, push, replace, router } = usePendingRouter();
   const [draft, setDraft] = useState<Record<DraftKey, AttendanceStatus | null>>({});
   const [reasons, setReasons] = useState<Record<DraftKey, AbsenceReason | null>>({});
   const [cellPhase, setCellPhase] = useState<Record<DraftKey, AttendancePickerPhase>>({});
@@ -400,7 +401,7 @@ export function AttendanceBoard({
   useEffect(() => {
     if (dayOccurrences.length === 1 && !selectedOccurrenceId) {
       const params = buildParams({ occurrenceId: dayOccurrences[0].id });
-      router.replace(`/attendance?${params.toString()}`, { scroll: false });
+      replace(`/attendance?${params.toString()}`, { scroll: false });
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [dayOccurrences.length, selectedOccurrenceId, selectedDate]);
@@ -460,18 +461,20 @@ export function AttendanceBoard({
         return a.subject.localeCompare(b.subject, "he");
       })
       .map((l) => {
+        const teacher = (l.teacherName || "").trim() || "ללא מורה";
+        const group = l.groupLabel || "ללא קבוצה";
         const day =
-          l.day_of_week != null ? `יום ${DAY_OF_WEEK_LABELS[l.day_of_week] ?? ""}` : "";
+          l.day_of_week != null ? `יום ${DAY_OF_WEEK_LABELS[l.day_of_week] ?? ""}`.trim() : "";
         const hours = l.lesson_number
           ? formatLessonHours(l.lesson_number, l.period_count ?? 1)
           : "";
-        const group = l.groupLabel || "ללא קבוצה";
+        const when = [day, hours].filter(Boolean).join(" · ");
         return {
           value: l.id,
-          label: `${l.teacherName || "ללא מורה"} · ${l.subject}`,
-          description: [group, day, hours].filter(Boolean).join(" · "),
-          selectedLabel: [l.teacherName, l.subject, group].filter(Boolean).join(" · "),
-          keywords: [l.teacherName, l.subject, group, day, hours].filter(Boolean).join(" "),
+          label: l.subject,
+          description: [`מורה: ${teacher}`, `קבוצה: ${group}`, when].filter(Boolean).join(" · "),
+          selectedLabel: `${l.subject} — ${group} · מורה ${teacher}`,
+          keywords: [teacher, l.subject, group, day, hours].filter(Boolean).join(" "),
         };
       });
   }, [scopedLessons]);
@@ -505,7 +508,7 @@ export function AttendanceBoard({
   }
 
   function navigate(params: URLSearchParams) {
-    router.push(`/attendance?${params.toString()}`, { scroll: false });
+    push(`/attendance?${params.toString()}`, { scroll: false });
   }
 
   function moveFocus(idx: number) {
@@ -1095,12 +1098,12 @@ export function AttendanceBoard({
         <div className="border-b border-outline-variant/25 bg-secondary-container/30 px-4 py-3">
           <p className="font-title-lg text-title-lg text-primary">חיפוש מורה ושיעור</p>
           <p className="mt-0.5 font-body-sm text-body-sm text-on-surface-variant">
-            הקלידי שם. מה שכתבת נשאר בשדה עד שהרשימה עולה. לסינון מדויק לחצי על אחת האפשרויות מתחת.
+            הקלידי שם מורה או מקצוע. מיד יופיע «מחפשת…», ואחרי בחירה «בודקת נתונים…» עד שהשיעור עולה.
           </p>
         </div>
         <div className="px-4 py-4">
           <Combobox
-            label="שם מורה, שיעור או קבוצה"
+            label="שם מורה, מקצוע או קבוצה"
             value={lessonId ?? ""}
             onChange={(v) => {
               const picked = lessons.find((l) => l.id === v);
@@ -1116,14 +1119,14 @@ export function AttendanceBoard({
             emptyLabel=""
             placeholder={
               teacherLessonOptions.length
-                ? "למשל: שם המורה או שם השיעור…"
+                ? "למשל: שם המורה או שם המקצוע…"
                 : "אין שיעורים לפי הסינון"
             }
             fieldSize="lg"
-            maxSuggestions={Math.max(80, teacherLessonOptions.length)}
+            loading={isPending}
           />
           <p className="mt-2 font-caption text-caption text-on-surface-variant">
-            רק מורות עם שיעורים בשנה הפעילה. אותה מורה יכולה להופיע כמה פעמים — ליד כל שורה כתובים השיעור והקבוצה.
+            בכל שורה: מקצוע למעלה, ומתחת מורה, קבוצה, יום ושעה. אותה מורה יכולה להופיע כמה פעמים.
           </p>
 
           <div className="mt-4">
@@ -1211,13 +1214,10 @@ export function AttendanceBoard({
                   label="שיעור ביומן"
                   value={lessonId ?? ""}
                   onChange={(v) => updateFilter("lessonId", v || undefined)}
-                  options={scopedLessons.map((l) => ({
-                    value: l.id,
-                    label: formatLessonOptionLabel(l),
-                  }))}
+                  options={teacherLessonOptions}
                   emptyLabel={scopedLessons.length ? "כל השיעורים לפי הסינון" : "אין שיעורים לפי הסינון"}
                   placeholder="הקלידי שם שיעור…"
-                  maxSuggestions={Math.max(80, scopedLessons.length)}
+                  loading={isPending}
                 />
               )}
               {openFilters.includes("class") && (
@@ -1302,12 +1302,12 @@ export function AttendanceBoard({
           <p className="font-body-sm text-body-sm text-primary">
             היומן מציג רק שיעורים לפי הסינון הפעיל
             {selectedLessonMeta?.teacherName
-              ? ` · ${selectedLessonMeta.teacherName}`
+              ? ` · מורה: ${selectedLessonMeta.teacherName}`
               : teacherId
                 ? ` · מורה: ${teachers.find((t) => t.id === teacherId)?.name ?? ""}`
                 : ""}
-            {selectedLessonMeta?.subject ? ` · ${selectedLessonMeta.subject}` : ""}
-            {selectedLessonMeta?.groupLabel ? ` · ${selectedLessonMeta.groupLabel}` : ""}
+            {selectedLessonMeta?.subject ? ` · מקצוע: ${selectedLessonMeta.subject}` : ""}
+            {selectedLessonMeta?.groupLabel ? ` · קבוצה: ${selectedLessonMeta.groupLabel}` : ""}
             .
           </p>
           <Button
@@ -1328,7 +1328,20 @@ export function AttendanceBoard({
         </div>
       )}
 
-      <div className="grid grid-cols-1 items-start gap-gutter print:hidden xl:grid-cols-12">
+      <div className="relative grid grid-cols-1 items-start gap-gutter print:hidden xl:grid-cols-12">
+        {isPending ? (
+          <div
+            className="absolute inset-0 z-10 flex items-start justify-center rounded-xl bg-surface/70 pt-16 backdrop-blur-[1px]"
+            aria-live="polite"
+          >
+            <div className="rounded-xl border border-outline-variant/40 bg-surface-container-lowest px-4 py-3 shadow-tactile-md">
+              <CheckingStatus loading className="font-body-md text-body-md" />
+              <p className="mt-1 font-caption text-caption text-on-surface-variant">
+                טוענת את המורה, השיעור והיומן — הסימון שנשמר לא נמחק.
+              </p>
+            </div>
+          </div>
+        ) : null}
         <section className="order-2 rounded-xl border border-outline-variant/30 bg-surface-container-lowest p-3 shadow-tactile-md xl:order-1 xl:col-span-7">
           {lessonId && selectedLessonOccurrences.length > 0 && (
             <div className="mb-3 rounded-md border border-outline-variant/40 bg-surface-container-low/40 p-2">

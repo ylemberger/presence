@@ -4,7 +4,10 @@ import { useCallback, useEffect, useId, useMemo, useRef, useState } from "react"
 import { createPortal } from "react-dom";
 import { cn } from "@/lib/cn";
 import { Icon } from "@/components/ui/Icon";
+import { CheckingStatus } from "@/components/ui/CheckingStatus";
 import { fieldClass, fieldSizeClass, labelSizeClass } from "@/components/ui/Input";
+
+const SEARCH_DEBOUNCE_MS = 160;
 
 export type SearchMultiOption = {
   value: string;
@@ -46,8 +49,18 @@ export function SearchMultiSelect({
   const listRef = useRef<HTMLDivElement>(null);
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
+  const [debouncedQuery, setDebouncedQuery] = useState("");
   const [box, setBox] = useState<{ top: number; left: number; width: number } | null>(null);
   const labelMemory = useRef<Map<string, string>>(new Map());
+
+  useEffect(() => {
+    if (!query.trim()) {
+      setDebouncedQuery("");
+      return;
+    }
+    const timer = window.setTimeout(() => setDebouncedQuery(query), SEARCH_DEBOUNCE_MS);
+    return () => window.clearTimeout(timer);
+  }, [query]);
 
   useEffect(() => {
     for (const opt of options) labelMemory.current.set(opt.value, opt.label);
@@ -66,9 +79,10 @@ export function SearchMultiSelect({
   const selectedCount = values.length;
 
   const matches = useMemo(() => {
-    const q = query.trim().toLowerCase();
+    const q = debouncedQuery.trim().toLowerCase();
     return options.filter((opt) => optionMatches(opt, q));
-  }, [options, query]);
+  }, [options, debouncedQuery]);
+  const searching = open && query.trim().length > 0 && query.trim() !== debouncedQuery.trim();
 
   const closedLabel =
     selectedCount === 0
@@ -97,6 +111,7 @@ export function SearchMultiSelect({
       if (rootRef.current?.contains(target) || listRef.current?.contains(target)) return;
       setOpen(false);
       setQuery("");
+      setDebouncedQuery("");
     }
     document.addEventListener("mousedown", onDoc);
     return () => document.removeEventListener("mousedown", onDoc);
@@ -134,7 +149,11 @@ export function SearchMultiSelect({
               />
               הכל
             </label>
-            {options.length === 0 ? (
+            {searching ? (
+              <p className="px-3 py-2 font-caption text-caption">
+                <CheckingStatus query={query} />
+              </p>
+            ) : options.length === 0 ? (
               <p className="px-3 py-2 font-caption text-caption text-on-surface-variant">
                 אין אפשרויות לפי הסינון
               </p>
@@ -198,16 +217,19 @@ export function SearchMultiSelect({
           aria-expanded={open}
           aria-controls={listId}
           aria-autocomplete="list"
+          aria-busy={searching || undefined}
           className={cn(
             fieldClass,
             fieldSizeClass.md,
             "w-full pe-9",
-            selectedCount > 0 && !open && "border-primary font-medium"
+            selectedCount > 0 && !open && "border-primary font-medium",
+            searching && "border-primary"
           )}
           placeholder={placeholder}
           value={open ? query : closedLabel}
           onFocus={() => {
             setQuery("");
+            setDebouncedQuery("");
             setOpen(true);
             updateBox();
           }}
@@ -220,10 +242,15 @@ export function SearchMultiSelect({
             if (e.key === "Escape") {
               setOpen(false);
               setQuery("");
+              setDebouncedQuery("");
             }
           }}
         />
-        {selectedCount > 0 ? (
+        {searching ? (
+          <span className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-primary">
+            <Icon name="sync" className="animate-spin text-[16px]" />
+          </span>
+        ) : selectedCount > 0 ? (
           <button
             type="button"
             className="absolute left-2 top-1/2 -translate-y-1/2 rounded p-0.5 text-on-surface-variant hover:text-primary"

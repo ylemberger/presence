@@ -37,6 +37,7 @@
 - טיפוסים ב-`src/types/database.ts` — עדכן יחד עם מיגרציה.
 - רכיבי UI משותפים ב-`src/components/ui/`.
 - **יציבות UI:** שינוי עיצוב/חלון לא ישבור זרימות קיימות (יצירה/עריכה/סגירה). פירוט: [`.cursor/rules/ui-stability.mdc`](.cursor/rules/ui-stability.mdc).
+- **מהירות בלי לפספס שמירה:** מקצרים קריאה (רשימות, סינון). כתיבה למסד נשארת מלאה — `await`, בדיקת `error`, ספירת שורות. פירוט: [`.cursor/rules/speed-without-skipping-saves.mdc`](.cursor/rules/speed-without-skipping-saves.mdc) ו-[`.cursor/rules/complete-db-writes.mdc`](.cursor/rules/complete-db-writes.mdc).
 
 ## לפני שינוי
 

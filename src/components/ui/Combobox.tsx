@@ -4,6 +4,7 @@ import { useCallback, useEffect, useId, useMemo, useRef, useState } from "react"
 import { createPortal } from "react-dom";
 import { cn } from "@/lib/cn";
 import { Icon } from "@/components/ui/Icon";
+import { CheckingStatus } from "@/components/ui/CheckingStatus";
 import {
   fieldClass,
   fieldSizeClass,
@@ -12,6 +13,7 @@ import {
 } from "@/components/ui/Input";
 
 const MAX_SUGGESTIONS = 80;
+const SEARCH_DEBOUNCE_MS = 160;
 
 export type ComboboxOption = {
   value: string;
@@ -33,6 +35,7 @@ interface ComboboxProps {
   required?: boolean;
   maxSuggestions?: number;
   fieldSize?: FieldSize;
+  loading?: boolean;
 }
 
 function searchableText(opt: ComboboxOption) {
@@ -66,6 +69,7 @@ export function Combobox({
   required = false,
   maxSuggestions = MAX_SUGGESTIONS,
   fieldSize = "md",
+  loading = false,
 }: ComboboxProps) {
   const autoId = useId();
   const listId = `${autoId}-list`;
@@ -75,6 +79,7 @@ export function Combobox({
   const listRef = useRef<HTMLUListElement>(null);
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
+  const [debouncedQuery, setDebouncedQuery] = useState("");
   const [internal, setInternal] = useState(defaultValue);
   /** Chosen value shown immediately, until the parent props catch up after a fetch. */
   const [pending, setPending] = useState<string | null>(null);
@@ -82,6 +87,7 @@ export function Combobox({
   const [box, setBox] = useState<{ top: number; left: number; width: number } | null>(null);
   const labelMemory = useRef<Map<string, string>>(new Map());
   const selected = pending !== null ? pending : value !== undefined ? value : internal;
+  const waitingForParent = pending !== null && pending !== (value ?? "");
 
   useEffect(() => {
     for (const opt of options) labelMemory.current.set(opt.value, optionLabel(opt));
@@ -91,6 +97,15 @@ export function Combobox({
     if (pending !== null && value === pending) setPending(null);
   }, [pending, value]);
 
+  useEffect(() => {
+    if (!query.trim()) {
+      setDebouncedQuery("");
+      return;
+    }
+    const timer = window.setTimeout(() => setDebouncedQuery(query), SEARCH_DEBOUNCE_MS);
+    return () => window.clearTimeout(timer);
+  }, [query]);
+
   const matched = options.find((opt) => opt.value === selected);
   const selectedLabel = !selected
     ? emptyLabel
@@ -99,21 +114,25 @@ export function Combobox({
       : labelMemory.current.get(selected) ?? emptyLabel;
 
   const matches = useMemo(() => {
-    const q = query.trim().toLowerCase();
+    const q = debouncedQuery.trim().toLowerCase();
     if (!q) {
       return {
         shown: options.slice(0, maxSuggestions),
         extra: Math.max(0, options.length - maxSuggestions),
+        total: options.length,
       };
     }
     const rows = options.filter((o) => optionMatches(o, q));
     return {
       shown: rows.slice(0, maxSuggestions),
       extra: Math.max(0, rows.length - maxSuggestions),
+      total: rows.length,
     };
-  }, [options, query, maxSuggestions]);
+  }, [options, debouncedQuery, maxSuggestions]);
 
-  const showList = open && options.length > 0;
+  const searching = open && query.trim().length > 0 && query.trim() !== debouncedQuery.trim();
+  const busy = loading || waitingForParent;
+  const showList = open;
 
   const updateBox = useCallback(() => {
     const el = inputRef.current;
@@ -134,11 +153,13 @@ export function Combobox({
     if (picked) labelMemory.current.set(next, optionLabel(picked));
     onChange?.(next);
     setQuery("");
+    setDebouncedQuery("");
     setOpen(false);
   }
 
   function handleFocus() {
     setQuery("");
+    setDebouncedQuery("");
     setOpen(true);
     setHighlight(0);
     updateBox();
@@ -159,6 +180,7 @@ export function Combobox({
     if (e.key === "Escape") {
       setOpen(false);
       setQuery("");
+      setDebouncedQuery("");
       return;
     }
     if (e.key === "ArrowDown") {
@@ -180,6 +202,7 @@ export function Combobox({
       if (rootRef.current?.contains(target) || listRef.current?.contains(target)) return;
       setOpen(false);
       setQuery("");
+      setDebouncedQuery("");
     }
     document.addEventListener("mousedown", onDoc);
     return () => document.removeEventListener("mousedown", onDoc);
@@ -194,7 +217,10 @@ export function Combobox({
       window.removeEventListener("resize", updateBox);
       window.removeEventListener("scroll", updateBox, true);
     };
-  }, [showList, updateBox, query]);
+  }, [showList, updateBox, query, searching, busy]);
+
+  const statusCaption =
+    fieldSize === "lg" ? "font-body-md text-body-md" : "font-caption text-caption";
 
   const list =
     showList && box
@@ -211,16 +237,25 @@ export function Combobox({
               width: box.width,
             }}
           >
-            {matches.shown.length === 0 ? (
-              <li
-                className={cn(
-                  "px-3 py-2 text-on-surface-variant",
-                  fieldSize === "lg"
-                    ? "font-body-md text-body-md"
-                    : "font-caption text-caption"
-                )}
-              >
-                אין התאמה — המשיכי לכתוב
+            {(searching || busy) && (
+              <li className={cn("px-3 py-2", statusCaption)}>
+                <CheckingStatus
+                  loading={busy}
+                  query={searching ? query : undefined}
+                />
+              </li>
+            )}
+            {busy || searching ? (
+              <li className={cn("px-3 py-2 text-on-surface-variant", statusCaption)}>
+                {busy ? "הנתונים בדרך — רגע קטן." : "בודקת התאמות למה שהקלדת…"}
+              </li>
+            ) : matches.shown.length === 0 ? (
+              <li className={cn("px-3 py-2 text-on-surface-variant", statusCaption)}>
+                {query.trim()
+                  ? "אין התאמה — המשיכי לכתוב"
+                  : options.length
+                    ? emptyLabel || "הקלידי לחיפוש"
+                    : "אין אפשרויות לפי הסינון"}
               </li>
             ) : (
               matches.shown.map((opt, i) => (
@@ -257,13 +292,16 @@ export function Combobox({
                 </li>
               ))
             )}
-            {matches.extra > 0 && (
+            {!searching && !busy && query.trim() && matches.total > 0 && (
+              <li className={cn("px-3 py-1.5 text-on-surface-variant", statusCaption)}>
+                {matches.total} התאמות ל«{query.trim()}»
+              </li>
+            )}
+            {!searching && !busy && matches.extra > 0 && (
               <li
                 className={cn(
                   "border-t border-outline-variant/40 px-3 py-1.5 text-on-surface-variant",
-                  fieldSize === "lg"
-                    ? "font-body-md text-body-md"
-                    : "font-caption text-caption"
+                  statusCaption
                 )}
               >
                 עוד {matches.extra} — המשיכי לכתוב לצמצום
@@ -292,12 +330,14 @@ export function Combobox({
           aria-expanded={showList}
           aria-controls={listId}
           aria-autocomplete="list"
+          aria-busy={busy || searching || undefined}
           className={cn(
             fieldClass,
             fieldSizeClass[fieldSize],
             "w-full pe-9",
             selected && !query && "font-medium",
-            !selected && !open && "text-on-surface-variant"
+            !selected && !open && "text-on-surface-variant",
+            (busy || searching) && "border-primary"
           )}
           placeholder={placeholder}
           value={open ? query : selectedLabel}
@@ -305,7 +345,11 @@ export function Combobox({
           onChange={(e) => handleChange(e.target.value)}
           onKeyDown={handleKeyDown}
         />
-        {selected ? (
+        {busy || searching ? (
+          <span className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-primary">
+            <Icon name="sync" className="animate-spin text-[16px]" />
+          </span>
+        ) : selected ? (
           <button
             type="button"
             className="absolute left-2 top-1/2 -translate-y-1/2 rounded p-0.5 text-on-surface-variant hover:text-primary"
@@ -320,6 +364,9 @@ export function Combobox({
           </span>
         )}
       </div>
+      {busy && !open ? (
+        <CheckingStatus loading className="font-caption text-caption" />
+      ) : null}
       {list}
     </div>
   );

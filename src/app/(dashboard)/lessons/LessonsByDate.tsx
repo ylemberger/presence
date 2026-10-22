@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { usePendingRouter } from "@/lib/ui/nav-pending";
 import { HebrewMonthCalendar } from "@/components/ui/HebrewMonthCalendar";
 import { Icon } from "@/components/ui/Icon";
 import { Section } from "@/components/ui/Section";
@@ -50,7 +50,7 @@ export function LessonsByDate({
   cancelledDates,
   studyRanges,
 }: LessonsByDateProps) {
-  const router = useRouter();
+  const { push } = usePendingRouter();
   const today = todayIso();
   const weekday = DAY_OF_WEEK_LABELS[parseIsoDate(selectedDate).getDay()] ?? "";
   const holiday = holidayDates.includes(selectedDate);
@@ -60,7 +60,7 @@ export function LessonsByDate({
     if (!iso || iso === selectedDate) return;
     const params = new URLSearchParams(baseQuery);
     params.set("date", iso);
-    router.push(`/lessons?${params.toString()}`, { scroll: false });
+    push(`/lessons?${params.toString()}`, { scroll: false });
   }
 
   return (
