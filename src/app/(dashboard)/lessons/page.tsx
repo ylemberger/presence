@@ -37,6 +37,7 @@ import {
   uniqueTeachersByName,
 } from "@/lib/teachers/name-group";
 import { chunkIds, fetchAllPages, fetchAssignmentsByLessons } from "@/lib/supabase/paged";
+import { compareByFamilyName } from "@/lib/students/sort";
 import { buildHebrewMonth, hebrewMonthFromIso, parseIsoDate, todayIso } from "@/lib/dates/hebrew";
 import {
   holidayDatesByKind,
@@ -276,7 +277,7 @@ export default async function LessonsPage({ searchParams }: Props) {
         return s?.is_active ? ([s.id, { id: s.id, full_name: s.full_name }] as const) : null;
       })
       .filter((v): v is readonly [string, { id: string; full_name: string }] => Boolean(v))
-  ).values()].sort((a, b) => a.full_name.localeCompare(b.full_name, "he"));
+  ).values()].sort(compareByFamilyName);
 
   const markedByLesson = new Map<string, { id: string; date: string }[]>();
   const yearLessonIds = allLessons.map((l) => l.id);
@@ -447,13 +448,15 @@ export default async function LessonsPage({ searchParams }: Props) {
   );
   const sourcesByTeacher = groupSourceRowsByTeacher(sourceRows, identityToTeacherId);
 
-  const teachersForForm: LessonFormTeacher[] = (teachers.data ?? []).map((t) => ({
-    id: t.id,
-    full_name: t.full_name,
-    salaryAssignments: uniqueSalaryAssignments(
-      (sourcesByTeacher.get(t.id) ?? []).map((s) => salaryDisplayFields(s))
-    ),
-  }));
+  const teachersForForm: LessonFormTeacher[] = (teachers.data ?? [])
+    .map((t) => ({
+      id: t.id,
+      full_name: t.full_name,
+      salaryAssignments: uniqueSalaryAssignments(
+        (sourcesByTeacher.get(t.id) ?? []).map((s) => salaryDisplayFields(s))
+      ),
+    }))
+    .sort(compareByFamilyName);
 
   const formProps = {
     yearId: activeYear.id,

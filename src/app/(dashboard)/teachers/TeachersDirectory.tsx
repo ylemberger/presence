@@ -8,6 +8,7 @@ import { Icon } from "@/components/ui/Icon";
 import { Button } from "@/components/ui/Button";
 import { SearchMultiSelect } from "@/components/ui/SearchMultiSelect";
 import * as XLSX from "xlsx";
+import { compareByFamilyName } from "@/lib/students/sort";
 
 export type TeacherDirectoryRow = {
   id: string;
@@ -139,7 +140,7 @@ export function TeachersDirectory({
         .join(" ")
         .toLowerCase();
       return tokens.every((tok) => hay.includes(tok));
-    });
+    }).sort(compareByFamilyName);
   }, [teachers, query, kind, subjects, tracks, years, semesters]);
 
   const hasActiveFilter = Boolean(

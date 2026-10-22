@@ -25,6 +25,7 @@ import { ATTENDANCE_STATUS_LABELS, BILLING_TYPE_LABELS, DAY_OF_WEEK_LABELS } fro
 import { formatLessonHours } from "@/lib/lessons/hours";
 import { formatSubjectLessonLabel } from "@/lib/lessons/subject-label";
 import { audienceForLesson, audienceMapFromRows } from "@/lib/lessons/autoAssign";
+import { compareByFamilyName } from "@/lib/students/sort";
 
 interface Props {
   searchParams: {
@@ -226,7 +227,7 @@ export default async function ReportsPage({ searchParams }: Props) {
       chetz: Boolean(s.chetz_program),
     });
   }
-  filterStudents.sort((a, b) => a.full_name.localeCompare(b.full_name, "he"));
+  filterStudents.sort(compareByFamilyName);
 
   const filterLessons = (yearLessons ?? []).map((l) => {
     const audience = audienceForLesson(
@@ -591,7 +592,9 @@ export default async function ReportsPage({ searchParams }: Props) {
       }
 
       reportRows.sort((a, b) => b.absencePercent - a.absencePercent);
-      occurrenceStudentRows.sort((a, b) => a.studentName.localeCompare(b.studentName, "he"));
+      occurrenceStudentRows.sort((a, b) =>
+        compareByFamilyName({ full_name: a.studentName }, { full_name: b.studentName })
+      );
     }
 
     const lessonIdsToShow = new Set(lessonItems.keys());
@@ -775,7 +778,9 @@ export default async function ReportsPage({ searchParams }: Props) {
           classes={classes ?? []}
           tracks={tracks ?? []}
           specializations={specializations ?? []}
-          teachers={(teachers ?? []).map((t) => ({ id: t.id, name: t.full_name }))}
+          teachers={[...(teachers ?? [])]
+            .sort(compareByFamilyName)
+            .map((t) => ({ id: t.id, name: t.full_name }))}
           students={filterStudents}
           subjects={subjects}
           lessons={filterLessons}

@@ -1,4 +1,5 @@
 import { cache } from "react";
+import { compareByFamilyName } from "@/lib/students/sort";
 import { createClient } from "@/lib/supabase/server";
 import type { AcademicYear } from "@/types/database";
 
@@ -55,7 +56,9 @@ export const getYearCatalog = cache(async (academicYearId: string) => {
     classes: classes.data ?? [],
     tracks: tracks.data ?? [],
     specializations: specializations.data ?? [],
-    teachers: (teachers.data ?? []).map((t) => ({ id: t.id, name: t.full_name })),
+    teachers: (teachers.data ?? [])
+      .map((t) => ({ id: t.id, name: t.full_name }))
+      .sort(compareByFamilyName),
     rules: rules.data ?? [],
     grades: grades.data ?? [],
   };

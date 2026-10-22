@@ -35,6 +35,7 @@ import { ABSENCE_REASONS, type AbsenceReason } from "@/lib/attendance/reasons";
 import { Icon } from "@/components/ui/Icon";
 import { PrintButton } from "@/components/ui/PrintButton";
 import { AssignStudentToLesson } from "../lessons/AssignStudentToLesson";
+import { compareByFamilyName } from "@/lib/students/sort";
 import {
   AttendanceStatusPicker,
   type AttendancePickerPhase,
@@ -451,7 +452,10 @@ export function AttendanceBoard({
       .filter((l) => l.teacherId)
       .slice()
       .sort((a, b) => {
-        const byTeacher = (a.teacherName ?? "").localeCompare(b.teacherName ?? "", "he");
+        const byTeacher = compareByFamilyName(
+          { name: a.teacherName ?? "" },
+          { name: b.teacherName ?? "" }
+        );
         if (byTeacher) return byTeacher;
         return a.subject.localeCompare(b.subject, "he");
       })

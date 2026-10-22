@@ -15,6 +15,7 @@ import { PrintButton } from "@/components/ui/PrintButton";
 import { SeminarPrintHeader } from "@/components/print/SeminarPrintHeader";
 import * as XLSX from "xlsx";
 import { useRememberedText } from "@/lib/ui/remembered-text";
+import { compareStudentsByLastName, familySortKey } from "@/lib/students/sort";
 
 const PRINT_COLUMNS = [
   { id: "name", label: "שם", defaultOn: true },
@@ -60,7 +61,7 @@ const SORT_OPTIONS: { value: SortKey; label: string }[] = [
 function sortValue(s: StudentRow, key: SortKey): string {
   switch (key) {
     case "name":
-      return `${s.last_name} ${s.first_name}`.trim() || s.full_name;
+      return familySortKey(s);
     case "identity":
       return s.identity_number;
     case "grade":
@@ -487,7 +488,7 @@ export function StudentsDirectory({
         sensitivity: "base",
       });
       if (cmp !== 0) return cmp * dir;
-      return a.full_name.localeCompare(b.full_name, "he") * dir;
+      return compareStudentsByLastName(a, b) * dir;
     });
   }, [filtered, sortKey, sortDir]);
 

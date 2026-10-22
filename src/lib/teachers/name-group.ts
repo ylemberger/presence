@@ -1,3 +1,5 @@
+import { compareByFamilyName } from "@/lib/students/sort";
+
 export type NamedTeacher = { id: string; full_name: string };
 
 /** Same person may arrive once per salary subject. Group by the stored full name. */
@@ -14,8 +16,7 @@ export function uniqueTeachersByName(
   teachers: NamedTeacher[]
 ): { id: string; name: string }[] {
   const sorted = [...teachers].sort(
-    (a, b) =>
-      a.full_name.localeCompare(b.full_name, "he") || a.id.localeCompare(b.id)
+    (a, b) => compareByFamilyName(a, b) || a.id.localeCompare(b.id)
   );
   const seen = new Set<string>();
   const options: { id: string; name: string }[] = [];
@@ -25,7 +26,7 @@ export function uniqueTeachersByName(
     seen.add(key);
     options.push({ id: teacher.id, name: displayTeacherName(teacher.full_name) });
   }
-  return options.sort((a, b) => a.name.localeCompare(b.name, "he"));
+  return options.sort((a, b) => compareByFamilyName({ name: a.name }, { name: b.name }));
 }
 
 /** Every teacher row that shares the selected person's name, including the selected id. */

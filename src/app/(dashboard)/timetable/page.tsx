@@ -10,6 +10,7 @@ import { formatSubjectLessonLabel } from "@/lib/lessons/subject-label";
 import { Section } from "@/components/ui/Section";
 import { Icon } from "@/components/ui/Icon";
 import { embeddedTeacher, embedOne } from "@/lib/supabase/embed";
+import { compareByFamilyName } from "@/lib/students/sort";
 import {
   audienceForLesson,
   audienceMapFromRows,
@@ -385,8 +386,12 @@ export default async function TimetablePage({ searchParams }: Props) {
           classes={(classes ?? []).map((c: any) => ({ id: c.id, name: c.name }))}
           tracks={(tracks ?? []).map((t: any) => ({ id: t.id, name: t.name }))}
           specializations={(specializations ?? []).map((s: any) => ({ id: s.id, name: s.name }))}
-          teachers={(teachers ?? []).map((t: any) => ({ id: t.id, name: t.full_name }))}
-          students={(students ?? []).map((s: any) => ({ id: s.id, full_name: s.full_name }))}
+          teachers={[...(teachers ?? [])]
+            .sort(compareByFamilyName)
+            .map((t: { id: string; full_name: string }) => ({ id: t.id, name: t.full_name }))}
+          students={[...(students ?? [])]
+            .sort(compareByFamilyName)
+            .map((s: { id: string; full_name: string }) => ({ id: s.id, full_name: s.full_name }))}
           subjects={subjects}
           activityRanges={(activityRanges ?? []).map((r: any) => ({ id: r.id, name: r.name }))}
           defaults={{
