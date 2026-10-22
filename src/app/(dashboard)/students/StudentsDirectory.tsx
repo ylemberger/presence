@@ -15,7 +15,7 @@ import { PrintButton } from "@/components/ui/PrintButton";
 import { SeminarPrintHeader } from "@/components/print/SeminarPrintHeader";
 import * as XLSX from "xlsx";
 import { useRememberedText } from "@/lib/ui/remembered-text";
-import { compareStudentsByLastName, familySortKey } from "@/lib/students/sort";
+import { compareStudentsByLastName, displayFamilyThenGiven, familySortKey } from "@/lib/students/sort";
 
 const PRINT_COLUMNS = [
   { id: "name", label: "שם", defaultOn: true },
@@ -84,7 +84,7 @@ function sortValue(s: StudentRow, key: SortKey): string {
 function printCell(s: StudentRow, id: PrintColId): string {
   switch (id) {
     case "name":
-      return `${s.first_name || s.full_name.split(" ")[0]} ${s.last_name}`.trim();
+      return displayFamilyThenGiven(s);
     case "identity":
       return s.identity_number;
     case "grade":
@@ -164,11 +164,11 @@ function StudentNameCell({
         className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-primary text-caption font-bold text-white"
         aria-hidden
       >
-        {(s.first_name || s.full_name).slice(0, 1)}
+        {(displayFamilyThenGiven(s) || s.full_name).slice(0, 1)}
       </span>
       <span className="min-w-0">
         <span className="block break-words font-label-md text-label-md text-primary">
-          {s.first_name || s.full_name.split(" ")[0]} {s.last_name}
+          {displayFamilyThenGiven(s)}
           {s.mi ? (
             <span className="ms-1 font-caption text-caption text-on-surface-variant">
               {s.mi}
@@ -706,6 +706,11 @@ export function StudentsDirectory({
             value={query}
             onChange={(e) => setQuery(e.target.value)}
           />
+          {query.trim() ? (
+            <p className="font-caption text-caption text-primary" aria-live="polite">
+              מחפשת «{query.trim()}» · {filtered.length} תלמידות
+            </p>
+          ) : null}
 
         <div>
           <p className="mb-2 font-label-md text-label-md text-primary">שיבוץ</p>

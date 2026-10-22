@@ -35,6 +35,18 @@ export function familySortKey(person: NamedPerson): string {
   return `${lastNameOf(person)} ${firstNameOf(person)}`.trim();
 }
 
+/** Family name, then given name. A stored full name uses the second word as the family name. */
+export function displayFamilyThenGiven(person: NamedPerson): string {
+  const explicitLast = (person.last_name ?? "").trim();
+  const explicitFirst = (person.first_name ?? "").trim();
+  if (explicitLast || explicitFirst) {
+    return [explicitLast, explicitFirst].filter(Boolean).join(" ");
+  }
+  const parts = storedName(person).split(/\s+/).filter(Boolean);
+  if (parts.length < 2) return parts[0] ?? "";
+  return [parts[1], parts[0], ...parts.slice(2)].join(" ");
+}
+
 function lastNameOf(person: NamedPerson): string {
   const explicit = (person.last_name ?? "").trim();
   if (explicit) return explicit;

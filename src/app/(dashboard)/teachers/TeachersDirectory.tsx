@@ -8,7 +8,7 @@ import { Icon } from "@/components/ui/Icon";
 import { Button } from "@/components/ui/Button";
 import { SearchMultiSelect } from "@/components/ui/SearchMultiSelect";
 import * as XLSX from "xlsx";
-import { compareByFamilyName } from "@/lib/students/sort";
+import { compareByFamilyName, displayFamilyThenGiven } from "@/lib/students/sort";
 
 export type TeacherDirectoryRow = {
   id: string;
@@ -67,7 +67,7 @@ function uniqueLabels(rows: TeacherDirectoryRow[], pick: (row: TeacherDirectoryR
 function exportCell(row: TeacherDirectoryRow, id: ExportColId): string {
   switch (id) {
     case "name":
-      return row.full_name;
+      return displayFamilyThenGiven(row);
     case "identity":
       return row.identity_number === "—" ? "" : row.identity_number;
     case "phone":
@@ -239,9 +239,15 @@ export function TeachersDirectory({
                 value={query}
                 onChange={(e) => setQuery(e.target.value)}
                 placeholder="שם, טלפון, מקצוע, מסלול או שנה"
+                aria-busy={Boolean(query.trim()) || undefined}
                 className="w-full rounded-full border border-outline bg-surface-container-lowest py-2 pl-4 pr-10 font-body-md text-body-md text-on-surface placeholder:text-on-surface-variant focus:border-primary focus:outline-none focus:ring-0"
               />
             </div>
+            {query.trim() ? (
+              <p className="font-caption text-caption text-primary" aria-live="polite">
+                מחפשת «{query.trim()}» · {filtered.length} מורות
+              </p>
+            ) : null}
             <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
               <SearchMultiSelect
                 label="מקצועות"
@@ -336,7 +342,7 @@ export function TeachersDirectory({
                     href={`/teachers/${t.id}`}
                     className="break-words font-body-md text-body-md text-primary hover:underline"
                   >
-                    {t.full_name}
+                    {displayFamilyThenGiven(t)}
                   </Link>
                   <div className="mt-0.5 break-all font-caption text-caption text-on-surface-variant" dir="ltr">
                     {t.identity_number}
@@ -375,7 +381,7 @@ export function TeachersDirectory({
                   <Link
                     href={`/teachers/${t.id}`}
                     className="inline-flex items-center rounded p-1 text-primary-container transition-colors hover:bg-surface-variant hover:text-primary"
-                    aria-label={`עריכת ${t.full_name}`}
+                    aria-label={`עריכת ${displayFamilyThenGiven(t)}`}
                   >
                     <Icon name="edit" className="text-[20px]" />
                   </Link>
