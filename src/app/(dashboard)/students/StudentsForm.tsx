@@ -3,6 +3,7 @@
 import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/Button";
+import { ActionSubmitButton } from "@/components/ui/ActionSubmitButton";
 import { Combobox } from "@/components/ui/Combobox";
 import { Input } from "@/components/ui/Input";
 import { HebrewDateInput } from "@/components/ui/HebrewDateInput";
@@ -31,6 +32,7 @@ export function StudentsForm({
   const router = useRouter();
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const [saved, setSaved] = useState(false);
   const [gradeId, setGradeId] = useState("");
   const [classId, setClassId] = useState("");
 
@@ -55,6 +57,7 @@ export function StudentsForm({
     e.preventDefault();
     const form = e.currentTarget;
     setLoading(true);
+    setSaved(false);
     setError(null);
     try {
       const fd = new FormData(form);
@@ -69,8 +72,9 @@ export function StudentsForm({
       form.reset();
       setGradeId("");
       setClassId("");
+      setSaved(true);
       router.refresh();
-      onSuccess?.();
+      window.setTimeout(() => onSuccess?.(), 900);
     } catch (err) {
       setError(err instanceof Error ? err.message : "שמירה נכשלה");
     } finally {
@@ -209,9 +213,14 @@ export function StudentsForm({
             ביטול
           </Button>
         )}
-        <Button type="submit" disabled={loading || missingStructure}>
-          {loading ? "שומר..." : "שמירת תלמידה"}
-        </Button>
+        <ActionSubmitButton
+          loading={loading}
+          saved={saved}
+          idleLabel="שמירת תלמידה"
+          loadingLabel="שומרת…"
+          savedLabel="נשמר"
+          disabled={missingStructure}
+        />
       </div>
     </form>
   );

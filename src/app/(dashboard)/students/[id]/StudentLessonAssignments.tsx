@@ -3,6 +3,7 @@
 import { useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/Button";
+import { ActionSubmitButton } from "@/components/ui/ActionSubmitButton";
 import { Combobox } from "@/components/ui/Combobox";
 import { HebrewDateInput } from "@/components/ui/HebrewDateInput";
 import { DeleteButton } from "@/components/ui/DeleteButton";
@@ -50,6 +51,7 @@ export function StudentLessonAssignments({
   const [pendingForm, setPendingForm] = useState<FormData | null>(null);
   const savingRef = useRef(false);
   const [saving, setSaving] = useState(false);
+  const [saved, setSaved] = useState(false);
 
   const today = todayIso();
   const currentAssignments = assignments.filter(
@@ -63,6 +65,7 @@ export function StudentLessonAssignments({
     if (savingRef.current) return false;
     savingRef.current = true;
     setSaving(true);
+    setSaved(false);
     if (force) fd.set("force_mismatch", "1");
     else fd.delete("force_mismatch");
 
@@ -95,6 +98,7 @@ export function StudentLessonAssignments({
     setError(null);
     setMismatchWarning(null);
     setPendingForm(null);
+    setSaved(true);
     router.refresh();
     return true;
   }
@@ -132,10 +136,15 @@ export function StudentLessonAssignments({
           <HebrewDateInput label="מתאריך" name="start_date" required />
           <HebrewDateInput label="עד תאריך" name="end_date" allowEmpty />
         </div>
-        <Button type="submit" className="mt-2 w-full" disabled={saving}>
-          <Icon name="add" className="text-[18px]" />
-          {saving ? "שומרת…" : "שיוך לשיעור"}
-        </Button>
+        <ActionSubmitButton
+          className="mt-2 w-full"
+          loading={saving}
+          saved={saved}
+          idleLabel="שיוך לשיעור"
+          loadingLabel="שומרת…"
+          savedLabel="נשמר"
+          idleIcon="add"
+        />
       </form>
       ) : null}
 

@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { useAccess } from "@/components/auth/AccessProvider";
 import { Button } from "@/components/ui/Button";
+import { ActionSubmitButton } from "@/components/ui/ActionSubmitButton";
 import { Icon } from "@/components/ui/Icon";
 import { updateStudentPersonalNoteAction } from "../../actions";
 
@@ -38,8 +39,8 @@ export function StudentPersonalNote({
         return;
       }
       setSaved(true);
-      setEditing(false);
       router.refresh();
+      window.setTimeout(() => setEditing(false), 900);
     } catch (err) {
       setError(err instanceof Error ? err.message : "שמירה נכשלה");
     } finally {
@@ -99,15 +100,19 @@ export function StudentPersonalNote({
         className="w-full rounded-lg border border-outline-variant bg-surface-container-lowest px-3.5 py-2.5 font-body-md text-body-md text-on-surface shadow-tactile-sm placeholder:text-on-surface-variant/70 focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
       />
       <div className="flex flex-wrap items-center gap-2">
-        <Button type="submit" size="sm" disabled={loading}>
-          {loading ? "שומר..." : "שמירה"}
-        </Button>
+        <ActionSubmitButton
+          size="sm"
+          loading={loading}
+          saved={saved}
+          idleLabel="שמירה"
+          loadingLabel="שומרת…"
+          savedLabel="נשמר"
+        />
         {compact && (
           <Button type="button" size="sm" variant="secondary" onClick={() => setEditing(false)}>
             ביטול
           </Button>
         )}
-        {saved && <p className="font-body-sm text-body-sm text-primary">נשמר.</p>}
         {error && (
           <p className="font-body-sm text-body-sm text-error" role="alert">
             {error}

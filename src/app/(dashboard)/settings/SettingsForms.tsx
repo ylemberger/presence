@@ -3,13 +3,13 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/Button";
+import { ActionSubmitButton } from "@/components/ui/ActionSubmitButton";
 import { Input, Select } from "@/components/ui/Input";
 import { HebrewDateRangePicker } from "@/components/ui/HebrewDateRangePicker";
 import { RANGE_TYPE_LABELS } from "@/lib/constants";
 import { FIXED_GRADE_NAMES } from "@/lib/years/grades";
 import type { Grade } from "@/types/database";
 import { useAccess } from "@/components/auth/AccessProvider";
-import { Icon } from "@/components/ui/Icon";
 
 interface SettingsFormsProps {
   type: string;
@@ -23,12 +23,14 @@ export function SettingsForms({ type, yearId, grades, createAction }: SettingsFo
   const router = useRouter();
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const [saved, setSaved] = useState(false);
   if (!canWrite) return null;
 
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
     const form = e.currentTarget;
     setLoading(true);
+    setSaved(false);
     setError(null);
     try {
       const formData = new FormData(form);
@@ -39,6 +41,7 @@ export function SettingsForms({ type, yearId, grades, createAction }: SettingsFo
         return;
       }
       form.reset();
+      setSaved(true);
       await router.refresh();
     } catch (err) {
       setError(err instanceof Error ? err.message : "שמירה נכשלה");
@@ -148,10 +151,14 @@ export function SettingsForms({ type, yearId, grades, createAction }: SettingsFo
       )}
 
       {(type !== "grade" || missingGrades.length > 0) && (
-        <Button type="submit" disabled={loading}>
-          <Icon name="add" className="text-[18px]" />
-          {loading ? "מוסיף..." : "הוספה"}
-        </Button>
+        <ActionSubmitButton
+          loading={loading}
+          saved={saved}
+          idleLabel="הוספה"
+          loadingLabel="מוסיפה…"
+          savedLabel="נשמר"
+          idleIcon="add"
+        />
       )}
       {error && (
         <p className="w-full rounded-lg bg-error-container/60 px-3 py-2 text-body-sm text-on-error-container">

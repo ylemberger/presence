@@ -3,6 +3,7 @@
 import { useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/Button";
+import { ActionSubmitButton } from "@/components/ui/ActionSubmitButton";
 import { Combobox } from "@/components/ui/Combobox";
 import { HebrewDateInput } from "@/components/ui/HebrewDateInput";
 import { createStudentLessonAssignmentAction } from "../actions";
@@ -25,6 +26,7 @@ export function AssignStudentToLesson({
   const [mismatchWarning, setMismatchWarning] = useState<string | null>(null);
   const [pendingForm, setPendingForm] = useState<FormData | null>(null);
   const [saving, setSaving] = useState(false);
+  const [saved, setSaved] = useState(false);
   const savingRef = useRef(false);
   if (!canWrite) return null;
 
@@ -35,6 +37,7 @@ export function AssignStudentToLesson({
     if (force) fd.set("force_mismatch", "1");
     else fd.delete("force_mismatch");
     setSaving(true);
+    setSaved(false);
     let result: Awaited<ReturnType<typeof createStudentLessonAssignmentAction>>;
     try {
       result = await createStudentLessonAssignmentAction(fd);
@@ -63,8 +66,9 @@ export function AssignStudentToLesson({
     setError(null);
     setMismatchWarning(null);
     setPendingForm(null);
-    setOpen(false);
+    setSaved(true);
     router.refresh();
+    window.setTimeout(() => setOpen(false), 900);
     return true;
   }
 
@@ -122,9 +126,14 @@ export function AssignStudentToLesson({
         </div>
       )}
       <div className="mt-3 flex flex-wrap gap-2">
-        <Button type="submit" size="sm" disabled={saving}>
-          {saving ? "שומרת…" : "שמירה"}
-        </Button>
+        <ActionSubmitButton
+          size="sm"
+          loading={saving}
+          saved={saved}
+          idleLabel="שמירה"
+          loadingLabel="שומרת…"
+          savedLabel="נשמר"
+        />
         <Button type="button" size="sm" variant="secondary" onClick={() => setOpen(false)}>
           ביטול
         </Button>

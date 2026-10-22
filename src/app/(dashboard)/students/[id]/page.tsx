@@ -934,11 +934,6 @@ export default async function StudentDetailPage({ params }: Props) {
               className="print:hidden"
             >
               <StudentDetailForms
-                key={
-                  currentAssignmentRow
-                    ? `${currentAssignmentRow.id}:${currentAssignmentRow.specialization_id}:${currentAssignmentRow.class_id}`
-                    : "none"
-                }
                 studentId={id}
                 yearData={yearData}
                 current={

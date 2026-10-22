@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/Button";
+import { ActionSubmitButton } from "@/components/ui/ActionSubmitButton";
 import { Input } from "@/components/ui/Input";
 import { HebrewDateInput } from "@/components/ui/HebrewDateInput";
 import { updateStudentAction } from "../../actions";
@@ -40,10 +41,12 @@ export function StudentEditDetails({
   const [open, setOpen] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const [saved, setSaved] = useState(false);
 
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
     setError(null);
+    setSaved(false);
     setLoading(true);
     try {
       const result = await updateStudentAction(studentId, new FormData(e.currentTarget));
@@ -51,8 +54,9 @@ export function StudentEditDetails({
         setError(result.error);
         return;
       }
-      setOpen(false);
+      setSaved(true);
       router.refresh();
+      window.setTimeout(() => setOpen(false), 900);
     } catch (err) {
       setError(err instanceof Error ? err.message : "שמירה נכשלה");
     } finally {
@@ -135,9 +139,14 @@ export function StudentEditDetails({
         </p>
       )}
       <div className="flex flex-wrap gap-2">
-        <Button type="submit" size="sm" disabled={loading}>
-          {loading ? "שומר..." : "שמירת פרטים"}
-        </Button>
+        <ActionSubmitButton
+          size="sm"
+          loading={loading}
+          saved={saved}
+          idleLabel="שמירת פרטים"
+          loadingLabel="שומרת…"
+          savedLabel="נשמר"
+        />
         <Button type="button" size="sm" variant="ghost" onClick={() => setOpen(false)} disabled={loading}>
           ביטול
         </Button>

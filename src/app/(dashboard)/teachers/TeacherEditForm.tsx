@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { updateTeacherAction } from "../actions";
-import { Button } from "@/components/ui/Button";
+import { ActionSubmitButton } from "@/components/ui/ActionSubmitButton";
 import { Input } from "@/components/ui/Input";
 
 interface TeacherEditFormProps {
@@ -57,12 +57,13 @@ export function TeacherEditForm({ teacherId, fullName, phone, email }: TeacherEd
         defaultValue={email ?? ""}
         dir="ltr"
       />
-      <Button type="submit" disabled={loading}>
-        {loading ? "שומר..." : "שמור פרטים"}
-      </Button>
-      {saved && (
-        <p className="font-body-md text-body-md text-primary">הפרטים נשמרו.</p>
-      )}
+      <ActionSubmitButton
+        loading={loading}
+        saved={saved}
+        idleLabel="שמור פרטים"
+        loadingLabel="שומרת…"
+        savedLabel="נשמר"
+      />
       {error && (
         <p className="text-body-md text-error" role="alert">
           {error}

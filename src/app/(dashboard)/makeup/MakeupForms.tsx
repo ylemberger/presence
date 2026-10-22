@@ -2,12 +2,11 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { Button } from "@/components/ui/Button";
+import { ActionSubmitButton } from "@/components/ui/ActionSubmitButton";
 import { Combobox } from "@/components/ui/Combobox";
 import { Input, Select } from "@/components/ui/Input";
 import { upsertMakeupExamAction, updateMakeupExamAction } from "../actions";
 import { useAccess } from "@/components/auth/AccessProvider";
-import { Icon } from "@/components/ui/Icon";
 
 interface Props {
   yearId: string;
@@ -37,12 +36,14 @@ export function MakeupForms({
   const router = useRouter();
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const [saved, setSaved] = useState(false);
   if (!canWrite) return null;
 
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
     const form = e.currentTarget;
     setLoading(true);
+    setSaved(false);
     setError(null);
     try {
       const fd = new FormData(form);
@@ -55,8 +56,12 @@ export function MakeupForms({
       const result = editId
         ? await updateMakeupExamAction(editId, fd)
         : await upsertMakeupExamAction(fd);
-      if (result && "error" in result && result.error) setError(result.error);
-      else router.refresh();
+      if (result && "error" in result && result.error) {
+        setError(result.error);
+        return;
+      }
+      setSaved(true);
+      router.refresh();
     } catch (err) {
       setError(err instanceof Error ? err.message : "שמירה נכשלה");
     } finally {
@@ -95,10 +100,15 @@ export function MakeupForms({
             { value: "blocked", label: "חסום" },
           ]}
         />
-        <Button type="submit" size="sm" disabled={loading}>
-          <Icon name="save" className="text-[16px]" />
-          עדכון
-        </Button>
+        <ActionSubmitButton
+          size="sm"
+          loading={loading}
+          saved={saved}
+          idleLabel="עדכון"
+          loadingLabel="שומרת…"
+          savedLabel="נשמר"
+          idleIcon="save"
+        />
         {error && (
           <p className="w-full rounded-lg bg-error-container/60 px-2 py-1 font-caption text-caption text-on-error-container">
             {error}
@@ -111,10 +121,15 @@ export function MakeupForms({
   if (preset) {
     return (
       <form onSubmit={handleSubmit}>
-        <Button type="submit" size="sm" disabled={loading}>
-          <Icon name="playlist_add" className="text-[16px]" />
-          {loading ? "..." : "שבץ"}
-        </Button>
+        <ActionSubmitButton
+          size="sm"
+          loading={loading}
+          saved={saved}
+          idleLabel="שבץ"
+          loadingLabel="שומרת…"
+          savedLabel="נשמר"
+          idleIcon="playlist_add"
+        />
         {error && (
           <p className="mt-1 font-caption text-caption text-error">{error}</p>
         )}
@@ -146,10 +161,15 @@ export function MakeupForms({
         max={4}
         defaultValue={1}
       />
-      <Button type="submit" disabled={loading} className="mt-1 w-full">
-        <Icon name="post_add" className="text-[18px]" />
-        {loading ? "שומר..." : "צור מבחן"}
-      </Button>
+      <ActionSubmitButton
+        className="mt-1 w-full"
+        loading={loading}
+        saved={saved}
+        idleLabel="צור מבחן"
+        loadingLabel="שומרת…"
+        savedLabel="נשמר"
+        idleIcon="post_add"
+      />
       {error && (
         <p className="rounded-lg bg-error-container/60 px-3 py-2 font-body-sm text-body-sm text-on-error-container">
           {error}
