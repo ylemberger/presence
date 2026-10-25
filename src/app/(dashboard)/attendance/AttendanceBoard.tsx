@@ -316,7 +316,7 @@ export function AttendanceBoard({
   const activeLesson = dayOccurrences.find((o) => o.id === activeOccurrenceId);
 
   useEffect(() => {
-    if (!canWrite || !activeLesson) return;
+    if (!canWrite || !activeLesson || lessonStudents.length > 0) return;
     const lessonIdToSync = activeLesson.lessonId;
     if (autoSyncedLesson.current === lessonIdToSync) return;
     autoSyncedLesson.current = lessonIdToSync;
@@ -326,7 +326,7 @@ export function AttendanceBoard({
         router.refresh();
       }
     })();
-  }, [canWrite, activeLesson, yearId, router]);
+  }, [canWrite, activeLesson, yearId, router, lessonStudents.length]);
 
   useEffect(() => {
     setNote(noteBody);
@@ -1385,16 +1385,8 @@ export function AttendanceBoard({
 
       <div className="relative grid grid-cols-1 items-start gap-gutter print:hidden xl:grid-cols-12">
         {isPending ? (
-          <div
-            className="pointer-events-none absolute inset-0 z-10 flex items-start justify-center rounded-xl bg-surface/50 pt-16"
-            aria-live="polite"
-          >
-            <div className="rounded-xl border border-outline-variant/40 bg-surface-container-lowest px-4 py-3 shadow-tactile-md">
-              <CheckingStatus loading className="font-body-md text-body-md" />
-              <p className="mt-1 font-caption text-caption text-on-surface-variant">
-                טוענת את המורה, השיעור והיומן — הסימון שנשמר לא נמחק.
-              </p>
-            </div>
+          <div className="pointer-events-none absolute inset-x-0 top-0 z-10 flex justify-center pt-2" aria-live="polite">
+            <CheckingStatus loading className="rounded-full bg-surface-container-lowest/90 px-3 py-1 font-caption text-caption shadow-tactile-sm" />
           </div>
         ) : null}
         <section className="order-2 rounded-xl border border-outline-variant/30 bg-surface-container-lowest p-3 shadow-tactile-md xl:order-1 xl:col-span-7">
@@ -1816,7 +1808,6 @@ export function AttendanceBoard({
                         (confirmed ? "bg-error-container/35" : "bg-error-container/15"),
                       !status &&
                         "border-outline-variant/40 bg-surface-container-lowest opacity-90 hover:border-secondary/40",
-                      pending && "attendance-pending",
                       focused && "ring-2 ring-secondary/40"
                     )}
                   >

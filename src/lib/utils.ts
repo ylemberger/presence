@@ -1,6 +1,7 @@
 import { cache } from "react";
 import { compareByFamilyName } from "@/lib/students/sort";
 import { createClient } from "@/lib/supabase/server";
+import { readShellCache, writeShellCache } from "@/lib/attendance/shell-cache";
 import type { AcademicYear } from "@/types/database";
 
 /** Deduped per request — layout + page often both need the active year. */
@@ -35,6 +36,16 @@ export async function setActiveAcademicYear(yearId: string) {
 
 /** Static year catalog — deduped per request across attendance/reports/dashboard. */
 export const getYearCatalog = cache(async (academicYearId: string) => {
+  const cacheKey = `year-catalog:${academicYearId}`;
+  const cached = readShellCache<
+    Awaited<ReturnType<typeof loadYearCatalog>>
+  >(cacheKey);
+  if (cached) return cached;
+  const loaded = await loadYearCatalog(academicYearId);
+  return writeShellCache(cacheKey, loaded);
+});
+
+async function loadYearCatalog(academicYearId: string) {
   const supabase = await createClient();
   const [classes, tracks, specializations, teachers, rules, grades] = await Promise.all([
     supabase.from("classes").select("id, name").eq("academic_year_id", academicYearId).order("name"),
@@ -62,4 +73,4 @@ export const getYearCatalog = cache(async (academicYearId: string) => {
     rules: rules.data ?? [],
     grades: grades.data ?? [],
   };
-});
+}

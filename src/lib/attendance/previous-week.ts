@@ -1,6 +1,7 @@
 import { addDays, isDateInRange, startOfWeekSunday } from "@/lib/dates/hebrew";
 import { embedOne } from "@/lib/supabase/embed";
 import { fetchAssignmentsByLessons } from "@/lib/supabase/paged";
+import { readShellCache, writeShellCache } from "@/lib/attendance/shell-cache";
 import type { createClient } from "@/lib/supabase/server";
 
 type Supabase = Awaited<ReturnType<typeof createClient>>;
@@ -32,12 +33,16 @@ export async function findIncompletePreviousWeekOccurrences(
   supabase: Supabase,
   occurrenceId: string
 ): Promise<IncompletePreviousOccurrence[]> {
+  const cacheKey = `prev-week:${occurrenceId}`;
+  const cached = readShellCache<IncompletePreviousOccurrence[]>(cacheKey, 20_000);
+  if (cached) return cached;
+
   const { data: current, error } = await supabase
     .from("lesson_occurrences")
     .select("id, lesson_id, occurrence_date")
     .eq("id", occurrenceId)
     .maybeSingle();
-  if (error || !current) return [];
+  if (error || !current) return writeShellCache(cacheKey, []);
 
   const { start, end } = previousWeekRange(current.occurrence_date);
   const { data: prevOccs } = await supabase
@@ -48,7 +53,7 @@ export async function findIncompletePreviousWeekOccurrences(
     .lte("occurrence_date", end)
     .neq("status", "cancelled");
 
-  if (!prevOccs?.length) return [];
+  if (!prevOccs?.length) return writeShellCache(cacheKey, []);
 
   const lessonId = current.lesson_id;
   const occIds = prevOccs.map((o) => o.id);
@@ -92,7 +97,10 @@ export async function findIncompletePreviousWeekOccurrences(
     }
   }
 
-  return incomplete.sort((a, b) => a.date.localeCompare(b.date));
+  return writeShellCache(
+    cacheKey,
+    incomplete.sort((a, b) => a.date.localeCompare(b.date))
+  );
 }
 
 /** Incomplete previous-week rows that still block marking (not marked "continued"). */

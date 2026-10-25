@@ -238,16 +238,14 @@ body {
   0%,
   100% {
     opacity: 1;
-    filter: saturate(1) brightness(1);
   }
   50% {
-    opacity: 0.48;
-    filter: saturate(1.15) brightness(1.08);
+    opacity: 0.88;
   }
 }
 
 .attendance-pending {
-  animation: attendancePending 0.55s ease-in-out infinite;
+  animation: attendancePending 1.8s ease-in-out infinite;
 }
 
 @media (prefers-reduced-motion: reduce) {

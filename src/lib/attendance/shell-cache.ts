@@ -38,4 +38,5 @@ export function bustAttendanceShellCache() {
 /** Call after attendance writes so the sidebar badge is not stale. */
 export function bustPendingAttendanceCache() {
   deleteKeysWithPrefix("pending:");
+  deleteKeysWithPrefix("prev-week:");
 }
