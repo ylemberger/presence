@@ -2883,8 +2883,15 @@ export async function deleteAttendancePoolAction(poolId: string) {
   return { success: true };
 }
 
-type AttendanceWriteOptions = {
-  /** Default true. Cell-by-cell fill skips the complete scan and page refresh. */
+type AttendanceMarkInput = {
+  studentId: string;
+  occurrenceId: string;
+  status: AttendanceStatus;
+  reason?: string | null;
+};
+
+type AttendanceWritePayload = {
+  updates: AttendanceMarkInput[];
   refresh?: boolean;
   skipPreviousWeek?: boolean;
 };
@@ -2894,29 +2901,29 @@ export async function upsertAttendanceAction(
   occurrenceId: string,
   status: AttendanceStatus,
   reason?: string | null,
-  options?: AttendanceWriteOptions
+  options?: { refresh?: boolean; skipPreviousWeek?: boolean }
 ) {
-  return bulkAttendanceAction(
-    [{ studentId, occurrenceId, status, reason }],
-    options
-  );
+  return bulkAttendanceAction({
+    updates: [{ studentId, occurrenceId, status, reason }],
+    refresh: options?.refresh,
+    skipPreviousWeek: options?.skipPreviousWeek,
+  });
 }
 
 export async function bulkAttendanceAction(
-  updates: {
-    studentId: string;
-    occurrenceId: string;
-    status: AttendanceStatus;
-    reason?: string | null;
-  }[]
-  ,
-  options?: AttendanceWriteOptions
+  input: AttendanceMarkInput[] | AttendanceWritePayload
 ) {
+  const payload: AttendanceWritePayload = Array.isArray(input)
+    ? { updates: input, refresh: true }
+    : input;
+  const updates = payload.updates ?? [];
+  if (updates.length === 0) return { error: "אין סימונים לשמירה" };
+
   const actionAuth = await createActionClient();
   if ("error" in actionAuth) return { error: actionAuth.error };
   const supabase = actionAuth.supabase;
-  const refresh = options?.refresh !== false;
-  if (!options?.skipPreviousWeek) {
+  const refresh = payload.refresh !== false;
+  if (!payload.skipPreviousWeek) {
     const blocked = await previousWeekStartBlockMessage(
       supabase,
       updates.map((u) => u.occurrenceId)
@@ -2929,8 +2936,7 @@ export async function bulkAttendanceAction(
     status: u.status,
     reason: u.status === "absent" && u.reason ? u.reason : null,
   }));
-  // One upsert statement is all-or-nothing. PostgREST `count` on upsert is unreliable
-  // and would revert marks that were already written.
+  // One upsert statement is all-or-nothing.
   const { error } = await supabase
     .from("attendance")
     .upsert(records, { onConflict: "student_id,lesson_occurrence_id" });

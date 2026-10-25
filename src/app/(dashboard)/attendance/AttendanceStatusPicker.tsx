@@ -14,6 +14,12 @@ const ICONS: Record<AttendanceStatus, string> = {
   absent: "close",
 };
 
+const SELECTED_STYLE: Record<AttendanceStatus, { backgroundColor: string; color: string }> = {
+  present: { backgroundColor: "#10b981", color: "#ffffff" },
+  late: { backgroundColor: "#f59e0b", color: "#181c1c" },
+  absent: { backgroundColor: "#f43f5e", color: "#ffffff" },
+};
+
 const SELECTED: Record<AttendanceStatus, string> = {
   present:
     "bg-attendance-present text-white border-attendance-present shadow-tactile-md",
@@ -75,7 +81,15 @@ export function AttendanceStatusPicker({
             key={option}
             type="button"
             disabled={locked}
-            onClick={() => onPick(option)}
+            onPointerDown={(e) => {
+              if (e.button !== 0 || locked) return;
+              e.preventDefault();
+              onPick(option);
+            }}
+            onClick={() => {
+              if (!locked) onPick(option);
+            }}
+            style={selected ? SELECTED_STYLE[option] : undefined}
             className={cn(
               "relative flex flex-1 items-center justify-center gap-1.5 rounded-lg border font-label-md text-label-md transition-colors duration-150 active:scale-95",
               "min-h-[44px] touch-manipulation",

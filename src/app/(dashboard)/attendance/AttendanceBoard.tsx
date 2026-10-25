@@ -1,7 +1,6 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { flushSync } from "react-dom";
 import Link from "next/link";
 import { Button } from "@/components/ui/Button";
 import { Combobox } from "@/components/ui/Combobox";
@@ -16,7 +15,6 @@ import {
   resetOccurrenceAttendanceAction,
   restoreOccurrencesAction,
   syncLessonStudentsAction,
-  upsertAttendanceAction,
   upsertAttendanceNoteAction,
 } from "../actions";
 import type { AttendanceStatus } from "@/types/database";
@@ -365,7 +363,7 @@ export function AttendanceBoard({
       return;
     }
     const linked = linkedOccurrenceIds(
-      dayOccurrences.find((o) => o.id === activeOccurrenceId),
+      dayOccurrencesRef.current.find((o) => o.id === activeOccurrenceId),
       activeOccurrenceId
     );
     const byKey = new Map<string, { status: AttendanceStatus; reason: AbsenceReason | null }>();
@@ -405,19 +403,25 @@ export function AttendanceBoard({
 
     setDraft((prev) => {
       const merged = { ...nextDraft };
-      for (const [k, phase] of Object.entries(cellPhaseRef.current)) {
-        if (phase === "saving") merged[k] = prev[k] ?? merged[k];
+      for (const [k, local] of Object.entries(prev)) {
+        const phase = cellPhaseRef.current[k];
+        if (local != null || phase === "saving" || phase === "saved" || phase === "error") {
+          merged[k] = local;
+        }
       }
       return merged;
     });
     setReasons((prev) => {
       const merged = { ...nextReasons };
-      for (const [k, phase] of Object.entries(cellPhaseRef.current)) {
-        if (phase === "saving") merged[k] = prev[k] ?? merged[k];
+      for (const [k, local] of Object.entries(prev)) {
+        const phase = cellPhaseRef.current[k];
+        if (local != null || phase === "saving" || phase === "saved") {
+          merged[k] = local;
+        }
       }
       return merged;
     });
-  }, [lessonStudents, attendance, activeOccurrenceId, dayOccurrences]);
+  }, [lessonStudents, attendance, activeOccurrenceId]);
 
   useEffect(() => {
     if (dayOccurrences.length === 1 && !selectedOccurrenceId) {
@@ -610,22 +614,24 @@ export function AttendanceBoard({
             reason: item.status === "absent" ? item.reason : null,
           }))
         );
-        const result = await bulkAttendanceAction(updates, {
-          refresh: false,
-          skipPreviousWeek: true,
-        });
+        let result: { error?: string; success?: boolean };
+        try {
+          result = await bulkAttendanceAction({
+            updates,
+            refresh: false,
+            skipPreviousWeek: true,
+          });
+        } catch {
+          writeQueue.current = items.concat(writeQueue.current);
+          setMessage("השמירה נכשלה. נסי שוב.");
+          break;
+        }
 
         for (const item of items) {
           if (saveGen.current[item.k] !== item.gen) continue;
           if (result && "error" in result && result.error) {
-            if (item.previous === null) bumpMarkedCount(item.ids[0], -1);
-            setDraft((prev) => ({ ...prev, [item.k]: item.previous }));
-            setReasons((prev) => ({ ...prev, [item.k]: item.previousReason }));
             setCellPhase((prev) => ({ ...prev, [item.k]: "error" }));
             setMessage(result.error);
-            window.setTimeout(() => {
-              setCellPhase((prev) => ({ ...prev, [item.k]: "idle" }));
-            }, 2000);
             continue;
           }
           setCellPhase((prev) => ({ ...prev, [item.k]: "saved" }));
@@ -649,25 +655,18 @@ export function AttendanceBoard({
       const previousReason = reasonsRef.current[k] ?? null;
       const studentName = lessonStudents.find((s) => s.id === sid)?.full_name ?? "";
 
-      if (prevWeekBlocked) {
-        setMessage("יש להשלים קודם את נוכחות השבוע הקודם של השיעור הזה.");
-        return;
-      }
-
-      if (cellPhaseRef.current[k] === "saving" && previous === status) return;
+      if (previous === status && cellPhaseRef.current[k] === "saved") return;
 
       saveGen.current[k] = (saveGen.current[k] ?? 0) + 1;
       const gen = saveGen.current[k];
 
-      flushSync(() => {
-        setDraft((prev) => ({ ...prev, [k]: status }));
-        if (status !== "absent") {
-          setReasons((prev) => ({ ...prev, [k]: null }));
-        }
-        setCellPhase((prev) => ({ ...prev, [k]: "saving" }));
-        setMessage(null);
-        if (previous === null) bumpMarkedCount(occurrenceId, 1);
-      });
+      setDraft((prev) => ({ ...prev, [k]: status }));
+      if (status !== "absent") {
+        setReasons((prev) => ({ ...prev, [k]: null }));
+      }
+      setCellPhase((prev) => ({ ...prev, [k]: "saving" }));
+      setMessage(null);
+      if (previous === null) bumpMarkedCount(occurrenceId, 1);
 
       const block = dayOccurrencesRef.current.find(
         (o) => o.id === occurrenceId || o.linkedOccurrenceIds?.includes(occurrenceId)
@@ -704,7 +703,7 @@ export function AttendanceBoard({
       }
     },
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [lessonStudents, prevWeekBlocked, flushWrites]
+    [lessonStudents, flushWrites]
   );
 
   useEffect(() => {
@@ -1013,22 +1012,16 @@ export function AttendanceBoard({
       dayOccurrences.find((o) => o.id === occurrenceId || o.linkedOccurrenceIds?.includes(occurrenceId)),
       occurrenceId
     );
-    if (ids.length > 1) {
-      await bulkAttendanceAction(
-        ids.map((id) => ({
-          studentId: sid,
-          occurrenceId: id,
-          status: "absent" as const,
-          reason: nextReason,
-        })),
-        { refresh: false, skipPreviousWeek: true }
-      );
-    } else {
-      await upsertAttendanceAction(sid, occurrenceId, "absent", nextReason, {
-        refresh: false,
-        skipPreviousWeek: true,
-      });
-    }
+    await bulkAttendanceAction({
+      updates: ids.map((id) => ({
+        studentId: sid,
+        occurrenceId: id,
+        status: "absent" as const,
+        reason: nextReason,
+      })),
+      refresh: false,
+      skipPreviousWeek: true,
+    });
   }
 
   function onRowKeyDown(e: React.KeyboardEvent, idx: number) {
@@ -1081,11 +1074,7 @@ export function AttendanceBoard({
     updateFilter("studentId", ids[nextIdx]);
   }
 
-  const canMark =
-    canWrite &&
-    Boolean(activeOccurrenceId) &&
-    lessonStudents.length > 0 &&
-    !prevWeekBlocked;
+  const canMark = canWrite && Boolean(activeOccurrenceId) && lessonStudents.length > 0;
   const markedInLesson = activeOccurrenceId
     ? Object.keys(draft).filter(
         (k) => k.endsWith(`::${activeOccurrenceId}`) && draft[k] !== null
@@ -1500,7 +1489,7 @@ export function AttendanceBoard({
             <div className="mb-2 rounded-md border border-secondary/25 bg-secondary/5 px-3 py-2 font-body-sm text-body-sm text-on-surface">
               <p className="font-semibold text-primary">תזכורת: יש מופע קודם של אותו שיעור בלי נוכחות מלאה</p>
               <p className="mt-1 text-on-surface-variant">
-                כדאי להשלים אותו לפני הסימון כאן
+                אפשר למלא אותו, ואפשר גם לסמן כאן עכשיו
                 {prevWeekIncomplete[0]
                   ? ` (${formatHebrewDate(prevWeekIncomplete[0].date)}).`
                   : "."}
@@ -1739,11 +1728,19 @@ export function AttendanceBoard({
           </div>
 
           <div className="flex-1 space-y-1 overflow-y-auto px-2 py-2">
+            {prevWeekBlocked && (
+              <p className="mb-2 rounded-lg bg-secondary/10 px-3 py-2 font-body-sm text-body-sm text-primary">
+                תזכורת: יש מופע קודם בלי נוכחות מלאה. אפשר למלא כאן עכשיו.
+              </p>
+            )}
             {message && (
               <p
                 className={cn(
                   "mb-2 rounded-lg px-3 py-1.5 font-body-sm text-body-sm",
-                  message.includes("שגיא") || message.includes("אין הרשאה")
+                  message.includes("שגיא") ||
+                    message.includes("אין הרשאה") ||
+                    message.includes("נכשל") ||
+                    message.includes("השלים")
                     ? "bg-error-container/60 text-on-error-container"
                     : "bg-attendance-present/10 text-attendance-present"
                 )}
@@ -1830,7 +1827,6 @@ export function AttendanceBoard({
                       <AttendanceStatusPicker
                         value={draft[k] ?? null}
                         phase={cellPhase[k] ?? "idle"}
-                        disabled={prevWeekBlocked}
                         onPick={(s) => pickStatus(student.id, activeOccurrenceId!, s, reasons[k])}
                       />
                       {draft[k] === "absent" && (
