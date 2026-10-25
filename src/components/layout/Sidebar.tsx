@@ -70,6 +70,12 @@ export function Sidebar({
     setPendingHref(null);
   }, [pathname]);
 
+  useEffect(() => {
+    for (const item of NAV_ITEMS) {
+      router.prefetch(item.href);
+    }
+  }, [router]);
+
   function toggleCollapsed() {
     const next = !isCollapsedDom();
     setCollapsed(next);

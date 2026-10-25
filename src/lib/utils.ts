@@ -1,27 +1,34 @@
 import { cache } from "react";
 import { compareByFamilyName } from "@/lib/students/sort";
 import { createClient } from "@/lib/supabase/server";
-import { readShellCache, writeShellCache } from "@/lib/attendance/shell-cache";
+import { bustAttendanceShellCache, readShellCache, writeShellCache } from "@/lib/attendance/shell-cache";
 import type { AcademicYear } from "@/types/database";
 
 /** Deduped per request — layout + page often both need the active year. */
 export const getActiveAcademicYear = cache(async (): Promise<AcademicYear | null> => {
+  const hit = readShellCache<{ year: AcademicYear | null }>("active-year");
+  if (hit) return hit.year;
   const supabase = await createClient();
   const { data } = await supabase
     .from("academic_years")
     .select("id, name, is_active, created_at")
     .eq("is_active", true)
     .maybeSingle();
+  writeShellCache("active-year", { year: data });
   return data;
 });
 
 export const getAllAcademicYears = cache(async (): Promise<AcademicYear[]> => {
+  const hit = readShellCache<AcademicYear[]>("all-years");
+  if (hit) return hit;
   const supabase = await createClient();
   const { data } = await supabase
     .from("academic_years")
     .select("id, name, is_active, created_at")
     .order("created_at", { ascending: false });
-  return data ?? [];
+  const years = data ?? [];
+  writeShellCache("all-years", years);
+  return years;
 });
 
 export async function setActiveAcademicYear(yearId: string) {
@@ -32,6 +39,7 @@ export async function setActiveAcademicYear(yearId: string) {
     .update({ is_active: true })
     .eq("id", yearId);
   if (error) throw error;
+  bustAttendanceShellCache();
 }
 
 /** Static year catalog — deduped per request across attendance/reports/dashboard. */

@@ -1,3 +1,5 @@
+import { readShellCache, writeShellCache } from "@/lib/attendance/shell-cache";
+
 let cachedAllowedEmails: Set<string> | null = null;
 let cachedViewerEmails: Set<string> | null = null;
 let cachedReadAllEmails: Set<string> | null = null;
@@ -85,12 +87,17 @@ type AccessLookup = {
   };
 };
 
+const ACCESS_ROLE_TTL_MS = 45_000;
+
 export async function fetchAccessRole(
   supabase: unknown,
   email: string | null | undefined
 ): Promise<AccessRole | null> {
   const normalized = jwtEmail(email);
   if (!normalized) return null;
+  const cacheKey = `access-role:${normalized}`;
+  const cached = readShellCache<AccessRole>(cacheKey, ACCESS_ROLE_TTL_MS);
+  if (cached) return cached;
   const client = supabase as AccessLookup;
   const { data, error } = await client
     .from("app_access_emails")
@@ -98,11 +105,14 @@ export async function fetchAccessRole(
     .eq("email", normalized)
     .maybeSingle();
   if (error) {
-    if (isMissingAccessTable(error)) return legacyAccessRole(normalized);
+    if (isMissingAccessTable(error)) {
+      const legacy = legacyAccessRole(normalized);
+      return legacy ? writeShellCache(cacheKey, legacy) : null;
+    }
     return null;
   }
   if (data?.role === "editor" || data?.role === "viewer" || data?.role === "read_all") {
-    return data.role;
+    return writeShellCache(cacheKey, data.role);
   }
   return null;
 }

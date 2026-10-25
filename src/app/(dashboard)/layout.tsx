@@ -16,15 +16,14 @@ export default async function DashboardLayout({
 }: {
   children: React.ReactNode;
 }) {
-  const { user, accessRole } = await requireAuthenticatedUser();
-  const profile = authUserProfile(user);
-  const listOnly = accessRole === "viewer";
-  const canWrite = accessRole === "editor";
-
-  const [activeYear, years] = await Promise.all([
+  const [{ user, accessRole }, activeYear, years] = await Promise.all([
+    requireAuthenticatedUser(),
     getActiveAcademicYear(),
     getAllAcademicYears(),
   ]);
+  const profile = authUserProfile(user);
+  const listOnly = accessRole === "viewer";
+  const canWrite = accessRole === "editor";
 
   const sidebarProps = {
     activeYearName: activeYear?.name,

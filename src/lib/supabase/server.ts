@@ -1,9 +1,10 @@
+import { cache } from "react";
 import { createServerClient } from "@supabase/ssr";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { fetchAccessRole } from "@/lib/auth/allowed-emails";
 
-export async function createClient() {
+export const createClient = cache(async () => {
   const cookieStore = await cookies();
 
   return createServerClient(
@@ -26,10 +27,10 @@ export async function createClient() {
       },
     }
   );
-}
+});
 
 /** Defense-in-depth for dashboard Server Components (middleware also guards). */
-export async function requireAuthenticatedUser() {
+export const requireAuthenticatedUser = cache(async () => {
   const supabase = await createClient();
   const {
     data: { user },
@@ -44,7 +45,7 @@ export async function requireAuthenticatedUser() {
   }
 
   return { supabase, user, accessRole };
-}
+});
 
 /** For Server Actions — requires an allowed, authenticated user. */
 export async function createActionClient(): Promise<

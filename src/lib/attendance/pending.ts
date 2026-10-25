@@ -42,7 +42,7 @@ export const EMPTY_PENDING_SUMMARY: PendingAttendanceSummary = {
   items: [],
 };
 
-const PENDING_TTL_MS = 20_000;
+const PENDING_TTL_MS = 45_000;
 
 type PendingOccRow = {
   id: string;
