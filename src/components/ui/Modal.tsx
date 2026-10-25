@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
+import { createPortal } from "react-dom";
 import { cn } from "@/lib/cn";
 import { Icon } from "@/components/ui/Icon";
 
@@ -26,6 +27,11 @@ export function Modal({
   dismissible = true,
   footer,
 }: ModalProps) {
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+
   useEffect(() => {
     if (!open) return;
     const onKey = (e: KeyboardEvent) => {
@@ -40,9 +46,9 @@ export function Modal({
     };
   }, [open, onClose, dismissible]);
 
-  if (!open) return null;
+  if (!open || !mounted) return null;
 
-  return (
+  return createPortal(
     <div
       className="fixed inset-0 z-[70] flex items-center justify-center p-4 animate-[fadeIn_160ms_ease-out] sm:p-6"
       role="dialog"
@@ -85,6 +91,7 @@ export function Modal({
           </div>
         )}
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }

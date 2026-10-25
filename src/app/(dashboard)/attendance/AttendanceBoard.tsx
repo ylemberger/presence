@@ -41,6 +41,7 @@ import {
 } from "./AttendanceStatusPicker";
 import { AttendanceBlankSheet } from "./AttendanceBlankSheet";
 import { AddOccurrenceDate } from "./AddOccurrenceDate";
+import { ReassignOccurrenceLesson } from "./ReassignOccurrenceLesson";
 import { AttendanceGapModal, type GapItem } from "./AttendanceGapModal";
 import { HebrewDateInput } from "@/components/ui/HebrewDateInput";
 import { useAccess } from "@/components/auth/AccessProvider";
@@ -1631,6 +1632,14 @@ export function AttendanceBoard({
                   disabled={lessonStudents.length === 0}
                 />
                 <AddOccurrenceDate lessonId={activeLesson.lessonId} />
+                {canWrite && activeOccurrenceId && activeLesson.status !== "cancelled" && (
+                  <ReassignOccurrenceLesson
+                    occurrenceIds={linkedOccurrenceIds(activeLesson, activeOccurrenceId)}
+                    currentLessonId={activeLesson.lessonId}
+                    occurrenceDate={activeLesson.date}
+                    lessons={lessons}
+                  />
+                )}
                 {activeLesson.status === "completed" && (
                   <Button
                     type="button"

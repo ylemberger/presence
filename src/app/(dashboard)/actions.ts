@@ -55,6 +55,7 @@ import type { AttendanceStatus, HolidayKind } from "@/types/database";
 import { todayIso, formatHebrewDate } from "@/lib/dates/hebrew";
 import { embedOne } from "@/lib/supabase/embed";
 import { resolveOrCreateSubject } from "@/lib/lessons/subjects";
+import { formatLessonHours } from "@/lib/lessons/hours";
 import { fingerprintForLesson } from "@/lib/attendance/pools";
 import { previousWeekStartBlockMessage } from "@/lib/attendance/previous-week";
 import {
@@ -2632,6 +2633,260 @@ export async function resetOccurrenceAttendanceAction(occurrenceIds: string[]) {
   revalidatePath("/students", "layout");
   revalidatePath("/");
   return { success: true as const, cleared: cleared ?? planned ?? 0 };
+}
+
+/** Move these meetings to another lesson. Marks stay on the same occurrence ids and then count for the target. */
+export async function reassignOccurrenceLessonAction(payload: {
+  occurrenceIds: string[];
+  targetLessonId: string;
+}) {
+  const actionAuth = await createActionClient();
+  if ("error" in actionAuth) return { error: actionAuth.error };
+  const supabase = actionAuth.supabase;
+
+  const targetLessonId = requireUuid(payload?.targetLessonId, "שיעור יעד");
+  if (isError(targetLessonId)) return { error: "יש לבחור שיעור יעד מהרשימה" };
+
+  const ids = [
+    ...new Set(
+      (payload?.occurrenceIds ?? [])
+        .map((id) => requireUuid(id, "מופע"))
+        .filter((id): id is string => typeof id === "string")
+    ),
+  ];
+  if (ids.length === 0) return { error: "חסר מופע" };
+
+  const { data: occs, error: occError } = await supabase
+    .from("lesson_occurrences")
+    .select("id, lesson_id, occurrence_date, lesson_number, status")
+    .in("id", ids);
+  if (occError) return { error: hebrewDbError(occError, "לא ניתן לקרוא את המופע") };
+  if (!occs?.length || occs.length !== ids.length) {
+    return { error: "לא נמצא המופע" };
+  }
+  if (occs.some((row) => row.status === "cancelled")) {
+    return { error: "שיעור שלא התקיים לא מועבר מכאן" };
+  }
+
+  const sourceLessonIds = [...new Set(occs.map((row) => row.lesson_id))];
+  const { data: sourceLessons, error: sourceError } = await supabase
+    .from("lessons")
+    .select("id, academic_year_id")
+    .in("id", sourceLessonIds);
+  if (sourceError || !sourceLessons?.length) {
+    return { error: "לא ניתן לקרוא את השיעור של המופע" };
+  }
+  const yearIds = [...new Set(sourceLessons.map((row) => row.academic_year_id))];
+  if (yearIds.length !== 1) {
+    return { error: "אפשר להעביר רק מופעים מאותה שנה" };
+  }
+  const yearId = yearIds[0];
+
+  const { data: target, error: targetError } = await supabase
+    .from("lessons")
+    .select("id, academic_year_id")
+    .eq("id", targetLessonId)
+    .maybeSingle();
+  if (targetError || !target) return { error: "שיעור היעד לא נמצא" };
+  if (target.academic_year_id !== yearId) {
+    return { error: "שיעור היעד חייב להיות באותה שנה אקדמית" };
+  }
+
+  const toMove = occs.filter((row) => row.lesson_id !== targetLessonId);
+  if (toMove.length === 0) {
+    return { error: "המופע כבר שייך לשיעור הזה" };
+  }
+
+  const dates = [...new Set(toMove.map((row) => String(row.occurrence_date).slice(0, 10)))];
+  const { data: existingTarget, error: existError } = await supabase
+    .from("lesson_occurrences")
+    .select("id, occurrence_date, lesson_number")
+    .eq("lesson_id", targetLessonId)
+    .in("occurrence_date", dates);
+  if (existError) {
+    return {
+      error: hebrewDbError(
+        existError,
+        "לא ניתן לבדוק אם לשיעור היעד כבר יש מפגש באותה שעה"
+      ),
+    };
+  }
+
+  const moveIdSet = new Set(toMove.map((row) => row.id));
+  const wanted = new Set(
+    toMove.map((row) => `${String(row.occurrence_date).slice(0, 10)}::${row.lesson_number}`)
+  );
+  const clashes = (existingTarget ?? []).filter((row) => {
+    if (moveIdSet.has(row.id)) return false;
+    return wanted.has(`${String(row.occurrence_date).slice(0, 10)}::${row.lesson_number}`);
+  });
+  if (clashes.length > 0) {
+    const hours = [
+      ...new Set(clashes.map((row) => formatLessonHours(row.lesson_number, 1))),
+    ].join(", ");
+    return {
+      error: `לשיעור היעד כבר יש מפגש באותו תאריך ב${hours}. לא מעבירים כדי לא לדרוס.`,
+    };
+  }
+
+  const toMoveIds = toMove.map((row) => row.id);
+  const { data: updated, error: updateError } = await supabase
+    .from("lesson_occurrences")
+    .update({ lesson_id: targetLessonId })
+    .in("id", toMoveIds)
+    .select("id");
+  if (updateError) {
+    if (updateError.code === "23505") {
+      return {
+        error: "לשיעור היעד כבר יש מפגש באותו תאריך ובאותה שעה. לא מעבירים כדי לא לדרוס.",
+      };
+    }
+    return { error: hebrewDbError(updateError, "העברת המופע נכשלה. לא נשמר.") };
+  }
+  if ((updated?.length ?? 0) !== toMoveIds.length) {
+    return { error: "לא כל המופעים הועברו. נסי שוב." };
+  }
+
+  const marks: { student_id: string; lesson_occurrence_id: string }[] = [];
+  for (const chunk of chunkIds(toMoveIds)) {
+    const { data, error } = await supabase
+      .from("attendance")
+      .select("student_id, lesson_occurrence_id")
+      .in("lesson_occurrence_id", chunk);
+    if (error) {
+      return {
+        error: hebrewDbError(
+          error,
+          "המופע הועבר, אבל לא ניתן לקרוא את הסימונים כדי לשייך תלמידות לשיעור היעד"
+        ),
+      };
+    }
+    marks.push(...(data ?? []));
+  }
+
+  const dateByOcc = new Map(
+    toMove.map((row) => [row.id, String(row.occurrence_date).slice(0, 10)])
+  );
+  const studentDates = new Map<string, Set<string>>();
+  for (const mark of marks) {
+    const date = dateByOcc.get(mark.lesson_occurrence_id);
+    if (!date || !mark.student_id) continue;
+    const set = studentDates.get(mark.student_id) ?? new Set<string>();
+    set.add(date);
+    studentDates.set(mark.student_id, set);
+  }
+
+  let assigned = 0;
+  const markedStudentIds = [...studentDates.keys()];
+  if (markedStudentIds.length > 0) {
+    type LinkRow = {
+      id: string;
+      student_id: string;
+      start_date: string;
+      end_date: string | null;
+    };
+    const existing: LinkRow[] = [];
+    for (const chunk of chunkIds(markedStudentIds)) {
+      const { data, error } = await supabase
+        .from("student_lesson_assignments")
+        .select("id, student_id, start_date, end_date")
+        .eq("lesson_id", targetLessonId)
+        .in("student_id", chunk);
+      if (error) {
+        return {
+          error: hebrewDbError(
+            error,
+            "המופע הועבר, אבל לא ניתן לקרוא שיוכים לשיעור היעד"
+          ),
+        };
+      }
+      existing.push(...((data ?? []) as LinkRow[]));
+    }
+
+    const existingByStudent = new Map<string, LinkRow[]>();
+    for (const row of existing) {
+      const list = existingByStudent.get(row.student_id) ?? [];
+      list.push(row);
+      existingByStudent.set(row.student_id, list);
+    }
+
+    const toInsert: Array<{
+      student_id: string;
+      lesson_id: string;
+      assignment_type: "manual";
+      start_date: string;
+      end_date: string;
+    }> = [];
+    for (const [studentId, dateSet] of studentDates) {
+      const rows = existingByStudent.get(studentId) ?? [];
+      for (const date of dateSet) {
+        const covered = rows.some((row) => {
+          const start = String(row.start_date).slice(0, 10);
+          const end = row.end_date ? String(row.end_date).slice(0, 10) : "9999-12-31";
+          return start <= date && date <= end;
+        });
+        if (!covered) {
+          toInsert.push({
+            student_id: studentId,
+            lesson_id: targetLessonId,
+            assignment_type: "manual",
+            start_date: date,
+            end_date: date,
+          });
+        }
+      }
+    }
+
+    if (toInsert.length > 0) {
+      const { data: inserted, error: insertError } = await supabase
+        .from("student_lesson_assignments")
+        .insert(toInsert)
+        .select("id");
+      if (insertError) {
+        return {
+          error: hebrewDbError(
+            insertError,
+            "המופע הועבר, אבל לא כל התלמידות שסומנו שויכו לשיעור היעד"
+          ),
+        };
+      }
+      if ((inserted?.length ?? 0) !== toInsert.length) {
+        return { error: "המופע הועבר, אבל לא כל השיוכים נשמרו" };
+      }
+      assigned = inserted.length;
+    }
+
+    for (const chunk of chunkIds(markedStudentIds)) {
+      const { error: exclusionError } = await supabase
+        .from("student_lesson_exclusions")
+        .delete()
+        .eq("lesson_id", targetLessonId)
+        .in("student_id", chunk);
+      if (
+        exclusionError &&
+        !/student_lesson_exclusions|schema cache|PGRST205|42P01/i.test(exclusionError.message)
+      ) {
+        return {
+          error: hebrewDbError(
+            exclusionError,
+            "המופע הועבר, אבל לא ניתן לעדכן חריגה משיעור היעד"
+          ),
+        };
+      }
+    }
+  }
+
+  bustAttendanceShellCache();
+  revalidatePath("/attendance");
+  revalidatePath("/lessons");
+  revalidatePath("/reports");
+  revalidatePath("/students", "layout");
+  return {
+    success: true as const,
+    lessonId: targetLessonId,
+    occurrenceId: toMoveIds[0],
+    assigned,
+  };
 }
 
 /** Clear every non-cancelled meeting of one lesson. The lesson, meetings, and students stay. */
