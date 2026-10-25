@@ -2883,36 +2883,23 @@ export async function deleteAttendancePoolAction(poolId: string) {
   return { success: true };
 }
 
+type AttendanceWriteOptions = {
+  /** Default true. Cell-by-cell fill skips the complete scan and page refresh. */
+  refresh?: boolean;
+  skipPreviousWeek?: boolean;
+};
+
 export async function upsertAttendanceAction(
   studentId: string,
   occurrenceId: string,
   status: AttendanceStatus,
-  reason?: string | null
+  reason?: string | null,
+  options?: AttendanceWriteOptions
 ) {
-  const actionAuth = await createActionClient();
-  if ("error" in actionAuth) return { error: actionAuth.error };
-  const supabase = actionAuth.supabase;
-  const blocked = await previousWeekStartBlockMessage(supabase, [occurrenceId]);
-  if (blocked) return { error: blocked };
-  const payload: {
-    student_id: string;
-    lesson_occurrence_id: string;
-    status: AttendanceStatus;
-    reason: string | null;
-  } = {
-    student_id: studentId,
-    lesson_occurrence_id: occurrenceId,
-    status,
-    reason: status === "absent" && reason ? reason : null,
-  };
-  const { error } = await supabase
-    .from("attendance")
-    .upsert(payload, { onConflict: "student_id,lesson_occurrence_id" });
-  if (error) return { error: error.message };
-
-  await tryMarkOccurrenceComplete(supabase, occurrenceId);
-  revalidatePath("/attendance");
-  return { success: true };
+  return bulkAttendanceAction(
+    [{ studentId, occurrenceId, status, reason }],
+    options
+  );
 }
 
 export async function bulkAttendanceAction(
@@ -2922,25 +2909,37 @@ export async function bulkAttendanceAction(
     status: AttendanceStatus;
     reason?: string | null;
   }[]
+  ,
+  options?: AttendanceWriteOptions
 ) {
   const actionAuth = await createActionClient();
   if ("error" in actionAuth) return { error: actionAuth.error };
   const supabase = actionAuth.supabase;
-  const blocked = await previousWeekStartBlockMessage(
-    supabase,
-    updates.map((u) => u.occurrenceId)
-  );
-  if (blocked) return { error: blocked };
+  const refresh = options?.refresh !== false;
+  if (!options?.skipPreviousWeek) {
+    const blocked = await previousWeekStartBlockMessage(
+      supabase,
+      updates.map((u) => u.occurrenceId)
+    );
+    if (blocked) return { error: blocked };
+  }
   const records = updates.map((u) => ({
     student_id: u.studentId,
     lesson_occurrence_id: u.occurrenceId,
     status: u.status,
     reason: u.status === "absent" && u.reason ? u.reason : null,
   }));
+  // One upsert statement is all-or-nothing. PostgREST `count` on upsert is unreliable
+  // and would revert marks that were already written.
   const { error } = await supabase
     .from("attendance")
     .upsert(records, { onConflict: "student_id,lesson_occurrence_id" });
-  if (error) return { error: error.message };
+  if (error) return { error: "השמירה נכשלה" };
+
+  if (!refresh) {
+    bustPendingAttendanceCache();
+    return { success: true };
+  }
 
   const occurrenceIds = [...new Set(updates.map((u) => u.occurrenceId))];
   await Promise.all(occurrenceIds.map((occId) => tryMarkOccurrenceComplete(supabase, occId)));

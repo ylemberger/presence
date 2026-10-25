@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { flushSync } from "react-dom";
 import Link from "next/link";
 import { Button } from "@/components/ui/Button";
 import { Combobox } from "@/components/ui/Combobox";
@@ -282,6 +283,26 @@ export function AttendanceBoard({
   const cellPhaseRef = useRef(cellPhase);
   cellPhaseRef.current = cellPhase;
   const saveGen = useRef<Record<DraftKey, number>>({});
+  const writeQueue = useRef<
+    Array<{
+      k: DraftKey;
+      gen: number;
+      sid: string;
+      ids: string[];
+      status: AttendanceStatus;
+      reason: AbsenceReason | null;
+      previous: AttendanceStatus | null;
+      previousReason: AbsenceReason | null;
+    }>
+  >([]);
+  const writeTimer = useRef<number | null>(null);
+  const flushingWrites = useRef(false);
+  const dayOccurrencesRef = useRef(dayOccurrences);
+  dayOccurrencesRef.current = dayOccurrences;
+  const draftRef = useRef(draft);
+  draftRef.current = draft;
+  const reasonsRef = useRef(reasons);
+  reasonsRef.current = reasons;
   const hydratedOccurrenceId = useRef<string | undefined>(undefined);
   const autoSyncedLesson = useRef<string | null>(null);
 
@@ -571,16 +592,61 @@ export function AttendanceBoard({
     undoTimer.current = window.setTimeout(() => setUndo(null), 3500);
   }
 
+  const flushWrites = useCallback(async () => {
+    if (flushingWrites.current) return;
+    flushingWrites.current = true;
+    try {
+      while (writeQueue.current.length > 0) {
+        const batch = writeQueue.current;
+        writeQueue.current = [];
+        const latest = new Map<DraftKey, (typeof batch)[number]>();
+        for (const item of batch) latest.set(item.k, item);
+        const items = [...latest.values()];
+        const updates = items.flatMap((item) =>
+          item.ids.map((occurrenceId) => ({
+            studentId: item.sid,
+            occurrenceId,
+            status: item.status,
+            reason: item.status === "absent" ? item.reason : null,
+          }))
+        );
+        const result = await bulkAttendanceAction(updates, {
+          refresh: false,
+          skipPreviousWeek: true,
+        });
+
+        for (const item of items) {
+          if (saveGen.current[item.k] !== item.gen) continue;
+          if (result && "error" in result && result.error) {
+            if (item.previous === null) bumpMarkedCount(item.ids[0], -1);
+            setDraft((prev) => ({ ...prev, [item.k]: item.previous }));
+            setReasons((prev) => ({ ...prev, [item.k]: item.previousReason }));
+            setCellPhase((prev) => ({ ...prev, [item.k]: "error" }));
+            setMessage(result.error);
+            window.setTimeout(() => {
+              setCellPhase((prev) => ({ ...prev, [item.k]: "idle" }));
+            }, 2000);
+            continue;
+          }
+          setCellPhase((prev) => ({ ...prev, [item.k]: "saved" }));
+        }
+      }
+    } finally {
+      flushingWrites.current = false;
+      if (writeQueue.current.length > 0) void flushWrites();
+    }
+  }, []);
+
   const pickStatus = useCallback(
-    async (
+    (
       sid: string,
       occurrenceId: string,
       status: AttendanceStatus,
       reason?: AbsenceReason | null
     ) => {
       const k = keyOf(sid, occurrenceId);
-      const previous = draft[k] ?? null;
-      const previousReason = reasons[k] ?? null;
+      const previous = draftRef.current[k] ?? null;
+      const previousReason = reasonsRef.current[k] ?? null;
       const studentName = lessonStudents.find((s) => s.id === sid)?.full_name ?? "";
 
       if (prevWeekBlocked) {
@@ -593,48 +659,37 @@ export function AttendanceBoard({
       saveGen.current[k] = (saveGen.current[k] ?? 0) + 1;
       const gen = saveGen.current[k];
 
-      setDraft((prev) => ({ ...prev, [k]: status }));
-      if (status !== "absent") {
-        setReasons((prev) => ({ ...prev, [k]: null }));
-      }
-      setCellPhase((prev) => ({ ...prev, [k]: "saving" }));
-      setMessage(null);
+      flushSync(() => {
+        setDraft((prev) => ({ ...prev, [k]: status }));
+        if (status !== "absent") {
+          setReasons((prev) => ({ ...prev, [k]: null }));
+        }
+        setCellPhase((prev) => ({ ...prev, [k]: "saving" }));
+        setMessage(null);
+        if (previous === null) bumpMarkedCount(occurrenceId, 1);
+      });
 
-      if (previous === null) bumpMarkedCount(occurrenceId, 1);
-
-      const block = dayOccurrences.find(
+      const block = dayOccurrencesRef.current.find(
         (o) => o.id === occurrenceId || o.linkedOccurrenceIds?.includes(occurrenceId)
       );
       const ids = linkedOccurrenceIds(block, occurrenceId);
-      const result =
-        ids.length > 1
-          ? await bulkAttendanceAction(
-              ids.map((id) => ({
-                studentId: sid,
-                occurrenceId: id,
-                status,
-                reason: status === "absent" ? reason ?? null : null,
-              }))
-            )
-          : await upsertAttendanceAction(
-              sid,
-              occurrenceId,
-              status,
-              status === "absent" ? reason ?? null : null
-            );
-      if (saveGen.current[k] !== gen) return;
+      writeQueue.current = writeQueue.current.filter((item) => item.k !== k);
+      writeQueue.current.push({
+        k,
+        gen,
+        sid,
+        ids,
+        status,
+        reason: status === "absent" ? reason ?? null : null,
+        previous,
+        previousReason,
+      });
+      if (writeTimer.current) window.clearTimeout(writeTimer.current);
+      writeTimer.current = window.setTimeout(() => {
+        writeTimer.current = null;
+        void flushWrites();
+      }, 40);
 
-      if (result && "error" in result && result.error) {
-        if (previous === null) bumpMarkedCount(occurrenceId, -1);
-        setDraft((prev) => ({ ...prev, [k]: previous }));
-        setReasons((prev) => ({ ...prev, [k]: previousReason }));
-        setCellPhase((prev) => ({ ...prev, [k]: "error" }));
-        setMessage(result.error);
-        window.setTimeout(() => setCellPhase((prev) => ({ ...prev, [k]: "idle" })), 2000);
-        return;
-      }
-
-      setCellPhase((prev) => ({ ...prev, [k]: "saved" }));
       showUndo({
         studentId: sid,
         occurrenceId,
@@ -649,8 +704,15 @@ export function AttendanceBoard({
       }
     },
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [draft, reasons, lessonStudents, dayOccurrences, prevWeekBlocked]
+    [lessonStudents, prevWeekBlocked, flushWrites]
   );
+
+  useEffect(() => {
+    return () => {
+      if (writeTimer.current) window.clearTimeout(writeTimer.current);
+      if (writeQueue.current.length > 0) void flushWrites();
+    };
+  }, [flushWrites]);
 
   async function undoLast() {
     if (!undo) return;
@@ -958,10 +1020,14 @@ export function AttendanceBoard({
           occurrenceId: id,
           status: "absent" as const,
           reason: nextReason,
-        }))
+        })),
+        { refresh: false, skipPreviousWeek: true }
       );
     } else {
-      await upsertAttendanceAction(sid, occurrenceId, "absent", nextReason);
+      await upsertAttendanceAction(sid, occurrenceId, "absent", nextReason, {
+        refresh: false,
+        skipPreviousWeek: true,
+      });
     }
   }
 
@@ -1331,7 +1397,7 @@ export function AttendanceBoard({
       <div className="relative grid grid-cols-1 items-start gap-gutter print:hidden xl:grid-cols-12">
         {isPending ? (
           <div
-            className="absolute inset-0 z-10 flex items-start justify-center rounded-xl bg-surface/70 pt-16 backdrop-blur-[1px]"
+            className="pointer-events-none absolute inset-0 z-10 flex items-start justify-center rounded-xl bg-surface/50 pt-16"
             aria-live="polite"
           >
             <div className="rounded-xl border border-outline-variant/40 bg-surface-container-lowest px-4 py-3 shadow-tactile-md">
