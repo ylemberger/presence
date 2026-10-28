@@ -1,4 +1,5 @@
 import { formatGregorianDate, formatHebrewDate } from "@/lib/dates/hebrew";
+import { SeminarPrintHeader } from "@/components/print/SeminarPrintHeader";
 
 export function AttendanceBlankSheet({
   subject,
@@ -15,17 +16,17 @@ export function AttendanceBlankSheet({
 }) {
   return (
     <section className="hidden print:block">
-      <header className="mb-6 border-b-[3px] border-primary pb-3">
-        <p className="text-caption font-semibold text-secondary">דף נוכחות ריק</p>
-        <h1 className="mt-1 font-headline-md text-headline-md text-primary">{subject}</h1>
-        <p className="mt-1 font-body-md text-body-md text-on-surface">
-          {formatHebrewDate(date)}
-          <span className="mx-1 text-outline">·</span>
-          {formatGregorianDate(date)}
-          {teacherName ? ` · המורה ${teacherName}` : ""}
-          {groupLabel ? ` · ${groupLabel}` : ""}
-        </p>
-      </header>
+      <SeminarPrintHeader
+        title={subject}
+        subtitle={[
+          formatHebrewDate(date),
+          formatGregorianDate(date),
+          teacherName ? `המורה ${teacherName}` : "",
+          groupLabel || "",
+        ]
+          .filter(Boolean)
+          .join(" · ")}
+      />
       <table className="w-full border-collapse text-right">
         <thead>
           <tr className="border-b-2 border-primary">

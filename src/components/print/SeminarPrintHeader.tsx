@@ -1,4 +1,6 @@
-/** Print-only seminar brand: logo from /logo.png plus title. */
+import { SEMINAR_LOGO_DATA_URI } from "./seminar-logo";
+
+/** Print-only seminar brand. Logo is inlined so NetFree cannot block /logo.png. */
 export function SeminarPrintHeader({
   title,
   subtitle,
@@ -9,9 +11,9 @@ export function SeminarPrintHeader({
   return (
     <header className="mb-4 hidden items-center justify-between gap-4 border-b-2 border-primary pb-3 print:flex">
       <div className="flex items-center gap-4">
-        {/* Native img so the logo prints reliably in Save-as-PDF. */}
+        {/* Native img + data URI: no HTTP fetch during print. */}
         {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img src="/logo.png" alt="" className="h-20 w-20 object-contain" />
+        <img src={SEMINAR_LOGO_DATA_URI} alt="" className="h-20 w-20 object-contain" />
         <div>
           <p className="text-[11px] font-semibold tracking-[0.12em] text-secondary">
             נוכחות סמינר
