@@ -184,6 +184,9 @@ begin
         pol.tablename
       );
     elsif pol.cmd = 'DELETE' then
+      if pol.tablename = 'students' then
+        continue;
+      end if;
       execute format(
         'create policy %I on public.%I for delete to authenticated using (not public.cannot_write_attendance())',
         pol.policyname,
@@ -204,10 +207,17 @@ begin
   loop
     execute format('revoke all on table public.%I from anon', t.tablename);
     execute format('revoke all on table public.%I from public', t.tablename);
-    execute format(
-      'grant select, insert, update, delete on table public.%I to authenticated',
-      t.tablename
-    );
+    if t.tablename = 'students' then
+      execute format(
+        'grant select, insert, update on table public.%I to authenticated',
+        t.tablename
+      );
+    else
+      execute format(
+        'grant select, insert, update, delete on table public.%I to authenticated',
+        t.tablename
+      );
+    end if;
   end loop;
   execute 'revoke all on all sequences in schema public from anon';
   execute 'revoke all on all sequences in schema public from public';
@@ -216,6 +226,11 @@ begin
   execute 'alter default privileges in schema public revoke all on tables from public';
   execute 'alter default privileges in schema public grant select, insert, update, delete on tables to authenticated';
 end $$;
+
+drop policy if exists "authenticated_delete_students" on public.students;
+revoke delete on table public.students from authenticated;
+revoke delete on table public.students from anon;
+revoke delete on table public.students from public;
 
 notify pgrst, 'reload schema';
 select 'app_access_emails is the login and RLS source of truth' as status;

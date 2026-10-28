@@ -138,13 +138,14 @@ export const getPendingAttendanceSummary = cache(
 
     const items: PendingOccurrence[] = [];
     for (const o of occs) {
-      let total = 0;
+      const covered = new Set<string>();
       for (const link of linksByLesson.get(o.lesson_id) ?? []) {
         const active = embedOne<{ is_active?: boolean }>(link.students);
         if (active?.is_active === false) continue;
         if (!isDateInRange(o.occurrence_date, link.start_date, link.end_date)) continue;
-        total++;
+        if (link.student_id) covered.add(link.student_id);
       }
+      const total = covered.size;
       if (total === 0) continue;
       const marked = markedByOcc.get(o.id) ?? 0;
       if (marked >= total) continue;

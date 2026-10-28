@@ -57,6 +57,7 @@ import { embedOne } from "@/lib/supabase/embed";
 import { resolveOrCreateSubject } from "@/lib/lessons/subjects";
 import { formatLessonHours } from "@/lib/lessons/hours";
 import { fingerprintForLesson } from "@/lib/attendance/pools";
+import { uniqueCoveredStudentIds } from "@/lib/attendance/roster";
 import { previousWeekStartBlockMessage } from "@/lib/attendance/previous-week";
 import {
   FLEXIBLE_RANGE_FORM_VALUE,
@@ -907,9 +908,8 @@ export async function createStudentAction(formData: FormData) {
 }
 
 /**
- * Student who left: never DELETE the students row (CASCADE would wipe
- * attendance and more). Only this student_id: close open class placement,
- * delete her lesson links, mark inactive.
+ * Student who left: never DELETE the students row.
+ * Only this student_id: close open class placement, drop her lesson links, mark inactive.
  */
 export async function leaveStudentAction(studentId: string) {
   const actionAuth = await createActionClient();
@@ -2958,6 +2958,38 @@ export async function resetLessonAttendanceAction(lessonId: string) {
 
 // --- Attendance ---
 
+const ATTENDANCE_WRITE_CHUNK = 200;
+
+async function writeAttendanceRecords(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  records: Array<{
+    student_id: string;
+    lesson_occurrence_id: string;
+    status: AttendanceStatus;
+    reason: string | null;
+  }>
+): Promise<{ error: string } | { written: number }> {
+  const seen = new Set<string>();
+  const unique: typeof records = [];
+  for (const row of records) {
+    if (!row.student_id || !row.lesson_occurrence_id) continue;
+    const key = `${row.student_id}::${row.lesson_occurrence_id}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    unique.push(row);
+  }
+  let written = 0;
+  for (let i = 0; i < unique.length; i += ATTENDANCE_WRITE_CHUNK) {
+    const chunk = unique.slice(i, i + ATTENDANCE_WRITE_CHUNK);
+    const { error } = await supabase
+      .from("attendance")
+      .upsert(chunk, { onConflict: "student_id,lesson_occurrence_id" });
+    if (error) return { error: "השמירה נכשלה" };
+    written += chunk.length;
+  }
+  return { written };
+}
+
 async function tryMarkOccurrenceComplete(
   supabase: Awaited<ReturnType<typeof createClient>>,
   occurrenceId: string
@@ -2969,19 +3001,20 @@ async function tryMarkOccurrenceComplete(
     .single();
   if (!occ || occ.status === "cancelled") return;
 
-  const links = await fetchAllPages<{ student_id: string; students: unknown }>((from, to) =>
+  const links = await fetchAllPages<{
+    student_id: string;
+    start_date: string;
+    end_date: string | null;
+    students: unknown;
+  }>((from, to) =>
     supabase
       .from("student_lesson_assignments")
-      .select("student_id, students(is_active)")
+      .select("student_id, start_date, end_date, students(is_active)")
       .eq("lesson_id", occ.lesson_id)
-      .lte("start_date", occ.occurrence_date)
-      .or(`end_date.is.null,end_date.gte.${occ.occurrence_date}`)
       .range(from, to)
   );
 
-  const studentIds = links
-    .filter((l) => embedOne<{ is_active: boolean }>(l.students)?.is_active)
-    .map((l) => l.student_id);
+  const studentIds = uniqueCoveredStudentIds(links, occ.occurrence_date);
   if (studentIds.length === 0) return;
 
   const markedPages = await Promise.all(
@@ -3191,11 +3224,8 @@ export async function bulkAttendanceAction(
     status: u.status,
     reason: u.status === "absent" && u.reason ? u.reason : null,
   }));
-  // One upsert statement is all-or-nothing.
-  const { error } = await supabase
-    .from("attendance")
-    .upsert(records, { onConflict: "student_id,lesson_occurrence_id" });
-  if (error) return { error: "השמירה נכשלה" };
+  const written = await writeAttendanceRecords(supabase, records);
+  if ("error" in written) return written;
 
   if (!refresh) {
     bustPendingAttendanceCache();
@@ -3207,6 +3237,101 @@ export async function bulkAttendanceAction(
 
   revalidatePath("/attendance");
   return { success: true };
+}
+
+/** Mark every assigned student on these meetings. Roster comes from the database, not the screen list. */
+export async function markOccurrenceRosterAction(payload: {
+  occurrenceIds: string[];
+  status: AttendanceStatus;
+  onlyUnmarked?: boolean;
+}) {
+  const actionAuth = await createActionClient();
+  if ("error" in actionAuth) return { error: actionAuth.error };
+  const supabase = actionAuth.supabase;
+  const status = payload.status;
+  if (status !== "present" && status !== "absent" && status !== "late") {
+    return { error: "סטטוס לא תקין" };
+  }
+  const ids = [
+    ...new Set(
+      (payload.occurrenceIds ?? [])
+        .map((id) => requireUuid(id, "מופע"))
+        .filter((id): id is string => typeof id === "string")
+    ),
+  ];
+  if (ids.length === 0) return { error: "חסר מופע" };
+
+  const { data: occs, error: occError } = await supabase
+    .from("lesson_occurrences")
+    .select("id, lesson_id, occurrence_date, status")
+    .in("id", ids);
+  if (occError || !occs?.length) return { error: "לא נמצא המופע" };
+
+  const records: Array<{
+    student_id: string;
+    lesson_occurrence_id: string;
+    status: AttendanceStatus;
+    reason: string | null;
+  }> = [];
+  let planned = 0;
+
+  for (const occ of occs) {
+    if (occ.status === "cancelled") continue;
+    const links = await fetchAllPages<{
+      student_id: string;
+      start_date: string;
+      end_date: string | null;
+      students: unknown;
+    }>((from, to) =>
+      supabase
+        .from("student_lesson_assignments")
+        .select("student_id, start_date, end_date, students(is_active)")
+        .eq("lesson_id", occ.lesson_id)
+        .range(from, to)
+    );
+    let studentIds = uniqueCoveredStudentIds(links, occ.occurrence_date);
+    if (studentIds.length === 0) continue;
+
+    if (payload.onlyUnmarked) {
+      const already = new Set<string>();
+      for (const chunk of chunkIds(studentIds)) {
+        const rows = await fetchAllPages<{ student_id: string }>((from, to) =>
+          supabase
+            .from("attendance")
+            .select("student_id")
+            .eq("lesson_occurrence_id", occ.id)
+            .in("student_id", chunk)
+            .range(from, to)
+        );
+        for (const row of rows) already.add(row.student_id);
+      }
+      studentIds = studentIds.filter((id) => !already.has(id));
+    }
+
+    planned += studentIds.length;
+    for (const studentId of studentIds) {
+      records.push({
+        student_id: studentId,
+        lesson_occurrence_id: occ.id,
+        status,
+        reason: null,
+      });
+    }
+  }
+
+  if (records.length === 0) {
+    return { success: true as const, planned: 0, written: 0 };
+  }
+
+  const written = await writeAttendanceRecords(supabase, records);
+  if ("error" in written) return written;
+  if (written.written !== records.length) {
+    return { error: "לא כל הסימונים נשמרו. נסי שוב." };
+  }
+
+  await Promise.all(occs.map((occ) => tryMarkOccurrenceComplete(supabase, occ.id)));
+  revalidatePath("/attendance");
+  return { success: true as const, planned, written: written.written };
 }
 
 /**

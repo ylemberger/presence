@@ -754,7 +754,11 @@ export default async function StudentDetailPage({ params }: Props) {
                 }}
               />
             ) : null}
-            <LeaveStudentButton studentId={id} studentName={displayName} />
+            <LeaveStudentButton
+              studentId={id}
+              studentName={displayName}
+              isActive={Boolean(student.is_active)}
+            />
           </div>
         </div>
       </section>

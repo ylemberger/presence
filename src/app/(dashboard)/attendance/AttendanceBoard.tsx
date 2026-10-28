@@ -8,6 +8,7 @@ import { CheckingStatus } from "@/components/ui/CheckingStatus";
 import { HebrewMonthCalendar } from "@/components/ui/HebrewMonthCalendar";
 import {
   bulkAttendanceAction,
+  markOccurrenceRosterAction,
   cancelOccurrenceAction,
   copyPreviousAttendanceAction,
   restoreCancelledOccurrenceAction,
@@ -732,19 +733,11 @@ export function AttendanceBoard({
   }
 
   async function markAll(status: AttendanceStatus) {
-    if (!activeOccurrenceId || lessonStudents.length === 0) return;
+    if (!activeOccurrenceId) return;
     setBulkSaving(true);
     setMessage(null);
 
     const ids = linkedOccurrenceIds(activeLesson, activeOccurrenceId);
-    const updates = lessonStudents.flatMap((s) =>
-      ids.map((occurrenceId) => ({
-        studentId: s.id,
-        occurrenceId,
-        status,
-      }))
-    );
-
     const next = { ...draft };
     const saving: Record<DraftKey, AttendancePickerPhase> = {};
     for (const s of lessonStudents) {
@@ -756,11 +749,13 @@ export function AttendanceBoard({
     setCellPhase(saving);
     setDayOccurrences((prev) =>
       prev.map((o) =>
-        o.id === activeOccurrenceId ? { ...o, markedCount: o.studentCount } : o
+        ids.includes(o.id) || o.id === activeOccurrenceId
+          ? { ...o, markedCount: o.studentCount }
+          : o
       )
     );
 
-    const result = await bulkAttendanceAction(updates);
+    const result = await markOccurrenceRosterAction({ occurrenceIds: ids, status });
     if (result && "error" in result && result.error) {
       setMessage(result.error);
       router.refresh();
@@ -770,28 +765,19 @@ export function AttendanceBoard({
         saved[keyOf(s.id, activeOccurrenceId)] = "saved";
       }
       setCellPhase(saved);
-      setMessage(`נשמר — ${lessonStudents.length} תלמידות`);
+      const written = result && "written" in result ? result.written : lessonStudents.length;
+      setMessage(`נשמר — ${written} סימונים`);
+      router.refresh();
     }
     setBulkSaving(false);
   }
 
   async function markRestAbsent() {
     if (!activeOccurrenceId) return;
-    const unmarked = lessonStudents.filter(
-      (s) => draft[keyOf(s.id, activeOccurrenceId)] == null
-    );
-    if (unmarked.length === 0) {
-      setMessage("כל התלמידות כבר סומנו");
-      return;
-    }
     setBulkSaving(true);
     const ids = linkedOccurrenceIds(activeLesson, activeOccurrenceId);
-    const updates = unmarked.flatMap((s) =>
-      ids.map((occurrenceId) => ({
-        studentId: s.id,
-        occurrenceId,
-        status: "absent" as const,
-      }))
+    const unmarked = lessonStudents.filter(
+      (s) => draft[keyOf(s.id, activeOccurrenceId)] == null
     );
     const next = { ...draft };
     for (const s of unmarked) next[keyOf(s.id, activeOccurrenceId)] = "absent";
@@ -803,12 +789,14 @@ export function AttendanceBoard({
     });
     setDayOccurrences((prev) =>
       prev.map((o) =>
-        o.id === activeOccurrenceId
-          ? { ...o, markedCount: Math.min(o.studentCount, o.markedCount + unmarked.length) }
-          : o
+        o.id === activeOccurrenceId ? { ...o, markedCount: o.studentCount } : o
       )
     );
-    const result = await bulkAttendanceAction(updates);
+    const result = await markOccurrenceRosterAction({
+      occurrenceIds: ids,
+      status: "absent",
+      onlyUnmarked: true,
+    });
     if (result && "error" in result && result.error) {
       setMessage(result.error);
       router.refresh();
@@ -818,7 +806,11 @@ export function AttendanceBoard({
         for (const s of unmarked) saved[keyOf(s.id, activeOccurrenceId)] = "saved";
         return saved;
       });
-      setMessage(`סומנו ${unmarked.length} נעדרות (מי שלא סומנה)`);
+      const written = result && "written" in result ? result.written : unmarked.length;
+      setMessage(
+        written === 0 ? "כל התלמידות כבר סומנו" : `סומנו ${written} נעדרות (מי שלא סומנה)`
+      );
+      router.refresh();
     }
     setBulkSaving(false);
   }

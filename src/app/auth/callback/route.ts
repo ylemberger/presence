@@ -56,14 +56,26 @@ export async function GET(request: Request) {
   const dest =
     accessRole === "viewer" && !viewerMayOpenPath(next) ? "/students" : next;
 
-  const forwardedHost = request.headers.get("x-forwarded-host");
   const isLocalEnv = process.env.NODE_ENV === "development" || isLocalHost;
 
   if (isLocalEnv) {
     return NextResponse.redirect(`${origin}${dest}`);
   }
 
-  if (forwardedHost && !forwardedHost.includes("localhost")) {
+  const forwardedHost = (request.headers.get("x-forwarded-host") ?? "")
+    .split(",")[0]
+    .trim()
+    .toLowerCase();
+  const allowedHosts = new Set(
+    [
+      url.hostname,
+      process.env.VERCEL_URL,
+      process.env.VERCEL_PROJECT_PRODUCTION_URL,
+    ]
+      .filter(Boolean)
+      .map((host) => host.replace(/^https?:\/\//, "").split("/")[0].toLowerCase())
+  );
+  if (forwardedHost && allowedHosts.has(forwardedHost)) {
     return NextResponse.redirect(`https://${forwardedHost}${dest}`);
   }
 

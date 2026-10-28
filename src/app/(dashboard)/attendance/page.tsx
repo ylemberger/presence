@@ -318,13 +318,13 @@ export default async function AttendancePage({ searchParams }: Props) {
   }
 
   function countRoster(lessonId: string, date: string) {
-    let count = 0;
+    const ids = new Set<string>();
     for (const link of linksFor(lessonId)) {
       if (!rosterStudent(link)) continue;
       if (!linkCoversDate(link, date)) continue;
-      count++;
+      ids.add(s.id || link.student_id);
     }
-    return count;
+    return ids.size;
   }
 
   const studentCounts = new Map<string, number>();

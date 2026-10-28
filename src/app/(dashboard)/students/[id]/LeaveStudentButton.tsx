@@ -6,10 +6,13 @@ import { leaveStudentAction } from "../../actions";
 export function LeaveStudentButton({
   studentId,
   studentName,
+  isActive,
 }: {
   studentId: string;
   studentName: string;
+  isActive: boolean;
 }) {
+  if (!isActive) return null;
   return (
     <DeleteButton
       label="תלמידה עזבה"

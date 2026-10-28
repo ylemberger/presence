@@ -484,7 +484,10 @@ begin
     execute format('create policy "authenticated_select_%s" on %I for select to authenticated using (%s)', tbl, tbl, select_using);
     execute format('create policy "authenticated_insert_%s" on %I for insert to authenticated with check (not public.cannot_write_attendance())', tbl, tbl);
     execute format('create policy "authenticated_update_%s" on %I for update to authenticated using (not public.cannot_write_attendance()) with check (not public.cannot_write_attendance())', tbl, tbl);
-    execute format('create policy "authenticated_delete_%s" on %I for delete to authenticated using (not public.cannot_write_attendance())', tbl, tbl);
+    -- students: no DELETE for the app. Permanent entity.
+    if tbl <> 'students' then
+      execute format('create policy "authenticated_delete_%s" on %I for delete to authenticated using (not public.cannot_write_attendance())', tbl, tbl);
+    end if;
   end loop;
 end $$;
 
@@ -1190,11 +1193,22 @@ begin
   loop
     execute format('revoke all on table public.%I from anon', t.tablename);
     execute format('revoke all on table public.%I from public', t.tablename);
-    execute format(
-      'grant select, insert, update, delete on table public.%I to authenticated',
-      t.tablename
-    );
+    if t.tablename = 'students' then
+      execute format(
+        'grant select, insert, update on table public.%I to authenticated',
+        t.tablename
+      );
+    else
+      execute format(
+        'grant select, insert, update, delete on table public.%I to authenticated',
+        t.tablename
+      );
+    end if;
   end loop;
+  execute 'drop policy if exists "authenticated_delete_students" on public.students';
+  execute 'revoke delete on table public.students from authenticated';
+  execute 'revoke delete on table public.students from anon';
+  execute 'revoke delete on table public.students from public';
   execute 'revoke all on all sequences in schema public from anon';
   execute 'revoke all on all sequences in schema public from public';
   execute 'grant usage, select on all sequences in schema public to authenticated';
@@ -1202,4 +1216,22 @@ begin
   execute 'alter default privileges in schema public revoke all on tables from public';
   execute 'alter default privileges in schema public grant select, insert, update, delete on tables to authenticated';
 end $$;
+
+create or replace function public.forbid_app_student_delete()
+returns trigger
+language plpgsql
+as $$
+begin
+  if current_user in ('authenticated', 'anon', 'authenticator') then
+    raise exception 'אין מחיקה פיזית של תלמידות מהאפליקציה';
+  end if;
+  return old;
+end;
+$$;
+
+drop trigger if exists trg_forbid_app_student_delete on public.students;
+create trigger trg_forbid_app_student_delete
+  before delete on public.students
+  for each row
+  execute function public.forbid_app_student_delete();
 
