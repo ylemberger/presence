@@ -533,7 +533,7 @@ export default async function AttendancePage({ searchParams }: Props) {
   }
 
   return (
-    <div className="flex flex-col gap-stack_lg">
+    <div className="flex flex-col gap-stack_lg print:gap-0">
       <PageHeader title="נוכחות" size="headline" />
 
       <AttendanceReminderBanner summary={pendingSummary} />

@@ -147,22 +147,50 @@ body {
 }
 
 @media print {
+  /* margin: 0 hides the browser URL/date footer. Padding on body keeps the sheet readable. */
   @page {
     size: A4;
-    margin: 12mm 14mm;
+    margin: 0;
   }
 
   html,
   body {
     background: white !important;
     color: #181c1c;
+    margin: 0 !important;
+    padding: 12mm 14mm !important;
     print-color-adjust: exact;
     -webkit-print-color-adjust: exact;
   }
 
-  a {
-    color: inherit;
-    text-decoration: none;
+  a,
+  a:link,
+  a:visited {
+    color: inherit !important;
+    text-decoration: none !important;
+  }
+
+  a[href]::after,
+  a[href]::before {
+    content: none !important;
+  }
+
+  .seminar-print-header {
+    display: flex !important;
+    align-items: center;
+    justify-content: flex-start;
+    gap: 1rem;
+    margin: 0 0 1rem;
+    padding: 0 0 0.75rem;
+    border-bottom: 2px solid var(--primary);
+  }
+
+  .seminar-print-header img {
+    display: block;
+    height: 5.5rem;
+    width: auto;
+    max-width: 6rem;
+    object-fit: contain;
   }
 
   thead {

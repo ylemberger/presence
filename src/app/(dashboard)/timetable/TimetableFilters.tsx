@@ -18,7 +18,7 @@ export interface TimetableFiltersProps {
   defaults: {
     classIds?: string[];
     trackIds?: string[];
-    specializationId?: string;
+    specializationIds?: string[];
     teacherId?: string;
     subject?: string;
     studentId?: string;
@@ -41,8 +41,10 @@ export function TimetableFilters({
   const { push } = usePendingRouter();
   const [classIds, setClassIds] = useState(defaults.classIds ?? []);
   const [trackIds, setTrackIds] = useState(defaults.trackIds ?? []);
+  const [specializationIds, setSpecializationIds] = useState(defaults.specializationIds ?? []);
   const classKey = (defaults.classIds ?? []).join(",");
   const trackKey = (defaults.trackIds ?? []).join(",");
+  const specKey = (defaults.specializationIds ?? []).join(",");
 
   useEffect(() => {
     setClassIds(classKey ? classKey.split(",") : []);
@@ -52,10 +54,14 @@ export function TimetableFilters({
     setTrackIds(trackKey ? trackKey.split(",") : []);
   }, [trackKey]);
 
+  useEffect(() => {
+    setSpecializationIds(specKey ? specKey.split(",") : []);
+  }, [specKey]);
+
   function apply(patch: {
     classIds?: string[];
     trackIds?: string[];
-    specializationId?: string;
+    specializationIds?: string[];
     teacherId?: string;
     subject?: string;
     studentId?: string;
@@ -64,18 +70,18 @@ export function TimetableFilters({
   }) {
     const nextClass = patch.classIds ?? classIds;
     const nextTrack = patch.trackIds ?? trackIds;
+    const nextSpec = patch.specializationIds ?? specializationIds;
     const params = new URLSearchParams();
     if (nextClass.length) params.set("classId", nextClass.join(","));
     if (nextTrack.length) params.set("trackId", nextTrack.join(","));
+    if (nextSpec.length) params.set("specializationId", nextSpec.join(","));
 
-    const spec = patch.specializationId !== undefined ? patch.specializationId : defaults.specializationId;
     const teacher = patch.teacherId !== undefined ? patch.teacherId : defaults.teacherId;
     const subject = patch.subject !== undefined ? patch.subject : defaults.subject;
     const student = patch.studentId !== undefined ? patch.studentId : defaults.studentId;
     const range = patch.activityRangeId !== undefined ? patch.activityRangeId : defaults.activityRangeId;
     const psych = patch.forPsychology !== undefined ? patch.forPsychology : defaults.forPsychology;
 
-    if (spec) params.set("specializationId", spec);
     if (teacher) params.set("teacherId", teacher);
     if (subject) params.set("subject", subject);
     if (student) params.set("studentId", student);
@@ -93,31 +99,27 @@ export function TimetableFilters({
       <MultiSelect
         label="כיתות"
         name="classId"
-        hint="אפשר לבחור כמה כיתות"
         values={classIds}
-        onChange={(next) => {
-          setClassIds(next);
-          apply({ classIds: next });
-        }}
+        onChange={setClassIds}
+        onClose={(next) => apply({ classIds: next })}
         options={classes.map((c) => ({ value: c.id, label: c.name }))}
       />
 
       <MultiSelect
         label="מסלולים"
         name="trackId"
-        hint="אפשר לבחור כמה מסלולים"
         values={trackIds}
-        onChange={(next) => {
-          setTrackIds(next);
-          apply({ trackIds: next });
-        }}
+        onChange={setTrackIds}
+        onClose={(next) => apply({ trackIds: next })}
         options={tracks.map((t) => ({ value: t.id, label: t.name }))}
       />
 
-      <Combobox
+      <MultiSelect
         label="התמחות"
-        value={defaults.specializationId ?? ""}
-        onChange={(v) => apply({ specializationId: v })}
+        name="specializationId"
+        values={specializationIds}
+        onChange={setSpecializationIds}
+        onClose={(next) => apply({ specializationIds: next })}
         options={specializations.map((s) => ({ value: s.id, label: s.name }))}
       />
 

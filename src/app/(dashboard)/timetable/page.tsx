@@ -61,13 +61,14 @@ function timetableHref(
   params: Props["searchParams"],
   classIds: string[],
   trackIds: string[],
+  specializationIds: string[],
   week: string
 ): string {
   const q = new URLSearchParams();
   if (classIds.length) q.set("classId", classIds.join(","));
   if (trackIds.length) q.set("trackId", trackIds.join(","));
+  if (specializationIds.length) q.set("specializationId", specializationIds.join(","));
   for (const key of [
-    "specializationId",
     "teacherId",
     "subject",
     "studentId",
@@ -85,6 +86,7 @@ function WeekNav({
   params,
   classIds,
   trackIds,
+  specializationIds,
   weekStart,
   weekEnd,
   isCurrentWeek,
@@ -92,6 +94,7 @@ function WeekNav({
   params: Props["searchParams"];
   classIds: string[];
   trackIds: string[];
+  specializationIds: string[];
   weekStart: string;
   weekEnd: string;
   isCurrentWeek: boolean;
@@ -102,7 +105,7 @@ function WeekNav({
   return (
     <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-outline-variant/30 bg-surface-container-low/60 px-4 py-3 print:hidden">
       <Link
-        href={timetableHref(params, classIds, trackIds, addDays(weekStart, -7))}
+        href={timetableHref(params, classIds, trackIds, specializationIds, addDays(weekStart, -7))}
         className={linkClass}
       >
         <Icon name="chevron_right" className="text-[18px]" />
@@ -121,12 +124,12 @@ function WeekNav({
       </p>
       <div className="flex flex-wrap items-center gap-2">
         {!isCurrentWeek ? (
-          <Link href={timetableHref(params, classIds, trackIds, currentWeek)} className={linkClass}>
+          <Link href={timetableHref(params, classIds, trackIds, specializationIds, currentWeek)} className={linkClass}>
             לשבוע הנוכחי
           </Link>
         ) : null}
         <Link
-          href={timetableHref(params, classIds, trackIds, addDays(weekStart, 7))}
+          href={timetableHref(params, classIds, trackIds, specializationIds, addDays(weekStart, 7))}
           className={linkClass}
         >
           שבוע הבא
@@ -156,6 +159,7 @@ export default async function TimetablePage({ searchParams }: Props) {
 
   const classIds = parseIdList(params.classId);
   const trackIds = parseIdList(params.trackId);
+  const specializationIds = parseIdList(params.specializationId);
   const weekStart = parseWeekStart(params.week);
   const weekEnd = addDays(weekStart, 6);
   const weekDates = expandIsoRange(weekStart, weekEnd);
@@ -264,7 +268,6 @@ export default async function TimetablePage({ searchParams }: Props) {
   if (weekLessonIds.length > 0) {
     lessonsQuery = lessonsQuery.in("id", weekLessonIds);
   }
-  if (params.specializationId) lessonsQuery = lessonsQuery.eq("specialization_id", params.specializationId);
   if (params.activityRangeId) lessonsQuery = lessonsQuery.eq("activity_range_id", params.activityRangeId);
   if (forPsychology !== undefined) lessonsQuery = lessonsQuery.eq("for_psychology", forPsychology);
 
@@ -305,6 +308,7 @@ export default async function TimetablePage({ searchParams }: Props) {
       const audience = audienceForLesson(l, audienceByLesson);
       if (!overlaps(classIds, audience.class_ids)) return false;
       if (!overlaps(trackIds, audience.track_ids)) return false;
+      if (!overlaps(specializationIds, audience.specialization_ids)) return false;
       if (params.teacherId) {
         const teacherId = embeddedTeacher(l.teacher_teaching_assignments)?.id ?? null;
         if (teacherId !== params.teacherId) return false;
@@ -376,6 +380,7 @@ export default async function TimetablePage({ searchParams }: Props) {
         params={params}
         classIds={classIds}
         trackIds={trackIds}
+        specializationIds={specializationIds}
         weekStart={weekStart}
         weekEnd={weekEnd}
         isCurrentWeek={isCurrentWeek}
@@ -397,7 +402,7 @@ export default async function TimetablePage({ searchParams }: Props) {
           defaults={{
             classIds,
             trackIds,
-            specializationId: params.specializationId,
+            specializationIds,
             teacherId: params.teacherId,
             subject: params.subject,
             studentId: params.studentId,

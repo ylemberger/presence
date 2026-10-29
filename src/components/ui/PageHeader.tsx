@@ -19,7 +19,7 @@ export function PageHeader({
   size = "display",
 }: PageHeaderProps) {
   return (
-    <div className="flex flex-wrap items-end justify-between gap-2">
+    <div className="flex flex-wrap items-end justify-between gap-2 print:hidden">
       <div className="flex min-w-0 flex-col gap-0.5">
         <h2
           className={cn(

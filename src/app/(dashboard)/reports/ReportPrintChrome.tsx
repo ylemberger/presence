@@ -1,3 +1,5 @@
+import { SEMINAR_LOGO_DATA_URI } from "@/components/print/seminar-logo";
+
 interface FilterItem {
   label: string;
   value: string;
@@ -21,13 +23,21 @@ export function ReportPrintHeader({
   return (
     <header className="mb-6 hidden print:block">
       <div className="flex items-end justify-between gap-4 border-b-[3px] border-primary pb-3">
-        <div>
-          <p className="text-caption font-semibold tracking-[0.08em] text-secondary">
-            מערכת ניהול נוכחות
-          </p>
-          <p className="mt-0.5 font-headline-md text-headline-md text-primary">
-            נוכחות סמינר
-          </p>
+        <div className="flex items-center gap-4">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src={SEMINAR_LOGO_DATA_URI}
+            alt="סמינר"
+            className="h-[5.5rem] w-auto max-w-[6rem] object-contain"
+          />
+          <div>
+            <p className="text-caption font-semibold tracking-[0.08em] text-secondary">
+              מערכת ניהול נוכחות
+            </p>
+            <p className="mt-0.5 font-headline-md text-headline-md text-primary">
+              נוכחות סמינר
+            </p>
+          </div>
         </div>
         <div className="text-end text-caption text-on-surface-variant">
           <p className="font-semibold text-primary">{yearName}</p>

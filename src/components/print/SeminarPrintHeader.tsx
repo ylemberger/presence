@@ -9,11 +9,11 @@ export function SeminarPrintHeader({
   subtitle?: string;
 }) {
   return (
-    <header className="mb-4 hidden items-center justify-between gap-4 border-b-2 border-primary pb-3 print:flex">
+    <header className="seminar-print-header hidden print:flex">
       <div className="flex items-center gap-4">
         {/* Native img + data URI: no HTTP fetch during print. */}
         {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img src={SEMINAR_LOGO_DATA_URI} alt="" className="h-20 w-20 object-contain" />
+        <img src={SEMINAR_LOGO_DATA_URI} alt="סמינר" />
         <div>
           <p className="text-[11px] font-semibold tracking-[0.12em] text-secondary">
             נוכחות סמינר
