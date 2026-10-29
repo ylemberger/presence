@@ -179,6 +179,14 @@ function linkedOccurrenceIds(row: DayLessonRow | undefined, fallbackId?: string)
   return row?.id ? [row.id] : [];
 }
 
+/** Save the open meeting. Extra hours of the same lesson are separate cards and are not included. */
+function attendanceTargetIds(row: DayLessonRow | undefined, occurrenceId: string): string[] {
+  if (!occurrenceId) return [];
+  const linked = (row?.linkedOccurrenceIds ?? []).filter(Boolean);
+  if (linked.length > 1 && linked.includes(occurrenceId)) return [...new Set(linked)];
+  return [occurrenceId];
+}
+
 function lessonAttendanceTone(markedCount: number, studentCount: number) {
   const complete = studentCount > 0 && markedCount >= studentCount;
   const started = markedCount > 0;
@@ -276,6 +284,7 @@ export function AttendanceBoard({
     return open;
   });
   const [focusedIdx, setFocusedIdx] = useState(0);
+  const [pinnedOccurrenceId, setPinnedOccurrenceId] = useState<string | undefined>(undefined);
   const [undo, setUndo] = useState<UndoItem | null>(null);
   const rowRefs = useRef<(HTMLDivElement | null)[]>([]);
   const touchStartX = useRef<number | null>(null);
@@ -310,12 +319,22 @@ export function AttendanceBoard({
     setDayOccurrences(dayOccurrencesProp);
   }, [dayOccurrencesProp]);
 
-  const activeOccurrenceId =
-    selectedOccurrenceId && dayOccurrences.some((o) => o.id === selectedOccurrenceId)
-      ? selectedOccurrenceId
-      : undefined;
+  useEffect(() => {
+    if (pinnedOccurrenceId && selectedOccurrenceId === pinnedOccurrenceId) {
+      setPinnedOccurrenceId(undefined);
+    }
+  }, [selectedOccurrenceId, pinnedOccurrenceId]);
 
-  const activeLesson = dayOccurrences.find((o) => o.id === activeOccurrenceId);
+  const requestedOccurrenceId = pinnedOccurrenceId || selectedOccurrenceId;
+  const activeLesson = requestedOccurrenceId
+    ? dayOccurrences.find(
+        (o) =>
+          o.id === requestedOccurrenceId ||
+          Boolean(o.linkedOccurrenceIds?.includes(requestedOccurrenceId))
+      )
+    : undefined;
+  const activeOccurrenceId =
+    requestedOccurrenceId && activeLesson ? requestedOccurrenceId : undefined;
 
   useEffect(() => {
     if (!canWrite || !activeLesson || lessonStudents.length > 0) return;
@@ -365,7 +384,11 @@ export function AttendanceBoard({
       return;
     }
     const linked = linkedOccurrenceIds(
-      dayOccurrencesRef.current.find((o) => o.id === activeOccurrenceId),
+      dayOccurrencesRef.current.find(
+        (o) =>
+          o.id === activeOccurrenceId ||
+          Boolean(o.linkedOccurrenceIds?.includes(activeOccurrenceId))
+      ),
       activeOccurrenceId
     );
     const byKey = new Map<string, { status: AttendanceStatus; reason: AbsenceReason | null }>();
@@ -550,6 +573,7 @@ export function AttendanceBoard({
   }
 
   function selectDate(iso: string) {
+    setPinnedOccurrenceId(undefined);
     navigate(
       buildParams({
         date: iso,
@@ -560,10 +584,12 @@ export function AttendanceBoard({
   }
 
   function selectLesson(occurrenceId: string) {
+    setPinnedOccurrenceId(occurrenceId);
     navigate(buildParams({ occurrenceId }));
   }
 
   function selectOccurrence(occurrenceId: string, date: string) {
+    setPinnedOccurrenceId(occurrenceId);
     const seed = hebrewMonthFromIso(date);
     const month = buildHebrewMonth(seed.year, seed.month);
     navigate(
@@ -673,7 +699,7 @@ export function AttendanceBoard({
       const block = dayOccurrencesRef.current.find(
         (o) => o.id === occurrenceId || o.linkedOccurrenceIds?.includes(occurrenceId)
       );
-      const ids = linkedOccurrenceIds(block, occurrenceId);
+      const ids = attendanceTargetIds(block, occurrenceId);
       writeQueue.current = writeQueue.current.filter((item) => item.k !== k);
       writeQueue.current.push({
         k,
@@ -737,7 +763,7 @@ export function AttendanceBoard({
     setBulkSaving(true);
     setMessage(null);
 
-    const ids = linkedOccurrenceIds(activeLesson, activeOccurrenceId);
+    const ids = attendanceTargetIds(activeLesson, activeOccurrenceId);
     const next = { ...draft };
     const saving: Record<DraftKey, AttendancePickerPhase> = {};
     for (const s of lessonStudents) {
@@ -749,7 +775,9 @@ export function AttendanceBoard({
     setCellPhase(saving);
     setDayOccurrences((prev) =>
       prev.map((o) =>
-        ids.includes(o.id) || o.id === activeOccurrenceId
+        ids.includes(o.id) ||
+        o.id === activeOccurrenceId ||
+        Boolean(o.linkedOccurrenceIds?.includes(activeOccurrenceId))
           ? { ...o, markedCount: o.studentCount }
           : o
       )
@@ -775,7 +803,7 @@ export function AttendanceBoard({
   async function markRestAbsent() {
     if (!activeOccurrenceId) return;
     setBulkSaving(true);
-    const ids = linkedOccurrenceIds(activeLesson, activeOccurrenceId);
+    const ids = attendanceTargetIds(activeLesson, activeOccurrenceId);
     const unmarked = lessonStudents.filter(
       (s) => draft[keyOf(s.id, activeOccurrenceId)] == null
     );
@@ -821,7 +849,7 @@ export function AttendanceBoard({
     setMessage(null);
     const result = await copyPreviousAttendanceAction(
       activeOccurrenceId,
-      linkedOccurrenceIds(activeLesson, activeOccurrenceId)
+      attendanceTargetIds(activeLesson, activeOccurrenceId)
     );
     if (result && "error" in result && result.error) {
       setMessage(result.error);
@@ -905,7 +933,7 @@ export function AttendanceBoard({
 
   async function reopenForEdits() {
     if (!activeLesson || reopening) return;
-    const ids = linkedOccurrenceIds(activeLesson, activeOccurrenceId);
+    const ids = attendanceTargetIds(activeLesson, activeOccurrenceId);
     setReopening(true);
     setMessage(null);
     const result = await restoreOccurrencesAction(ids);
@@ -925,7 +953,7 @@ export function AttendanceBoard({
 
   async function resetAttendance() {
     if (!canWrite || !activeLesson || resetting) return;
-    const ids = linkedOccurrenceIds(activeLesson, activeOccurrenceId);
+    const ids = attendanceTargetIds(activeLesson, activeOccurrenceId);
     if (ids.length === 0) return;
     const confirmed = window.confirm(
       "לאפס את הנוכחות של המפגש הזה בלבד? שאר המפגשים של השיעור לא משתנים. הסימונים של המפגש יימחקו, והמפגש יישאר בלוח."
@@ -1031,7 +1059,7 @@ export function AttendanceBoard({
     if (status !== "absent") return;
     const nextReason = reason || null;
     setReasons((prev) => ({ ...prev, [k]: nextReason }));
-    const ids = linkedOccurrenceIds(
+    const ids = attendanceTargetIds(
       dayOccurrences.find((o) => o.id === occurrenceId || o.linkedOccurrenceIds?.includes(occurrenceId)),
       occurrenceId
     );

@@ -229,11 +229,10 @@ export default async function AttendancePage({ searchParams }: Props) {
 
   const dayLessonIds = [...new Set(dayOccurrences.map((o) => o.lessonId))];
   const dayOccIds = dayOccurrences.map((o) => o.id);
-  const dayUnitKeys = new Set(dayOccurrences.map((o) => o.calcUnitKey));
   const clickedOcc =
     (params.occurrenceId && dayOccurrences.find((o) => o.id === params.occurrenceId)) ||
     selectedRaw ||
-    (dayUnitKeys.size === 1 ? dayOccurrences[0] : null);
+    null;
 
   let linkLessonIds: string[];
   let attendanceOccIds: string[];
@@ -320,9 +319,10 @@ export default async function AttendancePage({ searchParams }: Props) {
   function countRoster(lessonId: string, date: string) {
     const ids = new Set<string>();
     for (const link of linksFor(lessonId)) {
-      if (!rosterStudent(link)) continue;
+      const student = rosterStudent(link);
+      if (!student) continue;
       if (!linkCoversDate(link, date)) continue;
-      ids.add(s.id || link.student_id);
+      ids.add(student.id);
     }
     return ids.size;
   }
@@ -346,6 +346,10 @@ export default async function AttendancePage({ searchParams }: Props) {
   const selectedOcc =
     (wantedId && dayBlocks.find((b) => b.linkedOccurrenceIds.includes(wantedId))) ||
     (dayBlocks.length === 1 ? dayBlocks[0] : null);
+  const openOccurrenceId =
+    wantedId && selectedOcc?.linkedOccurrenceIds.includes(wantedId)
+      ? wantedId
+      : selectedOcc?.id ?? params.occurrenceId;
 
   if (selectedOcc) {
     const map = new Map<string, ShellStudent>();
@@ -498,8 +502,8 @@ export default async function AttendancePage({ searchParams }: Props) {
       }));
   }
 
-  const prevWeekIncompleteRaw = selectedOcc
-    ? await findIncompletePreviousWeekOccurrences(supabase, selectedOcc.id)
+  const prevWeekIncompleteRaw = openOccurrenceId
+    ? await findIncompletePreviousWeekOccurrences(supabase, openOccurrenceId)
     : [];
   const prevWeekIncomplete = blockingPreviousWeekGaps(prevWeekIncompleteRaw);
   const holidaySets = holidayDatesByKind(shell.holidayRows);
@@ -543,7 +547,7 @@ export default async function AttendancePage({ searchParams }: Props) {
         monthFrom={monthFrom}
         monthTo={monthTo}
         selectedDate={selectedDate}
-        selectedOccurrenceId={selectedOcc?.id ?? params.occurrenceId}
+        selectedOccurrenceId={openOccurrenceId}
         mode={mode}
         classId={params.classId}
         trackId={params.trackId}
@@ -595,7 +599,7 @@ export default async function AttendancePage({ searchParams }: Props) {
         lessonStudents={lessonStudents}
         attendance={attendanceRecords}
         noteBody={noteBody}
-        noteOccurrenceId={selectedOcc?.id ?? null}
+        noteOccurrenceId={openOccurrenceId ?? null}
         completeDates={completeDates}
         partialDates={partialDates}
         holidayDates={holidaySets.vacation}

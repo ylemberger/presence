@@ -2981,11 +2981,15 @@ async function writeAttendanceRecords(
   let written = 0;
   for (let i = 0; i < unique.length; i += ATTENDANCE_WRITE_CHUNK) {
     const chunk = unique.slice(i, i + ATTENDANCE_WRITE_CHUNK);
-    const { error } = await supabase
+    const { data: saved, error } = await supabase
       .from("attendance")
-      .upsert(chunk, { onConflict: "student_id,lesson_occurrence_id" });
+      .upsert(chunk, { onConflict: "student_id,lesson_occurrence_id" })
+      .select("student_id, lesson_occurrence_id");
     if (error) return { error: "השמירה נכשלה" };
-    written += chunk.length;
+    if ((saved?.length ?? 0) !== chunk.length) {
+      return { error: "לא כל הסימונים נשמרו. נסי שוב." };
+    }
+    written += saved.length;
   }
   return { written };
 }
@@ -3320,7 +3324,10 @@ export async function markOccurrenceRosterAction(payload: {
   }
 
   if (records.length === 0) {
-    return { success: true as const, planned: 0, written: 0 };
+    if (payload.onlyUnmarked) {
+      return { success: true as const, planned: 0, written: 0 };
+    }
+    return { error: "לא נשמרו סימונים. בדקי שהמופע הנכון פתוח ושיש תלמידות משויכות." };
   }
 
   const written = await writeAttendanceRecords(supabase, records);
@@ -3557,9 +3564,6 @@ export async function copyPreviousAttendanceAction(
         .filter((id): id is string => typeof id === "string"),
     ]),
   ];
-
-  const blocked = await previousWeekStartBlockMessage(supabase, targetIds);
-  if (blocked) return { error: blocked };
 
   const { data: targets, error: occError } = await supabase
     .from("lesson_occurrences")

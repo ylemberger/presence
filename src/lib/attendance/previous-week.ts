@@ -1,6 +1,6 @@
 import { addDays, isDateInRange, startOfWeekSunday } from "@/lib/dates/hebrew";
 import { embedOne } from "@/lib/supabase/embed";
-import { fetchAssignmentsByLessons } from "@/lib/supabase/paged";
+import { fetchAllPages, fetchAssignmentsByLessons } from "@/lib/supabase/paged";
 import { readShellCache, writeShellCache } from "@/lib/attendance/shell-cache";
 import type { createClient } from "@/lib/supabase/server";
 
@@ -39,26 +39,30 @@ export async function findIncompletePreviousWeekOccurrences(
 
   const { data: current, error } = await supabase
     .from("lesson_occurrences")
-    .select("id, lesson_id, occurrence_date")
+    .select("id, lesson_id, occurrence_date, lesson_number")
     .eq("id", occurrenceId)
     .maybeSingle();
   if (error || !current) return writeShellCache(cacheKey, []);
 
   const { start, end } = previousWeekRange(current.occurrence_date);
-  const { data: prevOccs } = await supabase
+  let prevQuery = supabase
     .from("lesson_occurrences")
     .select("id, occurrence_date, lesson_id, gap_handling")
     .eq("lesson_id", current.lesson_id)
     .gte("occurrence_date", start)
     .lte("occurrence_date", end)
     .neq("status", "cancelled");
+  if (current.lesson_number != null) {
+    prevQuery = prevQuery.eq("lesson_number", current.lesson_number);
+  }
+  const { data: prevOccs } = await prevQuery;
 
   if (!prevOccs?.length) return writeShellCache(cacheKey, []);
 
   const lessonId = current.lesson_id;
   const occIds = prevOccs.map((o) => o.id);
 
-  const [links, { data: marked }] = await Promise.all([
+  const [links, marked] = await Promise.all([
     fetchAssignmentsByLessons<{
       student_id: string;
       start_date: string;
@@ -69,10 +73,13 @@ export async function findIncompletePreviousWeekOccurrences(
       [lessonId],
       "student_id, start_date, end_date, students(is_active)"
     ),
-    supabase
-      .from("attendance")
-      .select("student_id, lesson_occurrence_id")
-      .in("lesson_occurrence_id", occIds),
+    fetchAllPages<{ student_id: string; lesson_occurrence_id: string }>((from, to) =>
+      supabase
+        .from("attendance")
+        .select("student_id, lesson_occurrence_id")
+        .in("lesson_occurrence_id", occIds)
+        .range(from, to)
+    ),
   ]);
 
   const markedSet = new Set(

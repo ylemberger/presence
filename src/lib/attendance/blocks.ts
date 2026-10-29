@@ -38,7 +38,9 @@ function canMerge(a: AttendanceBlockInput, b: AttendanceBlockInput): boolean {
   if (isAfternoonLesson(a.lessonNumber) !== isAfternoonLesson(b.lessonNumber)) return false;
   const as = hourSpan(a);
   const bs = hourSpan(b);
-  return as.start <= bs.end + 1 && bs.start <= as.end + 1;
+  // Same hour stays a separate card so each meeting saves on its own.
+  if (as.start === bs.start) return false;
+  return as.end + 1 === bs.start || bs.end + 1 === as.start;
 }
 
 function collapse(rows: AttendanceBlockInput[]): AttendanceBlock {
