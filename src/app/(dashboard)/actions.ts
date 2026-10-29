@@ -3490,7 +3490,54 @@ export async function fillAttendanceToTargetAction(
   };
 }
 
-/** Copy attendance statuses from the previous occurrence of the same lesson. */
+function copiedAttendanceStatus(value: unknown): AttendanceStatus | null {
+  if (value === "present" || value === "absent" || value === "late") return value;
+  return null;
+}
+
+function copiedAbsenceReason(status: AttendanceStatus, value: unknown): string | null {
+  if (status !== "absent") return null;
+  if (value === "illness" || value === "permission" || value === "family" || value === "unexcused") {
+    return value;
+  }
+  return null;
+}
+
+type PreviousAttendanceRow = {
+  student_id: string;
+  status: string;
+  reason: string | null;
+};
+
+async function loadPreviousSameHourAttendance(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  lessonId: string,
+  occurrenceDate: string,
+  lessonNumber: number | null
+): Promise<{ found: boolean; rows: PreviousAttendanceRow[] }> {
+  let query = supabase
+    .from("lesson_occurrences")
+    .select("id")
+    .eq("lesson_id", lessonId)
+    .lt("occurrence_date", occurrenceDate)
+    .neq("status", "cancelled")
+    .order("occurrence_date", { ascending: false })
+    .limit(1);
+  if (lessonNumber != null) query = query.eq("lesson_number", lessonNumber);
+  const { data: previous } = await query.maybeSingle();
+  if (!previous) return { found: false, rows: [] };
+
+  const rows = await fetchAllPages<PreviousAttendanceRow>((from, to) =>
+    supabase
+      .from("attendance")
+      .select("student_id, status, reason")
+      .eq("lesson_occurrence_id", previous.id)
+      .range(from, to)
+  );
+  return { found: true, rows };
+}
+
+/** Copy each student's exact status from the previous same-hour meeting of the same lesson. */
 export async function copyPreviousAttendanceAction(
   occurrenceId: string,
   alsoOccurrenceIds: string[] = []
@@ -3499,75 +3546,129 @@ export async function copyPreviousAttendanceAction(
   if ("error" in actionAuth) return { error: actionAuth.error };
   const supabase = actionAuth.supabase;
 
-  const { data: current } = await supabase
-    .from("lesson_occurrences")
-    .select("id, lesson_id, occurrence_date")
-    .eq("id", occurrenceId)
-    .single();
-  if (!current) return { error: "מופע לא נמצא" };
+  const primaryId = requireUuid(occurrenceId, "מופע");
+  if (isError(primaryId)) return primaryId;
 
-  const blocked = await previousWeekStartBlockMessage(supabase, [
-    occurrenceId,
-    ...alsoOccurrenceIds,
-  ]);
+  const targetIds = [
+    ...new Set([
+      primaryId,
+      ...alsoOccurrenceIds
+        .map((id) => requireUuid(id, "מופע"))
+        .filter((id): id is string => typeof id === "string"),
+    ]),
+  ];
+
+  const blocked = await previousWeekStartBlockMessage(supabase, targetIds);
   if (blocked) return { error: blocked };
 
-  const { data: previous } = await supabase
+  const { data: targets, error: occError } = await supabase
     .from("lesson_occurrences")
-    .select("id")
-    .eq("lesson_id", current.lesson_id)
-    .lt("occurrence_date", current.occurrence_date)
-    .neq("status", "cancelled")
-    .order("occurrence_date", { ascending: false })
-    .limit(1)
-    .maybeSingle();
-  if (!previous) return { error: "אין שיעור קודם להעתקה" };
+    .select("id, lesson_id, occurrence_date, lesson_number, status")
+    .in("id", targetIds);
+  if (occError) return { error: "לא ניתן לטעון את המופע" };
+  if (!targets?.length) return { error: "מופע לא נמצא" };
 
-  const { data: prevRows } = await supabase
-    .from("attendance")
-    .select("student_id, status, reason")
-    .eq("lesson_occurrence_id", previous.id);
-  if (!prevRows?.length) return { error: "בשיעור הקודם אין רישומי נוכחות" };
+  const byId = new Map(targets.map((row) => [row.id, row]));
+  const primary = byId.get(primaryId);
+  if (!primary) return { error: "מופע לא נמצא" };
 
-  const { data: links } = await supabase
-    .from("student_lesson_assignments")
-    .select("student_id, students(is_active)")
-    .eq("lesson_id", current.lesson_id)
-    .lte("start_date", current.occurrence_date)
-    .or(`end_date.is.null,end_date.gte.${current.occurrence_date}`);
+  const prevCache = new Map<string, { found: boolean; rows: PreviousAttendanceRow[] }>();
+  const records: Array<{
+    student_id: string;
+    lesson_occurrence_id: string;
+    status: AttendanceStatus;
+    reason: string | null;
+  }> = [];
+  const primaryRecords: Array<{
+    student_id: string;
+    status: AttendanceStatus;
+    reason: string | null;
+  }> = [];
 
-  const eligible = new Set(
-    (links ?? [])
-      .filter((l) => embedOne<{ is_active: boolean }>(l.students)?.is_active)
-      .map((l) => l.student_id)
-  );
+  let primaryPreviousFound = false;
+  let primaryPreviousHadRows = false;
 
-  const records = prevRows
-    .filter((r) => eligible.has(r.student_id))
-    .map((r) => ({
-      student_id: r.student_id,
-      lesson_occurrence_id: occurrenceId,
-      status: r.status as AttendanceStatus,
-      reason: r.status === "absent" ? (r.reason as string | null) : null,
-    }));
+  for (const targetId of targetIds) {
+    const occ = byId.get(targetId);
+    if (!occ || occ.status === "cancelled") continue;
 
-  if (records.length === 0) return { error: "אין תלמידות משותפות להעתקה" };
+    const cacheKey = `${occ.lesson_id}|${occ.occurrence_date}|${occ.lesson_number ?? ""}`;
+    let previous = prevCache.get(cacheKey);
+    if (!previous) {
+      previous = await loadPreviousSameHourAttendance(
+        supabase,
+        occ.lesson_id,
+        occ.occurrence_date,
+        occ.lesson_number ?? null
+      );
+      prevCache.set(cacheKey, previous);
+    }
 
-  const targetIds = [...new Set([occurrenceId, ...alsoOccurrenceIds.filter(Boolean)])];
-  const mirrored = targetIds.flatMap((id) =>
-    records.map((r) => ({ ...r, lesson_occurrence_id: id }))
-  );
+    if (targetId === primaryId) {
+      primaryPreviousFound = previous.found;
+      primaryPreviousHadRows = previous.rows.length > 0;
+    }
+    if (!previous.found || previous.rows.length === 0) continue;
 
-  const { error } = await supabase
-    .from("attendance")
-    .upsert(mirrored, { onConflict: "student_id,lesson_occurrence_id" });
-  if (error) return { error: error.message };
+    const links = await fetchAllPages<{
+      student_id: string;
+      start_date: string;
+      end_date: string | null;
+      students: unknown;
+    }>((from, to) =>
+      supabase
+        .from("student_lesson_assignments")
+        .select("student_id, start_date, end_date, students(is_active)")
+        .eq("lesson_id", occ.lesson_id)
+        .range(from, to)
+    );
+    const eligible = new Set(uniqueCoveredStudentIds(links, occ.occurrence_date));
 
-  for (const id of targetIds) {
-    await tryMarkOccurrenceComplete(supabase, id);
+    for (const row of previous.rows) {
+      if (!eligible.has(row.student_id)) continue;
+      const status = copiedAttendanceStatus(row.status);
+      if (!status) continue;
+      const record = {
+        student_id: row.student_id,
+        lesson_occurrence_id: occ.id,
+        status,
+        reason: copiedAbsenceReason(status, row.reason),
+      };
+      records.push(record);
+      if (targetId === primaryId) {
+        primaryRecords.push({
+          student_id: row.student_id,
+          status,
+          reason: record.reason,
+        });
+      }
+    }
   }
+
+  if (!primaryPreviousFound) return { error: "אין שיעור קודם להעתקה" };
+  if (!primaryPreviousHadRows) return { error: "בשיעור הקודם אין רישומי נוכחות" };
+  if (primaryRecords.length === 0 || records.length === 0) {
+    return { error: "אין תלמידות משותפות להעתקה" };
+  }
+
+  const written = await writeAttendanceRecords(supabase, records);
+  if ("error" in written) return written;
+  if (written.written !== records.length) {
+    return { error: "השמירה לא הושלמה לכל הרישומים" };
+  }
+
+  await Promise.all(targetIds.map((id) => tryMarkOccurrenceComplete(supabase, id)));
   revalidatePath("/attendance");
-  return { success: true, copied: records.length };
+
+  return {
+    success: true as const,
+    copied: primaryRecords.length,
+    written: written.written,
+    present: primaryRecords.filter((row) => row.status === "present").length,
+    late: primaryRecords.filter((row) => row.status === "late").length,
+    absent: primaryRecords.filter((row) => row.status === "absent").length,
+    records: primaryRecords,
+  };
 }
 
 export async function downloadStudentImportTemplateAction() {

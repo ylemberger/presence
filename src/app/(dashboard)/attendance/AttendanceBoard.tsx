@@ -826,7 +826,37 @@ export function AttendanceBoard({
     if (result && "error" in result && result.error) {
       setMessage(result.error);
     } else if (result && "copied" in result) {
-      setMessage(`הועתקו ${result.copied} רישומים מהשיעור הקודם`);
+      const copiedRecords = "records" in result && Array.isArray(result.records) ? result.records : [];
+      if (copiedRecords.length > 0) {
+        setDraft((prev) => {
+          const next = { ...prev };
+          for (const row of copiedRecords) {
+            next[keyOf(row.student_id, activeOccurrenceId)] = row.status;
+          }
+          return next;
+        });
+        setReasons((prev) => {
+          const next = { ...prev };
+          for (const row of copiedRecords) {
+            next[keyOf(row.student_id, activeOccurrenceId)] =
+              row.status === "absent" ? ((row.reason as AbsenceReason | null) ?? null) : null;
+          }
+          return next;
+        });
+        setCellPhase((prev) => {
+          const next = { ...prev };
+          for (const row of copiedRecords) {
+            next[keyOf(row.student_id, activeOccurrenceId)] = "saved";
+          }
+          return next;
+        });
+      }
+      const parts: string[] = [];
+      if ("present" in result && result.present) parts.push(`${result.present} נוכחות`);
+      if ("late" in result && result.late) parts.push(`${result.late} איחורים`);
+      if ("absent" in result && result.absent) parts.push(`${result.absent} חיסורים`);
+      const detail = parts.length ? ` (${parts.join(", ")})` : "";
+      setMessage(`הועתקו ${result.copied} רישומים מהשיעור הקודם${detail}`);
       router.refresh();
     }
     setCopying(false);
