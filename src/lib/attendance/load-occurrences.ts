@@ -27,6 +27,7 @@ function occurrenceQuery(
     ? "id, occurrence_date, status, lesson_number, lesson_id"
     : "id, occurrence_date, status, lesson_id";
   let query = supabase.from("lesson_occurrences").select(columns).order("occurrence_date");
+  if (opts.withHour) query = query.order("lesson_number");
   if (opts.lessonId) query = query.eq("lesson_id", opts.lessonId);
   else if (opts.lessonIds.length > 0) query = query.in("lesson_id", opts.lessonIds);
   if (opts.fromDate) query = query.gte("occurrence_date", opts.fromDate);
@@ -112,8 +113,9 @@ async function loadOccurrencesByDateRange(
       .select(columns)
       .gte("occurrence_date", opts.fromDate)
       .lte("occurrence_date", opts.toDate)
-      .order("occurrence_date")
-      .range(from, to);
+      .order("occurrence_date");
+    if (opts.withHour) query = query.order("lesson_number");
+    query = query.range(from, to);
     if (!opts.includeCancelled) query = query.neq("status", "cancelled");
     return query as PromiseLike<{ data: OccRow[] | null; error: { message: string } | null }>;
   });

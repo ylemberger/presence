@@ -72,6 +72,7 @@ export interface DayLessonRow {
   studentCount: number;
   markedCount: number;
   linkedOccurrenceIds?: string[];
+  linkedLessonIds?: string[];
 }
 
 interface Option {
@@ -124,10 +125,12 @@ interface Props {
   selectedLessonOccurrences?: Array<{
     id: string;
     date: string;
+    lessonNumber?: number | null;
     studentCount: number;
     markedCount: number;
     cancelled?: boolean;
   }>;
+  studentLessonIds?: string[];
   prevWeekBlocked?: boolean;
   prevWeekIncomplete?: Array<{ id: string; date: string }>;
   lessonStudents: AttendanceStudent[];
@@ -180,10 +183,20 @@ function linkedOccurrenceIds(row: DayLessonRow | undefined, fallbackId?: string)
 }
 
 /** Save the open meeting. Extra hours of the same lesson are separate cards and are not included. */
-function attendanceTargetIds(row: DayLessonRow | undefined, occurrenceId: string): string[] {
+/** Save the open meeting only. Same-lesson hours are separate rows and are never filled together. */
+function attendanceTargetIds(
+  row: DayLessonRow | undefined,
+  occurrenceId: string | undefined
+): string[] {
   if (!occurrenceId) return [];
-  const linked = (row?.linkedOccurrenceIds ?? []).filter(Boolean);
-  if (linked.length > 1 && linked.includes(occurrenceId)) return [...new Set(linked)];
+  const linked = [...new Set((row?.linkedOccurrenceIds ?? []).filter(Boolean))];
+  const lessonIds = [
+    ...new Set((row?.linkedLessonIds ?? (row?.lessonId ? [row.lessonId] : [])).filter(Boolean)),
+  ];
+  // Visual merge of consecutive DIFFERENT lessons: one card still fills those meetings.
+  if (lessonIds.length > 1 && linked.length > 1 && linked.includes(occurrenceId)) {
+    return linked;
+  }
   return [occurrenceId];
 }
 
@@ -238,6 +251,7 @@ export function AttendanceBoard({
   monthOccurrences,
   dayOccurrences: dayOccurrencesProp,
   selectedLessonOccurrences = [],
+  studentLessonIds = [],
   prevWeekBlocked = false,
   prevWeekIncomplete = [],
   lessonStudents,
@@ -279,7 +293,7 @@ export function AttendanceBoard({
     if (specializationId) open.push("spec");
     if (teacherId) open.push("teacher");
     if (subject) open.push("subject");
-    if (studentId) open.push("student");
+    if (studentId) open.push("student", "lesson");
     if (mode === "single") open.push("mode");
     return open;
   });
@@ -335,6 +349,8 @@ export function AttendanceBoard({
     : undefined;
   const activeOccurrenceId =
     requestedOccurrenceId && activeLesson ? requestedOccurrenceId : undefined;
+  const studentLessonIdSet = useMemo(() => new Set(studentLessonIds), [studentLessonIds]);
+  const studentLessonSheet = Boolean(studentId && lessonId);
 
   useEffect(() => {
     if (!canWrite || !activeLesson || lessonStudents.length > 0) return;
@@ -376,6 +392,55 @@ export function AttendanceBoard({
   const activeGap = gapQueue[0] ?? null;
 
   useEffect(() => {
+    if (studentLessonSheet && studentId) {
+      const nextDraft: Record<DraftKey, AttendanceStatus | null> = {};
+      const nextReasons: Record<DraftKey, AbsenceReason | null> = {};
+      const byOcc = new Map<string, { status: AttendanceStatus; reason: AbsenceReason | null }>();
+      for (const a of attendance) {
+        if (a.student_id !== studentId) continue;
+        byOcc.set(a.lesson_occurrence_id, {
+          status: a.status as AttendanceStatus,
+          reason: (a.reason as AbsenceReason | null) ?? null,
+        });
+      }
+      for (const o of selectedLessonOccurrences) {
+        const k = keyOf(studentId, o.id);
+        const row = byOcc.get(o.id);
+        nextDraft[k] = row?.status ?? null;
+        nextReasons[k] = row?.reason ?? null;
+      }
+      const sheetKey = `sheet:${studentId}:${lessonId}:${selectedLessonOccurrences.length}`;
+      const occurrenceChanged = hydratedOccurrenceId.current !== sheetKey;
+      hydratedOccurrenceId.current = sheetKey;
+      if (occurrenceChanged) {
+        setDraft(nextDraft);
+        setReasons(nextReasons);
+        setCellPhase({});
+        setMessage(null);
+        return;
+      }
+      setDraft((prev) => {
+        const merged = { ...nextDraft };
+        for (const [k, local] of Object.entries(prev)) {
+          const phase = cellPhaseRef.current[k];
+          if (local != null || phase === "saving" || phase === "saved" || phase === "error") {
+            merged[k] = local;
+          }
+        }
+        return merged;
+      });
+      setReasons((prev) => {
+        const merged = { ...nextReasons };
+        for (const [k, local] of Object.entries(prev)) {
+          const phase = cellPhaseRef.current[k];
+          if (local != null || phase === "saving" || phase === "saved") {
+            merged[k] = local;
+          }
+        }
+        return merged;
+      });
+      return;
+    }
     if (!activeOccurrenceId) {
       setDraft({});
       setReasons({});
@@ -394,7 +459,7 @@ export function AttendanceBoard({
     const byKey = new Map<string, { status: AttendanceStatus; reason: AbsenceReason | null }>();
     for (const a of attendance) {
       if (!linked.includes(a.lesson_occurrence_id)) continue;
-      const k = keyOf(a.student_id, activeOccurrenceId);
+      const k = keyOf(a.student_id, a.lesson_occurrence_id);
       if (!byKey.has(k) || a.lesson_occurrence_id === activeOccurrenceId) {
         byKey.set(k, {
           status: a.status as AttendanceStatus,
@@ -446,15 +511,24 @@ export function AttendanceBoard({
       }
       return merged;
     });
-  }, [lessonStudents, attendance, activeOccurrenceId]);
+  }, [
+    lessonStudents,
+    attendance,
+    activeOccurrenceId,
+    studentLessonSheet,
+    studentId,
+    lessonId,
+    selectedLessonOccurrences,
+  ]);
 
   useEffect(() => {
+    if (studentLessonSheet) return;
     if (dayOccurrences.length === 1 && !selectedOccurrenceId) {
       const params = buildParams({ occurrenceId: dayOccurrences[0].id });
       replace(`/attendance?${params.toString()}`, { scroll: false });
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [dayOccurrences.length, selectedOccurrenceId, selectedDate]);
+  }, [dayOccurrences.length, selectedOccurrenceId, selectedDate, studentLessonSheet]);
 
   const scrollRowIntoView = useRef(false);
   useEffect(() => {
@@ -485,6 +559,7 @@ export function AttendanceBoard({
 
   const scopedLessons = useMemo(() => {
     return lessons.filter((l) => {
+      if (studentId && !studentLessonIdSet.has(l.id)) return false;
       if (teacherId && l.teacherId && l.teacherId !== teacherId) return false;
       if (subject && l.subjectKey && l.subjectKey !== subject && !l.subject.startsWith(`${subject} ·`)) {
         return false;
@@ -496,11 +571,11 @@ export function AttendanceBoard({
       }
       return true;
     });
-  }, [lessons, teacherId, subject, classId, trackId, specializationId]);
+  }, [lessons, studentId, studentLessonIdSet, teacherId, subject, classId, trackId, specializationId]);
 
   const teacherLessonOptions = useMemo(() => {
     return scopedLessons
-      .filter((l) => l.teacherId)
+      .filter((l) => (studentId ? true : Boolean(l.teacherId)))
       .slice()
       .sort((a, b) => {
         const byTeacher = compareByFamilyName(
@@ -527,7 +602,7 @@ export function AttendanceBoard({
           keywords: [teacher, l.subject, group, day, hours].filter(Boolean).join(" "),
         };
       });
-  }, [scopedLessons]);
+  }, [scopedLessons, studentId]);
 
   function buildParams(patch: Record<string, string | undefined>) {
     const params = new URLSearchParams();
@@ -578,14 +653,22 @@ export function AttendanceBoard({
       buildParams({
         date: iso,
         occurrenceId: undefined,
-        lessonId: undefined,
+        lessonId: studentId ? lessonId : undefined,
       })
     );
   }
 
   function selectLesson(occurrenceId: string) {
     setPinnedOccurrenceId(occurrenceId);
-    navigate(buildParams({ occurrenceId }));
+    const row = dayOccurrences.find(
+      (o) => o.id === occurrenceId || o.linkedOccurrenceIds?.includes(occurrenceId)
+    );
+    navigate(
+      buildParams({
+        occurrenceId,
+        lessonId: studentId ? row?.lessonId ?? lessonId : lessonId,
+      })
+    );
   }
 
   function selectOccurrence(occurrenceId: string, date: string) {
@@ -841,42 +924,44 @@ export function AttendanceBoard({
     setBulkSaving(false);
   }
 
-  async function copyPrevious() {
-    if (!activeOccurrenceId) return;
+  function applyCopiedRecords(
+    occurrenceId: string,
+    records: Array<{ student_id: string; status: AttendanceStatus; reason?: string | null }>
+  ) {
+    setDraft((prev) => {
+      const next = { ...prev };
+      for (const row of records) {
+        next[keyOf(row.student_id, occurrenceId)] = row.status;
+      }
+      return next;
+    });
+    setReasons((prev) => {
+      const next = { ...prev };
+      for (const row of records) {
+        next[keyOf(row.student_id, occurrenceId)] =
+          row.status === "absent" ? ((row.reason as AbsenceReason | null) ?? null) : null;
+      }
+      return next;
+    });
+    setCellPhase((prev) => {
+      const next = { ...prev };
+      for (const row of records) {
+        next[keyOf(row.student_id, occurrenceId)] = "saved";
+      }
+      return next;
+    });
+  }
+
+  async function copyOccurrenceFromPrevious(occurrenceId: string) {
     setCopying(true);
     setMessage(null);
-    const result = await copyPreviousAttendanceAction(
-      activeOccurrenceId,
-      attendanceTargetIds(activeLesson, activeOccurrenceId)
-    );
+    const result = await copyPreviousAttendanceAction(occurrenceId, [occurrenceId]);
     if (result && "error" in result && result.error) {
       setMessage(result.error);
     } else if (result && "copied" in result) {
-      const copiedRecords = "records" in result && Array.isArray(result.records) ? result.records : [];
-      if (copiedRecords.length > 0) {
-        setDraft((prev) => {
-          const next = { ...prev };
-          for (const row of copiedRecords) {
-            next[keyOf(row.student_id, activeOccurrenceId)] = row.status;
-          }
-          return next;
-        });
-        setReasons((prev) => {
-          const next = { ...prev };
-          for (const row of copiedRecords) {
-            next[keyOf(row.student_id, activeOccurrenceId)] =
-              row.status === "absent" ? ((row.reason as AbsenceReason | null) ?? null) : null;
-          }
-          return next;
-        });
-        setCellPhase((prev) => {
-          const next = { ...prev };
-          for (const row of copiedRecords) {
-            next[keyOf(row.student_id, activeOccurrenceId)] = "saved";
-          }
-          return next;
-        });
-      }
+      const copiedRecords =
+        "records" in result && Array.isArray(result.records) ? result.records : [];
+      if (copiedRecords.length > 0) applyCopiedRecords(occurrenceId, copiedRecords);
       const parts: string[] = [];
       if ("present" in result && result.present) parts.push(`${result.present} נוכחות`);
       if ("late" in result && result.late) parts.push(`${result.late} איחורים`);
@@ -885,6 +970,11 @@ export function AttendanceBoard({
       setMessage(`הועתקו ${result.copied} רישומים מהשיעור הקודם${detail}`);
     }
     setCopying(false);
+  }
+
+  async function copyPrevious() {
+    if (!activeOccurrenceId) return;
+    await copyOccurrenceFromPrevious(activeOccurrenceId);
   }
 
   async function markOccurrenceDidNotTakePlace(occurrenceId: string) {
@@ -1199,14 +1289,18 @@ export function AttendanceBoard({
 
       <div className="overflow-hidden rounded-2xl border border-outline-variant/40 bg-surface-container-lowest shadow-tactile-sm print:hidden">
         <div className="border-b border-outline-variant/25 bg-secondary-container/30 px-4 py-3">
-          <p className="font-title-lg text-title-lg text-primary">חיפוש מורה ושיעור</p>
+          <p className="font-title-lg text-title-lg text-primary">
+            {studentId ? "נוכחות לפי תלמידה" : "חיפוש מורה ושיעור"}
+          </p>
           <p className="mt-0.5 font-body-sm text-body-sm text-on-surface-variant">
-            הקלידי שם מורה או מקצוע. מיד יופיע «מחפשת…», ואחרי בחירה «בודקת נתונים…» עד שהשיעור עולה.
+            {studentId
+              ? "בחרי שיעור של התלמידה. יופיעו כל המופעים שלו, ואפשר לסמן רק אותה בכל מפגש."
+              : "הקלידי שם מורה או מקצוע. מיד יופיע «מחפשת…», ואחרי בחירה «בודקת נתונים…» עד שהשיעור עולה."}
           </p>
         </div>
         <div className="px-4 py-4">
           <Combobox
-            label="שם מורה, מקצוע או קבוצה"
+            label={studentId ? "שיעור של התלמידה" : "שם מורה, מקצוע או קבוצה"}
             value={lessonId ?? ""}
             onChange={(v) => {
               const picked = lessons.find((l) => l.id === v);
@@ -1222,8 +1316,12 @@ export function AttendanceBoard({
             emptyLabel=""
             placeholder={
               teacherLessonOptions.length
-                ? "למשל: שם המורה או שם המקצוע…"
-                : "אין שיעורים לפי הסינון"
+                ? studentId
+                  ? "בחרי שיעור של התלמידה…"
+                  : "למשל: שם המורה או שם המקצוע…"
+                : studentId
+                  ? "אין שיעורים משויכים לתלמידה"
+                  : "אין שיעורים לפי הסינון"
             }
             fieldSize="lg"
             loading={isPending}
@@ -1306,7 +1404,15 @@ export function AttendanceBoard({
                 <Combobox
                   label="תלמידה"
                   value={studentId ?? ""}
-                  onChange={(v) => updateFilter("studentId", v || undefined)}
+                  onChange={(v) =>
+                    navigate(
+                      buildParams({
+                        studentId: v || undefined,
+                        lessonId: undefined,
+                        occurrenceId: undefined,
+                      })
+                    )
+                  }
                   options={allStudents.map((s) => ({ value: s.id, label: s.full_name }))}
                   emptyLabel="כל התלמידות"
                   placeholder="הקלידי שם תלמידה…"
@@ -1438,22 +1544,59 @@ export function AttendanceBoard({
           </div>
         ) : null}
         <section className="order-2 rounded-xl border border-outline-variant/30 bg-surface-container-lowest p-3 shadow-tactile-md xl:order-1 xl:col-span-7">
+          {lessonId && selectedLessonOccurrences.length === 0 && studentId ? (
+            <p className="mb-3 rounded-md border border-outline-variant/40 bg-surface-container-low/40 px-3 py-2 font-body-sm text-body-sm text-on-surface-variant">
+              אין מופעים משויכים לתלמידה בשיעור זה.
+            </p>
+          ) : null}
           {lessonId && selectedLessonOccurrences.length > 0 && (
             <div className="mb-3 rounded-md border border-outline-variant/40 bg-surface-container-low/40 p-2">
               <p className="mb-1 font-label-md text-label-md text-primary">
                 מופעים של {selectedLessonMeta?.subject ?? "השיעור"}
                 {selectedLessonMeta?.groupLabel ? ` · ${selectedLessonMeta.groupLabel}` : ""}
+                {studentLessonSheet
+                  ? ` · ${allStudents.find((s) => s.id === studentId)?.full_name ?? "התלמידה"}`
+                  : ""}
               </p>
-              <div className="flex max-h-48 flex-col gap-1 overflow-y-auto">
+              {studentLessonSheet ? (
+                <p className="mb-2 font-caption text-caption text-on-surface-variant">
+                  כל מפגש הוא שעה נפרדת. הסימון נשמר במסד לאותו מופע בלבד, רק לתלמידה זו.
+                </p>
+              ) : null}
+              {studentLessonSheet && message ? (
+                <p
+                  className={cn(
+                    "mb-2 rounded-lg px-3 py-1.5 font-body-sm text-body-sm",
+                    message.includes("שגיא") ||
+                      message.includes("אין הרשאה") ||
+                      message.includes("נכשל") ||
+                      message.includes("השלים")
+                      ? "bg-error-container/60 text-on-error-container"
+                      : "bg-attendance-present/10 text-attendance-present"
+                  )}
+                >
+                  {message}
+                </p>
+              ) : null}
+              <div
+                className={cn(
+                  "flex flex-col gap-1 overflow-y-auto",
+                  studentLessonSheet ? "max-h-[70vh]" : "max-h-48"
+                )}
+              >
                 {selectedLessonOccurrences.map((o) => {
                   const tone = lessonAttendanceTone(o.markedCount, o.studentCount);
                   const selected = o.id === activeOccurrenceId;
                   const cancelled = Boolean(o.cancelled);
+                  const hourLabel = o.lessonNumber
+                    ? formatLessonHours(o.lessonNumber, 1)
+                    : "";
+                  const k = studentId ? keyOf(studentId, o.id) : "";
                   return (
                     <div
                       key={o.id}
                       className={cn(
-                        "flex items-center gap-1 rounded-md border px-1 py-0.5",
+                        "flex flex-wrap items-center gap-1 rounded-md border px-1 py-0.5",
                         cancelled
                           ? "border-outline-variant/30 bg-surface-container-low/50 opacity-80"
                           : tone.card,
@@ -1473,16 +1616,64 @@ export function AttendanceBoard({
                           <span className="ms-1 font-caption text-caption text-on-surface-variant">
                             ({formatGregorianDate(o.date)})
                           </span>
+                          {hourLabel ? (
+                            <span className="ms-1 font-label-md text-label-md text-primary">
+                              {hourLabel}
+                            </span>
+                          ) : null}
                           {cancelled ? (
                             <span className="ms-1 font-caption text-caption text-on-surface-variant">
                               בוטל
                             </span>
                           ) : null}
                         </span>
-                        <span className={cn("font-caption text-caption", cancelled ? "text-on-surface-variant" : tone.meta)}>
-                          {cancelled ? "—" : `${o.markedCount}/${o.studentCount}${tone.complete ? " ✓" : ""}`}
-                        </span>
+                        {!studentLessonSheet ? (
+                          <span className={cn("font-caption text-caption", cancelled ? "text-on-surface-variant" : tone.meta)}>
+                            {cancelled ? "—" : `${o.markedCount}/${o.studentCount}${tone.complete ? " ✓" : ""}`}
+                          </span>
+                        ) : null}
                       </button>
+                      {studentLessonSheet && studentId && !cancelled ? (
+                        <div className="flex w-full flex-wrap items-center justify-end gap-2 px-1 pb-1 sm:w-auto">
+                          <AttendanceStatusPicker
+                            value={draft[k] ?? null}
+                            phase={cellPhase[k] ?? "idle"}
+                            onPick={(s) => pickStatus(studentId, o.id, s, reasons[k])}
+                            compact
+                          />
+                          {draft[k] === "absent" ? (
+                            <select
+                              className="min-w-[8rem] rounded-md border border-outline-variant/60 bg-surface-container-lowest px-2 py-1 font-body-sm text-body-sm text-on-surface focus:border-secondary focus:outline-none focus:ring-1 focus:ring-secondary/30"
+                              value={reasons[k] ?? ""}
+                              onChange={(e) =>
+                                setReason(
+                                  studentId,
+                                  o.id,
+                                  e.target.value as AbsenceReason | ""
+                                )
+                              }
+                            >
+                              <option value="">הערה (אופציונלי)</option>
+                              {ABSENCE_REASONS.map((r) => (
+                                <option key={r.value} value={r.value}>
+                                  {r.label}
+                                </option>
+                              ))}
+                            </select>
+                          ) : null}
+                          {canWrite ? (
+                            <Button
+                              type="button"
+                              size="sm"
+                              variant="secondary"
+                              disabled={copying}
+                              onClick={() => void copyOccurrenceFromPrevious(o.id)}
+                            >
+                              העתק קודם
+                            </Button>
+                          ) : null}
+                        </div>
+                      ) : null}
                       {canWrite && cancelled ? (
                         <Button
                           type="button"
@@ -1493,7 +1684,7 @@ export function AttendanceBoard({
                         >
                           החזר שיעור
                         </Button>
-                      ) : canWrite ? (
+                      ) : canWrite && !studentLessonSheet ? (
                         <Button
                           type="button"
                           size="sm"
@@ -1510,6 +1701,8 @@ export function AttendanceBoard({
               </div>
             </div>
           )}
+          {!studentLessonSheet && (
+          <>
           <div className="mb-2 flex flex-wrap items-center gap-2 border-b border-outline-variant/30 pb-2">
             <h3 className="flex flex-wrap items-center gap-1.5 font-label-md text-label-md text-primary">
               <Icon name="today" className="text-[16px] text-secondary" />
@@ -1603,6 +1796,8 @@ export function AttendanceBoard({
               })}
             </div>
           )}
+          </>
+          )}
         </section>
 
         <div className="order-1 xl:sticky xl:top-14 xl:order-2 xl:col-span-5">
@@ -1627,7 +1822,7 @@ export function AttendanceBoard({
       </div>
 
       <div className="print:hidden">
-      {activeLesson ? (
+      {studentLessonSheet ? null : activeLesson ? (
         <div className="mt-2 flex max-h-[70vh] min-h-[12rem] flex-col overflow-hidden rounded-xl border border-outline-variant/30 bg-surface-container-lowest shadow-tactile-md">
           <div className="sticky top-0 z-10 border-b border-outline-variant/30 bg-surface-container-lowest px-3 py-2">
             <div className="mb-2 flex flex-wrap items-center justify-between gap-2">

@@ -3516,12 +3516,43 @@ type PreviousAttendanceRow = {
   reason: string | null;
 };
 
+async function loadAttendanceRowsForOccurrence(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  occurrenceId: string
+): Promise<PreviousAttendanceRow[]> {
+  return fetchAllPages<PreviousAttendanceRow>((from, to) =>
+    supabase
+      .from("attendance")
+      .select("student_id, status, reason")
+      .eq("lesson_occurrence_id", occurrenceId)
+      .range(from, to)
+  );
+}
+
 async function loadPreviousSameHourAttendance(
   supabase: Awaited<ReturnType<typeof createClient>>,
   lessonId: string,
   occurrenceDate: string,
   lessonNumber: number | null
 ): Promise<{ found: boolean; rows: PreviousAttendanceRow[] }> {
+  if (lessonNumber != null) {
+    const earlierToday = await fetchAllPages<{ id: string; lesson_number: number }>((from, to) =>
+      supabase
+        .from("lesson_occurrences")
+        .select("id, lesson_number")
+        .eq("lesson_id", lessonId)
+        .eq("occurrence_date", occurrenceDate)
+        .lt("lesson_number", lessonNumber)
+        .neq("status", "cancelled")
+        .order("lesson_number", { ascending: false })
+        .range(from, to)
+    );
+    for (const occ of earlierToday) {
+      const rows = await loadAttendanceRowsForOccurrence(supabase, occ.id);
+      if (rows.length > 0) return { found: true, rows };
+    }
+  }
+
   let query = supabase
     .from("lesson_occurrences")
     .select("id")
@@ -3534,17 +3565,11 @@ async function loadPreviousSameHourAttendance(
   const { data: previous } = await query.maybeSingle();
   if (!previous) return { found: false, rows: [] };
 
-  const rows = await fetchAllPages<PreviousAttendanceRow>((from, to) =>
-    supabase
-      .from("attendance")
-      .select("student_id, status, reason")
-      .eq("lesson_occurrence_id", previous.id)
-      .range(from, to)
-  );
+  const rows = await loadAttendanceRowsForOccurrence(supabase, previous.id);
   return { found: true, rows };
 }
 
-/** Copy each student's exact status from the previous same-hour meeting of the same lesson. */
+/** Copy exact statuses from the previous hour today of the same lesson, else last week's same hour. */
 export async function copyPreviousAttendanceAction(
   occurrenceId: string,
   alsoOccurrenceIds: string[] = []

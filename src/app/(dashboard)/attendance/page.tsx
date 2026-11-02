@@ -25,7 +25,7 @@ import {
   fetchSkinnyOccurrences,
 } from "@/lib/attendance/load-occurrences";
 import { embedOne } from "@/lib/supabase/embed";
-import { fetchAssignmentsByLessons } from "@/lib/supabase/paged";
+import { fetchAllPages, fetchAssignmentsByLessons } from "@/lib/supabase/paged";
 import { compareStudentsByLastName } from "@/lib/students/sort";
 import { AttendanceBoard, type AttendanceMode } from "./AttendanceBoard";
 
@@ -74,10 +74,13 @@ export default async function AttendancePage({ searchParams }: Props) {
     loadAttendanceShell(activeYear.id),
     getPendingAttendanceSummary(activeYear.id),
     params.studentId
-      ? supabase
-          .from("student_lesson_assignments")
-          .select("lesson_id, start_date, end_date")
-          .eq("student_id", params.studentId)
+      ? fetchAllPages<{ lesson_id: string; start_date: string; end_date: string | null }>((from, to) =>
+          supabase
+            .from("student_lesson_assignments")
+            .select("lesson_id, start_date, end_date")
+            .eq("student_id", params.studentId)
+            .range(from, to)
+        ).then((rows) => ({ data: rows }))
       : Promise.resolve({ data: [] as { lesson_id: string; start_date: string; end_date: string | null }[] }),
   ]);
 
@@ -364,12 +367,22 @@ export default async function AttendancePage({ searchParams }: Props) {
     }
   }
 
+  if (params.studentId && lessonStudents.length === 0) {
+    const one = allStudentsMap.get(params.studentId);
+    if (one && one.is_active !== false) {
+      lessonStudents = [one];
+    }
+  }
+
   const selectedOccIds = new Set(selectedOcc?.linkedOccurrenceIds ?? []);
-  const attendanceRecords = monthAttendance.filter((a) =>
-    selectedOcc
-      ? selectedOccIds.has(a.lesson_occurrence_id)
-      : dayOccIds.includes(a.lesson_occurrence_id)
-  );
+  const attendanceRecords =
+    params.studentId && params.lessonId
+      ? monthAttendance
+      : monthAttendance.filter((a) =>
+          selectedOcc
+            ? selectedOccIds.has(a.lesson_occurrence_id)
+            : dayOccIds.includes(a.lesson_occurrence_id)
+        );
 
   const completeDates: string[] = [];
   const partialDates: string[] = [];
@@ -420,20 +433,35 @@ export default async function AttendancePage({ searchParams }: Props) {
   let selectedLessonOccurrences: Array<{
     id: string;
     date: string;
+    lessonNumber: number | null;
     studentCount: number;
     markedCount: number;
     cancelled: boolean;
   }> = [];
   if (params.lessonId) {
+    const studentCoverLinks = studentLinks.data ?? [];
     selectedLessonOccurrences = rawOccs
       .filter((o) => o.lesson_id === params.lessonId)
+      .filter((o) => {
+        if (!params.studentId) return true;
+        return studentCoverLinks.some(
+          (la) =>
+            la.lesson_id === o.lesson_id &&
+            isDateInRange(o.occurrence_date, la.start_date, la.end_date)
+        );
+      })
       .map((o) => ({
         id: o.id,
         date: o.occurrence_date,
+        lessonNumber: o.lesson_number,
         studentCount: countRoster(o.lesson_id, o.occurrence_date),
         markedCount: markedCountByOccurrence.get(o.id) ?? 0,
         cancelled: o.status === "cancelled",
-      }));
+      }))
+      .sort(
+        (a, b) =>
+          a.date.localeCompare(b.date) || (a.lessonNumber ?? 0) - (b.lessonNumber ?? 0)
+      );
   }
 
   const dayOccurrenceIds = dayBlocks.flatMap((o) =>
@@ -539,6 +567,7 @@ export default async function AttendancePage({ searchParams }: Props) {
         prevWeekIncomplete={prevWeekIncomplete}
         allStudents={allStudents}
         monthOccurrences={monthOccurrences}
+        studentLessonIds={[...new Set((studentLinks.data ?? []).map((row) => row.lesson_id))]}
         dayOccurrences={dayBlocks.map((o) => ({
           id: o.id,
           date: o.date,
@@ -552,6 +581,7 @@ export default async function AttendancePage({ searchParams }: Props) {
           studentCount: o.studentCount,
           markedCount: o.markedCount,
           linkedOccurrenceIds: o.linkedOccurrenceIds,
+          linkedLessonIds: o.linkedLessonIds,
         }))}
         lessonStudents={lessonStudents}
         attendance={attendanceRecords}
