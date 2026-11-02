@@ -7,10 +7,6 @@ import {
   isDateInRange,
   todayIso,
 } from "@/lib/dates/hebrew";
-import {
-  evaluateAbsenceAgainstRule,
-  summarizeAttendance,
-} from "@/lib/attendance/calculator";
 import { getPendingAttendanceSummary } from "@/lib/attendance/pending";
 import { mergeAttendanceBlocks } from "@/lib/attendance/blocks";
 import { holidayDatesByKind } from "@/lib/lessons/holidays";
@@ -31,11 +27,7 @@ import {
 import { embedOne } from "@/lib/supabase/embed";
 import { fetchAssignmentsByLessons } from "@/lib/supabase/paged";
 import { compareStudentsByLastName } from "@/lib/students/sort";
-import {
-  AttendanceBoard,
-  type AttendanceMode,
-  type StudentInsight,
-} from "./AttendanceBoard";
+import { AttendanceBoard, type AttendanceMode } from "./AttendanceBoard";
 
 interface Props {
   searchParams: {
@@ -316,7 +308,11 @@ export default async function AttendancePage({ searchParams }: Props) {
     return linksByLesson.get(lessonId) ?? [];
   }
 
+  const rosterCountByLessonDate = new Map<string, number>();
   function countRoster(lessonId: string, date: string) {
+    const key = `${lessonId}|${date}`;
+    const cached = rosterCountByLessonDate.get(key);
+    if (cached != null) return cached;
     const ids = new Set<string>();
     for (const link of linksFor(lessonId)) {
       const student = rosterStudent(link);
@@ -324,6 +320,7 @@ export default async function AttendancePage({ searchParams }: Props) {
       if (!linkCoversDate(link, date)) continue;
       ids.add(student.id);
     }
+    rosterCountByLessonDate.set(key, ids.size);
     return ids.size;
   }
 
@@ -420,69 +417,6 @@ export default async function AttendancePage({ searchParams }: Props) {
     }
   }
 
-  const insightsByStudent: Record<string, StudentInsight> = {};
-  if (selectedOcc && lessonStudents.length > 0) {
-    const rule =
-      catalog.rules.find((r) => r.id === selectedOcc.attendanceRuleId) ?? catalog.rules[0];
-    const maxPct = rule ? Number(rule.max_allowed_absence_percent) : null;
-    const selectedUnitKey = calcUnitForLesson(selectedOcc.lessonId, poolCatalog.byLesson).key;
-    const lessonOccs = monthOccurrences
-      .filter((o) => o.calcUnitKey === selectedUnitKey)
-      .sort((a, b) => a.date.localeCompare(b.date));
-
-    for (const student of lessonStudents) {
-      const eligible = lessonOccs
-        .filter((o) => {
-          if (o.date > selectedOcc.date) return false;
-          return linksFor(o.lessonId).some(
-            (link) => link.student_id === student.id && linkCoversDate(link, o.date)
-          );
-        })
-        .map((o) => {
-          const att = attendanceByPair.get(`${o.id}::${student.id}`);
-          return {
-            occurrenceId: o.id,
-            occurrenceDate: o.date,
-            status: "scheduled" as const,
-            attendanceStatus: att?.status as "present" | "absent" | "late" | undefined,
-          };
-        });
-      const summary = summarizeAttendance(eligible);
-      const evaluated = evaluateAbsenceAgainstRule(summary.absencePercent, maxPct);
-
-      let streak = 0;
-      for (let i = eligible.length - 1; i >= 0; i--) {
-        const s = eligible[i].attendanceStatus;
-        if (s === "present" || s === "late") streak++;
-        else break;
-      }
-
-      insightsByStudent[student.id] = {
-        absencePercent: summary.absencePercent,
-        ruleLevel: evaluated.level,
-        presentStreak: streak,
-      };
-    }
-  }
-
-  let noteBody = "";
-  if (selectedOcc) {
-    const { data: note } = await supabase
-      .from("attendance_notes")
-      .select("body")
-      .eq("lesson_occurrence_id", selectedOcc.id)
-      .maybeSingle();
-    noteBody = note?.body ?? "";
-  } else if (mode === "single" && params.studentId) {
-    const { data: note } = await supabase
-      .from("attendance_notes")
-      .select("body")
-      .eq("academic_year_id", activeYear.id)
-      .eq("student_id", params.studentId)
-      .maybeSingle();
-    noteBody = note?.body ?? "";
-  }
-
   let selectedLessonOccurrences: Array<{
     id: string;
     date: string;
@@ -502,9 +436,43 @@ export default async function AttendancePage({ searchParams }: Props) {
       }));
   }
 
-  const prevWeekIncompleteRaw = openOccurrenceId
-    ? await findIncompletePreviousWeekOccurrences(supabase, openOccurrenceId)
-    : [];
+  const dayOccurrenceIds = dayBlocks.flatMap((o) =>
+    o.linkedOccurrenceIds?.length ? o.linkedOccurrenceIds : [o.id]
+  );
+
+  const noteQuery = selectedOcc
+    ? supabase
+        .from("attendance_notes")
+        .select("body")
+        .eq("lesson_occurrence_id", selectedOcc.id)
+        .maybeSingle()
+    : mode === "single" && params.studentId
+      ? supabase
+          .from("attendance_notes")
+          .select("body")
+          .eq("academic_year_id", activeYear.id)
+          .eq("student_id", params.studentId)
+          .maybeSingle()
+      : Promise.resolve({ data: null as { body: string | null } | null });
+
+  const dayNotesQuery =
+    dayOccurrenceIds.length > 0
+      ? supabase
+          .from("attendance_notes")
+          .select("lesson_occurrence_id")
+          .in("lesson_occurrence_id", dayOccurrenceIds)
+          .not("body", "eq", "")
+      : Promise.resolve({ data: [] as { lesson_occurrence_id: string }[] });
+
+  const [noteRes, prevWeekIncompleteRaw, dayNotesRes] = await Promise.all([
+    noteQuery,
+    openOccurrenceId
+      ? findIncompletePreviousWeekOccurrences(supabase, openOccurrenceId)
+      : Promise.resolve([]),
+    dayNotesQuery,
+  ]);
+
+  const noteBody = noteRes.data?.body ?? "";
   const prevWeekIncomplete = blockingPreviousWeekGaps(prevWeekIncompleteRaw);
   const holidaySets = holidayDatesByKind(shell.holidayRows);
 
@@ -521,20 +489,9 @@ export default async function AttendancePage({ searchParams }: Props) {
           }))
       : [];
 
-  const dayOccurrenceIds = dayBlocks.flatMap((o) =>
-    o.linkedOccurrenceIds?.length ? o.linkedOccurrenceIds : [o.id]
-  );
-  let occurrenceIdsWithNotes: string[] = [];
-  if (dayOccurrenceIds.length > 0) {
-    const { data: noteRows } = await supabase
-      .from("attendance_notes")
-      .select("lesson_occurrence_id")
-      .in("lesson_occurrence_id", dayOccurrenceIds)
-      .not("body", "eq", "");
-    occurrenceIdsWithNotes = (noteRows ?? [])
-      .map((n) => n.lesson_occurrence_id)
-      .filter(Boolean) as string[];
-  }
+  const occurrenceIdsWithNotes = (dayNotesRes.data ?? [])
+    .map((n) => n.lesson_occurrence_id)
+    .filter(Boolean);
 
   return (
     <div className="flex flex-col gap-stack_lg print:gap-0">
@@ -605,7 +562,7 @@ export default async function AttendancePage({ searchParams }: Props) {
         holidayDates={holidaySets.vacation}
         cancelledDates={holidaySets.cancelled}
         studyRanges={shell.activityRanges}
-        insightsByStudent={insightsByStudent}
+        insightsByStudent={{}}
         pastGaps={pastGaps}
         occurrenceIdsWithNotes={occurrenceIdsWithNotes}
       />

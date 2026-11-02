@@ -927,6 +927,19 @@ create trigger trg_forbid_app_student_delete
   for each row
   execute function public.forbid_app_student_delete();
 
+-- ========== אינדקסים לקריאת נוכחות (033) — בלי מחיקה ==========
+create index if not exists idx_lo_lesson_date_number_active
+  on lesson_occurrences (lesson_id, occurrence_date desc, lesson_number)
+  where status is distinct from 'cancelled';
+
+create index if not exists idx_sla_lesson_covering
+  on student_lesson_assignments (lesson_id)
+  include (student_id, start_date, end_date, assignment_type);
+
+analyze lesson_occurrences;
+analyze attendance;
+analyze student_lesson_assignments;
+
 notify pgrst, 'reload schema';
 
 -- סיום

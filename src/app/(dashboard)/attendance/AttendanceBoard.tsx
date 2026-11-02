@@ -795,7 +795,6 @@ export function AttendanceBoard({
       setCellPhase(saved);
       const written = result && "written" in result ? result.written : lessonStudents.length;
       setMessage(`נשמר — ${written} סימונים`);
-      router.refresh();
     }
     setBulkSaving(false);
   }
@@ -838,7 +837,6 @@ export function AttendanceBoard({
       setMessage(
         written === 0 ? "כל התלמידות כבר סומנו" : `סומנו ${written} נעדרות (מי שלא סומנה)`
       );
-      router.refresh();
     }
     setBulkSaving(false);
   }
@@ -885,7 +883,6 @@ export function AttendanceBoard({
       if ("absent" in result && result.absent) parts.push(`${result.absent} חיסורים`);
       const detail = parts.length ? ` (${parts.join(", ")})` : "";
       setMessage(`הועתקו ${result.copied} רישומים מהשיעור הקודם${detail}`);
-      router.refresh();
     }
     setCopying(false);
   }

@@ -1,3 +1,4 @@
+import { cache } from "react";
 import { getYearCatalog } from "@/lib/utils";
 import { createClient } from "@/lib/supabase/server";
 import { embedOne, embeddedTeacher } from "@/lib/supabase/embed";
@@ -85,7 +86,7 @@ function inflate(yearId: string, cached: CachedShell): AttendanceShell {
   };
 }
 
-export async function loadAttendanceShell(yearId: string): Promise<AttendanceShell> {
+export const loadAttendanceShell = cache(async (yearId: string): Promise<AttendanceShell> => {
   const key = `attendance-shell:${yearId}`;
   const cached = readShellCache<CachedShell>(key);
   if (cached) return inflate(yearId, cached);
@@ -229,4 +230,4 @@ export async function loadAttendanceShell(yearId: string): Promise<AttendanceShe
   };
   writeShellCache(key, packed);
   return inflate(yearId, packed);
-}
+});
