@@ -26,6 +26,7 @@ import {
   expandIsoRange,
   formatGregorianDate,
   formatHebrewDate,
+  formatSchoolHebrewDate,
   hebrewMonthFromIso,
   startOfWeekSunday,
 } from "@/lib/dates/hebrew";
@@ -1612,7 +1613,7 @@ export function AttendanceBoard({
                         className="flex min-w-0 flex-1 items-center justify-between gap-2 px-1 py-1 text-right disabled:cursor-default"
                       >
                         <span className="font-body-sm text-body-sm text-on-surface">
-                          {formatHebrewDate(o.date)}
+                          {formatSchoolHebrewDate(o.date)}
                           <span className="ms-1 font-caption text-caption text-on-surface-variant">
                             ({formatGregorianDate(o.date)})
                           </span>

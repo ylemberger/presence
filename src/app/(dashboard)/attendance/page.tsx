@@ -5,8 +5,11 @@ import {
   buildHebrewMonth,
   hebrewMonthFromIso,
   isDateInRange,
+  schoolYearIsoBounds,
   todayIso,
 } from "@/lib/dates/hebrew";
+import { generateLessonOccurrences } from "@/lib/lessons/occurrences";
+import { autoAssignStudentsToLesson } from "@/lib/lessons/autoAssign";
 import { getPendingAttendanceSummary } from "@/lib/attendance/pending";
 import { mergeAttendanceBlocks } from "@/lib/attendance/blocks";
 import { holidayDatesByKind } from "@/lib/lessons/holidays";
@@ -70,6 +73,15 @@ export default async function AttendancePage({ searchParams }: Props) {
   const monthFrom = params.from || month.rangeStart;
   const monthTo = params.to || month.rangeEnd;
 
+  if (params.lessonId) {
+    try {
+      await generateLessonOccurrences(params.lessonId, undefined, supabase);
+      await autoAssignStudentsToLesson(params.lessonId, activeYear.id, undefined, supabase);
+    } catch {
+      // Keep listing meetings that already exist.
+    }
+  }
+
   const [shell, pendingSummary, studentLinks] = await Promise.all([
     loadAttendanceShell(activeYear.id),
     getPendingAttendanceSummary(activeYear.id),
@@ -85,11 +97,12 @@ export default async function AttendancePage({ searchParams }: Props) {
   ]);
 
   const yearLessonIds = shell.lessons.map((l) => l.id);
+  const schoolBounds = schoolYearIsoBounds(selectedDate);
   const rawOccs = await fetchSkinnyOccurrences(supabase, {
     yearLessonIds,
     lessonId: params.lessonId,
-    fromDate: params.lessonId ? undefined : monthFrom,
-    toDate: params.lessonId ? undefined : monthTo,
+    fromDate: params.lessonId ? schoolBounds.start : monthFrom,
+    toDate: params.lessonId ? schoolBounds.end : monthTo,
     includeCancelled: Boolean(params.lessonId),
   });
 

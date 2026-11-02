@@ -332,7 +332,8 @@ export async function autoAssignStudentsToLesson(
   const range = (Array.isArray(rawRange) ? rawRange[0] : rawRange) as {
     start_date: string;
   } | null;
-  const effectiveFrom = startDate || range?.start_date || todayIso();
+  const effectiveFrom =
+    toIsoDay(startDate || range?.start_date) || todayIso();
 
   const scoped = withAudience(lesson, audience ?? []);
 

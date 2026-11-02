@@ -224,6 +224,37 @@ export function academicViewYear(year: number, month: number): number {
   return month === 6 ? year + 1 : year;
 }
 
+/** Elul of schoolYear-1 through Av of schoolYear, as ISO bounds. */
+export function schoolYearIsoBounds(iso: string): { start: string; end: string } {
+  const { year, month } = hebrewMonthFromIso((iso || todayIso()).slice(0, 10));
+  const schoolYear = academicViewYear(year, month);
+  const elul = new HDate(1, 6, schoolYear - 1);
+  const av = new HDate(1, 5, schoolYear);
+  const avLast = new HDate(av.daysInMonth(), 5, schoolYear);
+  return { start: hDateToIso(elul), end: hDateToIso(avLast) };
+}
+
+/** Hebrew date for attendance lists: Elul is labeled as opening the new school year. */
+export function formatSchoolHebrewDate(date: string | Date | null | undefined): string {
+  if (!date) return "";
+  const iso = typeof date === "string" ? date.slice(0, 10) : toIsoDate(date);
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(iso)) return String(date);
+  try {
+    const hd = isoToHDate(iso);
+    const year = hd.getFullYear();
+    const month = hd.getMonth();
+    const dayLabel = hd.renderGematriya(true).split(" ")[0] ?? "";
+    const monthName = hebrewMonthName(year, month);
+    const school = hebrewYearLabel(academicViewYear(year, month));
+    if (month === 6) {
+      return `${dayLabel} ${monthName} ${hebrewYearLabel(year)} · שנת ${school}`;
+    }
+    return `${dayLabel} ${monthName} ${school}`;
+  } catch {
+    return iso;
+  }
+}
+
 /** Month row in the school-year list. Elul is named with its own Hebrew year. */
 export function schoolMonthLabel(calendarYear: number, month: number): string {
   const name = `${hebrewMonthName(calendarYear, month)} ${hebrewYearLabel(calendarYear)}`;

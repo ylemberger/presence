@@ -135,10 +135,14 @@ export function LessonsForm({
   const skipSalarySubject = useRef(Boolean(initial));
   const subjectListId = useId();
   const initialRange = ranges.find((r) => r.id === initial?.activityRangeId);
+  const defaultNamedRangeId =
+    ranges.find((r) => r.range_type === "annual" && !isFlexibleActivityRange(r))?.id ??
+    ranges.find((r) => !isFlexibleActivityRange(r))?.id ??
+    "";
   const [rangeChoice, setRangeChoice] = useState(() =>
     isFlexibleActivityRange(initialRange)
       ? FLEXIBLE_RANGE_FORM_VALUE
-      : (initial?.activityRangeId ?? "")
+      : (initial?.activityRangeId ?? defaultNamedRangeId)
   );
   const namedRanges = useMemo(
     () => ranges.filter((r) => !isFlexibleActivityRange(r)),
