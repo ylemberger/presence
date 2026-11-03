@@ -9,7 +9,6 @@ import {
   todayIso,
 } from "@/lib/dates/hebrew";
 import { generateLessonOccurrences } from "@/lib/lessons/occurrences";
-import { autoAssignStudentsToLesson } from "@/lib/lessons/autoAssign";
 import { getPendingAttendanceSummary } from "@/lib/attendance/pending";
 import { mergeAttendanceBlocks } from "@/lib/attendance/blocks";
 import { holidayDatesByKind } from "@/lib/lessons/holidays";
@@ -24,6 +23,7 @@ import { AttendanceReminderBanner } from "@/components/attendance/AttendanceRemi
 import { loadAttendanceShell, type ShellLesson, type ShellStudent } from "@/lib/attendance/load-shell";
 import { bustAttendanceShellCache } from "@/lib/attendance/shell-cache";
 import {
+  fetchAttendanceCountsByOccurrence,
   fetchAttendanceForOccurrences,
   fetchSkinnyOccurrences,
 } from "@/lib/attendance/load-occurrences";
@@ -72,11 +72,20 @@ export default async function AttendancePage({ searchParams }: Props) {
   const month = buildHebrewMonth(monthSeed.year, monthSeed.month);
   const monthFrom = params.from || month.rangeStart;
   const monthTo = params.to || month.rangeEnd;
+  const schoolBounds = schoolYearIsoBounds(selectedDate);
 
+  // Search is read-only when the lesson already has meetings. Fill once if empty.
   if (params.lessonId) {
     try {
-      await generateLessonOccurrences(params.lessonId, undefined, supabase);
-      await autoAssignStudentsToLesson(params.lessonId, activeYear.id, undefined, supabase);
+      const { count, error: countError } = await supabase
+        .from("lesson_occurrences")
+        .select("id", { count: "exact", head: true })
+        .eq("lesson_id", params.lessonId)
+        .gte("occurrence_date", schoolBounds.start)
+        .lte("occurrence_date", schoolBounds.end);
+      if (!countError && (count ?? 0) === 0) {
+        await generateLessonOccurrences(params.lessonId, undefined, supabase);
+      }
     } catch {
       // Keep listing meetings that already exist.
     }
@@ -97,7 +106,6 @@ export default async function AttendancePage({ searchParams }: Props) {
   ]);
 
   const yearLessonIds = shell.lessons.map((l) => l.id);
-  const schoolBounds = schoolYearIsoBounds(selectedDate);
   const rawOccs = await fetchSkinnyOccurrences(supabase, {
     yearLessonIds,
     lessonId: params.lessonId,
@@ -245,10 +253,20 @@ export default async function AttendancePage({ searchParams }: Props) {
   let linkLessonIds: string[];
   let attendanceOccIds: string[];
   let calendarFromStatus = false;
+  /** Lesson search: count marks for the year list; full rows only for the open meeting. */
+  const lessonSearchCounts = Boolean(params.lessonId) && !params.studentId;
+  const yearOccIdsForCounts = lessonSearchCounts ? rawOccs.map((o) => o.id) : [];
 
   if (params.lessonId) {
     linkLessonIds = [params.lessonId];
-    attendanceOccIds = rawOccs.map((o) => o.id);
+    if (params.studentId) {
+      // One student's marks across the lesson sheet — needed for the picker per meeting.
+      attendanceOccIds = rawOccs.map((o) => o.id);
+    } else {
+      const openIds = new Set(dayOccIds);
+      if (params.occurrenceId) openIds.add(params.occurrenceId);
+      attendanceOccIds = [...openIds];
+    }
   } else if (params.studentId) {
     linkLessonIds = [...new Set(monthOccurrences.map((o) => o.lessonId))];
     attendanceOccIds = monthOccurrences.map((o) => o.id);
@@ -262,7 +280,7 @@ export default async function AttendancePage({ searchParams }: Props) {
     calendarFromStatus = true;
   }
 
-  const [monthLinks, monthAttendance] = await Promise.all([
+  const [monthLinks, monthAttendance, lessonMarkCounts] = await Promise.all([
     fetchAssignmentsByLessons<{
       lesson_id: string;
       student_id: string;
@@ -285,6 +303,9 @@ export default async function AttendancePage({ searchParams }: Props) {
       "student_id, lesson_occurrence_id, status, reason",
       params.studentId
     ),
+    lessonSearchCounts
+      ? fetchAttendanceCountsByOccurrence(supabase, yearOccIdsForCounts)
+      : Promise.resolve(new Map<string, number>()),
   ]);
 
   function rosterStudent(link: {
@@ -310,13 +331,15 @@ export default async function AttendancePage({ searchParams }: Props) {
     if (list) list.push(link);
     else linksByLesson.set(link.lesson_id, [link]);
   }
-  const markedCountByOccurrence = new Map<string, number>();
+  const markedCountByOccurrence = new Map<string, number>(lessonMarkCounts);
   const attendanceByPair = new Map<string, (typeof monthAttendance)[number]>();
   for (const row of monthAttendance) {
-    markedCountByOccurrence.set(
-      row.lesson_occurrence_id,
-      (markedCountByOccurrence.get(row.lesson_occurrence_id) ?? 0) + 1
-    );
+    if (!lessonSearchCounts) {
+      markedCountByOccurrence.set(
+        row.lesson_occurrence_id,
+        (markedCountByOccurrence.get(row.lesson_occurrence_id) ?? 0) + 1
+      );
+    }
     attendanceByPair.set(`${row.lesson_occurrence_id}::${row.student_id}`, row);
   }
 

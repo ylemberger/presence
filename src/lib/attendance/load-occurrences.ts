@@ -206,3 +206,23 @@ export async function fetchAttendanceForOccurrences<T extends Record<string, unk
   );
   return pages.flat();
 }
+
+/** How many marks per meeting — skinny ids only, for lesson search lists. */
+export async function fetchAttendanceCountsByOccurrence(
+  supabase: SupabaseClient,
+  occurrenceIds: string[],
+  studentIds?: string | string[]
+): Promise<Map<string, number>> {
+  const counts = new Map<string, number>();
+  if (occurrenceIds.length === 0) return counts;
+  const rows = await fetchAttendanceForOccurrences<{ lesson_occurrence_id: string }>(
+    supabase,
+    occurrenceIds,
+    "lesson_occurrence_id",
+    studentIds
+  );
+  for (const row of rows) {
+    counts.set(row.lesson_occurrence_id, (counts.get(row.lesson_occurrence_id) ?? 0) + 1);
+  }
+  return counts;
+}
