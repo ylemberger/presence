@@ -269,7 +269,7 @@ export function AttendanceBoard({
   occurrenceIdsWithNotes = [],
 }: Props) {
   const { canWrite } = useAccess();
-  const { isPending, push, replace, router } = usePendingRouter();
+  const { isPending, push, router } = usePendingRouter();
   const [draft, setDraft] = useState<Record<DraftKey, AttendanceStatus | null>>({});
   const [reasons, setReasons] = useState<Record<DraftKey, AbsenceReason | null>>({});
   const [cellPhase, setCellPhase] = useState<Record<DraftKey, AttendancePickerPhase>>({});
@@ -340,7 +340,11 @@ export function AttendanceBoard({
     }
   }, [selectedOccurrenceId, pinnedOccurrenceId]);
 
-  const requestedOccurrenceId = pinnedOccurrenceId || selectedOccurrenceId;
+  // One meeting that day: open it without a second navigation that reloads the page.
+  const soleDayOccurrenceId =
+    !studentId && dayOccurrences.length === 1 ? dayOccurrences[0]?.id : undefined;
+  const requestedOccurrenceId =
+    pinnedOccurrenceId || selectedOccurrenceId || soleDayOccurrenceId;
   const activeLesson = requestedOccurrenceId
     ? dayOccurrences.find(
         (o) =>
@@ -521,15 +525,6 @@ export function AttendanceBoard({
     lessonId,
     selectedLessonOccurrences,
   ]);
-
-  useEffect(() => {
-    if (studentLessonSheet) return;
-    if (dayOccurrences.length === 1 && !selectedOccurrenceId) {
-      const params = buildParams({ occurrenceId: dayOccurrences[0].id });
-      replace(`/attendance?${params.toString()}`, { scroll: false });
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [dayOccurrences.length, selectedOccurrenceId, selectedDate, studentLessonSheet]);
 
   const scrollRowIntoView = useRef(false);
   useEffect(() => {

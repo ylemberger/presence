@@ -63,13 +63,18 @@ export function SettingsForms({ type, yearId, grades, createAction }: SettingsFo
             שנה פעילה
           </label>
           <p className="basis-full text-body-sm text-on-surface-variant">
-            כיתות, מסלולים והתמחויות מועתקים מהשנה הקודמת. טווחי פעילות ולוח
-            חופשות הם אותו לוח לכל השנים — מה שמולא בשנה שעברה יופיע גם כאן.
+            מהשנה הקודמת מגיעים לשנה החדשה: שכבות, כיתות, מסלולים, התמחויות
+            ומקצועות. טווחי פעילות ולוח חופשות הם לוח מוסדי אחד — לא מועתקים ולא
+            משתנים בפתיחת שנה. שיעורים ושיבוצי מורות לא מועתקים.
           </p>
           <label className="flex items-center gap-2 text-sm">
             <input type="checkbox" name="promote_students" defaultChecked />
             קדם תלמידות מהשנה הקודמת (א→ב, ב→ג, ג יוצאות)
           </label>
+          <p className="basis-full text-body-sm text-on-surface-variant">
+            אם רק בודקים פתיחת שנה — בטלו את סימון הקידום. אחרי קידום אי אפשר
+            למחוק את השנה (יש שיבוצי תלמידות), ושיבוצי השנה הקודמת כבר נסגרים.
+          </p>
         </>
       )}
 

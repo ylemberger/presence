@@ -10,6 +10,9 @@ export type SkinnyOccurrence = {
   lesson_number: number | null;
 };
 
+/** After the first probe, skip the extra round-trip for lesson_number column presence. */
+let occurrenceHourColumn: "yes" | "no" | "unknown" = "unknown";
+
 function occurrenceQuery(
   supabase: SupabaseClient,
   opts: {
@@ -139,18 +142,22 @@ export async function fetchSkinnyOccurrences(
   if (!lessonId && opts.yearLessonIds.length === 0) return [];
   if (lessonId && lessonChunks.length === 0) return [];
 
-  const probeChunk = lessonId ? [lessonId] : opts.yearLessonIds.slice(0, 1);
-  const probe = await occurrenceQuery(supabase, {
-    lessonIds: probeChunk,
-    lessonId,
-    fromDate: opts.fromDate,
-    toDate: opts.toDate,
-    includeCancelled,
-    withHour: true,
-    from: 0,
-    to: 0,
-  });
-  const withHour = !(probe.error && isMissingOccurrenceHourColumn(probe.error));
+  let withHour = occurrenceHourColumn !== "no";
+  if (occurrenceHourColumn === "unknown") {
+    const probeChunk = lessonId ? [lessonId] : opts.yearLessonIds.slice(0, 1);
+    const probe = await occurrenceQuery(supabase, {
+      lessonIds: probeChunk,
+      lessonId,
+      fromDate: opts.fromDate,
+      toDate: opts.toDate,
+      includeCancelled,
+      withHour: true,
+      from: 0,
+      to: 0,
+    });
+    withHour = !(probe.error && isMissingOccurrenceHourColumn(probe.error));
+    occurrenceHourColumn = withHour ? "yes" : "no";
+  }
 
   if (!lessonId && opts.fromDate && opts.toDate) {
     return asSkinny(

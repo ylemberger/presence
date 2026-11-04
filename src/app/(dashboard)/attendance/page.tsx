@@ -9,7 +9,6 @@ import {
   todayIso,
 } from "@/lib/dates/hebrew";
 import { generateLessonOccurrences } from "@/lib/lessons/occurrences";
-import { getPendingAttendanceSummary } from "@/lib/attendance/pending";
 import { mergeAttendanceBlocks } from "@/lib/attendance/blocks";
 import { holidayDatesByKind } from "@/lib/lessons/holidays";
 import { audienceForLesson, lessonMatchesAudienceFilter } from "@/lib/lessons/autoAssign";
@@ -19,7 +18,6 @@ import {
   blockingPreviousWeekGaps,
   findIncompletePreviousWeekOccurrences,
 } from "@/lib/attendance/previous-week";
-import { AttendanceReminderBanner } from "@/components/attendance/AttendanceReminderBanner";
 import { loadAttendanceShell, type ShellLesson, type ShellStudent } from "@/lib/attendance/load-shell";
 import { bustAttendanceShellCache } from "@/lib/attendance/shell-cache";
 import {
@@ -91,9 +89,9 @@ export default async function AttendancePage({ searchParams }: Props) {
     }
   }
 
-  const [shell, pendingSummary, studentLinks] = await Promise.all([
+  // Pending banner lives in the layout Suspense — keep it off this page's critical path.
+  const [shell, studentLinks] = await Promise.all([
     loadAttendanceShell(activeYear.id),
-    getPendingAttendanceSummary(activeYear.id),
     params.studentId
       ? fetchAllPages<{ lesson_id: string; start_date: string; end_date: string | null }>((from, to) =>
           supabase
@@ -528,9 +526,13 @@ export default async function AttendancePage({ searchParams }: Props) {
           .not("body", "eq", "")
       : Promise.resolve({ data: [] as { lesson_occurrence_id: string }[] });
 
+  // Previous-week check only blocks when the open meeting has no marks yet.
+  const needsPrevWeekCheck =
+    Boolean(openOccurrenceId) && (selectedOcc?.markedCount ?? 0) === 0;
+
   const [noteRes, prevWeekIncompleteRaw, dayNotesRes] = await Promise.all([
     noteQuery,
-    openOccurrenceId
+    needsPrevWeekCheck && openOccurrenceId
       ? findIncompletePreviousWeekOccurrences(supabase, openOccurrenceId)
       : Promise.resolve([]),
     dayNotesQuery,
@@ -560,8 +562,6 @@ export default async function AttendancePage({ searchParams }: Props) {
   return (
     <div className="flex flex-col gap-stack_lg print:gap-0">
       <PageHeader title="נוכחות" size="headline" />
-
-      <AttendanceReminderBanner summary={pendingSummary} />
 
       <AttendanceBoard
         yearId={activeYear.id}
@@ -602,7 +602,7 @@ export default async function AttendancePage({ searchParams }: Props) {
         }
         prevWeekIncomplete={prevWeekIncomplete}
         allStudents={allStudents}
-        monthOccurrences={monthOccurrences}
+        monthOccurrences={monthOccurrences.map((o) => ({ id: o.id, date: o.date }))}
         studentLessonIds={[...new Set((studentLinks.data ?? []).map((row) => row.lesson_id))]}
         dayOccurrences={dayBlocks.map((o) => ({
           id: o.id,
