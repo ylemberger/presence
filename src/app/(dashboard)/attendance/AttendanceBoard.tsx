@@ -355,7 +355,10 @@ export function AttendanceBoard({
   const activeOccurrenceId =
     requestedOccurrenceId && activeLesson ? requestedOccurrenceId : undefined;
   const studentLessonIdSet = useMemo(() => new Set(studentLessonIds), [studentLessonIds]);
-  const studentLessonSheet = Boolean(studentId && lessonId);
+  // Year sheet: student + specific lesson, or student + subject (meetings passed from the server).
+  const studentLessonSheet = Boolean(
+    studentId && (lessonId || (subject && selectedLessonOccurrences.length > 0))
+  );
 
   useEffect(() => {
     if (!canWrite || !activeLesson || lessonStudents.length > 0) return;
@@ -414,7 +417,7 @@ export function AttendanceBoard({
         nextDraft[k] = row?.status ?? null;
         nextReasons[k] = row?.reason ?? null;
       }
-      const sheetKey = `sheet:${studentId}:${lessonId}:${selectedLessonOccurrences.length}`;
+      const sheetKey = `sheet:${studentId}:${lessonId ?? ""}:${subject ?? ""}:${selectedLessonOccurrences.length}`;
       const occurrenceChanged = hydratedOccurrenceId.current !== sheetKey;
       hydratedOccurrenceId.current = sheetKey;
       if (occurrenceChanged) {
@@ -523,6 +526,7 @@ export function AttendanceBoard({
     studentLessonSheet,
     studentId,
     lessonId,
+    subject,
     selectedLessonOccurrences,
   ]);
 
@@ -1216,7 +1220,16 @@ export function AttendanceBoard({
     : 0;
   const unmarkedCount = Math.max(0, lessonStudents.length - markedInLesson);
 
-  const selectedLessonMeta = lessons.find((l) => l.id === lessonId);
+  const selectedLessonMeta = lessonId
+    ? lessons.find((l) => l.id === lessonId)
+    : subject
+      ? lessons.find(
+          (l) =>
+            l.subjectKey === subject ||
+            l.subject === subject ||
+            l.subject.startsWith(`${subject} ·`)
+        )
+      : undefined;
   const filterChips: { key: ExtraFilter; label: string; valueLabel?: string }[] = [
     { key: "class", label: "כיתה", valueLabel: classes.find((c) => c.id === classId)?.name },
     { key: "track", label: "מסלול", valueLabel: tracks.find((t) => t.id === trackId)?.name },
@@ -1540,15 +1553,16 @@ export function AttendanceBoard({
           </div>
         ) : null}
         <section className="order-2 rounded-xl border border-outline-variant/30 bg-surface-container-lowest p-3 shadow-tactile-md xl:order-1 xl:col-span-7">
-          {lessonId && selectedLessonOccurrences.length === 0 && studentId ? (
+          {studentLessonSheet && selectedLessonOccurrences.length === 0 ? (
             <p className="mb-3 rounded-md border border-outline-variant/40 bg-surface-container-low/40 px-3 py-2 font-body-sm text-body-sm text-on-surface-variant">
-              אין מופעים משויכים לתלמידה בשיעור זה.
+              אין מופעים משויכים לתלמידה בשיעור או במקצוע זה.
             </p>
           ) : null}
-          {lessonId && selectedLessonOccurrences.length > 0 && (
+          {(lessonId || studentLessonSheet) && selectedLessonOccurrences.length > 0 && (
             <div className="mb-3 rounded-md border border-outline-variant/40 bg-surface-container-low/40 p-2">
               <p className="mb-1 font-label-md text-label-md text-primary">
-                מופעים של {selectedLessonMeta?.subject ?? "השיעור"}
+                מופעים של{" "}
+                {selectedLessonMeta?.subject ?? subject ?? "השיעור"}
                 {selectedLessonMeta?.groupLabel ? ` · ${selectedLessonMeta.groupLabel}` : ""}
                 {studentLessonSheet
                   ? ` · ${allStudents.find((s) => s.id === studentId)?.full_name ?? "התלמידה"}`
@@ -1746,7 +1760,7 @@ export function AttendanceBoard({
           {dayOccurrences.length === 0 ? (
             <p className="px-1 py-2 font-caption text-caption text-on-surface-variant">
               {cancelledDates.includes(selectedDate)
-                ? "ביטול לימודים — אין שיעורים אוטומטיים ביום זה."
+                ? "ביטול לימודים — השיעורים בוטלו ואין סימון נוכחות ביום זה."
                 : holidayDates.includes(selectedDate)
                   ? "יום חופשה — אין לימודים ולא נספרת נוכחות."
                   : "אין שיעורים ביום זה לפי הסינון."}

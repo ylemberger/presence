@@ -23,7 +23,7 @@ export type CalendarMeeting = {
 const STATUS_LABEL: Record<CalendarMeeting["status"], string> = {
   scheduled: "טרם סומן",
   completed: "סומן",
-  cancelled: "בוטל",
+  cancelled: "השיעור בוטל",
 };
 
 interface LessonsByDateProps {
@@ -115,13 +115,26 @@ export function LessonsByDate({
             </div>
           </div>
 
+          {cancelledDay ? (
+            <p className="mb-3 rounded-lg border border-outline-variant/40 bg-surface-container-low px-3 py-2 font-body-md text-body-md text-on-surface">
+              ביטול לימודים ביום זה — השיעורים לא מתקיימים ואין סימון נוכחות.
+            </p>
+          ) : null}
           {meetings.length === 0 ? (
             <p className="font-body-md text-body-md text-on-surface-variant">
-              אין מפגשים בתאריך הזה לפי הסינון. מופעים נוצרים כששומרים שיעור בטווח הפעילות.
+              {cancelledDay
+                ? "אין מפגשים לסימון ביום שבוטל."
+                : "אין מפגשים בתאריך הזה לפי הסינון. מופעים נוצרים כששומרים שיעור בטווח הפעילות."}
             </p>
           ) : (
             <ul className="flex flex-col gap-2">
-              {meetings.map((meeting) => (
+              {meetings.map((meeting) => {
+                const treatedCancelled =
+                  cancelledDay || meeting.status === "cancelled";
+                const statusLabel = treatedCancelled
+                  ? STATUS_LABEL.cancelled
+                  : STATUS_LABEL[meeting.status];
+                return (
                 <li
                   key={meeting.id}
                   className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-outline-variant/30 bg-surface-container-low px-3 py-2"
@@ -133,12 +146,12 @@ export function LessonsByDate({
                       {meeting.subject}
                     </div>
                     <p className="mt-0.5 font-caption text-caption text-on-surface-variant">
-                      {[meeting.teacherName, meeting.audienceLabel, STATUS_LABEL[meeting.status]]
+                      {[meeting.teacherName, meeting.audienceLabel, statusLabel]
                         .filter(Boolean)
                         .join(" · ")}
                     </p>
                   </div>
-                  {meeting.status === "cancelled" ? null : (
+                  {treatedCancelled ? null : (
                     <Link
                       href={`/attendance?date=${meeting.date}&occurrenceId=${meeting.id}`}
                       className="inline-flex shrink-0 items-center gap-1 rounded-lg border border-outline-variant bg-surface-container-lowest px-3 py-1.5 font-semibold text-caption text-primary hover:bg-surface-container-low"
@@ -148,7 +161,8 @@ export function LessonsByDate({
                     </Link>
                   )}
                 </li>
-              ))}
+                );
+              })}
             </ul>
           )}
         </div>

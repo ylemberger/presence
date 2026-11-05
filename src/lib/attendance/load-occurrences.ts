@@ -134,6 +134,8 @@ export async function fetchSkinnyOccurrences(
     fromDate?: string;
     toDate?: string;
     includeCancelled?: boolean;
+    /** Prefer per-lesson queries (for a few lessons over a long date range). */
+    chunkByLesson?: boolean;
   }
 ): Promise<SkinnyOccurrence[]> {
   const includeCancelled = Boolean(opts.includeCancelled);
@@ -159,7 +161,7 @@ export async function fetchSkinnyOccurrences(
     occurrenceHourColumn = withHour ? "yes" : "no";
   }
 
-  if (!lessonId && opts.fromDate && opts.toDate) {
+  if (!lessonId && opts.fromDate && opts.toDate && !opts.chunkByLesson) {
     return asSkinny(
       await loadOccurrencesByDateRange(supabase, {
         yearLessonIds: opts.yearLessonIds,

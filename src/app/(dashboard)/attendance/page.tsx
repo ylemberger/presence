@@ -8,7 +8,10 @@ import {
   schoolYearIsoBounds,
   todayIso,
 } from "@/lib/dates/hebrew";
-import { generateLessonOccurrences } from "@/lib/lessons/occurrences";
+import {
+  generateLessonOccurrences,
+  scrubScheduledOccurrencesOnDate,
+} from "@/lib/lessons/occurrences";
 import { mergeAttendanceBlocks } from "@/lib/attendance/blocks";
 import { holidayDatesByKind } from "@/lib/lessons/holidays";
 import { audienceForLesson, lessonMatchesAudienceFilter } from "@/lib/lessons/autoAssign";
@@ -26,7 +29,7 @@ import {
   fetchSkinnyOccurrences,
 } from "@/lib/attendance/load-occurrences";
 import { embedOne } from "@/lib/supabase/embed";
-import { fetchAllPages, fetchAssignmentsByLessons } from "@/lib/supabase/paged";
+import { chunkIds, fetchAllPages, fetchAssignmentsByLessons } from "@/lib/supabase/paged";
 import { compareStudentsByLastName } from "@/lib/students/sort";
 import { AttendanceBoard, type AttendanceMode } from "./AttendanceBoard";
 
@@ -104,12 +107,39 @@ export default async function AttendancePage({ searchParams }: Props) {
   ]);
 
   const yearLessonIds = shell.lessons.map((l) => l.id);
+  const studentLinkedLessonIds = new Set(
+    (studentLinks.data ?? []).map((row) => row.lesson_id)
+  );
+  const subjectMatchesLesson = (lesson: ShellLesson) => {
+    if (!params.subject) return false;
+    return (
+      lesson.subjectKey === params.subject ||
+      lesson.subject === params.subject ||
+      lesson.subject.startsWith(`${params.subject} ·`) ||
+      lesson.subjectRaw === params.subject
+    );
+  };
+  /** Student + lesson, or student + subject: year-long meeting sheet. */
+  const subjectSheetLessonIds =
+    params.studentId && params.subject && !params.lessonId
+      ? shell.lessons
+          .filter((l) => studentLinkedLessonIds.has(l.id) && subjectMatchesLesson(l))
+          .map((l) => l.id)
+      : [];
+  const yearSheetMode = Boolean(
+    params.lessonId || (params.studentId && params.subject && subjectSheetLessonIds.length > 0)
+  );
+  const yearSheetLessonIds = params.lessonId
+    ? [params.lessonId]
+    : subjectSheetLessonIds;
+
   const rawOccs = await fetchSkinnyOccurrences(supabase, {
-    yearLessonIds,
+    yearLessonIds: yearSheetMode && !params.lessonId ? yearSheetLessonIds : yearLessonIds,
     lessonId: params.lessonId,
-    fromDate: params.lessonId ? schoolBounds.start : monthFrom,
-    toDate: params.lessonId ? schoolBounds.end : monthTo,
-    includeCancelled: Boolean(params.lessonId),
+    fromDate: yearSheetMode ? schoolBounds.start : monthFrom,
+    toDate: yearSheetMode ? schoolBounds.end : monthTo,
+    includeCancelled: yearSheetMode,
+    chunkByLesson: Boolean(params.studentId && params.subject && !params.lessonId),
   });
 
   let lessonById = new Map(shell.lessons.map((l) => [l.id, l]));
@@ -228,6 +258,21 @@ export default async function AttendancePage({ searchParams }: Props) {
     );
   }
 
+  const holidaySetsEarly = holidayDatesByKind(shell.holidayRows);
+  const cancelledDateSet = new Set(holidaySetsEarly.cancelled);
+  const vacationDateSet = new Set(holidaySetsEarly.vacation);
+  // Repair leftover scheduled rows on a cancelled/vacation day (saved before paging fix).
+  if (cancelledDateSet.has(selectedDate) || vacationDateSet.has(selectedDate)) {
+    try {
+      await scrubScheduledOccurrencesOnDate(activeYear.id, selectedDate, supabase);
+    } catch {
+      // UI still hides the day; DB cleanup can wait for the next holiday save.
+    }
+  }
+  // Keep cancelled/vacation days off the month calendar and day roster.
+  monthOccurrences = monthOccurrences.filter(
+    (o) => !cancelledDateSet.has(o.date) && !vacationDateSet.has(o.date)
+  );
   const dayOccurrences = monthOccurrences.filter((o) => o.date === selectedDate);
   const allStudentsMap = new Map(shell.allStudents.map((s) => [s.id, s]));
   const allStudents = shell.allStudents;
@@ -254,11 +299,12 @@ export default async function AttendancePage({ searchParams }: Props) {
   /** Lesson search: count marks for the year list; full rows only for the open meeting. */
   const lessonSearchCounts = Boolean(params.lessonId) && !params.studentId;
   const yearOccIdsForCounts = lessonSearchCounts ? rawOccs.map((o) => o.id) : [];
+  const studentYearSheet = Boolean(params.studentId && yearSheetMode);
 
-  if (params.lessonId) {
-    linkLessonIds = [params.lessonId];
+  if (params.lessonId || studentYearSheet) {
+    linkLessonIds = params.lessonId ? [params.lessonId] : yearSheetLessonIds;
     if (params.studentId) {
-      // One student's marks across the lesson sheet — needed for the picker per meeting.
+      // One student's marks across the year sheet — needed for the picker per meeting.
       attendanceOccIds = rawOccs.map((o) => o.id);
     } else {
       const openIds = new Set(dayOccIds);
@@ -278,7 +324,7 @@ export default async function AttendancePage({ searchParams }: Props) {
     calendarFromStatus = true;
   }
 
-  const [monthLinks, monthAttendance, lessonMarkCounts] = await Promise.all([
+  const [monthLinks, monthAttendance, lessonMarkCounts, exclusionRows] = await Promise.all([
     fetchAssignmentsByLessons<{
       lesson_id: string;
       student_id: string;
@@ -304,12 +350,35 @@ export default async function AttendancePage({ searchParams }: Props) {
     lessonSearchCounts
       ? fetchAttendanceCountsByOccurrence(supabase, yearOccIdsForCounts)
       : Promise.resolve(new Map<string, number>()),
+    linkLessonIds.length > 0
+      ? Promise.all(
+          chunkIds(linkLessonIds).map((chunk) =>
+            fetchAllPages<{ student_id: string; lesson_id: string }>((from, to) =>
+              supabase
+                .from("student_lesson_exclusions")
+                .select("student_id, lesson_id")
+                .in("lesson_id", chunk)
+                .range(from, to)
+            )
+          )
+        )
+          .then((pages) => pages.flat())
+          .catch(() => [] as { student_id: string; lesson_id: string }[])
+      : Promise.resolve([] as { student_id: string; lesson_id: string }[]),
   ]);
+
+  const excludedPairs = new Set(
+    exclusionRows.map((row) => `${row.lesson_id}::${row.student_id}`)
+  );
 
   function rosterStudent(link: {
     student_id: string;
+    lesson_id?: string;
     students: unknown;
   }): ShellStudent | null {
+    if (link.lesson_id && excludedPairs.has(`${link.lesson_id}::${link.student_id}`)) {
+      return null;
+    }
     const embedded = embedOne<ShellStudent>(link.students);
     const s = embedded ?? allStudentsMap.get(link.student_id) ?? null;
     if (!s || s.is_active === false) return null;
@@ -325,6 +394,7 @@ export default async function AttendancePage({ searchParams }: Props) {
 
   const linksByLesson = new Map<string, typeof monthLinks>();
   for (const link of monthLinks) {
+    if (excludedPairs.has(`${link.lesson_id}::${link.student_id}`)) continue;
     const list = linksByLesson.get(link.lesson_id);
     if (list) list.push(link);
     else linksByLesson.set(link.lesson_id, [link]);
@@ -410,7 +480,7 @@ export default async function AttendancePage({ searchParams }: Props) {
 
   const selectedOccIds = new Set(selectedOcc?.linkedOccurrenceIds ?? []);
   const attendanceRecords =
-    params.studentId && params.lessonId
+    studentYearSheet
       ? monthAttendance
       : monthAttendance.filter((a) =>
           selectedOcc
@@ -472,10 +542,11 @@ export default async function AttendancePage({ searchParams }: Props) {
     markedCount: number;
     cancelled: boolean;
   }> = [];
-  if (params.lessonId) {
+  if (params.lessonId || studentYearSheet) {
     const studentCoverLinks = studentLinks.data ?? [];
+    const sheetLessonSet = new Set(yearSheetLessonIds);
     selectedLessonOccurrences = rawOccs
-      .filter((o) => o.lesson_id === params.lessonId)
+      .filter((o) => sheetLessonSet.has(o.lesson_id))
       .filter((o) => {
         if (!params.studentId) return true;
         return studentCoverLinks.some(
@@ -490,7 +561,10 @@ export default async function AttendancePage({ searchParams }: Props) {
         lessonNumber: o.lesson_number,
         studentCount: countRoster(o.lesson_id, o.occurrence_date),
         markedCount: markedCountByOccurrence.get(o.id) ?? 0,
-        cancelled: o.status === "cancelled",
+        cancelled:
+          o.status === "cancelled" ||
+          cancelledDateSet.has(o.occurrence_date) ||
+          vacationDateSet.has(o.occurrence_date),
       }))
       .sort(
         (a, b) =>
@@ -540,7 +614,7 @@ export default async function AttendancePage({ searchParams }: Props) {
 
   const noteBody = noteRes.data?.body ?? "";
   const prevWeekIncomplete = blockingPreviousWeekGaps(prevWeekIncompleteRaw);
-  const holidaySets = holidayDatesByKind(shell.holidayRows);
+  const holidaySets = holidaySetsEarly;
 
   const pastGaps =
     selectedOcc && prevWeekIncompleteRaw.length > 0

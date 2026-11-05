@@ -507,13 +507,22 @@ export async function applyHolidaysToYearOccurrences(
     return { created: gen.created, skipped: gen.skipped, removed: 0, cancelled: 0 };
   }
 
-  const { data: occs, error: occError } = await supabase
-    .from("lesson_occurrences")
-    .select("id, occurrence_date, status, lessons!inner(academic_year_id)")
-    .eq("lessons.academic_year_id", academicYearId);
-  if (occError) throw occError;
+  const occs = await fetchAllPages<{
+    id: string;
+    occurrence_date: string;
+    status: string;
+  }>((from, to) =>
+    supabase
+      .from("lesson_occurrences")
+      .select("id, occurrence_date, status, lessons!inner(academic_year_id)")
+      .eq("lessons.academic_year_id", academicYearId)
+      .range(from, to) as PromiseLike<{
+      data: { id: string; occurrence_date: string; status: string }[] | null;
+      error: { message: string } | null;
+    }>
+  );
 
-  const onHoliday = (occs ?? []).filter(
+  const onHoliday = occs.filter(
     (o) => holidays.has(o.occurrence_date) && o.status !== "cancelled"
   );
   if (onHoliday.length === 0) {
@@ -569,4 +578,63 @@ export async function applyHolidaysToAllOccurrences(supabase: SupabaseClient) {
     cancelled += result.cancelled;
   }
   return { created, skipped, removed, cancelled };
+}
+
+/**
+ * Fix leftover scheduled meetings on one holiday/cancelled-studies date
+ * (for calendars saved before full paging). Does not delete attendance marks.
+ */
+export async function scrubScheduledOccurrencesOnDate(
+  academicYearId: string,
+  date: string,
+  supabase: SupabaseClient
+): Promise<{ removed: number; cancelled: number }> {
+  const iso = date.slice(0, 10);
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(iso)) return { removed: 0, cancelled: 0 };
+
+  const occs = await fetchAllPages<{ id: string; status: string }>((from, to) =>
+    supabase
+      .from("lesson_occurrences")
+      .select("id, status, lessons!inner(academic_year_id)")
+      .eq("lessons.academic_year_id", academicYearId)
+      .eq("occurrence_date", iso)
+      .neq("status", "cancelled")
+      .range(from, to) as PromiseLike<{
+      data: { id: string; status: string }[] | null;
+      error: { message: string } | null;
+    }>
+  );
+  if (occs.length === 0) return { removed: 0, cancelled: 0 };
+
+  const ids = occs.map((o) => o.id);
+  const attended = new Set<string>();
+  await chunkedIn(ids, 200, async (chunk) => {
+    const { data: att, error } = await supabase
+      .from("attendance")
+      .select("lesson_occurrence_id")
+      .in("lesson_occurrence_id", chunk);
+    if (error) throw error;
+    for (const row of att ?? []) attended.add(row.lesson_occurrence_id);
+  });
+
+  const toDelete = ids.filter((id) => !attended.has(id));
+  const toCancel = ids.filter((id) => attended.has(id));
+  let removed = 0;
+  let cancelled = 0;
+
+  await chunkedIn(toDelete, 200, async (chunk) => {
+    const { error } = await supabase.from("lesson_occurrences").delete().in("id", chunk);
+    if (error) throw error;
+    removed += chunk.length;
+  });
+  await chunkedIn(toCancel, 200, async (chunk) => {
+    const { error } = await supabase
+      .from("lesson_occurrences")
+      .update({ status: "cancelled" })
+      .in("id", chunk);
+    if (error) throw error;
+    cancelled += chunk.length;
+  });
+
+  return { removed, cancelled };
 }

@@ -423,6 +423,10 @@ export default async function LessonsPage({ searchParams }: Props) {
     meetingsByDate.set(row.occurrence_date, list);
   }
 
+  const holidaySets = holidayDatesByKind(holidayRows);
+  const cancelledDaySet = new Set(holidaySets.cancelled);
+  const vacationDaySet = new Set(holidaySets.vacation);
+
   const countsByDate: Record<string, number> = {};
   const completeDates: string[] = [];
   const partialDates: string[] = [];
@@ -430,6 +434,7 @@ export default async function LessonsPage({ searchParams }: Props) {
     list.sort(
       (a, b) => a.lessonNumber - b.lessonNumber || a.subject.localeCompare(b.subject, "he")
     );
+    if (cancelledDaySet.has(date) || vacationDaySet.has(date)) continue;
     const active = list.filter((meeting) => meeting.status !== "cancelled");
     if (active.length === 0) continue;
     countsByDate[date] = active.length;
@@ -438,7 +443,6 @@ export default async function LessonsPage({ searchParams }: Props) {
   }
 
   const dayMeetings = meetingsByDate.get(selectedDate) ?? [];
-  const holidaySets = holidayDatesByKind(holidayRows);
   const studyRanges = ((ranges.data ?? []) as { start_date?: string | null; end_date?: string | null }[])
     .filter((range) => range.start_date && range.end_date)
     .map((range) => ({ start_date: range.start_date as string, end_date: range.end_date as string }));

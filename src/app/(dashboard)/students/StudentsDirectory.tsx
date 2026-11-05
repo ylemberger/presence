@@ -292,6 +292,7 @@ export function StudentsDirectory({
   const [psychology, setPsychology] = useState<"all" | "yes" | "no">("all");
   const [chetz, setChetz] = useState<"all" | "yes" | "no">("all");
   const [status, setStatus] = useState<"all" | "active" | "inactive">("all");
+  const [cities, setCities] = useState<string[]>([]);
   const [sortKey, setSortKey] = useState<SortKey>("name");
   const [sortDir, setSortDir] = useState<"asc" | "desc">("asc");
   const [filtersOpen, setFiltersOpen] = useState(!canWrite);
@@ -423,6 +424,7 @@ export function StudentsDirectory({
       ) {
         return false;
       }
+      if (cities.length > 0 && !cities.includes((s.city ?? "").trim())) return false;
       if (psychology === "yes" && !s.isPsychology) return false;
       if (psychology === "no" && s.isPsychology) return false;
       if (chetz === "yes" && !s.chetz_program) return false;
@@ -470,6 +472,7 @@ export function StudentsDirectory({
     classIds,
     trackIds,
     specIds,
+    cities,
     psychology,
     chetz,
     lessonIds,
@@ -479,6 +482,17 @@ export function StudentsDirectory({
     lessonSubjectById,
     lessonTeacherById,
   ]);
+
+  const cityFilterOptions = useMemo(() => {
+    const names = new Set<string>();
+    for (const s of students) {
+      const city = (s.city ?? "").trim();
+      if (city) names.add(city);
+    }
+    return [...names]
+      .sort((a, b) => a.localeCompare(b, "he"))
+      .map((name) => ({ value: name, label: name }));
+  }, [students]);
 
   const sorted = useMemo(() => {
     const dir = sortDir === "asc" ? 1 : -1;
@@ -600,12 +614,16 @@ export function StudentsDirectory({
     filtered.length,
   ]);
 
+  /** Print and Excel always exclude inactive students. */
+  const printRows = useMemo(() => sorted.filter((s) => s.is_active), [sorted]);
+
   const hasActiveFilter = Boolean(
     query.trim() ||
       gradeIds.length ||
       classIds.length ||
       trackIds.length ||
       specIds.length ||
+      cities.length ||
       teacherIds.length ||
       subjectKeys.length ||
       lessonIds.length ||
@@ -620,7 +638,7 @@ export function StudentsDirectory({
       <div className="flex flex-wrap items-start justify-between gap-3 border-b border-outline-variant/30 bg-secondary-container/30 px-5 py-3 print:hidden">
         <div className="min-w-0 flex-1">
           <p className="mb-1 font-label-md text-label-md text-on-surface">
-            הדפסה וייצוא — סמני אילו עמודות יופיעו ברשימה המודפסת ובאקסל (לפי הסינון למטה)
+            הדפסה וייצוא — רק תלמידות פעילות לפי הסינון למטה. סמני אילו עמודות יופיעו.
           </p>
           <div className="flex flex-wrap gap-x-3 gap-y-1">
             {PRINT_COLUMNS.map((col) => (
@@ -645,18 +663,18 @@ export function StudentsDirectory({
         <PrintButton
           label="הדפסת רשימה"
           documentTitle={`תלמידות${yearName ? `-${yearName}` : ""}`}
-          disabled={filtered.length === 0}
-          disabledReason="אין תלמידות להדפסה לפי הסינון"
+          disabled={printRows.length === 0}
+          disabledReason="אין תלמידות פעילות להדפסה לפי הסינון"
         />
         <Button
           type="button"
           variant="secondary"
-          disabled={filtered.length === 0}
-          title={filtered.length === 0 ? "אין תלמידות לייצוא לפי הסינון" : undefined}
+          disabled={printRows.length === 0}
+          title={printRows.length === 0 ? "אין תלמידות פעילות לייצוא לפי הסינון" : undefined}
           onClick={() => {
             const cols = PRINT_COLUMNS.filter((col) => printCols[col.id]);
             const header = cols.map((col) => col.label);
-            const body = sorted.map((s) => cols.map((col) => printCell(s, col.id)));
+            const body = printRows.map((s) => cols.map((col) => printCell(s, col.id)));
             const sheet = XLSX.utils.aoa_to_sheet([header, ...body]);
             sheet["!cols"] = cols.map((col) => ({
               wch: Math.min(28, Math.max(10, col.label.length + 4)),
@@ -765,6 +783,13 @@ export function StudentsDirectory({
                 value: s.id,
                 label: s.name,
               }))}
+            />
+            <SearchMultiSelect
+              label="ערים"
+              values={cities}
+              onChange={setCities}
+              options={cityFilterOptions}
+              placeholder="בחרי עיר…"
             />
           </div>
         </div>
@@ -913,6 +938,7 @@ export function StudentsDirectory({
                   setClassIds([]);
                   setTrackIds([]);
                   setSpecIds([]);
+                  setCities([]);
                   setTeacherIds([]);
                   setSubjectKeys([]);
                   setLessonIds([]);
@@ -1102,7 +1128,7 @@ export function StudentsDirectory({
             </tr>
           </thead>
           <tbody>
-            {sorted.map((s) => (
+            {printRows.map((s) => (
               <tr key={s.id} className="border-b border-outline-variant/40">
                 {printColumns.map((col) => (
                   <td key={col.id} className="px-1.5 py-0.5 text-on-surface">

@@ -52,7 +52,7 @@ import {
 } from "@/lib/students/excelImport";
 import { applyStudentImportRows } from "@/lib/students/importApply";
 import type { AttendanceStatus, HolidayKind } from "@/types/database";
-import { todayIso, formatHebrewDate } from "@/lib/dates/hebrew";
+import { addDays, todayIso, formatHebrewDate } from "@/lib/dates/hebrew";
 import { embedOne } from "@/lib/supabase/embed";
 import { resolveOrCreateSubject } from "@/lib/lessons/subjects";
 import { formatLessonHours } from "@/lib/lessons/hours";
@@ -1197,10 +1197,12 @@ export async function deleteStudentLessonAssignmentAction(id: string, studentId:
 
   const start = String(row.start_date).slice(0, 10);
   const today = todayIso();
+  const yesterday = addDays(today, -1);
   const manual = row.assignment_type === "manual";
-  const notStarted = start > today;
+  // Started today or later: remove the row. Older links close yesterday so today is off the roster.
+  const removeRow = manual || start >= today;
 
-  if (manual || notStarted) {
+  if (removeRow) {
     const { data: deleted, error } = await supabase
       .from("student_lesson_assignments")
       .delete()
@@ -1210,9 +1212,10 @@ export async function deleteStudentLessonAssignmentAction(id: string, studentId:
     if (error) return { error: hebrewDbError(error, "הסרת השיוך נכשלה") };
     if ((deleted?.length ?? 0) !== 1) return { error: "הסרת השיוך נכשלה" };
   } else {
+    const endDate = start > yesterday ? start : yesterday;
     const { data: updated, error } = await supabase
       .from("student_lesson_assignments")
-      .update({ end_date: today })
+      .update({ end_date: endDate })
       .eq("id", assignmentId)
       .eq("student_id", sid)
       .select("id");
@@ -1220,29 +1223,16 @@ export async function deleteStudentLessonAssignmentAction(id: string, studentId:
     if ((updated?.length ?? 0) !== 1) return { error: "הסרת השיוך נכשלה" };
   }
 
-  const { data: rest, error: restError } = await supabase
-    .from("student_lesson_assignments")
-    .select("id, end_date")
-    .eq("student_id", sid)
-    .eq("lesson_id", row.lesson_id);
-  if (restError) {
-    return { error: "השיוך הוסר, אבל לא ניתן לבדוק אם נשארו שיוכים נוספים. רענני ונסי שוב." };
-  }
-  const stillCurrent = (rest ?? []).some((item) => {
-    if (!item.end_date) return true;
-    return String(item.end_date).slice(0, 10) >= today;
+  // Always exclude so automatic audience assign cannot put her back.
+  const { error: exclusionError } = await supabase.from("student_lesson_exclusions").upsert({
+    student_id: sid,
+    lesson_id: row.lesson_id,
   });
-  if (!stillCurrent) {
-    const { error: exclusionError } = await supabase.from("student_lesson_exclusions").upsert({
-      student_id: sid,
-      lesson_id: row.lesson_id,
-    });
-    if (
-      exclusionError &&
-      !/student_lesson_exclusions|schema cache|PGRST205|42P01/i.test(exclusionError.message)
-    ) {
-      return { error: "השיוך הוסר, אבל לא ניתן לחסום חזרה אוטומטית לשיעור. נסי שוב." };
-    }
+  if (
+    exclusionError &&
+    !/student_lesson_exclusions|schema cache|PGRST205|42P01/i.test(exclusionError.message)
+  ) {
+    return { error: "השיוך הוסר, אבל לא ניתן לחסום חזרה אוטומטית לשיעור. נסי שוב." };
   }
 
   revalidatePath(`/students/${sid}`);
@@ -1280,9 +1270,10 @@ export async function excludeStudentFromLessonAction(studentId: string, lessonId
     .is("end_date", null);
   if (openError) return { error: hebrewDbError(openError, "הסרת השיוך נכשלה") };
   const today = todayIso();
+  const yesterday = addDays(today, -1);
   for (const row of openRows ?? []) {
     const start = String(row.start_date).slice(0, 10);
-    if (start > today) {
+    if (start >= today) {
       const { error } = await supabase
         .from("student_lesson_assignments")
         .delete()
@@ -1290,9 +1281,10 @@ export async function excludeStudentFromLessonAction(studentId: string, lessonId
       if (error) return { error: hebrewDbError(error, "הסרת השיוך נכשלה") };
       continue;
     }
+    const endDate = start > yesterday ? start : yesterday;
     const { error } = await supabase
       .from("student_lesson_assignments")
-      .update({ end_date: today })
+      .update({ end_date: endDate })
       .eq("id", row.id);
     if (error) return { error: hebrewDbError(error, "הסרת השיוך נכשלה") };
   }
