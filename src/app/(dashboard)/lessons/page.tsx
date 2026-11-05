@@ -472,6 +472,7 @@ export default async function LessonsPage({ searchParams }: Props) {
     ranges: ranges.data ?? [],
     rules: rules.data ?? [],
     subjects: yearSubjects,
+    students: yearStudents,
   };
 
   const filterQuery = new URLSearchParams();

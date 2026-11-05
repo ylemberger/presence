@@ -51,7 +51,7 @@ export function DeleteButton({
   return (
     <div>
       <Button variant="danger" size="sm" onClick={handleDelete} disabled={loading}>
-        {loading ? "מוחק..." : label}
+        {loading ? "מסירה…" : label}
       </Button>
       {error && <p className="mt-1 text-xs text-red-600">{error}</p>}
     </div>

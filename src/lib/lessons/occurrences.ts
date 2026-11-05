@@ -90,6 +90,47 @@ function expectedMeetingKeys(
   return keys;
 }
 
+/**
+ * Activity-range window clipped to the school year, plus expected date|hour keys.
+ * Used to hide stale meetings that no longer match the lesson schedule.
+ */
+export async function lessonScheduleWindow(
+  lessonId: string,
+  schoolBounds: { start: string; end: string },
+  supabaseClient?: SupabaseClient
+): Promise<{ fromDate: string; toDate: string; expectedKeys: Set<string> } | null> {
+  const supabase = supabaseClient ?? (await createClient());
+  const { data: lesson, error } = await supabase
+    .from("lessons")
+    .select(
+      "id, day_of_week, lesson_number, period_count, repeat_every_weeks, academic_year_id, activity_ranges(start_date, end_date)"
+    )
+    .eq("id", lessonId)
+    .maybeSingle();
+  if (error || !lesson) return null;
+
+  const rawRange = lesson.activity_ranges as unknown;
+  const range = (Array.isArray(rawRange) ? rawRange[0] : rawRange) as {
+    start_date: string;
+    end_date: string;
+  } | null;
+  if (!range?.start_date || !range?.end_date) return null;
+
+  const fromDate =
+    range.start_date > schoolBounds.start ? range.start_date.slice(0, 10) : schoolBounds.start;
+  const toDate =
+    range.end_date < schoolBounds.end ? range.end_date.slice(0, 10) : schoolBounds.end;
+  if (fromDate > toDate) return { fromDate, toDate, expectedKeys: new Set() };
+
+  const holidaysByYear = await fetchHolidayDateSet(supabase, [lesson.academic_year_id]);
+  const holidays = holidaysByYear.get(lesson.academic_year_id) ?? new Set<string>();
+  const slotsByLesson = await loadSlotsForLessons(supabase, [lessonId]);
+  const slots = slotsFromLessonAndRows(lesson, slotsByLesson.get(lessonId));
+  const everyWeeks = lesson.repeat_every_weeks === 2 ? 2 : 1;
+  const expectedKeys = expectedMeetingKeys(fromDate, toDate, slots, holidays, everyWeeks);
+  return { fromDate, toDate, expectedKeys };
+}
+
 function isMissingWeeklySlotsTable(error: { message?: string; code?: string } | null): boolean {
   if (!error) return false;
   const msg = `${error.message ?? ""} ${error.code ?? ""}`;

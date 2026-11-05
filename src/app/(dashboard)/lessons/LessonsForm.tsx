@@ -23,6 +23,7 @@ import {
 import type { ActivityRange, AttendanceRule } from "@/types/database";
 import { Icon } from "@/components/ui/Icon";
 import { MultiSelect } from "@/components/ui/MultiSelect";
+import { SearchMultiSelect } from "@/components/ui/SearchMultiSelect";
 import { HebrewDateRangePicker } from "@/components/ui/HebrewDateRangePicker";
 import {
   FLEXIBLE_RANGE_FORM_VALUE,
@@ -71,6 +72,8 @@ export interface LessonsFormProps {
   ranges: ActivityRange[];
   rules: AttendanceRule[];
   subjects: { id: string; name: string }[];
+  /** Active-year students for the optional named roster under audience. */
+  students?: { id: string; full_name: string }[];
   initial?: LessonFormDraft | null;
   cancelHref?: string;
   onCreated?: () => void;
@@ -89,6 +92,7 @@ export function LessonsForm({
   ranges,
   rules,
   subjects,
+  students = [],
   initial,
   cancelHref,
   onCreated,
@@ -111,6 +115,7 @@ export function LessonsForm({
     initial?.specializationIds ?? []
   );
   const [wholeGrade, setWholeGrade] = useState(initial?.wholeGrade ?? false);
+  const [namedStudentIds, setNamedStudentIds] = useState<string[]>([]);
   const [weeklySlots, setWeeklySlots] = useState<WeeklySlot[]>(() =>
     initial?.weeklySlots?.length
       ? initial.weeklySlots
@@ -263,6 +268,7 @@ export function LessonsForm({
       putIds("class_ids", classIds);
       putIds("track_ids", trackIds);
       putIds("specialization_ids", specializationIds);
+      putIds("named_student_ids", namedStudentIds);
       putIds(
         "slot_day_of_week",
         weeklySlots.map((slot) => String(slot.dayOfWeek))
@@ -595,6 +601,19 @@ export function LessonsForm({
                 : "תלמידה תשויך אם היא באחת השכבות, וגם עומדת בכל שאר התנאים שנבחרו (כיתה / מסלול / התמחות)."}
         </p>
         </fieldset>
+        <div className="mt-4 rounded-xl border border-dashed border-outline-variant/50 bg-surface-container-low/50 p-4">
+          <SearchMultiSelect
+            label="תלמידות ספציפיות (רשות)"
+            values={namedStudentIds}
+            onChange={setNamedStudentIds}
+            options={students.map((s) => ({ value: s.id, label: s.full_name }))}
+            placeholder="הקלידי שמות תלמידות…"
+          />
+          <p className="mt-2 font-caption text-caption text-on-surface-variant">
+            בנוסף לקהל למעלה — אפשר לבחור כאן תלמידות בשמות. הן ישויכו לשיעור ידנית גם אם אינן
+            בכיתה או בהתמחות של השיעור.
+          </p>
+        </div>
       </div>
 
       <div>

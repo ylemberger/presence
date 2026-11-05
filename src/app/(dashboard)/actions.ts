@@ -1117,6 +1117,19 @@ export async function createStudentLessonAssignmentAction(formData: FormData) {
     return { error: mismatch, code: "mismatch" as const };
   }
 
+  // Clear exclusion first — otherwise the roster still hides her after a successful insert.
+  const { error: clearExclusionError } = await supabase
+    .from("student_lesson_exclusions")
+    .delete()
+    .eq("student_id", studentId)
+    .eq("lesson_id", lessonId);
+  if (
+    clearExclusionError &&
+    !/student_lesson_exclusions|schema cache|PGRST205|42P01/i.test(clearExclusionError.message)
+  ) {
+    return { error: hebrewDbError(clearExclusionError, "לא ניתן לשייך את התלמידה לשיעור") };
+  }
+
   const { data: existingRows, error: existingError } = await supabase
     .from("student_lesson_assignments")
     .select("id, start_date, end_date")
@@ -1135,6 +1148,7 @@ export async function createStudentLessonAssignmentAction(formData: FormData) {
   if (overlapping.length > 0) {
     const only = overlapping.length === 1 ? overlapping[0] : null;
     const onlyStart = only ? String(only.start_date).slice(0, 10) : "";
+    const onlyEnd = only?.end_date ? String(only.end_date).slice(0, 10) : null;
     if (only && !only.end_date && !endDate && startDate < onlyStart) {
       const { error } = await supabase
         .from("student_lesson_assignments")
@@ -1148,6 +1162,28 @@ export async function createStudentLessonAssignmentAction(formData: FormData) {
           ),
         };
       }
+    } else if (only && onlyEnd && startDate > onlyEnd) {
+      // Closed history ended before the new start — open a fresh manual link.
+      const { error } = await supabase.from("student_lesson_assignments").insert({
+        student_id: studentId,
+        lesson_id: lessonId,
+        assignment_type: "manual",
+        start_date: startDate,
+        end_date: endDate,
+      });
+      if (error) return { error: hebrewDbError(error, "לא ניתן לשייך את התלמידה לשיעור") };
+    } else if (only && onlyEnd) {
+      // Re-open the closed link from the requested start (or keep earlier start).
+      const nextStart = startDate < onlyStart ? startDate : onlyStart;
+      const { error } = await supabase
+        .from("student_lesson_assignments")
+        .update({
+          end_date: endDate,
+          start_date: nextStart,
+          assignment_type: "manual",
+        })
+        .eq("id", only.id);
+      if (error) return { error: hebrewDbError(error, "לא ניתן לשייך את התלמידה לשיעור") };
     } else {
       return {
         error:
@@ -1165,16 +1201,82 @@ export async function createStudentLessonAssignmentAction(formData: FormData) {
     if (error) return { error: hebrewDbError(error, "לא ניתן לשייך את התלמידה לשיעור") };
   }
 
-  await supabase
-    .from("student_lesson_exclusions")
-    .delete()
-    .eq("student_id", studentId)
-    .eq("lesson_id", lessonId);
   revalidatePath(`/students/${studentId}`);
   revalidatePath("/attendance");
   revalidatePath("/reports");
   revalidatePath("/lessons");
   return { success: true };
+}
+
+type ActionSupabase = Awaited<ReturnType<typeof createClient>>;
+
+async function closeStudentLessonLinks(
+  supabase: ActionSupabase,
+  studentId: string,
+  lessonId: string,
+  asOfDate: string
+): Promise<{ error?: string; closed: number }> {
+  const yesterday = addDays(asOfDate, -1);
+  const { data: rows, error: loadError } = await supabase
+    .from("student_lesson_assignments")
+    .select("id, start_date, end_date")
+    .eq("student_id", studentId)
+    .eq("lesson_id", lessonId);
+  if (loadError) return { error: hebrewDbError(loadError, "הסרת השיוך נכשלה"), closed: 0 };
+
+  // Links that still cover asOfDate (today or the open meeting). History before that stays.
+  const covering = (rows ?? []).filter((r) => {
+    const start = String(r.start_date).slice(0, 10);
+    const end = r.end_date ? String(r.end_date).slice(0, 10) : null;
+    return start <= asOfDate && (!end || end >= asOfDate);
+  });
+
+  let closed = 0;
+  for (const target of covering) {
+    const start = String(target.start_date).slice(0, 10);
+    if (start >= asOfDate) {
+      const { data: deleted, error } = await supabase
+        .from("student_lesson_assignments")
+        .delete()
+        .eq("id", target.id)
+        .eq("student_id", studentId)
+        .select("id");
+      if (error) return { error: hebrewDbError(error, "הסרת השיוך נכשלה"), closed };
+      if ((deleted?.length ?? 0) !== 1) return { error: "הסרת השיוך נכשלה", closed };
+      closed += 1;
+      continue;
+    }
+    const endDate = start > yesterday ? start : yesterday;
+    const { data: updated, error } = await supabase
+      .from("student_lesson_assignments")
+      .update({ end_date: endDate })
+      .eq("id", target.id)
+      .eq("student_id", studentId)
+      .select("id");
+    if (error) return { error: hebrewDbError(error, "הסרת השיוך נכשלה"), closed };
+    if ((updated?.length ?? 0) !== 1) return { error: "הסרת השיוך נכשלה", closed };
+    closed += 1;
+  }
+  return { closed };
+}
+
+async function upsertLessonExclusion(
+  supabase: ActionSupabase,
+  studentId: string,
+  lessonId: string
+): Promise<{ error?: string }> {
+  const { error } = await supabase.from("student_lesson_exclusions").upsert(
+    { student_id: studentId, lesson_id: lessonId },
+    { onConflict: "student_id,lesson_id" }
+  );
+  if (!error) return {};
+  if (/student_lesson_exclusions|schema cache|PGRST205|42P01/i.test(error.message)) {
+    return {
+      error:
+        "הסרת השיוך נכשלה: חסרה טבלת ההחרגות. יש להריץ ב-Supabase את supabase/patches/018_student_lesson_exclusions.sql",
+    };
+  }
+  return { error: hebrewDbError(error, "הסרת השיוך נכשלה") };
 }
 
 export async function deleteStudentLessonAssignmentAction(id: string, studentId: string) {
@@ -1195,45 +1297,12 @@ export async function deleteStudentLessonAssignmentAction(id: string, studentId:
   if (loadError) return { error: hebrewDbError(loadError, "הסרת השיוך נכשלה") };
   if (!row) return { error: "השיוך לא נמצא" };
 
-  const start = String(row.start_date).slice(0, 10);
-  const today = todayIso();
-  const yesterday = addDays(today, -1);
-  const manual = row.assignment_type === "manual";
-  // Started today or later: remove the row. Older links close yesterday so today is off the roster.
-  const removeRow = manual || start >= today;
+  // Exclusion must stick first — otherwise «שייך אוטומטית» / sync puts her back.
+  const exclusion = await upsertLessonExclusion(supabase, sid, row.lesson_id);
+  if (exclusion.error) return { error: exclusion.error };
 
-  if (removeRow) {
-    const { data: deleted, error } = await supabase
-      .from("student_lesson_assignments")
-      .delete()
-      .eq("id", assignmentId)
-      .eq("student_id", sid)
-      .select("id");
-    if (error) return { error: hebrewDbError(error, "הסרת השיוך נכשלה") };
-    if ((deleted?.length ?? 0) !== 1) return { error: "הסרת השיוך נכשלה" };
-  } else {
-    const endDate = start > yesterday ? start : yesterday;
-    const { data: updated, error } = await supabase
-      .from("student_lesson_assignments")
-      .update({ end_date: endDate })
-      .eq("id", assignmentId)
-      .eq("student_id", sid)
-      .select("id");
-    if (error) return { error: hebrewDbError(error, "הסרת השיוך נכשלה") };
-    if ((updated?.length ?? 0) !== 1) return { error: "הסרת השיוך נכשלה" };
-  }
-
-  // Always exclude so automatic audience assign cannot put her back.
-  const { error: exclusionError } = await supabase.from("student_lesson_exclusions").upsert({
-    student_id: sid,
-    lesson_id: row.lesson_id,
-  });
-  if (
-    exclusionError &&
-    !/student_lesson_exclusions|schema cache|PGRST205|42P01/i.test(exclusionError.message)
-  ) {
-    return { error: "השיוך הוסר, אבל לא ניתן לחסום חזרה אוטומטית לשיעור. נסי שוב." };
-  }
+  const closed = await closeStudentLessonLinks(supabase, sid, row.lesson_id, todayIso());
+  if (closed.error) return { error: closed.error };
 
   revalidatePath(`/students/${sid}`);
   revalidatePath("/attendance");
@@ -1242,7 +1311,11 @@ export async function deleteStudentLessonAssignmentAction(id: string, studentId:
   return { success: true };
 }
 
-export async function excludeStudentFromLessonAction(studentId: string, lessonId: string) {
+export async function excludeStudentFromLessonAction(
+  studentId: string,
+  lessonId: string,
+  asOfDate?: string
+) {
   const actionAuth = await createActionClient();
   if ("error" in actionAuth) return { error: actionAuth.error };
   const supabase = actionAuth.supabase;
@@ -1251,43 +1324,17 @@ export async function excludeStudentFromLessonAction(studentId: string, lessonId
   const lid = requireId(lessonId, "שיעור");
   if (isError(lid)) return lid;
 
-  const { error: exclusionError } = await supabase.from("student_lesson_exclusions").upsert({
-    student_id: sid,
-    lesson_id: lid,
-  });
-  if (exclusionError) {
-    if (/student_lesson_exclusions|schema cache|PGRST205|42P01/i.test(exclusionError.message)) {
-      return { error: "יש להריץ ב-Supabase את הקובץ supabase/patches/018_student_lesson_exclusions.sql" };
-    }
-    return { error: "הסרת השיוך נכשלה" };
-  }
+  const day =
+    typeof asOfDate === "string" && /^\d{4}-\d{2}-\d{2}$/.test(asOfDate.slice(0, 10))
+      ? asOfDate.slice(0, 10)
+      : todayIso();
 
-  const { data: openRows, error: openError } = await supabase
-    .from("student_lesson_assignments")
-    .select("id, start_date")
-    .eq("student_id", sid)
-    .eq("lesson_id", lid)
-    .is("end_date", null);
-  if (openError) return { error: hebrewDbError(openError, "הסרת השיוך נכשלה") };
-  const today = todayIso();
-  const yesterday = addDays(today, -1);
-  for (const row of openRows ?? []) {
-    const start = String(row.start_date).slice(0, 10);
-    if (start >= today) {
-      const { error } = await supabase
-        .from("student_lesson_assignments")
-        .delete()
-        .eq("id", row.id);
-      if (error) return { error: hebrewDbError(error, "הסרת השיוך נכשלה") };
-      continue;
-    }
-    const endDate = start > yesterday ? start : yesterday;
-    const { error } = await supabase
-      .from("student_lesson_assignments")
-      .update({ end_date: endDate })
-      .eq("id", row.id);
-    if (error) return { error: hebrewDbError(error, "הסרת השיוך נכשלה") };
-  }
+  // Exclusion first so a following roster sync cannot re-add her.
+  const exclusion = await upsertLessonExclusion(supabase, sid, lid);
+  if (exclusion.error) return { error: exclusion.error };
+
+  const closed = await closeStudentLessonLinks(supabase, sid, lid, day);
+  if (closed.error) return { error: closed.error };
 
   revalidatePath(`/students/${sid}`);
   revalidatePath("/attendance");
@@ -1354,10 +1401,6 @@ export async function transferStudentAction(formData: FormData) {
     .maybeSingle();
 
   if (currentAssignment) {
-    if (placement.start_date < currentAssignment.start_date) {
-      return { error: "תאריך ההעברה לא יכול להיות לפני תחילת השיבוץ הנוכחי" };
-    }
-
     const samePlacement =
       currentAssignment.grade_id === placement.grade_id &&
       currentAssignment.class_id === placement.class_id &&
@@ -1378,12 +1421,36 @@ export async function transferStudentAction(formData: FormData) {
       secondary_specialization_id: placement.secondary_specialization_id,
       is_psychology: placement.is_psychology,
     };
+    const currentStart = String(currentAssignment.start_date).slice(0, 10);
 
-    // Same calendar day: correct the open assignment (cannot close+open — overlap + end<start).
-    if (placement.start_date === currentAssignment.start_date) {
+    // Transfer on/before the open row's start: correct that row (past dates allowed).
+    // Moving start earlier must not overlap a closed historical assignment.
+    if (placement.start_date <= currentStart) {
+      if (placement.start_date < currentStart) {
+        const { data: earlier, error: earlierError } = await supabase
+          .from("student_assignments")
+          .select("id, start_date, end_date")
+          .eq("student_id", placement.student_id)
+          .eq("academic_year_id", placement.academic_year_id)
+          .neq("id", currentAssignment.id);
+        if (earlierError) {
+          return { error: hebrewDbError(earlierError, "בדיקת היסטוריית השיבוץ נכשלה") };
+        }
+        const overlaps = (earlier ?? []).some((row) => {
+          const start = String(row.start_date).slice(0, 10);
+          const end = row.end_date ? String(row.end_date).slice(0, 10) : "9999-12-31";
+          return start <= currentStart && end >= placement.start_date;
+        });
+        if (overlaps) {
+          return {
+            error:
+              "אי אפשר להקדים את תאריך ההעברה כי יש שיבוץ קודם שחופף לתאריכים האלה. בחרי תאריך אחרי סיום השיבוץ הקודם.",
+          };
+        }
+      }
       const { error: updateError } = await supabase
         .from("student_assignments")
-        .update(nextPlacement)
+        .update({ ...nextPlacement, start_date: placement.start_date })
         .eq("id", currentAssignment.id);
       if (updateError) return { error: hebrewDbError(updateError, "ההעברה נכשלה") };
     } else {
@@ -1934,8 +2001,144 @@ export async function createLessonAction(formData: FormData) {
 
   await autoAssignStudentsToLesson(lesson.id, payload.academic_year_id, undefined, supabase);
 
+  const named = await assignNamedStudentsToLesson(
+    supabase,
+    lesson.id,
+    payload.academic_year_id,
+    formData
+  );
+  if (named.error) {
+    await rollbackFailedLessonCreate(supabase, {
+      lessonId: lesson.id,
+      assignmentId,
+      removeAssignment: isNewAssignment,
+    });
+    return { error: named.error };
+  }
+
   revalidateLessonPaths();
   return { success: true };
+}
+
+/** Explicit student list from the lesson form (in addition to audience auto-assign). */
+async function assignNamedStudentsToLesson(
+  supabase: ActionSupabase,
+  lessonId: string,
+  academicYearId: string,
+  formData: FormData
+): Promise<{ error?: string; assigned: number }> {
+  const rawIds = formData
+    .getAll("named_student_ids")
+    .map((v) => String(v).trim())
+    .filter(Boolean);
+  const studentIds = [...new Set(rawIds)];
+  if (studentIds.length === 0) return { assigned: 0 };
+
+  for (const studentId of studentIds) {
+    const id = requireUuid(studentId, "תלמידה");
+    if (isError(id)) return { error: "יש לבחור תלמידות מהרשימה", assigned: 0 };
+  }
+
+  const { data: rangeRow } = await supabase
+    .from("lessons")
+    .select("activity_ranges(start_date)")
+    .eq("id", lessonId)
+    .maybeSingle();
+  const rawRange = rangeRow?.activity_ranges as unknown;
+  const range = (Array.isArray(rawRange) ? rawRange[0] : rawRange) as {
+    start_date?: string;
+  } | null;
+  const startDate = (range?.start_date ?? todayIso()).slice(0, 10);
+
+  const { data: placements, error: placementError } = await supabase
+    .from("student_assignments")
+    .select("student_id")
+    .eq("academic_year_id", academicYearId)
+    .in("student_id", studentIds)
+    .is("end_date", null);
+  if (placementError) {
+    return { error: hebrewDbError(placementError, "שיוך התלמידות לשיעור נכשל"), assigned: 0 };
+  }
+  const active = new Set((placements ?? []).map((p) => p.student_id));
+  const missing = studentIds.filter((id) => !active.has(id));
+  if (missing.length > 0) {
+    return {
+      error: "חלק מהתלמידות שנבחרו אין להן שיבוץ פעיל בשנה הזו. בדקי את הרשימה ונסי שוב.",
+      assigned: 0,
+    };
+  }
+
+  let assigned = 0;
+  for (const studentId of studentIds) {
+    const { error: clearExclusionError } = await supabase
+      .from("student_lesson_exclusions")
+      .delete()
+      .eq("student_id", studentId)
+      .eq("lesson_id", lessonId);
+    if (
+      clearExclusionError &&
+      !/student_lesson_exclusions|schema cache|PGRST205|42P01/i.test(clearExclusionError.message)
+    ) {
+      return { error: hebrewDbError(clearExclusionError, "שיוך התלמידות לשיעור נכשל"), assigned };
+    }
+
+    const { data: existingRows, error: existingError } = await supabase
+      .from("student_lesson_assignments")
+      .select("id, start_date, end_date")
+      .eq("student_id", studentId)
+      .eq("lesson_id", lessonId);
+    if (existingError) {
+      return { error: hebrewDbError(existingError, "שיוך התלמידות לשיעור נכשל"), assigned };
+    }
+
+    const overlapping = (existingRows ?? []).filter((row) => {
+      const start = String(row.start_date).slice(0, 10);
+      const end = row.end_date ? String(row.end_date).slice(0, 10) : "9999-12-31";
+      return start <= "9999-12-31" && startDate <= end;
+    });
+    if (overlapping.length > 0) {
+      const open = overlapping.find((row) => !row.end_date);
+      if (open) {
+        const openStart = String(open.start_date).slice(0, 10);
+        if (startDate < openStart) {
+          const { error } = await supabase
+            .from("student_lesson_assignments")
+            .update({ start_date: startDate, assignment_type: "manual" })
+            .eq("id", open.id);
+          if (error) return { error: hebrewDbError(error, "שיוך התלמידות לשיעור נכשל"), assigned };
+        }
+        assigned += 1;
+        continue;
+      }
+      const closed = overlapping[0];
+      const { error } = await supabase
+        .from("student_lesson_assignments")
+        .update({
+          end_date: null,
+          start_date:
+            startDate < String(closed.start_date).slice(0, 10)
+              ? startDate
+              : String(closed.start_date).slice(0, 10),
+          assignment_type: "manual",
+        })
+        .eq("id", closed.id);
+      if (error) return { error: hebrewDbError(error, "שיוך התלמידות לשיעור נכשל"), assigned };
+      assigned += 1;
+      continue;
+    }
+
+    const { error } = await supabase.from("student_lesson_assignments").insert({
+      student_id: studentId,
+      lesson_id: lessonId,
+      assignment_type: "manual",
+      start_date: startDate,
+      end_date: null,
+    });
+    if (error) return { error: hebrewDbError(error, "שיוך התלמידות לשיעור נכשל"), assigned };
+    assigned += 1;
+  }
+
+  return { assigned };
 }
 
 function idKey(ids: Array<string | null | undefined>): string {
@@ -2203,6 +2406,14 @@ export async function updateLessonAction(formData: FormData) {
       ),
     };
   }
+
+  const named = await assignNamedStudentsToLesson(
+    supabase,
+    lessonId,
+    payload.academic_year_id,
+    formData
+  );
+  if (named.error) return { error: named.error };
 
   if (existing.activity_range_id && existing.activity_range_id !== payload.activity_range_id) {
     await maybeDeleteUnusedFlexibleRange(supabase, existing.activity_range_id);
@@ -3040,12 +3251,22 @@ export async function syncLessonStudentsAction(lessonId: string, academicYearId:
   if ("error" in actionAuth) return { error: actionAuth.error };
 
   try {
-    const result = await autoAssignStudentsToLesson(lessonId, academicYearId, undefined, actionAuth.supabase);
+    // Close automatic links that no longer match the audience, then add missing ones.
+    const result = await refreshAutomaticAssignmentsForLesson(
+      lessonId,
+      academicYearId,
+      actionAuth.supabase
+    );
     revalidatePath("/attendance");
     revalidatePath("/students");
     revalidatePath("/lessons");
     revalidatePath("/reports");
-    return { success: true, assigned: result.assigned, backfilled: result.backfilled };
+    return {
+      success: true,
+      assigned: result.assigned,
+      backfilled: result.backfilled,
+      closed: result.closed,
+    };
   } catch (e) {
     return { error: (e as Error).message };
   }

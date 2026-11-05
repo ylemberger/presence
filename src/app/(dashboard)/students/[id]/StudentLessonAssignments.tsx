@@ -112,8 +112,12 @@ export function StudentLessonAssignments({
     if (ok) form.reset();
   }
 
-  function removeLink(assignmentId: string) {
-    return deleteStudentLessonAssignmentAction(assignmentId, studentId);
+  async function removeLink(assignmentId: string) {
+    try {
+      return await deleteStudentLessonAssignmentAction(assignmentId, studentId);
+    } catch {
+      return { error: "הסרת השיוך נכשלה. נסי שוב." };
+    }
   }
 
   return (

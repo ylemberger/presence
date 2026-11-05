@@ -437,10 +437,20 @@ export async function refreshAutomaticAssignmentsForLesson(
   const toClose = existingLinks.filter((row) => !matching.has(row.student_id));
   if (toClose.length === 0) return { ...result, closed: 0 };
 
+  // End yesterday so today is already off the roster; delete rows that never covered a past day.
   const today = todayIso();
+  const yesterday = addDays(today, -1);
   for (const row of toClose) {
     const start = row.start_date.slice(0, 10);
-    const endDate = start > addDays(today, -1) ? start : addDays(today, -1);
+    if (start >= today) {
+      const { error } = await supabase
+        .from("student_lesson_assignments")
+        .delete()
+        .eq("id", row.id);
+      if (error) throw new Error(error.message);
+      continue;
+    }
+    const endDate = start > yesterday ? start : yesterday;
     const { error } = await supabase
       .from("student_lesson_assignments")
       .update({ end_date: endDate })

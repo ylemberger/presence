@@ -16,6 +16,7 @@ import {
   resetOccurrenceAttendanceAction,
   restoreOccurrencesAction,
   syncLessonStudentsAction,
+  excludeStudentFromLessonAction,
   upsertAttendanceNoteAction,
 } from "../actions";
 import type { AttendanceStatus } from "@/types/database";
@@ -281,6 +282,8 @@ export function AttendanceBoard({
   const [resetting, setResetting] = useState(false);
   const [cancellingId, setCancellingId] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
+  /** Optimistic hide after «הסר שיוך» until refresh drops her from props. */
+  const [hiddenStudentIds, setHiddenStudentIds] = useState<string[]>([]);
   const [note, setNote] = useState(noteBody);
   const [noteSaving, setNoteSaving] = useState(false);
   const [noteModalOpen, setNoteModalOpen] = useState(false);
@@ -360,6 +363,8 @@ export function AttendanceBoard({
     studentId && (lessonId || (subject && selectedLessonOccurrences.length > 0))
   );
 
+  // Only auto-fill when the roster is empty. Never re-run after «הסר שיוך» —
+  // that was putting excluded students back when sync raced the refresh.
   useEffect(() => {
     if (!canWrite || !activeLesson || lessonStudents.length > 0) return;
     const lessonIdToSync = activeLesson.lessonId;
@@ -367,7 +372,11 @@ export function AttendanceBoard({
     autoSyncedLesson.current = lessonIdToSync;
     void (async () => {
       const result = await syncLessonStudentsAction(lessonIdToSync, yearId);
-      if (result && "success" in result && (result.assigned ?? 0) > 0) {
+      if (
+        result &&
+        "success" in result &&
+        ((result.assigned ?? 0) > 0 || (result.closed ?? 0) > 0)
+      ) {
         router.refresh();
       }
     })();
@@ -1105,11 +1114,13 @@ export function AttendanceBoard({
     } else if (result && "success" in result) {
       const n = typeof result.assigned === "number" ? result.assigned : 0;
       const backfilled = typeof result.backfilled === "number" ? result.backfilled : 0;
-      if (n > 0 || backfilled > 0) {
+      const closed = typeof result.closed === "number" ? result.closed : 0;
+      if (n > 0 || backfilled > 0 || closed > 0) {
         setMessage(
           [
             n > 0 ? `שויכו ${n} תלמידות לשיעור` : null,
             backfilled > 0 ? `עודכן תוקף ל־${backfilled} שיוכים קיימים` : null,
+            closed > 0 ? `הוסרו ${closed} שיוכים שלא מתאימים לקהל היעד` : null,
           ]
             .filter(Boolean)
             .join(" · ")
@@ -1212,13 +1223,25 @@ export function AttendanceBoard({
     updateFilter("studentId", ids[nextIdx]);
   }
 
-  const canMark = canWrite && Boolean(activeOccurrenceId) && lessonStudents.length > 0;
+  const visibleLessonStudents = useMemo(() => {
+    if (hiddenStudentIds.length === 0) return lessonStudents;
+    const hidden = new Set(hiddenStudentIds);
+    return lessonStudents.filter((s) => !hidden.has(s.id));
+  }, [lessonStudents, hiddenStudentIds]);
+
+  useEffect(() => {
+    if (hiddenStudentIds.length === 0) return;
+    const stillListed = new Set(lessonStudents.map((s) => s.id));
+    setHiddenStudentIds((prev) => prev.filter((id) => stillListed.has(id)));
+  }, [lessonStudents, hiddenStudentIds.length]);
+
+  const canMark = canWrite && Boolean(activeOccurrenceId) && visibleLessonStudents.length > 0;
   const markedInLesson = activeOccurrenceId
-    ? Object.keys(draft).filter(
-        (k) => k.endsWith(`::${activeOccurrenceId}`) && draft[k] !== null
-      ).length
-    : 0;
-  const unmarkedCount = Math.max(0, lessonStudents.length - markedInLesson);
+      ? Object.keys(draft).filter(
+          (k) => k.endsWith(`::${activeOccurrenceId}`) && draft[k] !== null
+        ).length
+      : 0;
+  const unmarkedCount = Math.max(0, visibleLessonStudents.length - markedInLesson);
 
   const selectedLessonMeta = lessonId
     ? lessons.find((l) => l.id === lessonId)
@@ -1975,12 +1998,12 @@ export function AttendanceBoard({
                 {copying ? "מעתיק…" : "העתק קודם"}
               </button>
               <span className="ms-auto font-caption text-caption text-on-surface-variant">
-                {markedInLesson}/{lessonStudents.length}
-              </span>
+                {markedInLesson}/{visibleLessonStudents.length}
+                </span>
+              </div>
             </div>
-          </div>
 
-          <div className="flex-1 space-y-1 overflow-y-auto px-2 py-2">
+            <div className="flex-1 space-y-1 overflow-y-auto px-2 py-2">
             {prevWeekBlocked && (
               <p className="mb-2 rounded-lg bg-secondary/10 px-3 py-2 font-body-sm text-body-sm text-primary">
                 תזכורת: יש מופע קודם בלי נוכחות מלאה. אפשר למלא כאן עכשיו.
@@ -1993,7 +2016,9 @@ export function AttendanceBoard({
                   message.includes("שגיא") ||
                     message.includes("אין הרשאה") ||
                     message.includes("נכשל") ||
-                    message.includes("השלים")
+                    message.includes("השלים") ||
+                    message.includes("חסרה") ||
+                    message.includes("לא ניתן")
                     ? "bg-error-container/60 text-on-error-container"
                     : "bg-attendance-present/10 text-attendance-present"
                 )}
@@ -2008,7 +2033,7 @@ export function AttendanceBoard({
               </p>
             )}
 
-            {lessonStudents.length === 0 && (
+            {visibleLessonStudents.length === 0 && (
               <div className="rounded-lg border border-dashed border-outline-variant/50 bg-surface-container-low/60 px-3 py-4 text-center">
                 <p className="font-body-sm text-body-sm text-on-surface-variant">
                   אין תלמידות משויכות לשיעור זה.
@@ -2036,7 +2061,7 @@ export function AttendanceBoard({
             )}
 
             <div className="space-y-1">
-              {lessonStudents.map((student, idx) => {
+              {visibleLessonStudents.map((student, idx) => {
                 const k = keyOf(student.id, activeOccurrenceId!);
                 const focused = focusedIdx === idx;
                 const status = draft[k];
@@ -2076,6 +2101,44 @@ export function AttendanceBoard({
                       {student.full_name}
                     </span>
                     <div className="flex flex-1 flex-wrap items-center justify-end gap-2">
+                      {canWrite && activeLesson ? (
+                        <button
+                          type="button"
+                          className="shrink-0 font-caption text-caption text-error underline-offset-2 hover:underline"
+                          title="הסר שיוך לשיעור זה"
+                          onClick={async (e) => {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            if (
+                              !confirm(
+                                "יוסר השיוך של התלמידה לשיעור הזה. נוכחות שכבר סומנה נשארת."
+                              )
+                            ) {
+                              return;
+                            }
+                            try {
+                              const result = await excludeStudentFromLessonAction(
+                                student.id,
+                                activeLesson.lessonId,
+                                activeLesson.date || selectedDate
+                              );
+                              if (result && "error" in result && result.error) {
+                                setMessage(result.error);
+                                return;
+                              }
+                              setHiddenStudentIds((prev) =>
+                                prev.includes(student.id) ? prev : [...prev, student.id]
+                              );
+                              setMessage("השיוך הוסר מהשיעור");
+                              router.refresh();
+                            } catch {
+                              setMessage("הסרת השיוך נכשלה. נסי שוב.");
+                            }
+                          }}
+                        >
+                          הסר שיוך
+                        </button>
+                      ) : null}
                       <AttendanceStatusPicker
                         value={draft[k] ?? null}
                         phase={cellPhase[k] ?? "idle"}
@@ -2107,7 +2170,7 @@ export function AttendanceBoard({
               })}
             </div>
 
-            {activeLesson && lessonStudents.length > 0 && (
+            {activeLesson && visibleLessonStudents.length > 0 && (
               <div className="mt-2">
                 <AssignStudentToLesson
                   lessonId={activeLesson.lessonId}
@@ -2126,7 +2189,7 @@ export function AttendanceBoard({
               סגור
             </button>
             <span className="rounded-lg bg-primary px-4 py-1.5 font-label-md text-label-md text-white shadow-tactile-sm">
-              {markedInLesson}/{lessonStudents.length}
+              {markedInLesson}/{visibleLessonStudents.length}
             </span>
           </div>
         </div>

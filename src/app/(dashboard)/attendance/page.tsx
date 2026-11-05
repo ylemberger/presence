@@ -10,7 +10,9 @@ import {
 } from "@/lib/dates/hebrew";
 import {
   generateLessonOccurrences,
+  lessonScheduleWindow,
   scrubScheduledOccurrencesOnDate,
+  syncLessonOccurrences,
 } from "@/lib/lessons/occurrences";
 import { mergeAttendanceBlocks } from "@/lib/attendance/blocks";
 import { holidayDatesByKind } from "@/lib/lessons/holidays";
@@ -75,15 +77,19 @@ export default async function AttendancePage({ searchParams }: Props) {
   const monthTo = params.to || month.rangeEnd;
   const schoolBounds = schoolYearIsoBounds(selectedDate);
 
-  // Search is read-only when the lesson already has meetings. Fill once if empty.
+  // Lesson search: clip to activity range; soft-sync only when schedule and DB diverge.
+  let lessonWindow: Awaited<ReturnType<typeof lessonScheduleWindow>> = null;
   if (params.lessonId) {
     try {
+      lessonWindow = await lessonScheduleWindow(params.lessonId, schoolBounds, supabase);
+      const fromDate = lessonWindow?.fromDate ?? schoolBounds.start;
+      const toDate = lessonWindow?.toDate ?? schoolBounds.end;
       const { count, error: countError } = await supabase
         .from("lesson_occurrences")
         .select("id", { count: "exact", head: true })
         .eq("lesson_id", params.lessonId)
-        .gte("occurrence_date", schoolBounds.start)
-        .lte("occurrence_date", schoolBounds.end);
+        .gte("occurrence_date", fromDate)
+        .lte("occurrence_date", toDate);
       if (!countError && (count ?? 0) === 0) {
         await generateLessonOccurrences(params.lessonId, undefined, supabase);
       }
@@ -91,6 +97,13 @@ export default async function AttendancePage({ searchParams }: Props) {
       // Keep listing meetings that already exist.
     }
   }
+
+  const lessonSheetFrom = params.lessonId
+    ? (lessonWindow?.fromDate ?? schoolBounds.start)
+    : schoolBounds.start;
+  const lessonSheetTo = params.lessonId
+    ? (lessonWindow?.toDate ?? schoolBounds.end)
+    : schoolBounds.end;
 
   // Pending banner lives in the layout Suspense — keep it off this page's critical path.
   const [shell, studentLinks] = await Promise.all([
@@ -133,14 +146,47 @@ export default async function AttendancePage({ searchParams }: Props) {
     ? [params.lessonId]
     : subjectSheetLessonIds;
 
-  const rawOccs = await fetchSkinnyOccurrences(supabase, {
+  let rawOccs = await fetchSkinnyOccurrences(supabase, {
     yearLessonIds: yearSheetMode && !params.lessonId ? yearSheetLessonIds : yearLessonIds,
     lessonId: params.lessonId,
-    fromDate: yearSheetMode ? schoolBounds.start : monthFrom,
-    toDate: yearSheetMode ? schoolBounds.end : monthTo,
+    fromDate: yearSheetMode
+      ? params.lessonId
+        ? lessonSheetFrom
+        : schoolBounds.start
+      : monthFrom,
+    toDate: yearSheetMode ? (params.lessonId ? lessonSheetTo : schoolBounds.end) : monthTo,
     includeCancelled: yearSheetMode,
     chunkByLesson: Boolean(params.studentId && params.subject && !params.lessonId),
   });
+
+  // Soft-sync removes unmarked meetings that no longer match day/hour/range; marked stay visible.
+  if (params.lessonId && lessonWindow && lessonWindow.expectedKeys.size > 0) {
+    const keyOf = (o: (typeof rawOccs)[number]) =>
+      o.lesson_number == null ? null : `${o.occurrence_date}|${o.lesson_number}`;
+    const hasStale = rawOccs.some((o) => {
+      const key = keyOf(o);
+      return key != null && !lessonWindow!.expectedKeys.has(key);
+    });
+    if (hasStale) {
+      try {
+        await syncLessonOccurrences(params.lessonId, supabase, { keepMarked: true });
+        rawOccs = await fetchSkinnyOccurrences(supabase, {
+          yearLessonIds,
+          lessonId: params.lessonId,
+          fromDate: lessonSheetFrom,
+          toDate: lessonSheetTo,
+          includeCancelled: true,
+        });
+      } catch {
+        // Read-only fallback: hide schedule mismatches (marked leftovers may reappear after edit sync).
+        rawOccs = rawOccs.filter((o) => {
+          const key = keyOf(o);
+          if (key == null) return true;
+          return lessonWindow!.expectedKeys.has(key);
+        });
+      }
+    }
+  }
 
   let lessonById = new Map(shell.lessons.map((l) => [l.id, l]));
   if (rawOccs.some((o) => !lessonById.has(o.lesson_id))) {
