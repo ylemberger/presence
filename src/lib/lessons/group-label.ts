@@ -33,6 +33,9 @@ export function formatLessonGroupLabel(opts: {
   if (parts.length === 0 && yearPart) {
     return grades.map((g) => `שכבה ${g}`).join(" / ");
   }
+  if (parts.length === 0 && !yearPart) {
+    return "תלמידות בשם";
+  }
   return parts.join(" · ");
 }
 

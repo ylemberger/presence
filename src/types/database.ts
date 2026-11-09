@@ -160,7 +160,7 @@ export interface Lesson {
   teacher_teaching_assignment_id: string;
   subject_id: string;
   subject: string;
-  grade_id: string;
+  grade_id: string | null;
   class_id: string | null;
   track_id: string | null;
   specialization_id: string | null;

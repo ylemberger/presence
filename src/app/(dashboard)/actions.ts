@@ -74,6 +74,7 @@ import { chunkIds, fetchAllPages } from "@/lib/supabase/paged";
 import {
   isError,
   parseLessonBilling,
+  audienceKindFromForm,
   parseLessonGradeIds,
   requireId,
   requireIsoDate,
@@ -1577,10 +1578,24 @@ async function insertTeachingAssignmentFromForm(
     "שם שיעור"
   );
   if (isError(subject)) return subject;
+  const audienceKind = audienceKindFromForm(formData);
   const gradeIds = parseLessonGradeIds(formData);
   if ("error" in gradeIds) return gradeIds;
-  const gradeId = gradeIds[0];
-  const billing = parseLessonBilling(formData);
+  const gradeId = gradeIds[0] ?? null;
+  const billing =
+    audienceKind === "named"
+      ? {
+          billing_type: "mandatory" as const,
+          class_id: null,
+          track_id: null,
+          specialization_id: null,
+          class_ids: [] as string[],
+          track_ids: [] as string[],
+          specialization_ids: [] as string[],
+          for_psychology: false,
+          whole_grade: false,
+        }
+      : parseLessonBilling(formData);
   if ("error" in billing) return billing;
 
   if (billing.class_ids.length > 0) {
@@ -1784,6 +1799,9 @@ async function buildLessonPayload(formData: FormData) {
     return { error: "חסר סוג שיעור (חובה/התמחות)" };
   }
 
+  const audienceKind = audienceKindFromForm(formData);
+  const billingFromForm = parseLessonBilling(formData);
+  // Named-only lessons have no catalog audience; grade may be null.
   let gradeId = teaching.grade_id as string | null;
   if (!gradeId && teaching.class_id) {
     const { data: cls } = await supabase
@@ -1793,9 +1811,19 @@ async function buildLessonPayload(formData: FormData) {
       .maybeSingle();
     gradeId = cls?.grade_id ?? null;
   }
-  if (!gradeId) {
+  if (!gradeId && audienceKind !== "named") {
     return { error: "חסרה שכבה לשיעור" };
   }
+  if (audienceKind !== "named" && "error" in billingFromForm) return billingFromForm;
+
+  const forPsychology =
+    audienceKind === "psychology"
+      ? true
+      : audienceKind === "named"
+        ? false
+        : "error" in billingFromForm
+          ? Boolean(teaching.for_psychology)
+          : billingFromForm.for_psychology;
 
   return {
     academic_year_id: yearId,
@@ -1803,11 +1831,14 @@ async function buildLessonPayload(formData: FormData) {
     subject_id: subjectResolved.id,
     subject: lessonName,
     grade_id: gradeId,
-    class_id: teaching.class_id,
-    track_id: teaching.track_id,
-    specialization_id: teaching.specialization_id,
-    billing_type: teaching.billing_type as "mandatory" | "specialization",
-    for_psychology: Boolean(teaching.for_psychology),
+    class_id: audienceKind === "named" ? null : teaching.class_id,
+    track_id: audienceKind === "named" ? null : teaching.track_id,
+    specialization_id: audienceKind === "named" ? null : teaching.specialization_id,
+    billing_type:
+      audienceKind === "named"
+        ? ("mandatory" as const)
+        : (teaching.billing_type as "mandatory" | "specialization"),
+    for_psychology: forPsychology,
     day_of_week: first.dayOfWeek,
     lesson_number: first.lessonNumber,
     period_count: first.periodCount,
@@ -1853,7 +1884,7 @@ async function replaceLessonWeeklySlots(
 
 function lessonAudienceRows(
   lessonId: string,
-  gradeId: string,
+  gradeId: string | null,
   formData: FormData
 ): Array<{
   lesson_id: string;
@@ -1862,11 +1893,17 @@ function lessonAudienceRows(
   track_id: string | null;
   specialization_id: string | null;
 }> | { error: string } {
+  if (audienceKindFromForm(formData) === "named") return [];
+
   const billing = parseLessonBilling(formData);
   const gradeIdsParsed = parseLessonGradeIds(formData);
   if ("error" in billing) return billing;
   if ("error" in gradeIdsParsed) return gradeIdsParsed;
-  const gradeIdsForAudience = gradeIdsParsed.length > 0 ? gradeIdsParsed : [gradeId];
+  const gradeIdsForAudience =
+    gradeIdsParsed.length > 0 ? gradeIdsParsed : gradeId ? [gradeId] : [];
+  if (gradeIdsForAudience.length === 0) {
+    return { error: "יש לבחור לפחות שכבה אחת" };
+  }
   return [
     ...gradeIdsForAudience.map((grade_id) => ({
       lesson_id: lessonId,
@@ -1995,7 +2032,24 @@ export async function createLessonAction(formData: FormData) {
     };
   }
 
-  await autoAssignStudentsToLesson(lesson.id, payload.academic_year_id, undefined, supabase);
+  const audienceKind = audienceKindFromForm(formData);
+  const namedIds = formData
+    .getAll("named_student_ids")
+    .map((v) => String(v).trim())
+    .filter(Boolean);
+  if (audienceKind === "named" && namedIds.length === 0) {
+    await rollbackFailedLessonCreate(supabase, {
+      lessonId: lesson.id,
+      assignmentId,
+      removeAssignment: isNewAssignment,
+    });
+    return { error: "יש לבחור לפחות תלמידה אחת לשיעור" };
+  }
+
+  // Catalog/psychology audience gets automatic links; named-only skips that.
+  if (audienceKind !== "named") {
+    await autoAssignStudentsToLesson(lesson.id, payload.academic_year_id, undefined, supabase);
+  }
 
   const named = await assignNamedStudentsToLesson(
     supabase,
@@ -2010,6 +2064,14 @@ export async function createLessonAction(formData: FormData) {
       removeAssignment: isNewAssignment,
     });
     return { error: named.error };
+  }
+  if (audienceKind === "named" && named.assigned === 0) {
+    await rollbackFailedLessonCreate(supabase, {
+      lessonId: lesson.id,
+      assignmentId,
+      removeAssignment: isNewAssignment,
+    });
+    return { error: "לא שויכה אף תלמידה לשיעור. בדקי את הרשימה ונסי שוב." };
   }
 
   revalidateLessonPaths();
@@ -2218,7 +2280,28 @@ export async function updateLessonAction(formData: FormData) {
     "שם שיעור"
   );
   if (isError(lessonName)) return lessonName;
-  const billing = parseLessonBilling(formData);
+  const audienceKind = audienceKindFromForm(formData);
+  const namedIdsForUpdate = formData
+    .getAll("named_student_ids")
+    .map((v) => String(v).trim())
+    .filter(Boolean);
+  if (audienceKind === "named" && namedIdsForUpdate.length === 0) {
+    return { error: "יש לבחור לפחות תלמידה אחת לשיעור" };
+  }
+  const billing =
+    audienceKind === "named"
+      ? {
+          billing_type: "mandatory" as const,
+          class_id: null,
+          track_id: null,
+          specialization_id: null,
+          class_ids: [] as string[],
+          track_ids: [] as string[],
+          specialization_ids: [] as string[],
+          for_psychology: false,
+          whole_grade: false,
+        }
+      : parseLessonBilling(formData);
   if ("error" in billing) return billing;
   const gradeIds = parseLessonGradeIds(formData);
   if ("error" in gradeIds) return gradeIds;
@@ -2303,11 +2386,11 @@ export async function updateLessonAction(formData: FormData) {
             teacher_id: teacherId,
             subject: lessonName,
             billing_type: billing.billing_type,
-            grade_id: gradeIds[0],
-            class_id: billing.class_id,
-            track_id: billing.track_id,
-            specialization_id: billing.specialization_id,
-            for_psychology: billing.for_psychology,
+            grade_id: gradeIds[0] ?? null,
+            class_id: audienceKind === "named" ? null : billing.class_id,
+            track_id: audienceKind === "named" ? null : billing.track_id,
+            specialization_id: audienceKind === "named" ? null : billing.specialization_id,
+            for_psychology: audienceKind === "psychology" ? true : billing.for_psychology,
           }
     )
     .eq("id", existing.teacher_teaching_assignment_id);
@@ -2391,7 +2474,7 @@ export async function updateLessonAction(formData: FormData) {
   const oldStart = oldRange?.start_date?.slice(0, 10) ?? "";
   const rangeStartChanged = oldStart !== bounds.start;
   try {
-    if (!hasMarks || rangeStartChanged) {
+    if (audienceKind !== "named" && (!hasMarks || rangeStartChanged)) {
       await refreshAutomaticAssignmentsForLesson(lessonId, payload.academic_year_id, supabase);
     }
   } catch (e) {

@@ -184,7 +184,6 @@ function linkedOccurrenceIds(row: DayLessonRow | undefined, fallbackId?: string)
   return row?.id ? [row.id] : [];
 }
 
-/** Save the open meeting. Extra hours of the same lesson are separate cards and are not included. */
 /** Save the open meeting only. Same-lesson hours are separate rows and are never filled together. */
 function attendanceTargetIds(
   row: DayLessonRow | undefined,
@@ -195,8 +194,10 @@ function attendanceTargetIds(
   const lessonIds = [
     ...new Set((row?.linkedLessonIds ?? (row?.lessonId ? [row.lessonId] : [])).filter(Boolean)),
   ];
+  // Same lesson (one or many hours): always the open meeting alone — never a sibling hour.
+  if (lessonIds.length <= 1) return [occurrenceId];
   // Visual merge of consecutive DIFFERENT lessons: one card still fills those meetings.
-  if (lessonIds.length > 1 && linked.length > 1 && linked.includes(occurrenceId)) {
+  if (linked.length > 1 && linked.includes(occurrenceId)) {
     return linked;
   }
   return [occurrenceId];
@@ -348,11 +349,12 @@ export function AttendanceBoard({
     !studentId && dayOccurrences.length === 1 ? dayOccurrences[0]?.id : undefined;
   const requestedOccurrenceId =
     pinnedOccurrenceId || selectedOccurrenceId || soleDayOccurrenceId;
+  // Exact card first. Linked-includes is only for merged different-lesson blocks —
+  // otherwise a sibling hour of the same lesson can steal the header/selection.
   const activeLesson = requestedOccurrenceId
-    ? dayOccurrences.find(
-        (o) =>
-          o.id === requestedOccurrenceId ||
-          Boolean(o.linkedOccurrenceIds?.includes(requestedOccurrenceId))
+    ? dayOccurrences.find((o) => o.id === requestedOccurrenceId) ||
+      dayOccurrences.find((o) =>
+        Boolean(o.linkedOccurrenceIds?.includes(requestedOccurrenceId))
       )
     : undefined;
   const activeOccurrenceId =
@@ -465,24 +467,14 @@ export function AttendanceBoard({
       hydratedOccurrenceId.current = undefined;
       return;
     }
-    const linked = linkedOccurrenceIds(
-      dayOccurrencesRef.current.find(
-        (o) =>
-          o.id === activeOccurrenceId ||
-          Boolean(o.linkedOccurrenceIds?.includes(activeOccurrenceId))
-      ),
-      activeOccurrenceId
-    );
     const byKey = new Map<string, { status: AttendanceStatus; reason: AbsenceReason | null }>();
+    // Draft is only for the open meeting — sibling hours of the same lesson stay out.
     for (const a of attendance) {
-      if (!linked.includes(a.lesson_occurrence_id)) continue;
-      const k = keyOf(a.student_id, a.lesson_occurrence_id);
-      if (!byKey.has(k) || a.lesson_occurrence_id === activeOccurrenceId) {
-        byKey.set(k, {
-          status: a.status as AttendanceStatus,
-          reason: (a.reason as AbsenceReason | null) ?? null,
-        });
-      }
+      if (a.lesson_occurrence_id !== activeOccurrenceId) continue;
+      byKey.set(keyOf(a.student_id, a.lesson_occurrence_id), {
+        status: a.status as AttendanceStatus,
+        reason: (a.reason as AbsenceReason | null) ?? null,
+      });
     }
     const nextDraft: Record<DraftKey, AttendanceStatus | null> = {};
     const nextReasons: Record<DraftKey, AbsenceReason | null> = {};
@@ -668,10 +660,11 @@ export function AttendanceBoard({
   }
 
   function selectLesson(occurrenceId: string) {
+    // Pin the exact card id so a slow refresh cannot open a later hour of the same lesson.
     setPinnedOccurrenceId(occurrenceId);
-    const row = dayOccurrences.find(
-      (o) => o.id === occurrenceId || o.linkedOccurrenceIds?.includes(occurrenceId)
-    );
+    const row =
+      dayOccurrences.find((o) => o.id === occurrenceId) ||
+      dayOccurrences.find((o) => o.linkedOccurrenceIds?.includes(occurrenceId));
     navigate(
       buildParams({
         occurrenceId,
@@ -788,9 +781,9 @@ export function AttendanceBoard({
       setMessage(null);
       if (previous === null) bumpMarkedCount(occurrenceId, 1);
 
-      const block = dayOccurrencesRef.current.find(
-        (o) => o.id === occurrenceId || o.linkedOccurrenceIds?.includes(occurrenceId)
-      );
+      const block =
+        dayOccurrencesRef.current.find((o) => o.id === occurrenceId) ||
+        dayOccurrencesRef.current.find((o) => o.linkedOccurrenceIds?.includes(occurrenceId));
       const ids = attendanceTargetIds(block, occurrenceId);
       writeQueue.current = writeQueue.current.filter((item) => item.k !== k);
       writeQueue.current.push({
@@ -1877,7 +1870,12 @@ export function AttendanceBoard({
                     <span className="text-on-surface-variant">תאריך: </span>
                     {formatHebrewDate(selectedDate)}
                     {activeLesson.lessonNumber
-                      ? ` · ${formatLessonHours(activeLesson.lessonNumber, activeLesson.periodCount ?? 1)}`
+                      ? ` · ${formatLessonHours(
+                          activeLesson.lessonNumber,
+                          (activeLesson.linkedLessonIds?.length ?? 0) > 1
+                            ? (activeLesson.periodCount ?? 1)
+                            : 1
+                        )}`
                       : ""}
                   </div>
                 </dl>

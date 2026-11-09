@@ -63,11 +63,22 @@ function collectIds(formData: FormData, name: string): string[] {
   return [...new Set(values)];
 }
 
+export function audienceKindFromForm(
+  formData: FormData
+): "catalog" | "psychology" | "named" {
+  const raw = String(formData.get("audience_kind") ?? "catalog").trim();
+  if (raw === "psychology" || raw === "named") return raw;
+  return "catalog";
+}
+
 export function parseLessonGradeIds(formData: FormData): string[] | { error: string } {
   const gradeIds = collectIds(formData, "grade_ids");
   const single = String(formData.get("grade_id") ?? "").trim();
   if (single && !gradeIds.includes(single)) gradeIds.push(single);
-  if (gradeIds.length === 0) return { error: "יש לבחור לפחות שכבה אחת" };
+  const kind = audienceKindFromForm(formData);
+  if (gradeIds.length === 0 && kind !== "named") {
+    return { error: "יש לבחור לפחות שכבה אחת" };
+  }
   return gradeIds;
 }
 

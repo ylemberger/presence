@@ -32,8 +32,9 @@ function hourSpan(row: AttendanceBlockInput): { start: number; end: number } {
 
 function canMerge(a: AttendanceBlockInput, b: AttendanceBlockInput): boolean {
   if (a.date !== b.date) return false;
-  // One lesson that lasts several hours is several meetings. Do not glue them back together.
-  if (a.lessonId && a.lessonId === b.lessonId) return false;
+  // One lesson that lasts several hours is several meetings. Do not glue them back together —
+  // filling the first hour must not open or write the second.
+  if (a.lessonId && b.lessonId && a.lessonId === b.lessonId) return false;
   if (a.audienceKey !== b.audienceKey) return false;
   if (isAfternoonLesson(a.lessonNumber) !== isAfternoonLesson(b.lessonNumber)) return false;
   const as = hourSpan(a);

@@ -499,6 +499,53 @@ export default async function LessonsPage({ searchParams }: Props) {
     ? weeklySlotsByLesson.get(editingLesson.id) ??
       slotsFromLessonAndRows(editingLesson, weeklySlotRowsByLesson.get(editingLesson.id))
     : [];
+  const editingNamedStudentIds = editingLesson
+    ? [
+        ...new Set(
+          (
+            await supabase
+              .from("student_lesson_assignments")
+              .select("student_id")
+              .eq("lesson_id", editingLesson.id)
+              .eq("assignment_type", "manual")
+              .is("end_date", null)
+          ).data?.map((row) => row.student_id) ?? []
+        ),
+      ]
+    : [];
+
+  const editingGradeIds =
+    editingAudience && editingAudience.grade_ids.length > 0
+      ? editingAudience.grade_ids
+      : editingLesson?.grade_id
+        ? [editingLesson.grade_id]
+        : [];
+  const editingClassIds =
+    editingAudience && editingAudience.class_ids.length > 0
+      ? editingAudience.class_ids
+      : editingLesson?.class_id
+        ? [editingLesson.class_id]
+        : [];
+  const editingTrackIds =
+    editingAudience && editingAudience.track_ids.length > 0
+      ? editingAudience.track_ids
+      : editingLesson?.track_id
+        ? [editingLesson.track_id]
+        : [];
+  const editingSpecIds =
+    editingAudience && editingAudience.specialization_ids.length > 0
+      ? editingAudience.specialization_ids
+      : editingLesson?.specialization_id
+        ? [editingLesson.specialization_id]
+        : [];
+  const editingIsNamedOnly =
+    Boolean(editingLesson) &&
+    !editingLesson!.for_psychology &&
+    editingGradeIds.length === 0 &&
+    editingClassIds.length === 0 &&
+    editingTrackIds.length === 0 &&
+    editingSpecIds.length === 0;
+
   const editingDraft: LessonFormDraft | null = editingLesson
     ? {
         id: editingLesson.id,
@@ -507,36 +554,23 @@ export default async function LessonsPage({ searchParams }: Props) {
         teacherId: editingTeacherId,
         billingType: editingLesson.billing_type,
         forPsychology: Boolean(editingLesson.for_psychology),
-        gradeIds:
-          editingAudience && editingAudience.grade_ids.length > 0
-            ? editingAudience.grade_ids
-            : editingLesson.grade_id
-              ? [editingLesson.grade_id]
-              : [],
-        classIds:
-          editingAudience && editingAudience.class_ids.length > 0
-            ? editingAudience.class_ids
-            : editingLesson.class_id
-              ? [editingLesson.class_id]
-              : [],
-        trackIds:
-          editingAudience && editingAudience.track_ids.length > 0
-            ? editingAudience.track_ids
-            : editingLesson.track_id
-              ? [editingLesson.track_id]
-              : [],
-        specializationIds:
-          editingAudience && editingAudience.specialization_ids.length > 0
-            ? editingAudience.specialization_ids
-            : editingLesson.specialization_id
-              ? [editingLesson.specialization_id]
-              : [],
+        audienceKind: editingLesson.for_psychology
+          ? "psychology"
+          : editingIsNamedOnly
+            ? "named"
+            : "catalog",
+        gradeIds: editingGradeIds,
+        classIds: editingClassIds,
+        trackIds: editingTrackIds,
+        specializationIds: editingSpecIds,
         wholeGrade:
           editingLesson.billing_type === "mandatory" &&
           !editingLesson.for_psychology &&
-          (editingAudience?.class_ids.length ?? 0) === 0 &&
-          (editingAudience?.track_ids.length ?? 0) === 0 &&
-          (editingAudience?.specialization_ids.length ?? 0) === 0,
+          !editingIsNamedOnly &&
+          editingClassIds.length === 0 &&
+          editingTrackIds.length === 0 &&
+          editingSpecIds.length === 0,
+        namedStudentIds: editingNamedStudentIds,
         weeklySlots: editingSlots,
         repeatEveryWeeks:
           editingLesson.repeat_every_weeks === 2 ? 2 : 1,

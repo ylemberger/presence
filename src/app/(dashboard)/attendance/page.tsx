@@ -495,13 +495,27 @@ export default async function AttendancePage({ searchParams }: Props) {
   );
 
   const wantedId = params.occurrenceId || selectedRaw?.id;
+  const blockForWanted = wantedId
+    ? dayBlocks.find(
+        (b) => b.id === wantedId || b.linkedOccurrenceIds.includes(wantedId)
+      )
+    : null;
+  // Same lesson, several hours today: without a click, open the earliest hour so
+  // the first meeting can be filled and later copied — never jump to a later hour.
+  const earliestDayBlock =
+    !wantedId && params.lessonId && dayBlocks.length > 0
+      ? [...dayBlocks].sort(
+          (a, b) => (a.lessonNumber || 0) - (b.lessonNumber || 0) || a.id.localeCompare(b.id)
+        )[0]
+      : null;
   const selectedOcc =
-    (wantedId && dayBlocks.find((b) => b.linkedOccurrenceIds.includes(wantedId))) ||
+    blockForWanted ||
+    earliestDayBlock ||
     (dayBlocks.length === 1 ? dayBlocks[0] : null);
-  const openOccurrenceId =
-    wantedId && selectedOcc?.linkedOccurrenceIds.includes(wantedId)
-      ? wantedId
-      : selectedOcc?.id ?? params.occurrenceId;
+  // Honor the clicked/requested meeting id. Never substitute a sibling hour.
+  const openOccurrenceId = wantedId
+    ? wantedId
+    : selectedOcc?.id ?? params.occurrenceId;
 
   if (selectedOcc) {
     const map = new Map<string, ShellStudent>();
@@ -726,21 +740,25 @@ export default async function AttendancePage({ searchParams }: Props) {
         allStudents={allStudents}
         monthOccurrences={monthOccurrences.map((o) => ({ id: o.id, date: o.date }))}
         studentLessonIds={[...new Set((studentLinks.data ?? []).map((row) => row.lesson_id))]}
-        dayOccurrences={dayBlocks.map((o) => ({
-          id: o.id,
-          date: o.date,
-          status: o.status,
-          subject: o.subject,
-          teacherName: o.teacherName,
-          lessonId: o.lessonId,
-          lessonNumber: o.lessonNumber,
-          periodCount: o.periodCount,
-          groupLabel: o.groupLabel,
-          studentCount: o.studentCount,
-          markedCount: o.markedCount,
-          linkedOccurrenceIds: o.linkedOccurrenceIds,
-          linkedLessonIds: o.linkedLessonIds,
-        }))}
+        dayOccurrences={dayBlocks.map((o) => {
+          const multiLessonMerge = (o.linkedLessonIds?.length ?? 0) > 1;
+          return {
+            id: o.id,
+            date: o.date,
+            status: o.status,
+            subject: o.subject,
+            teacherName: o.teacherName,
+            lessonId: o.lessonId,
+            lessonNumber: o.lessonNumber,
+            // One lesson-hour meeting is always a single hour on the card.
+            periodCount: multiLessonMerge ? o.periodCount : 1,
+            groupLabel: o.groupLabel,
+            studentCount: o.studentCount,
+            markedCount: o.markedCount,
+            linkedOccurrenceIds: o.linkedOccurrenceIds,
+            linkedLessonIds: o.linkedLessonIds,
+          };
+        })}
         lessonStudents={lessonStudents}
         attendance={attendanceRecords}
         noteBody={noteBody}

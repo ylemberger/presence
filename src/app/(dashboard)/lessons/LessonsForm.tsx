@@ -40,6 +40,8 @@ export type LessonFormTeacher = {
   salaryAssignments: SalaryDisplayFields[];
 };
 
+export type LessonAudienceKind = "catalog" | "psychology" | "named";
+
 export type LessonFormDraft = {
   id: string;
   lessonName: string;
@@ -47,11 +49,14 @@ export type LessonFormDraft = {
   teacherId: string;
   billingType: "mandatory" | "specialization";
   forPsychology: boolean;
+  /** How the lesson picks its roster. Named = only the student list. */
+  audienceKind?: LessonAudienceKind;
   gradeIds: string[];
   classIds: string[];
   trackIds: string[];
   specializationIds: string[];
   wholeGrade: boolean;
+  namedStudentIds?: string[];
   weeklySlots: WeeklySlot[];
   /** 1 = every week, 2 = every other week */
   repeatEveryWeeks: 1 | 2;
@@ -107,7 +112,23 @@ export function LessonsForm({
   const [billingType, setBillingType] = useState<"mandatory" | "specialization">(
     initial?.billingType ?? "mandatory"
   );
-  const [forPsychology, setForPsychology] = useState(initial?.forPsychology ?? false);
+  const [audienceKind, setAudienceKind] = useState<LessonAudienceKind>(() => {
+    if (initial?.audienceKind) return initial.audienceKind;
+    if (initial?.forPsychology) return "psychology";
+    if (
+      initial &&
+      initial.gradeIds.length === 0 &&
+      initial.classIds.length === 0 &&
+      initial.trackIds.length === 0 &&
+      initial.specializationIds.length === 0
+    ) {
+      return "named";
+    }
+    return "catalog";
+  });
+  const [forPsychology, setForPsychology] = useState(
+    initial?.forPsychology ?? audienceKind === "psychology"
+  );
   const [gradeIds, setGradeIds] = useState<string[]>(initial?.gradeIds ?? []);
   const [classIds, setClassIds] = useState<string[]>(initial?.classIds ?? []);
   const [trackIds, setTrackIds] = useState<string[]>(initial?.trackIds ?? []);
@@ -115,7 +136,9 @@ export function LessonsForm({
     initial?.specializationIds ?? []
   );
   const [wholeGrade, setWholeGrade] = useState(initial?.wholeGrade ?? false);
-  const [namedStudentIds, setNamedStudentIds] = useState<string[]>([]);
+  const [namedStudentIds, setNamedStudentIds] = useState<string[]>(
+    initial?.namedStudentIds ?? []
+  );
   const [weeklySlots, setWeeklySlots] = useState<WeeklySlot[]>(() =>
     initial?.weeklySlots?.length
       ? initial.weeklySlots
@@ -230,15 +253,22 @@ export function LessonsForm({
     .filter((s) => specializationIds.includes(s.id))
     .map((s) => s.name);
 
-  const audienceSummary = describeAudienceScope({
-    billing_type: billingType,
-    gradeNames,
-    classNames,
-    trackNames,
-    specializationNames,
-    forPsychology,
-    wholeGrade,
-  });
+  const audienceSummary =
+    audienceKind === "named"
+      ? namedStudentIds.length > 0
+        ? `שיעור לתלמידות שנבחרו בשם (${namedStudentIds.length})`
+        : "שיעור לתלמידות שנבחרות בשם"
+      : audienceKind === "psychology"
+        ? "ישויכו תלמידות המסומנות כפסיכולוגיה באחת השכבות שנבחרו."
+        : describeAudienceScope({
+            billing_type: billingType,
+            gradeNames,
+            classNames,
+            trackNames,
+            specializationNames,
+            forPsychology,
+            wholeGrade,
+          });
 
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -248,26 +278,40 @@ export function LessonsForm({
     try {
       const fd = new FormData(form);
       fd.set("academic_year_id", yearId);
-      fd.set("billing_type", billingType);
+      fd.set("audience_kind", audienceKind);
+      fd.set(
+        "billing_type",
+        audienceKind === "named" || audienceKind === "psychology" ? "mandatory" : billingType
+      );
       if (!teacherId) {
         setError("יש לבחור מורה ושיבוץ");
         setLoading(false);
         return;
       }
-      if (gradeIds.length === 0) {
+      if (audienceKind === "named") {
+        if (namedStudentIds.length === 0) {
+          setError("יש לבחור לפחות תלמידה אחת לשיעור");
+          setLoading(false);
+          return;
+        }
+      } else if (gradeIds.length === 0) {
         setError("יש לבחור לפחות שכבה אחת");
         setLoading(false);
         return;
       }
-      fd.set("grade_id", gradeIds[0]);
+      if (gradeIds[0]) fd.set("grade_id", gradeIds[0]);
+      else fd.set("grade_id", "");
       const putIds = (name: string, values: string[]) => {
         fd.delete(name);
         for (const value of values) fd.append(name, value);
       };
-      putIds("grade_ids", gradeIds);
-      putIds("class_ids", classIds);
-      putIds("track_ids", trackIds);
-      putIds("specialization_ids", specializationIds);
+      putIds("grade_ids", audienceKind === "named" ? [] : gradeIds);
+      putIds("class_ids", audienceKind === "catalog" && !forPsychology ? classIds : []);
+      putIds("track_ids", audienceKind === "catalog" && !forPsychology ? trackIds : []);
+      putIds(
+        "specialization_ids",
+        audienceKind === "catalog" ? specializationIds : []
+      );
       putIds("named_student_ids", namedStudentIds);
       putIds(
         "slot_day_of_week",
@@ -281,16 +325,21 @@ export function LessonsForm({
         "slot_period_count",
         weeklySlots.map((slot) => String(slot.periodCount))
       );
-      if (wholeGrade) fd.set("whole_grade", "1");
-      if (billingType === "specialization") {
-        fd.set("class_id", "");
-        fd.set("track_id", "");
-        fd.set("for_psychology", "");
-      } else if (forPsychology) {
+      if (audienceKind === "catalog" && wholeGrade) fd.set("whole_grade", "1");
+      if (audienceKind === "psychology" || (audienceKind === "catalog" && forPsychology)) {
         fd.set("for_psychology", "1");
         fd.set("class_id", "");
         fd.set("track_id", "");
         fd.set("specialization_id", "");
+      } else if (audienceKind === "named") {
+        fd.set("for_psychology", "");
+        fd.set("class_id", "");
+        fd.set("track_id", "");
+        fd.set("specialization_id", "");
+      } else if (billingType === "specialization") {
+        fd.set("class_id", "");
+        fd.set("track_id", "");
+        fd.set("for_psychology", "");
       } else {
         fd.set("for_psychology", "");
       }
@@ -311,6 +360,7 @@ export function LessonsForm({
       }
 
       form.reset();
+      setAudienceKind("catalog");
       setBillingType("mandatory");
       setForPsychology(false);
       setGradeIds([]);
@@ -318,6 +368,7 @@ export function LessonsForm({
       setTrackIds([]);
       setSpecializationIds([]);
       setWholeGrade(false);
+      setNamedStudentIds([]);
       setWeeklySlots([{ dayOfWeek: 0, lessonNumber: 1, periodCount: 1 }]);
       setRepeatEveryWeeks(1);
       setAssignmentKey("");
@@ -465,70 +516,138 @@ export function LessonsForm({
           </p>
         ) : null}
         <fieldset disabled={attendanceRecorded} className="min-w-0 border-0 p-0 disabled:opacity-70">
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
-          <div className="sm:col-span-2 xl:col-span-4">
-            <MultiSelect
-              fieldSize="lg"
-              label="שכבות"
-              name="grade_ids"
-              values={gradeIds}
-              onChange={(next) => {
-                setGradeIds(next);
-                setClassIds((prev) =>
-                  prev.filter((id) => {
-                    const cls = classes.find((c) => c.id === id);
-                    return cls ? next.includes(cls.grade_id) : false;
-                  })
-                );
-              }}
-              options={grades.map((g) => ({ value: g.id, label: g.name }))}
-              hint="אפשר כמה שכבות. תלמידה תשויך אם היא באחת מהן (ובנוסף עומדת בשאר התנאים)."
+        <div
+          className="mb-4 grid grid-cols-1 gap-2 sm:grid-cols-3"
+          role="radiogroup"
+          aria-label="סוג קהל יעד"
+        >
+          {(
+            [
+              {
+                value: "catalog" as const,
+                title: "לפי שכבה / כיתה",
+                hint: "שיוך אוטומטי לפי שכבה, כיתה, מסלול או התמחות",
+              },
+              {
+                value: "psychology" as const,
+                title: "לפי פסיכולוגיה",
+                hint: "תלמידות שמסומנות כפסיכולוגיה בשכבות שנבחרו",
+              },
+              {
+                value: "named" as const,
+                title: "תלמידות בשם",
+                hint: "בלי כיתה — בוחרות תלמידות מהרשימה והשיעור נוצר להן",
+              },
+            ] as const
+          ).map((opt) => {
+            const active = audienceKind === opt.value;
+            return (
+              <button
+                key={opt.value}
+                type="button"
+                role="radio"
+                aria-checked={active}
+                onClick={() => {
+                  setAudienceKind(opt.value);
+                  if (opt.value === "psychology") {
+                    setBillingType("mandatory");
+                    setForPsychology(true);
+                    setClassIds([]);
+                    setTrackIds([]);
+                    setSpecializationIds([]);
+                    setWholeGrade(false);
+                  } else if (opt.value === "named") {
+                    setBillingType("mandatory");
+                    setForPsychology(false);
+                    setGradeIds([]);
+                    setClassIds([]);
+                    setTrackIds([]);
+                    setSpecializationIds([]);
+                    setWholeGrade(false);
+                  } else {
+                    setForPsychology(false);
+                  }
+                }}
+                className={`rounded-xl border px-4 py-3 text-right transition ${
+                  active
+                    ? "border-primary bg-primary/5 text-primary"
+                    : "border-outline-variant/60 bg-surface text-on-surface hover:border-outline"
+                }`}
+              >
+                <span className="block font-title-lg text-title-lg">{opt.title}</span>
+                <span className="mt-1 block font-caption text-caption text-on-surface-variant">
+                  {opt.hint}
+                </span>
+              </button>
+            );
+          })}
+        </div>
+
+        {audienceKind === "named" ? (
+          <div className="rounded-xl border border-primary/20 bg-surface-container-low/60 p-4">
+            <SearchMultiSelect
+              label="תלמידות לשיעור"
+              values={namedStudentIds}
+              onChange={setNamedStudentIds}
+              options={students.map((s) => ({ value: s.id, label: s.full_name }))}
+              placeholder="הקלידי שמות תלמידות…"
             />
+            <p className="mt-2 font-caption text-caption text-on-surface-variant">
+              בוחרות כאן את כל התלמידות של השיעור. נוצר שיעור רגיל עם שיוך ידני לכל אחת — בלי שכבה
+              או כיתה.
+            </p>
           </div>
-          <Select
-            fieldSize="lg"
-            label="סוג שיעור"
-            name="billing_type_ui"
-            required
-            value={billingType}
-            onChange={(e) => setBillingType(e.target.value as "mandatory" | "specialization")}
-            options={Object.entries(BILLING_TYPE_LABELS).map(([v, l]) => ({
-              value: v,
-              label: l,
-            }))}
-          />
-          {billingType === "specialization" ? (
-            <div className="sm:col-span-2 xl:col-span-3">
-              <MultiSelect
-                fieldSize="lg"
-                label="התמחויות"
-                name="specialization_ids"
-                values={specializationIds}
-                onChange={setSpecializationIds}
-                options={specializations.map((s) => ({ value: s.id, label: s.name }))}
-                hint="תלמידה תשויך אם היא באחת השכבות שנבחרו וגם יש לה אחת מההתמחויות (ראשית או נוספת)."
-              />
-            </div>
-          ) : (
-            <>
-              <label className="flex items-center gap-3 font-title-lg text-title-lg text-on-surface sm:col-span-2 xl:col-span-4">
-                <input
-                  type="checkbox"
-                  checked={forPsychology}
-                  onChange={(e) => {
-                    setForPsychology(e.target.checked);
-                    if (e.target.checked) {
-                      setClassIds([]);
-                      setTrackIds([]);
-                      setSpecializationIds([]);
-                      setWholeGrade(false);
-                    }
+        ) : (
+          <>
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
+              <div className="sm:col-span-2 xl:col-span-4">
+                <MultiSelect
+                  fieldSize="lg"
+                  label="שכבות"
+                  name="grade_ids"
+                  values={gradeIds}
+                  onChange={(next) => {
+                    setGradeIds(next);
+                    setClassIds((prev) =>
+                      prev.filter((id) => {
+                        const cls = classes.find((c) => c.id === id);
+                        return cls ? next.includes(cls.grade_id) : false;
+                      })
+                    );
                   }}
-                  className="h-5 w-5 rounded border-outline-variant"
+                  options={grades.map((g) => ({ value: g.id, label: g.name }))}
+                  hint="אפשר כמה שכבות. תלמידה תשויך אם היא באחת מהן (ובנוסף עומדת בשאר התנאים)."
                 />
-                מיועד לפסיכולוגיה
-              </label>
-              {!forPsychology && (
+              </div>
+              {audienceKind === "psychology" ? null : (
+                <Select
+                  fieldSize="lg"
+                  label="סוג שיעור"
+                  name="billing_type_ui"
+                  required
+                  value={billingType}
+                  onChange={(e) =>
+                    setBillingType(e.target.value as "mandatory" | "specialization")
+                  }
+                  options={Object.entries(BILLING_TYPE_LABELS).map(([v, l]) => ({
+                    value: v,
+                    label: l,
+                  }))}
+                />
+              )}
+              {audienceKind === "psychology" ? null : billingType === "specialization" ? (
+                <div className="sm:col-span-2 xl:col-span-3">
+                  <MultiSelect
+                    fieldSize="lg"
+                    label="התמחויות"
+                    name="specialization_ids"
+                    values={specializationIds}
+                    onChange={setSpecializationIds}
+                    options={specializations.map((s) => ({ value: s.id, label: s.name }))}
+                    hint="תלמידה תשויך אם היא באחת השכבות שנבחרו וגם יש לה אחת מההתמחויות (ראשית או נוספת)."
+                  />
+                </div>
+              ) : (
                 <>
                   <label className="flex items-center gap-3 font-title-lg text-title-lg text-on-surface sm:col-span-2 xl:col-span-4">
                     <input
@@ -587,33 +706,26 @@ export function LessonsForm({
                   )}
                 </>
               )}
-            </>
-          )}
-        </div>
-        <p className="mt-3 rounded-lg bg-surface-container-low px-4 py-3 font-body-md text-body-md text-on-surface-variant">
-          {forPsychology
-            ? "ישויכו תלמידות המסומנות כפסיכולוגיה באחת השכבות שנבחרו."
-            : billingType === "specialization"
-              ? "ישויכו תלמידות שבאחת השכבות וגם עם אחת מההתמחויות שנבחרו."
-              : wholeGrade ||
-                  (classIds.length === 0 && trackIds.length === 0 && specializationIds.length === 0)
-                ? "כל תלמידות השכבות שנבחרו ישויכו."
-                : "תלמידה תשויך אם היא באחת השכבות, וגם עומדת בכל שאר התנאים שנבחרו (כיתה / מסלול / התמחות)."}
-        </p>
+            </div>
+            <p className="mt-3 rounded-lg bg-surface-container-low px-4 py-3 font-body-md text-body-md text-on-surface-variant">
+              {audienceSummary}
+            </p>
+            <div className="mt-4 rounded-xl border border-dashed border-outline-variant/50 bg-surface-container-low/50 p-4">
+              <SearchMultiSelect
+                label="תלמידות ספציפיות (רשות)"
+                values={namedStudentIds}
+                onChange={setNamedStudentIds}
+                options={students.map((s) => ({ value: s.id, label: s.full_name }))}
+                placeholder="הקלידי שמות תלמידות…"
+              />
+              <p className="mt-2 font-caption text-caption text-on-surface-variant">
+                בנוסף לקהל למעלה — אפשר לבחור כאן תלמידות בשמות. הן ישויכו לשיעור ידנית גם אם אינן
+                בכיתה או בהתמחות של השיעור.
+              </p>
+            </div>
+          </>
+        )}
         </fieldset>
-        <div className="mt-4 rounded-xl border border-dashed border-outline-variant/50 bg-surface-container-low/50 p-4">
-          <SearchMultiSelect
-            label="תלמידות ספציפיות (רשות)"
-            values={namedStudentIds}
-            onChange={setNamedStudentIds}
-            options={students.map((s) => ({ value: s.id, label: s.full_name }))}
-            placeholder="הקלידי שמות תלמידות…"
-          />
-          <p className="mt-2 font-caption text-caption text-on-surface-variant">
-            בנוסף לקהל למעלה — אפשר לבחור כאן תלמידות בשמות. הן ישויכו לשיעור ידנית גם אם אינן
-            בכיתה או בהתמחות של השיעור.
-          </p>
-        </div>
       </div>
 
       <div>
@@ -822,7 +934,7 @@ export function LessonsForm({
         </p>
       </div>
 
-      {gradeIds.length > 0 && (
+      {(audienceKind === "named" ? namedStudentIds.length > 0 : gradeIds.length > 0) && (
         <div className="rounded-lg border border-secondary/20 bg-secondary-container/40 px-4 py-3 font-body-lg text-body-lg text-primary">
           <div className="font-semibold">סיכום</div>
           <div className="mt-1 text-on-surface-variant">קהל: {audienceSummary}</div>
