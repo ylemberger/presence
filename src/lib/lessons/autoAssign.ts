@@ -552,6 +552,7 @@ export async function refreshAutomaticLessonAssignmentsForStudent(
   }
 
   const closedIds = new Set(toClose.map((row) => row.id));
+  const closedLessonIds = [...new Set(toClose.map((row) => row.lesson_id))];
   const stillOpen = new Set(
     openLinks.filter((row) => !closedIds.has(row.id)).map((row) => row.lesson_id)
   );
@@ -583,5 +584,9 @@ export async function refreshAutomaticLessonAssignmentsForStudent(
     if (error) throw new Error(hebrewDbError(error, "שיוך השיעורים החדשים נכשל"));
   }
 
-  return { assigned: rows.length, closed: toClose.length };
+  return {
+    assigned: rows.length,
+    closed: toClose.length,
+    closedLessonIds,
+  };
 }

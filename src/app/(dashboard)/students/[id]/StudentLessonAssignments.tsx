@@ -124,7 +124,7 @@ export function StudentLessonAssignments({
     <div className="flex flex-col gap-4">
       {canWrite ? (
       <p className="font-caption text-caption text-on-surface-variant">
-        אפשר לשייך לשיעור ספציפי פעם אחת. שיוך שכבר קיים לא נשמר שוב. «הסר שיוך» מוריד את השורה הזו. התלמידה ונוכחות שכבר סומנה נשארות.
+        אפשר לשייך לשיעור ספציפי פעם אחת. שיוך שכבר קיים לא נשמר שוב. «הסר שיוך» מוריד את השורה ומוחק את סימוני הנוכחות שלה בשיעור הזה. התלמידה עצמה נשארת.
       </p>
       ) : null}
       {canWrite ? (
@@ -191,7 +191,7 @@ export function StudentLessonAssignments({
               {canWrite ? (
                 <DeleteButton
                   label="הסר שיוך"
-                  confirmMessage="יוסר השיוך הזה לשיעור. נוכחות שכבר סומנה נשארת, והתלמידה לא נמחקת."
+                  confirmMessage="יוסר השיוך הזה לשיעור, וכל סימוני הנוכחות שלה בשיעור יימחקו (גם בעבר). היא לא תופיע ברשימות/הדפסה/דוחות של השיעור. התלמידה עצמה לא נמחקת. להמשיך?"
                   onDelete={() => removeLink(a.id)}
                 />
               ) : null}
@@ -212,7 +212,7 @@ export function StudentLessonAssignments({
               {canWrite && a.assignment_type === "manual" ? (
                 <DeleteButton
                   label="הסר שיוך"
-                  confirmMessage="יוסר השיוך הזה לשיעור. נוכחות שכבר סומנה נשארת, והתלמידה לא נמחקת."
+                  confirmMessage="יוסר השיוך הזה לשיעור, וכל סימוני הנוכחות שלה בשיעור יימחקו (גם בעבר). היא לא תופיע ברשימות/הדפסה/דוחות של השיעור. התלמידה עצמה לא נמחקת. להמשיך?"
                   onDelete={() => removeLink(a.id)}
                 />
               ) : null}

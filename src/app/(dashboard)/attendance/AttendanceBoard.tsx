@@ -2111,7 +2111,7 @@ export function AttendanceBoard({
                             e.stopPropagation();
                             if (
                               !confirm(
-                                "יוסר השיוך של התלמידה לשיעור הזה. נוכחות שכבר סומנה נשארת."
+                                "יוסר השיוך של התלמידה לשיעור הזה, וכל סימוני הנוכחות שלה בשיעור יימחקו (גם בעבר). היא לא תופיע ברשימות, בהדפסה ובדוחות של השיעור. להמשיך?"
                               )
                             ) {
                               return;
@@ -2129,7 +2129,15 @@ export function AttendanceBoard({
                               setHiddenStudentIds((prev) =>
                                 prev.includes(student.id) ? prev : [...prev, student.id]
                               );
-                              setMessage("השיוך הוסר מהשיעור");
+                              const n =
+                                result && "deletedAttendance" in result
+                                  ? Number(result.deletedAttendance ?? 0)
+                                  : 0;
+                              setMessage(
+                                n > 0
+                                  ? `השיוך הוסר מהשיעור · נמחקו ${n} סימוני נוכחות`
+                                  : "השיוך הוסר מהשיעור"
+                              );
                               router.refresh();
                             } catch {
                               setMessage("הסרת השיוך נכשלה. נסי שוב.");

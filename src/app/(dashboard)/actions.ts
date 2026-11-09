@@ -36,6 +36,7 @@ import {
   refreshAutomaticLessonAssignmentsForStudent,
   refreshAutomaticAssignmentsForLesson,
 } from "@/lib/lessons/autoAssign";
+import { deleteStudentAttendanceOnLessons } from "@/lib/attendance/scrub-student";
 import {
   ensureFixedGrades,
   promoteStudentsToYear,
@@ -1304,11 +1305,15 @@ export async function deleteStudentLessonAssignmentAction(id: string, studentId:
   const closed = await closeStudentLessonLinks(supabase, sid, row.lesson_id, todayIso());
   if (closed.error) return { error: closed.error };
 
+  // Remove every mark for this lesson so she is not recorded as having been in it.
+  const scrub = await deleteStudentAttendanceOnLessons(supabase, sid, [row.lesson_id]);
+  if (scrub.error) return { error: scrub.error };
+
   revalidatePath(`/students/${sid}`);
   revalidatePath("/attendance");
   revalidatePath("/reports");
   revalidatePath("/lessons");
-  return { success: true };
+  return { success: true, deletedAttendance: scrub.deleted };
 }
 
 export async function excludeStudentFromLessonAction(
@@ -1336,11 +1341,15 @@ export async function excludeStudentFromLessonAction(
   const closed = await closeStudentLessonLinks(supabase, sid, lid, day);
   if (closed.error) return { error: closed.error };
 
+  // Full scrub for this lesson — she should not appear as having attended it at all.
+  const scrub = await deleteStudentAttendanceOnLessons(supabase, sid, [lid]);
+  if (scrub.error) return { error: scrub.error };
+
   revalidatePath(`/students/${sid}`);
   revalidatePath("/attendance");
   revalidatePath("/reports");
   revalidatePath("/lessons");
-  return { success: true };
+  return { success: true, deletedAttendance: scrub.deleted };
 }
 
 function parsePlacementFields(formData: FormData) {
@@ -1475,8 +1484,9 @@ export async function transferStudentAction(formData: FormData) {
     if (error) return { error: hebrewDbError(error, "ההעברה נכשלה") };
   }
 
+  let closedLessonIds: string[] = [];
   try {
-    await refreshAutomaticLessonAssignmentsForStudent(
+    const refresh = await refreshAutomaticLessonAssignmentsForStudent(
       placement.student_id,
       placement.academic_year_id,
       {
@@ -1490,6 +1500,7 @@ export async function transferStudentAction(formData: FormData) {
       placement.start_date,
       supabase
     );
+    closedLessonIds = refresh.closedLessonIds ?? [];
   } catch (error) {
     return {
       error: thrownHebrew(
@@ -1499,11 +1510,29 @@ export async function transferStudentAction(formData: FormData) {
     };
   }
 
+  // From the transfer date onward: drop marks on lessons she left, so lists/print/reports match.
+  let deletedAttendance = 0;
+  if (closedLessonIds.length > 0) {
+    const scrub = await deleteStudentAttendanceOnLessons(
+      supabase,
+      placement.student_id,
+      closedLessonIds,
+      { fromDate: placement.start_date }
+    );
+    if (scrub.error) {
+      return {
+        error:
+          "השיבוץ עודכן, אבל מחיקת הנוכחות בשיעורים הישנים מתאריך ההעברה נכשלה. נסי שוב.",
+      };
+    }
+    deletedAttendance = scrub.deleted;
+  }
+
   revalidatePath(`/students/${placement.student_id}`);
   revalidatePath("/attendance");
   revalidatePath("/lessons");
   revalidatePath("/reports");
-  return { success: true };
+  return { success: true, deletedAttendance, closedLessons: closedLessonIds.length };
 }
 
 // --- Teachers ---

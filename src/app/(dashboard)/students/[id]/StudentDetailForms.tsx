@@ -99,9 +99,17 @@ export function StudentDetailForms({ studentId, yearData, current }: Props) {
       setError("יש לבחור שכבה, כיתה, מסלול והתמחות");
       return;
     }
+    const fd = new FormData(form);
+    const transferDate = String(fd.get("transfer_date") ?? fd.get("start_date") ?? "").slice(0, 10);
+    const today = todayIso();
+    if (transferDate && transferDate < today) {
+      const ok = window.confirm(
+        `תאריך ההעברה (${transferDate}) לפני היום. שיעורים אוטומטיים שלא מתאימים לשיבוץ החדש ייסגרו מתאריך זה, וסימוני נוכחות שלה בשיעורים האלה מתאריך ההעברה ואילך יימחקו (רשימות, הדפסה ודוחות). להמשיך?`
+      );
+      if (!ok) return;
+    }
     setLoading(true);
     try {
-      const fd = new FormData(form);
       fd.set("student_id", studentId);
       fd.set("academic_year_id", yearData.year.id);
       fd.set("grade_id", gradeId);
@@ -131,9 +139,9 @@ export function StudentDetailForms({ studentId, yearData, current }: Props) {
   return (
     <div>
       <p className="mb-3 font-caption text-caption text-on-surface-variant">
-        שינוי כיתה/מסלול/התמחות/פסיכולוגיה נעשה רק בהעברה. אפשר גם תאריך בעבר. אם התאריך
-        אחרי תחילת השיבוץ הנוכחי — השיבוץ הישן נסגר יום לפני; אם מוקדם יותר או באותו יום —
-        מתקנים את השיבוץ הפתוח בלי לדרוס היסטוריה קודמת.
+        שינוי כיתה/מסלול/התמחות/פסיכולוגיה נעשה רק בהעברה. אפשר גם תאריך בעבר. שיעורים
+        אוטומטיים שלא מתאימים לשיבוץ החדש נסגרים מתאריך ההעברה, וסימוני נוכחות שלה בשיעורים
+        האלה מתאריך זה ואילך נמחקים (רשימות, הדפסה ודוחות). שיוך ידני לשיעור לא נסגר בהעברה.
       </p>
       <form onSubmit={handleTransfer} className="flex flex-col gap-3">
         <HebrewDateInput
