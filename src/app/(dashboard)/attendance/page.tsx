@@ -159,7 +159,8 @@ export default async function AttendancePage({ searchParams }: Props) {
     chunkByLesson: Boolean(params.studentId && params.subject && !params.lessonId),
   });
 
-  // Soft-sync removes unmarked meetings that no longer match day/hour/range; marked stay visible.
+  // Soft-sync drops unmarked off-schedule meetings. Display always matches the lesson schedule
+  // (same dates as the calendar), even if marked leftovers remain in the DB.
   if (params.lessonId && lessonWindow && lessonWindow.expectedKeys.size > 0) {
     const keyOf = (o: (typeof rawOccs)[number]) =>
       o.lesson_number == null ? null : `${o.occurrence_date}|${o.lesson_number}`;
@@ -178,14 +179,15 @@ export default async function AttendancePage({ searchParams }: Props) {
           includeCancelled: true,
         });
       } catch {
-        // Read-only fallback: hide schedule mismatches (marked leftovers may reappear after edit sync).
-        rawOccs = rawOccs.filter((o) => {
-          const key = keyOf(o);
-          if (key == null) return true;
-          return lessonWindow!.expectedKeys.has(key);
-        });
+        // Keep listing; filter below still clips to the schedule.
       }
     }
+    rawOccs = rawOccs.filter((o) => {
+      if (o.status === "cancelled") return true;
+      const key = keyOf(o);
+      if (key == null) return true;
+      return lessonWindow!.expectedKeys.has(key);
+    });
   }
 
   let lessonById = new Map(shell.lessons.map((l) => [l.id, l]));

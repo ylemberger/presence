@@ -1211,54 +1211,20 @@ export async function createStudentLessonAssignmentAction(formData: FormData) {
 
 type ActionSupabase = Awaited<ReturnType<typeof createClient>>;
 
-async function closeStudentLessonLinks(
+/** Remove every lesson-link row so she never appears on any meeting of this lesson. */
+async function removeAllStudentLessonLinks(
   supabase: ActionSupabase,
   studentId: string,
-  lessonId: string,
-  asOfDate: string
-): Promise<{ error?: string; closed: number }> {
-  const yesterday = addDays(asOfDate, -1);
-  const { data: rows, error: loadError } = await supabase
+  lessonId: string
+): Promise<{ error?: string; removed: number }> {
+  const { data: deleted, error } = await supabase
     .from("student_lesson_assignments")
-    .select("id, start_date, end_date")
+    .delete()
     .eq("student_id", studentId)
-    .eq("lesson_id", lessonId);
-  if (loadError) return { error: hebrewDbError(loadError, "הסרת השיוך נכשלה"), closed: 0 };
-
-  // Links that still cover asOfDate (today or the open meeting). History before that stays.
-  const covering = (rows ?? []).filter((r) => {
-    const start = String(r.start_date).slice(0, 10);
-    const end = r.end_date ? String(r.end_date).slice(0, 10) : null;
-    return start <= asOfDate && (!end || end >= asOfDate);
-  });
-
-  let closed = 0;
-  for (const target of covering) {
-    const start = String(target.start_date).slice(0, 10);
-    if (start >= asOfDate) {
-      const { data: deleted, error } = await supabase
-        .from("student_lesson_assignments")
-        .delete()
-        .eq("id", target.id)
-        .eq("student_id", studentId)
-        .select("id");
-      if (error) return { error: hebrewDbError(error, "הסרת השיוך נכשלה"), closed };
-      if ((deleted?.length ?? 0) !== 1) return { error: "הסרת השיוך נכשלה", closed };
-      closed += 1;
-      continue;
-    }
-    const endDate = start > yesterday ? start : yesterday;
-    const { data: updated, error } = await supabase
-      .from("student_lesson_assignments")
-      .update({ end_date: endDate })
-      .eq("id", target.id)
-      .eq("student_id", studentId)
-      .select("id");
-    if (error) return { error: hebrewDbError(error, "הסרת השיוך נכשלה"), closed };
-    if ((updated?.length ?? 0) !== 1) return { error: "הסרת השיוך נכשלה", closed };
-    closed += 1;
-  }
-  return { closed };
+    .eq("lesson_id", lessonId)
+    .select("id");
+  if (error) return { error: hebrewDbError(error, "הסרת השיוך נכשלה"), removed: 0 };
+  return { removed: deleted?.length ?? 0 };
 }
 
 async function upsertLessonExclusion(
@@ -1298,14 +1264,14 @@ export async function deleteStudentLessonAssignmentAction(id: string, studentId:
   if (loadError) return { error: hebrewDbError(loadError, "הסרת השיוך נכשלה") };
   if (!row) return { error: "השיוך לא נמצא" };
 
-  // Exclusion must stick first — otherwise «שייך אוטומטית» / sync puts her back.
+  // Exclusion first — otherwise «שייך אוטומטית» / sync puts her back.
   const exclusion = await upsertLessonExclusion(supabase, sid, row.lesson_id);
   if (exclusion.error) return { error: exclusion.error };
 
-  const closed = await closeStudentLessonLinks(supabase, sid, row.lesson_id, todayIso());
-  if (closed.error) return { error: closed.error };
+  const removed = await removeAllStudentLessonLinks(supabase, sid, row.lesson_id);
+  if (removed.error) return { error: removed.error };
 
-  // Remove every mark for this lesson so she is not recorded as having been in it.
+  // Wipe marks so she is not on any meeting / print / report for this lesson.
   const scrub = await deleteStudentAttendanceOnLessons(supabase, sid, [row.lesson_id]);
   if (scrub.error) return { error: scrub.error };
 
@@ -1319,7 +1285,7 @@ export async function deleteStudentLessonAssignmentAction(id: string, studentId:
 export async function excludeStudentFromLessonAction(
   studentId: string,
   lessonId: string,
-  asOfDate?: string
+  _asOfDate?: string
 ) {
   const actionAuth = await createActionClient();
   if ("error" in actionAuth) return { error: actionAuth.error };
@@ -1329,19 +1295,14 @@ export async function excludeStudentFromLessonAction(
   const lid = requireId(lessonId, "שיעור");
   if (isError(lid)) return lid;
 
-  const day =
-    typeof asOfDate === "string" && /^\d{4}-\d{2}-\d{2}$/.test(asOfDate.slice(0, 10))
-      ? asOfDate.slice(0, 10)
-      : todayIso();
-
   // Exclusion first so a following roster sync cannot re-add her.
   const exclusion = await upsertLessonExclusion(supabase, sid, lid);
   if (exclusion.error) return { error: exclusion.error };
 
-  const closed = await closeStudentLessonLinks(supabase, sid, lid, day);
-  if (closed.error) return { error: closed.error };
+  const removed = await removeAllStudentLessonLinks(supabase, sid, lid);
+  if (removed.error) return { error: removed.error };
 
-  // Full scrub for this lesson — she should not appear as having attended it at all.
+  // Full scrub — she must not appear on any date of this lesson.
   const scrub = await deleteStudentAttendanceOnLessons(supabase, sid, [lid]);
   if (scrub.error) return { error: scrub.error };
 
