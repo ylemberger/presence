@@ -1285,7 +1285,8 @@ export async function deleteStudentLessonAssignmentAction(id: string, studentId:
 export async function excludeStudentFromLessonAction(
   studentId: string,
   lessonId: string,
-  _asOfDate?: string
+  _asOfDate?: string,
+  alsoLessonIds?: string[]
 ) {
   const actionAuth = await createActionClient();
   if ("error" in actionAuth) return { error: actionAuth.error };
@@ -1295,15 +1296,20 @@ export async function excludeStudentFromLessonAction(
   const lid = requireId(lessonId, "שיעור");
   if (isError(lid)) return lid;
 
-  // Exclusion first so a following roster sync cannot re-add her.
-  const exclusion = await upsertLessonExclusion(supabase, sid, lid);
-  if (exclusion.error) return { error: exclusion.error };
+  const extra = (alsoLessonIds ?? [])
+    .map((id) => requireUuid(id, "שיעור"))
+    .filter((id): id is string => typeof id === "string");
+  const lessonIds = [...new Set([lid, ...extra])];
 
-  const removed = await removeAllStudentLessonLinks(supabase, sid, lid);
-  if (removed.error) return { error: removed.error };
+  // Exclusion + wipe links + wipe ALL marks on these lessons (past included).
+  for (const one of lessonIds) {
+    const exclusion = await upsertLessonExclusion(supabase, sid, one);
+    if (exclusion.error) return { error: exclusion.error };
+    const removed = await removeAllStudentLessonLinks(supabase, sid, one);
+    if (removed.error) return { error: removed.error };
+  }
 
-  // Full scrub — she must not appear on any date of this lesson.
-  const scrub = await deleteStudentAttendanceOnLessons(supabase, sid, [lid]);
+  const scrub = await deleteStudentAttendanceOnLessons(supabase, sid, lessonIds);
   if (scrub.error) return { error: scrub.error };
 
   revalidatePath(`/students/${sid}`);

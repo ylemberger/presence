@@ -1,11 +1,13 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { chunkIds, fetchAllPages } from "@/lib/supabase/paged";
+import { chunkIds } from "@/lib/supabase/paged";
 import { hebrewDbError } from "@/lib/db/hebrew-error";
+
+const PAGE = 1000;
 
 /**
  * Delete a student's attendance marks on the given lessons.
  * When fromDate is set, only meetings on/after that day are scrubbed
- * (used after a backdated placement transfer).
+ * (backdated placement transfer). Without fromDate — every mark on those lessons.
  */
 export async function deleteStudentAttendanceOnLessons(
   supabase: SupabaseClient,
@@ -17,32 +19,41 @@ export async function deleteStudentAttendanceOnLessons(
   if (uniqueLessonIds.length === 0) return { deleted: 0 };
 
   const fromDate = opts?.fromDate?.slice(0, 10);
-  const occurrenceIds: string[] = [];
-  for (const chunk of chunkIds(uniqueLessonIds)) {
-    const rows = await fetchAllPages<{ id: string }>((from, to) => {
+  const attendanceIds: string[] = [];
+
+  for (const lessonChunk of chunkIds(uniqueLessonIds)) {
+    for (let from = 0; from < 50000; from += PAGE) {
       let query = supabase
-        .from("lesson_occurrences")
-        .select("id")
-        .in("lesson_id", chunk)
-        .order("id");
-      if (fromDate) query = query.gte("occurrence_date", fromDate);
-      return query.range(from, to) as PromiseLike<{
-        data: { id: string }[] | null;
-        error: { message: string } | null;
-      }>;
-    });
-    for (const row of rows) occurrenceIds.push(row.id);
+        .from("attendance")
+        .select("id, lesson_occurrences!inner(lesson_id, occurrence_date)")
+        .eq("student_id", studentId)
+        .in("lesson_occurrences.lesson_id", lessonChunk)
+        .order("id")
+        .range(from, from + PAGE - 1);
+      if (fromDate) {
+        query = query.gte("lesson_occurrences.occurrence_date", fromDate);
+      }
+      const { data, error } = await query;
+      if (error) {
+        return {
+          deleted: 0,
+          error: hebrewDbError(error, "מחיקת סימוני הנוכחות נכשלה"),
+        };
+      }
+      const batch = data ?? [];
+      for (const row of batch) attendanceIds.push(row.id);
+      if (batch.length < PAGE) break;
+    }
   }
 
-  if (occurrenceIds.length === 0) return { deleted: 0 };
+  if (attendanceIds.length === 0) return { deleted: 0 };
 
   let deleted = 0;
-  for (const chunk of chunkIds(occurrenceIds)) {
-    const { data, error } = await supabase
+  for (const idChunk of chunkIds(attendanceIds)) {
+    const { data, error, count } = await supabase
       .from("attendance")
-      .delete()
-      .eq("student_id", studentId)
-      .in("lesson_occurrence_id", chunk)
+      .delete({ count: "exact" })
+      .in("id", idChunk)
       .select("id");
     if (error) {
       return {
@@ -50,7 +61,14 @@ export async function deleteStudentAttendanceOnLessons(
         error: hebrewDbError(error, "מחיקת סימוני הנוכחות נכשלה"),
       };
     }
-    deleted += data?.length ?? 0;
+    const n = data?.length ?? count ?? 0;
+    deleted += n;
+    if (n !== idChunk.length) {
+      return {
+        deleted,
+        error: "לא כל סימוני הנוכחות נמחקו. נסי שוב.",
+      };
+    }
   }
 
   return { deleted };

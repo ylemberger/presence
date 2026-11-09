@@ -2117,10 +2117,19 @@ export function AttendanceBoard({
                               return;
                             }
                             try {
+                              const linkedLessons = [
+                                ...new Set(
+                                  (activeLesson.linkedLessonIds?.length
+                                    ? activeLesson.linkedLessonIds
+                                    : [activeLesson.lessonId]
+                                  ).filter(Boolean)
+                                ),
+                              ];
                               const result = await excludeStudentFromLessonAction(
                                 student.id,
                                 activeLesson.lessonId,
-                                activeLesson.date || selectedDate
+                                activeLesson.date || selectedDate,
+                                linkedLessons
                               );
                               if (result && "error" in result && result.error) {
                                 setMessage(result.error);
@@ -2129,6 +2138,14 @@ export function AttendanceBoard({
                               setHiddenStudentIds((prev) =>
                                 prev.includes(student.id) ? prev : [...prev, student.id]
                               );
+                              // Drop her marks from the open draft so the list looks clean before refresh.
+                              setDraft((prev) => {
+                                const next = { ...prev };
+                                for (const key of Object.keys(next)) {
+                                  if (key.startsWith(`${student.id}::`)) next[key as DraftKey] = null;
+                                }
+                                return next;
+                              });
                               const n =
                                 result && "deletedAttendance" in result
                                   ? Number(result.deletedAttendance ?? 0)
@@ -2136,7 +2153,7 @@ export function AttendanceBoard({
                               setMessage(
                                 n > 0
                                   ? `השיוך הוסר מהשיעור · נמחקו ${n} סימוני נוכחות`
-                                  : "השיוך הוסר מהשיעור"
+                                  : "השיוך הוסר מהשיעור · לא נמצאו סימונים למחיקה"
                               );
                               router.refresh();
                             } catch {
