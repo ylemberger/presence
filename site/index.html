@@ -36,28 +36,7 @@
     button, input, select, textarea { font-family: inherit; }
     [hidden] { display: none !important; }
 
-    #login {
-      min-height: 100vh;
-      display: flex; align-items: center; justify-content: center;
-      padding: 24px; position: relative; overflow: hidden;
-      background: linear-gradient(135deg, rgba(196,233,240,.4) 0%, #f6faf9 45%, rgba(255,222,167,.35) 100%);
-    }
-    .blob { position: absolute; border-radius: 50%; filter: blur(48px); pointer-events: none; }
-    .login-wrap { position: relative; z-index: 1; width: 100%; max-width: 28rem; text-align: center; }
-    .mark {
-      width: 96px; height: 96px; margin: 0 auto 16px; border-radius: 50%;
-      background: var(--primary); color: var(--secondary); display: flex;
-      align-items: center; justify-content: center; font-size: 48px; font-weight: 800;
-      box-shadow: var(--shadow-lg);
-    }
-    .login-card {
-      background: var(--surface); border-radius: 12px; border-top: 4px solid var(--secondary);
-      padding: 28px; box-shadow: var(--shadow-lg);
-    }
-    .login-card h2 { margin: 0 0 8px; font-size: 24px; }
-    .login-card p { color: var(--muted); margin: 0 0 20px; }
-
-    #app { display: none; }
+    #app { display: block; }
     .shell { display: flex; min-height: 100vh; }
     nav.side {
       position: sticky; top: 0; width: var(--sidebar); min-height: 100vh;
@@ -218,21 +197,6 @@
   </style>
 </head>
 <body>
-  <div id="login">
-    <div class="blob" style="width:28rem;height:28rem;left:-8rem;top:0;background:rgba(168,205,212,.35)"></div>
-    <div class="blob" style="width:28rem;height:28rem;right:-8rem;top:30%;background:rgba(232,193,124,.35)"></div>
-    <div class="login-wrap">
-      <div class="mark">נ</div>
-      <h1 style="margin:0;color:var(--primary);font-size:40px;line-height:1.4;font-weight:800;padding-top:0.18em">נוכחות סמינר</h1>
-      <p class="sub" style="margin-bottom:20px;font-size:18px">ניהול אקדמי מתקדם</p>
-      <div class="login-card">
-        <h2>כניסה למערכת</h2>
-        <p>לחצי כדי להיכנס למערכת ניהול הנוכחות.</p>
-        <button class="btn btn-primary" type="button" style="width:100%" onclick="enterApp()">כניסה למערכת</button>
-      </div>
-    </div>
-  </div>
-
   <div id="app">
     <div class="shell">
       <nav class="side">
@@ -249,7 +213,6 @@
         <div class="nav" id="nav"></div>
         <div class="foot">
           <span>מזכירות</span>
-          <button class="btn btn-sm" type="button" style="background:transparent;color:#fff;border:1px solid rgba(255,255,255,.25)" onclick="logout()">התנתקות</button>
         </div>
       </nav>
       <div class="main">
@@ -425,17 +388,12 @@
       toastTimer = setTimeout(() => { el.style.display = "none"; }, 2600);
     }
 
-    function enterApp() {
+    function boot() {
       db = load();
       persist();
-      document.getElementById("login").style.display = "none";
-      document.getElementById("app").style.display = "block";
+      ui.page = "dashboard";
       ui.lessonId = ui.lessonId || (yearLessons()[0] && yearLessons()[0].id);
       render();
-    }
-    function logout() {
-      document.getElementById("app").style.display = "none";
-      document.getElementById("login").style.display = "flex";
     }
     function resetData() {
       if (!confirm("לאפס את הנתונים לנתוני הפתיחה? השינויים בדפדפן זה יימחקו.")) return;
@@ -1110,6 +1068,8 @@
       renderNav();
       document.getElementById("content").innerHTML = (PAGES[ui.page] || renderDashboard)();
     }
+
+    boot();
   </script>
 </body>
 </html>

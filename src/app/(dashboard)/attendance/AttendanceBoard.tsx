@@ -1746,9 +1746,9 @@ export function AttendanceBoard({
           </div>
           {prevWeekBlocked && (
             <div className="mb-2 rounded-md border border-secondary/25 bg-secondary/5 px-3 py-2 font-body-sm text-body-sm text-on-surface">
-              <p className="font-semibold text-primary">תזכורת: יש מופע קודם של אותו שיעור בלי נוכחות מלאה</p>
+              <p className="font-semibold text-primary">תזכורת: יש מופע קודם בלי נוכחות מלאה</p>
               <p className="mt-1 text-on-surface-variant">
-                אפשר למלא אותו, ואפשר גם לסמן כאן עכשיו
+                אפשר לסמן כאן עכשיו ולחזור למלא את הקודם אחר כך
                 {prevWeekIncomplete[0]
                   ? ` (${formatHebrewDate(prevWeekIncomplete[0].date)}).`
                   : "."}
@@ -2004,7 +2004,7 @@ export function AttendanceBoard({
             <div className="flex-1 space-y-1 overflow-y-auto px-2 py-2">
             {prevWeekBlocked && (
               <p className="mb-2 rounded-lg bg-secondary/10 px-3 py-2 font-body-sm text-body-sm text-primary">
-                תזכורת: יש מופע קודם בלי נוכחות מלאה. אפשר למלא כאן עכשיו.
+                תזכורת: יש מופע קודם בלי נוכחות מלאה. אפשר לסמן כאן עכשיו ולחזור אליו אחר כך.
               </p>
             )}
             {message && (

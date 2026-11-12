@@ -59,7 +59,6 @@ import { resolveOrCreateSubject } from "@/lib/lessons/subjects";
 import { formatLessonHours } from "@/lib/lessons/hours";
 import { fingerprintForLesson } from "@/lib/attendance/pools";
 import { uniqueCoveredStudentIds } from "@/lib/attendance/roster";
-import { previousWeekStartBlockMessage } from "@/lib/attendance/previous-week";
 import {
   FLEXIBLE_RANGE_FORM_VALUE,
   isFlexibleActivityRange,
@@ -3477,6 +3476,7 @@ type AttendanceMarkInput = {
 type AttendanceWritePayload = {
   updates: AttendanceMarkInput[];
   refresh?: boolean;
+  /** Kept for callers; previous-week gaps are a soft reminder only and never block saves. */
   skipPreviousWeek?: boolean;
 };
 
@@ -3507,13 +3507,7 @@ export async function bulkAttendanceAction(
   if ("error" in actionAuth) return { error: actionAuth.error };
   const supabase = actionAuth.supabase;
   const refresh = payload.refresh !== false;
-  if (!payload.skipPreviousWeek) {
-    const blocked = await previousWeekStartBlockMessage(
-      supabase,
-      updates.map((u) => u.occurrenceId)
-    );
-    if (blocked) return { error: blocked };
-  }
+  // Incomplete previous-week meetings are a reminder only — never block saving here.
   const records = updates.map((u) => ({
     student_id: u.studentId,
     lesson_occurrence_id: u.occurrenceId,

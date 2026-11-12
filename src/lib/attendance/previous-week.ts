@@ -27,7 +27,8 @@ function parseGapHandling(
 
 /**
  * מופעים חסרים של אותו שיעור בשבוע הקודם (א'-ש').
- * `continued` לא נספר כחוסם סימון — רק כתזכורת רכה אם בכלל.
+ * לתזכורת במסך בלבד — שמירת נוכחות במופע הנוכחי לא נחסמת.
+ * `continued` = המשתמשת בחרה להמשיך ולחזור מאוחר יותר.
  */
 export async function findIncompletePreviousWeekOccurrences(
   supabase: Supabase,
@@ -110,7 +111,7 @@ export async function findIncompletePreviousWeekOccurrences(
   );
 }
 
-/** Incomplete previous-week rows that still block marking (not marked "continued"). */
+/** Incomplete previous-week rows still shown as a soft reminder (not marked "continued"). */
 export function blockingPreviousWeekGaps(
   incomplete: IncompletePreviousOccurrence[]
 ): IncompletePreviousOccurrence[] {
@@ -129,30 +130,18 @@ export async function occurrenceHasAttendance(
   return (count ?? 0) > 0;
 }
 
+/** @deprecated Soft reminder only — never used to block saves. Always returns null. */
 export async function previousWeekBlockMessage(
-  supabase: Supabase,
-  occurrenceIds: string[]
+  _supabase: Supabase,
+  _occurrenceIds: string[]
 ): Promise<string | null> {
-  const unique = [...new Set(occurrenceIds.filter(Boolean))];
-  for (const id of unique) {
-    const incomplete = await findIncompletePreviousWeekOccurrences(supabase, id);
-    if (blockingPreviousWeekGaps(incomplete).length > 0) {
-      return "יש להשלים קודם את נוכחות השבוע הקודם של השיעור הזה.";
-    }
-  }
   return null;
 }
 
-/** Block only starting a new occurrence — not correcting marks that already exist. */
+/** @deprecated Soft reminder only — never used to block saves. Always returns null. */
 export async function previousWeekStartBlockMessage(
-  supabase: Supabase,
-  occurrenceIds: string[]
+  _supabase: Supabase,
+  _occurrenceIds: string[]
 ): Promise<string | null> {
-  const unique = [...new Set(occurrenceIds.filter(Boolean))];
-  const unstarted: string[] = [];
-  for (const id of unique) {
-    if (!(await occurrenceHasAttendance(supabase, id))) unstarted.push(id);
-  }
-  if (unstarted.length === 0) return null;
-  return previousWeekBlockMessage(supabase, unstarted);
+  return null;
 }
