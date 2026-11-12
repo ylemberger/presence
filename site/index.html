@@ -1,0 +1,1115 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>נוכחות סמינר</title>
+  <meta name="robots" content="noindex,nofollow" />
+  <!-- Showcase build: static UI only. No connection to production DB. -->
+  <style>
+    :root {
+      --primary: #00242a;
+      --primary-container: #163a40;
+      --secondary: #775a20;
+      --secondary-container: #fdd48e;
+      --secondary-dim: #e8c17c;
+      --bg: #f6faf9;
+      --surface: #ffffff;
+      --surface-low: #f0f4f3;
+      --on: #181c1c;
+      --muted: #414849;
+      --outline: #71787a;
+      --outline-v: #c1c8c9;
+      --present: #10b981;
+      --late: #f59e0b;
+      --absent: #f43f5e;
+      --error: #ba1a1a;
+      --error-bg: #ffdad6;
+      --sidebar: 17.5rem;
+      --shadow: 0 4px 20px rgba(22,58,64,.05);
+      --shadow-sm: 0 2px 8px rgba(22,58,64,.04);
+      --shadow-lg: 0 12px 32px rgba(22,58,64,.12);
+    }
+    * { box-sizing: border-box; }
+    html, body { margin: 0; min-height: 100%; }
+    body { font-family: "Segoe UI", Arial, Tahoma, sans-serif; background: var(--bg); color: var(--on); }
+    button, input, select, textarea { font-family: inherit; }
+    [hidden] { display: none !important; }
+
+    #login {
+      min-height: 100vh;
+      display: flex; align-items: center; justify-content: center;
+      padding: 24px; position: relative; overflow: hidden;
+      background: linear-gradient(135deg, rgba(196,233,240,.4) 0%, #f6faf9 45%, rgba(255,222,167,.35) 100%);
+    }
+    .blob { position: absolute; border-radius: 50%; filter: blur(48px); pointer-events: none; }
+    .login-wrap { position: relative; z-index: 1; width: 100%; max-width: 28rem; text-align: center; }
+    .mark {
+      width: 96px; height: 96px; margin: 0 auto 16px; border-radius: 50%;
+      background: var(--primary); color: var(--secondary); display: flex;
+      align-items: center; justify-content: center; font-size: 48px; font-weight: 800;
+      box-shadow: var(--shadow-lg);
+    }
+    .login-card {
+      background: var(--surface); border-radius: 12px; border-top: 4px solid var(--secondary);
+      padding: 28px; box-shadow: var(--shadow-lg);
+    }
+    .login-card h2 { margin: 0 0 8px; font-size: 24px; }
+    .login-card p { color: var(--muted); margin: 0 0 20px; }
+
+    #app { display: none; }
+    .shell { display: flex; min-height: 100vh; }
+    nav.side {
+      position: sticky; top: 0; width: var(--sidebar); min-height: 100vh;
+      background: var(--primary); color: #fff; display: flex; flex-direction: column; flex-shrink: 0;
+    }
+    .brand { padding: 24px 20px; border-bottom: 1px solid rgba(255,255,255,.15); }
+    .brand-row { display: flex; gap: 12px; align-items: center; }
+    .brand-mark {
+      width: 44px; height: 44px; border-radius: 8px; background: var(--secondary);
+      color: var(--primary); display: flex; align-items: center; justify-content: center; font-size: 22px; font-weight: 800;
+    }
+    .brand h1 { margin: 0; font-size: 18px; }
+    .brand p { margin: 2px 0 0; font-size: 12px; opacity: .8; }
+    .year-pill {
+      display: inline-flex; gap: 8px; align-items: center; margin-top: 14px;
+      padding: 6px 12px; border-radius: 999px; background: rgba(255,255,255,.1); font-size: 13px;
+    }
+    .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--secondary); }
+    .nav { flex: 1; overflow: auto; padding: 16px 12px; display: flex; flex-direction: column; gap: 4px; }
+    .nav button {
+      display: flex; align-items: center; gap: 12px; width: 100%;
+      border: 0; background: transparent; color: #fff; text-align: right;
+      padding: 10px 12px; border-radius: 12px; font-size: 16px; cursor: pointer;
+    }
+    .nav button:hover { background: rgba(255,255,255,.1); }
+    .nav button.active { background: #fff; color: var(--primary); font-weight: 700; }
+    .ico {
+      width: 36px; height: 36px; border-radius: 8px; display: flex; align-items: center; justify-content: center;
+      background: rgba(255,255,255,.1); font-size: 15px; flex-shrink: 0;
+    }
+    .nav button.active .ico { background: var(--secondary-container); color: var(--primary); }
+    .badge {
+      margin-inline-start: auto; min-width: 20px; padding: 2px 6px; border-radius: 999px;
+      background: var(--secondary); color: var(--primary); font-size: 10px; font-weight: 800;
+    }
+    .foot { border-top: 1px solid rgba(255,255,255,.15); padding: 16px; display: flex; gap: 8px; align-items: center; }
+    .foot span { flex: 1; font-size: 11px; opacity: .75; direction: ltr; text-align: right; }
+
+    .main { flex: 1; min-width: 0; }
+    header.top {
+      position: sticky; top: 0; z-index: 40;
+      display: flex; align-items: center; justify-content: space-between; gap: 16px;
+      padding: 8px 20px; background: rgba(246,250,249,.95); box-shadow: var(--shadow-sm); backdrop-filter: blur(8px);
+    }
+    header.top strong { color: var(--primary); font-size: 20px; }
+    .canvas { max-width: 1440px; margin: 0 auto; padding: 20px; display: flex; flex-direction: column; gap: 20px; }
+
+    h2.ph {
+      margin: 0;
+      color: var(--primary);
+      font-size: 40px;
+      line-height: 1.4;
+      font-weight: 800;
+      overflow: visible;
+      padding-top: 0.18em;
+    }
+    h2.ph.sm { font-size: 28px; line-height: 1.35; }
+    .sub { margin: 4px 0 0; color: var(--muted); font-size: 14px; }
+
+    .btn {
+      display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+      border: 0; border-radius: 8px; cursor: pointer; font-weight: 700; font-size: 14px; padding: 10px 16px;
+    }
+    .btn-primary { background: var(--primary); color: #fff; box-shadow: var(--shadow-sm); }
+    .btn-primary:hover { background: var(--primary-container); }
+    .btn-gold { background: var(--secondary); color: var(--primary); }
+    .btn-ghost { background: #fff; color: var(--primary); border: 1px solid var(--outline-v); }
+    .btn-danger { background: var(--error); color: #fff; }
+    .btn-sm { padding: 6px 12px; font-size: 13px; }
+    .btn:disabled { opacity: .5; cursor: not-allowed; }
+
+    .chip {
+      display: inline-flex; gap: 8px; align-items: center; padding: 8px 18px; border-radius: 999px;
+      border: 1px solid var(--outline-v); background: #fff; color: var(--primary);
+      font-weight: 700; font-size: 14px; cursor: pointer; box-shadow: var(--shadow-sm);
+    }
+    .kpis { display: grid; grid-template-columns: repeat(4, minmax(0,1fr)); gap: 16px; }
+    .kpi {
+      background: #fff; border-radius: 12px; padding: 16px; box-shadow: var(--shadow);
+      border-top: 4px solid var(--secondary); cursor: pointer;
+    }
+    .kpi.warn { border-top-color: var(--late); }
+    .kpi .n { font-size: 32px; font-weight: 800; color: var(--primary); }
+    .kpi .l { color: var(--muted); font-size: 14px; }
+
+    .grid-2 { display: grid; grid-template-columns: 1.15fr .85fr; gap: 16px; }
+    .card { background: #fff; border-radius: 12px; padding: 16px; box-shadow: var(--shadow); }
+    .card.gold { border-top: 4px solid var(--secondary); }
+    .card h3 { margin: 0 0 12px; color: var(--primary); font-size: 18px; }
+    table { width: 100%; border-collapse: collapse; font-size: 14px; }
+    th { text-align: right; color: var(--muted); font-size: 12px; font-weight: 700; padding: 8px 12px; border-bottom: 1px solid var(--outline-v); background: var(--bg); }
+    td { padding: 8px 12px; border-bottom: 1px solid #eef2f1; }
+    tr.click:hover { background: var(--surface-low); cursor: pointer; }
+
+    .inp, select.inp, textarea.inp {
+      width: 100%; padding: 8px 10px; border-radius: 8px; border: 1px solid var(--outline-v);
+      background: #fff; font-size: 14px;
+    }
+    .search { max-width: 280px; border-radius: 999px; padding: 8px 14px; }
+    label.fld { display: flex; flex-direction: column; gap: 4px; font-size: 13px; font-weight: 700; color: var(--muted); }
+    .form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+
+    .pill { display: inline-block; padding: 2px 10px; border-radius: 999px; font-size: 12px; font-weight: 800; }
+    .ok { background: #d1fae5; color: #065f46; }
+    .warn { background: #fef3c7; color: #92400e; }
+    .bad { background: var(--error-bg); color: #93000a; }
+    .muted { background: var(--surface-low); color: var(--muted); }
+
+    .att { display: grid; grid-template-columns: 280px 1fr; gap: 16px; min-height: 560px; }
+    .cal { background: #fff; border-radius: 12px; padding: 12px; box-shadow: var(--shadow); }
+    .cal-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 4px; }
+    .cal-grid span, .cal-grid button {
+      aspect-ratio: 1; border: 0; border-radius: 8px; background: transparent; font-size: 13px; cursor: pointer;
+    }
+    .cal-grid .wd { aspect-ratio: auto; color: var(--muted); font-size: 11px; cursor: default; padding: 4px 0; }
+    .cal-grid button.has { background: #e8f5e9; font-weight: 700; }
+    .cal-grid button.miss { outline: 1px solid var(--late); background: #fff7ed; }
+    .cal-grid button.sel { background: var(--primary); color: #fff; }
+    .lesson-btn {
+      display: block; width: 100%; text-align: right; margin-top: 6px; padding: 8px 10px;
+      border: 1px solid var(--outline-v); border-radius: 8px; background: #fff; cursor: pointer; font-size: 13px;
+    }
+    .lesson-btn.sel { border-color: var(--primary); background: #f0f7f8; font-weight: 700; }
+    .sheet { background: #fff; border-radius: 12px; box-shadow: var(--shadow); display: flex; flex-direction: column; overflow: hidden; min-height: 560px; }
+    .sheet-h { padding: 10px 12px; border-bottom: 1px solid var(--outline-v); }
+    .sheet-h h3 { margin: 0; color: var(--primary); font-size: 20px; }
+    .sheet-b { flex: 1; overflow: auto; padding: 8px; display: flex; flex-direction: column; gap: 4px; }
+    .srow { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; border: 1px solid var(--outline-v); border-radius: 8px; padding: 4px 8px; }
+    .srow.abs { border-inline-start: 4px solid var(--absent); background: #fff5f5; }
+    .srow .nm { flex: 1; min-width: 7rem; font-weight: 700; font-size: 14px; }
+    .seg { display: flex; gap: 4px; flex: 1; justify-content: flex-end; }
+    .seg button {
+      flex: 1; min-width: 4.5rem; min-height: 36px; border-radius: 8px; border: 1px solid var(--outline-v);
+      background: #fff; color: var(--muted); font-weight: 700; font-size: 12px; cursor: pointer;
+    }
+    .seg .p { background: var(--present); color: #fff; border-color: var(--present); }
+    .seg .l { background: var(--late); color: var(--primary); border-color: var(--late); }
+    .seg .a { background: var(--absent); color: #fff; border-color: var(--absent); }
+
+    .tt { display: grid; grid-template-columns: 72px repeat(5, 1fr); gap: 4px; }
+    .tt > div { background: #fff; border: 1px solid var(--outline-v); border-radius: 8px; padding: 8px; min-height: 62px; font-size: 12px; }
+    .tt .hd { background: var(--primary); color: #fff; font-weight: 700; min-height: auto; text-align: center; }
+
+    .modal-bg { position: fixed; inset: 0; background: rgba(0,36,42,.45); z-index: 100; display: flex; align-items: center; justify-content: center; padding: 16px; }
+    .modal { background: #fff; border-radius: 12px; width: min(520px, 100%); padding: 20px; box-shadow: var(--shadow-lg); max-height: 90vh; overflow: auto; }
+    .toast {
+      position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%); z-index: 110;
+      background: var(--primary); color: #fff; padding: 10px 18px; border-radius: 999px; display: none; font-size: 14px;
+    }
+    .tools { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; justify-content: space-between; }
+    .row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+
+    @media (max-width: 1100px) {
+      .kpis, .grid-2, .att, .form-grid { grid-template-columns: 1fr; }
+      nav.side { width: 4.6rem; }
+      .brand p, .brand h1, .year-pill, .nav button span:not(.ico):not(.badge), .foot span { display: none; }
+    }
+  </style>
+</head>
+<body>
+  <div id="login">
+    <div class="blob" style="width:28rem;height:28rem;left:-8rem;top:0;background:rgba(168,205,212,.35)"></div>
+    <div class="blob" style="width:28rem;height:28rem;right:-8rem;top:30%;background:rgba(232,193,124,.35)"></div>
+    <div class="login-wrap">
+      <div class="mark">נ</div>
+      <h1 style="margin:0;color:var(--primary);font-size:40px;line-height:1.4;font-weight:800;padding-top:0.18em">נוכחות סמינר</h1>
+      <p class="sub" style="margin-bottom:20px;font-size:18px">ניהול אקדמי מתקדם</p>
+      <div class="login-card">
+        <h2>כניסה למערכת</h2>
+        <p>לחצי כדי להיכנס למערכת ניהול הנוכחות.</p>
+        <button class="btn btn-primary" type="button" style="width:100%" onclick="enterApp()">כניסה למערכת</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="app">
+    <div class="shell">
+      <nav class="side">
+        <div class="brand">
+          <div class="brand-row">
+            <div class="brand-mark">נ</div>
+            <div>
+              <h1>נוכחות סמינר</h1>
+              <p>ניהול נוכחות והיסטוריית שיבוצים</p>
+            </div>
+          </div>
+          <div class="year-pill"><span class="dot"></span> <span id="year-label">שנה תשפ״ו</span></div>
+        </div>
+        <div class="nav" id="nav"></div>
+        <div class="foot">
+          <span>מזכירות</span>
+          <button class="btn btn-sm" type="button" style="background:transparent;color:#fff;border:1px solid rgba(255,255,255,.25)" onclick="logout()">התנתקות</button>
+        </div>
+      </nav>
+      <div class="main">
+        <header class="top">
+          <strong>מערכת ניהול פנימית</strong>
+          <div class="row">
+            <span id="header-year" style="border-bottom:2px solid var(--secondary);padding-bottom:2px;font-weight:800;color:var(--primary)">תשפ״ו</span>
+            <select class="inp" id="year-select" style="width:auto" onchange="switchYear(this.value)"></select>
+          </div>
+        </header>
+        <div class="canvas" id="content"></div>
+      </div>
+    </div>
+  </div>
+
+  <div id="modal-root"></div>
+  <div class="toast" id="toast"></div>
+
+  <script>
+    const STORE_KEY = "seminar-attendance-site-v1";
+    const DAYS = ["א׳", "ב׳", "ג׳", "ד׳", "ה׳", "ו׳", "ש׳"];
+    const WD = ["א", "ב", "ג", "ד", "ה", "ו", "ש"];
+    const REASONS = ["", "מחלה", "שמחה", "איחור מאושר", "אחר"];
+    const TODAY = 12;
+    const NAV = [
+      ["dashboard", "לוח בקרה", "▣"],
+      ["students", "תלמידות", "👥"],
+      ["attendance", "נוכחות", "☑"],
+      ["makeup", "מבחני השלמה", "✎"],
+      ["timetable", "מערכת שעות", "▦"],
+      ["lessons", "שיעורים", "▤"],
+      ["teachers", "מורות", "♀"],
+      ["reports", "דוחות", "📊"],
+      ["settings", "הגדרות", "⚙"],
+    ];
+    const SALARY_POOL = [
+      { name: "רבקה כהן", tz: "318472901", phone: "050-8123345", email: "", subject: "תפילה", track: "כללי", year: "א", sem: "א", meetings: 28 },
+      { name: "שרה לוי", tz: "204918376", phone: "052-4471890", email: "", subject: "אנגלית", track: "הוראה", year: "א+ב", sem: "א", meetings: 42 },
+      { name: "מרים מזרחי", tz: "291847562", phone: "054-6612034", email: "", subject: "חשבונאות", track: "כללי", year: "א", sem: "ב", meetings: 24 },
+      { name: "חנה אברהם", tz: "317205894", phone: "053-9081142", email: "", subject: "מחשבים", track: "כללי", year: "ב", sem: "א", meetings: 18 },
+      { name: "רחל פרץ", tz: "208471963", phone: "050-3342781", email: "", subject: "היסטוריה", track: "כללי", year: "א", sem: "א", meetings: 16 },
+    ];
+
+    const ui = { page: "dashboard", studentId: null, attDay: TODAY, lessonId: null, q: "", klass: "", modal: null };
+    let db = null;
+    let toastTimer = null;
+
+    function uid(p) { return p + "-" + Math.random().toString(36).slice(2, 9); }
+    function esc(s) { return String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c])); }
+    function activeYear() { return db.years.find((y) => y.active) || db.years[0]; }
+
+    function seed() {
+      const y1 = { id: "y1", name: "תשפ״ו", active: true };
+      const y2 = { id: "y2", name: "תשפ״ה", active: false };
+      const grades = [
+        { id: "g-a", yearId: "y1", name: "א" },
+        { id: "g-b", yearId: "y1", name: "ב" },
+        { id: "g-a2", yearId: "y2", name: "א" },
+      ];
+      const classes = [
+        { id: "c1", yearId: "y1", gradeId: "g-a", name: "יג 1" },
+        { id: "c2", yearId: "y1", gradeId: "g-a", name: "יג 2" },
+        { id: "c3", yearId: "y1", gradeId: "g-b", name: "יד 1" },
+        { id: "c4", yearId: "y2", gradeId: "g-a2", name: "יג 1" },
+      ];
+      const tracks = [
+        { id: "t1", yearId: "y1", name: "כללי" },
+        { id: "t2", yearId: "y1", name: "הוראה" },
+        { id: "t3", yearId: "y2", name: "כללי" },
+      ];
+      const specs = [
+        { id: "sp1", yearId: "y1", name: "חשבונאות" },
+        { id: "sp2", yearId: "y1", name: "אנגלית" },
+        { id: "sp3", yearId: "y1", name: "מחשבים" },
+      ];
+      const names = [
+        "רחל גולדשטיין","שרה רוזנברג","לאה שפירא","מרים הורוביץ","דבורה קליין","חנה וייס",
+        "אסתר ברקוביץ","רבקה פרידמן","גיטל שוורץ","פייגי גרינברג","בריינדל אדלר","מלכה זילברמן",
+      ];
+      const klasses = ["c1","c1","c1","c2","c2","c2","c3","c3","c3","c3","c1","c2"];
+      const trs = ["t1","t1","t2","t2","t1","t1","t2","t2","t1","t1","t1","t2"];
+      const sps = ["sp1","sp1","sp2","sp2","sp3","sp3","sp2","sp2","sp1","sp3","sp1","sp2"];
+      const students = names.map((full, i) => ({
+        id: "s" + (i + 1),
+        full,
+        identity: String(208471500 + i * 17),
+        phone: "",
+        note: i === 3 ? "מעקב נוכחות" : "",
+        active: true,
+      }));
+      const assignments = students.map((s, i) => ({
+        id: "a" + s.id,
+        studentId: s.id,
+        yearId: "y1",
+        gradeId: klasses[i] === "c3" ? "g-b" : "g-a",
+        classId: klasses[i],
+        trackId: trs[i],
+        specId: sps[i],
+        start: "2025-09-01",
+        end: null,
+      }));
+      const teachers = SALARY_POOL.slice(0, 4).map((t, i) => ({
+        id: "tch" + (i + 1),
+        full: t.name,
+        identity: t.tz,
+        phone: t.phone,
+        email: t.email,
+        local: false,
+      }));
+      const sourceRecords = SALARY_POOL.slice(0, 4).map((t, i) => ({
+        id: "src" + (i + 1),
+        teacherId: "tch" + (i + 1),
+        identity: t.tz,
+        subject: t.subject,
+        track: t.track,
+        year: t.year,
+        sem: t.sem,
+        meetings: t.meetings,
+      }));
+      const lessons = [
+        { id: "l1", yearId: "y1", subject: "בקיאות בתפילה", teacherId: "tch1", day: 0, hour: 1, classId: "c1" },
+        { id: "l2", yearId: "y1", subject: "אנגלית", teacherId: "tch2", day: 1, hour: 2, classId: "c1", periods: 2 },
+        { id: "l3", yearId: "y1", subject: "חשבונאות", teacherId: "tch3", day: 2, hour: 4, classId: "c2" },
+        { id: "l4", yearId: "y1", subject: "מחשבים", teacherId: "tch4", day: 3, hour: 1, classId: "c3" },
+        { id: "l5", yearId: "y1", subject: "אנגלית", teacherId: "tch2", day: 4, hour: 3, classId: "c3" },
+        { id: "l6", yearId: "y1", subject: "בקיאות בתפילה", teacherId: "tch1", day: 0, hour: 2, classId: "c2" },
+      ];
+      const lessonDays = { l1: [1, 3, 8, 10, 12], l2: [2, 9, 12], l3: [3, 10], l4: [4, 11], l5: [5, 12], l6: [1, 8, 12] };
+      const occurrences = [];
+      Object.entries(lessonDays).forEach(([lessonId, days]) => {
+        days.forEach((day) => occurrences.push({ id: lessonId + "-d" + day, lessonId, day, status: "scheduled" }));
+      });
+      const attendance = {};
+      function mark(occ, sid, status) { attendance[occ + "|" + sid] = { status, reason: "" }; }
+      ["s1", "s2"].forEach((sid) => mark("l1-d1", sid, "present"));
+      mark("l1-d3", "s2", "absent");
+      mark("l1-d3", "s1", "late");
+      ["s7", "s8", "s9", "s10"].forEach((sid) => mark("l4-d4", sid, "present"));
+      return {
+        years: [y1, y2], grades, classes, tracks, specs, students, assignments,
+        teachers, sourceRecords, lessons, occurrences, attendance,
+        changeLog: [
+          { id: "log1", studentId: "s2", subject: "בקיאות בתפילה", day: 3, old: "—", neu: "absent" },
+        ],
+        makeup: [
+          { id: "m1", studentId: "s4", lessonId: "l2", day: 5, status: "pending" },
+          { id: "m2", studentId: "s10", lessonId: "l4", day: 8, status: "scheduled" },
+          { id: "m3", studentId: "s7", lessonId: "l5", day: 10, status: "done" },
+        ],
+        notes: {},
+      };
+    }
+
+    function persist() {
+      try { localStorage.setItem(STORE_KEY, JSON.stringify(db)); } catch (e) {}
+    }
+    function load() {
+      try {
+        const raw = localStorage.getItem(STORE_KEY);
+        if (raw) {
+          const parsed = JSON.parse(raw);
+          if (parsed && parsed.students && parsed.lessons) return parsed;
+        }
+      } catch (e) {}
+      return seed();
+    }
+
+    function toast(msg) {
+      const el = document.getElementById("toast");
+      el.textContent = msg;
+      el.style.display = "block";
+      clearTimeout(toastTimer);
+      toastTimer = setTimeout(() => { el.style.display = "none"; }, 2600);
+    }
+
+    function enterApp() {
+      db = load();
+      persist();
+      document.getElementById("login").style.display = "none";
+      document.getElementById("app").style.display = "block";
+      ui.lessonId = ui.lessonId || (yearLessons()[0] && yearLessons()[0].id);
+      render();
+    }
+    function logout() {
+      document.getElementById("app").style.display = "none";
+      document.getElementById("login").style.display = "flex";
+    }
+    function resetData() {
+      if (!confirm("לאפס את הנתונים לנתוני הפתיחה? השינויים בדפדפן זה יימחקו.")) return;
+      db = seed();
+      persist();
+      toast("הנתונים אופסו");
+      render();
+    }
+
+    function yearLessons() { return db.lessons.filter((l) => l.yearId === activeYear().id); }
+    function nameOf(list, id, field) {
+      const x = db[list].find((i) => i.id === id);
+      return x ? x[field || "name"] : "—";
+    }
+    function teacherName(id) { const t = db.teachers.find((x) => x.id === id); return t ? t.full : "—"; }
+    function studentName(id) { const s = db.students.find((x) => x.id === id); return s ? s.full : "—"; }
+    function placement(studentId) {
+      const y = activeYear().id;
+      return db.assignments.find((a) => a.studentId === studentId && a.yearId === y) || null;
+    }
+    function yearStudents() {
+      const y = activeYear().id;
+      return db.students.filter((s) => db.assignments.some((a) => a.studentId === s.id && a.yearId === y));
+    }
+    function studentsForLesson(lessonId) {
+      const lesson = db.lessons.find((l) => l.id === lessonId);
+      if (!lesson) return [];
+      return yearStudents().filter((s) => {
+        const p = placement(s.id);
+        return p && p.classId === lesson.classId && s.active;
+      });
+    }
+    function occKey(occId, sid) { return occId + "|" + sid; }
+    function attOf(occId, sid) { return db.attendance[occKey(occId, sid)] || null; }
+
+    function absPercent(studentId) {
+      const occs = db.occurrences.filter((o) => o.status !== "cancelled" && o.day <= TODAY);
+      const mine = occs.filter((o) => studentsForLesson(o.lessonId).some((s) => s.id === studentId));
+      if (!mine.length) return 0;
+      let absent = 0;
+      mine.forEach((o) => {
+        const a = attOf(o.id, studentId);
+        if (a && a.status === "absent") absent++;
+      });
+      return Math.round((absent / mine.length) * 100);
+    }
+
+    function pendingCount() {
+      const todayOcc = db.occurrences.filter((o) => o.day === ui.attDay && o.status !== "cancelled");
+      let n = 0;
+      todayOcc.forEach((o) => {
+        const stus = studentsForLesson(o.lessonId);
+        const marked = stus.filter((s) => attOf(o.id, s.id)).length;
+        if (stus.length && marked < stus.length) n++;
+      });
+      return n;
+    }
+
+    function setAtt(occId, sid, status, reason) {
+      const k = occKey(occId, sid);
+      const prev = db.attendance[k];
+      db.attendance[k] = { status, reason: reason || (prev && prev.reason) || "" };
+      const lesson = db.lessons.find((l) => l.id === (db.occurrences.find((o) => o.id === occId) || {}).lessonId);
+      db.changeLog.unshift({
+        id: uid("log"),
+        studentId: sid,
+        subject: lesson ? lesson.subject : "שיעור",
+        day: (db.occurrences.find((o) => o.id === occId) || {}).day,
+        old: prev ? prev.status : "—",
+        neu: status,
+      });
+      persist();
+    }
+
+    function currentOcc() {
+      return db.occurrences.find((o) => o.lessonId === ui.lessonId && o.day === ui.attDay) || null;
+    }
+
+    function ensureOcc() {
+      let o = currentOcc();
+      if (!o && ui.lessonId) {
+        o = { id: ui.lessonId + "-d" + ui.attDay, lessonId: ui.lessonId, day: ui.attDay, status: "scheduled" };
+        db.occurrences.push(o);
+        persist();
+      }
+      return o;
+    }
+
+    function switchYear(id) {
+      db.years.forEach((y) => { y.active = y.id === id; });
+      persist();
+      ui.lessonId = (yearLessons()[0] || {}).id || null;
+      render();
+    }
+
+    function go(page, extra) {
+      ui.page = page;
+      if (extra && extra.studentId) ui.studentId = extra.studentId;
+      closeModal();
+      render();
+    }
+
+    function closeModal() {
+      ui.modal = null;
+      document.getElementById("modal-root").innerHTML = "";
+    }
+    function openModal(title, bodyHtml, footerHtml) {
+      document.getElementById("modal-root").innerHTML =
+        `<div class="modal-bg" onclick="if(event.target===this)closeModal()">
+          <div class="modal">
+            <div class="tools"><h3 style="margin:0;color:var(--primary)">${esc(title)}</h3>
+              <button class="btn btn-sm btn-ghost" type="button" onclick="closeModal()">סגור</button></div>
+            <div style="margin-top:12px">${bodyHtml}</div>
+            <div class="row" style="margin-top:16px;justify-content:flex-end">${footerHtml || ""}</div>
+          </div>
+        </div>`;
+    }
+
+    function renderNav() {
+      const pending = pendingCount();
+      document.getElementById("nav").innerHTML = NAV.map(([id, label, ico]) => {
+        const active = ui.page === id || (ui.page === "student" && id === "students");
+        return `<button type="button" class="${active ? "active" : ""}" onclick="go('${id}')">
+          <span class="ico">${ico}</span><span>${label}</span>
+          ${id === "attendance" && pending ? `<span class="badge">${pending > 9 ? "9+" : pending}</span>` : ""}
+        </button>`;
+      }).join("");
+      const y = activeYear();
+      document.getElementById("year-label").textContent = "שנה " + y.name;
+      document.getElementById("header-year").textContent = y.name;
+      document.getElementById("year-select").innerHTML = db.years.map((yr) =>
+        `<option value="${yr.id}" ${yr.id === y.id ? "selected" : ""}>${esc(yr.name)}${yr.active ? " · פעילה" : ""}</option>`
+      ).join("");
+    }
+
+    function ph(title, sub, actions, sm) {
+      return `<div class="tools">
+        <div><h2 class="ph ${sm ? "sm" : ""}">${title}</h2><p class="sub">${sub}</p></div>
+        <div class="row">${actions || ""}</div>
+      </div>`;
+    }
+
+    function renderDashboard() {
+      const stus = yearStudents();
+      const lessons = yearLessons();
+      const pending = pendingCount();
+      const todayOcc = db.occurrences.filter((o) => o.day === TODAY);
+      const risk = stus.filter((s) => s.active && absPercent(s.id) >= 12)
+        .sort((a, b) => absPercent(b.id) - absPercent(a.id)).slice(0, 5);
+      return ph("לוח בקרה", "שנת " + activeYear().name + " · י״ב באלול תשפ״ו",
+        `<button class="btn btn-primary" onclick="go('attendance')">סמני היום</button>`) +
+        `<div class="row">
+          <button class="chip" onclick="go('attendance')">סמני היום</button>
+          <button class="chip" onclick="go('reports')">דוח שבועי</button>
+          <button class="chip" onclick="openStudentForm()">תלמידה חדשה</button>
+          <button class="chip" onclick="openLessonForm()">שיעור חדש</button>
+        </div>
+        <div class="kpis">
+          <div class="kpi" onclick="go('students')"><div class="n">${stus.filter(s=>s.active).length}</div><div class="l">תלמידות בשנה</div></div>
+          <div class="kpi" onclick="go('settings')"><div class="n">${db.classes.filter(c=>c.yearId===activeYear().id).length}</div><div class="l">כיתות</div></div>
+          <div class="kpi" onclick="go('lessons')"><div class="n">${lessons.length}</div><div class="l">תבניות שיעור</div></div>
+          <div class="kpi warn" onclick="go('attendance')"><div class="n">${pending}</div><div class="l">שיעורים בלי רישום</div></div>
+        </div>
+        <div class="grid-2">
+          <div class="card">
+            <h3>שיעורי היום</h3>
+            <table><thead><tr><th>שיעור</th><th>מורה</th><th>כיתה</th><th>רישום</th></tr></thead><tbody>
+              ${todayOcc.map((o) => {
+                const l = db.lessons.find((x) => x.id === o.lessonId);
+                if (!l || l.yearId !== activeYear().id) return "";
+                const list = studentsForLesson(l.id);
+                const marked = list.filter((s) => attOf(o.id, s.id)).length;
+                return `<tr class="click" onclick="ui.lessonId='${l.id}';ui.attDay=${TODAY};go('attendance')">
+                  <td>${esc(l.subject)}</td><td>${esc(teacherName(l.teacherId))}</td>
+                  <td>${esc(nameOf("classes", l.classId))}</td><td>${marked}/${list.length}</td></tr>`;
+              }).join("") || `<tr><td colspan="4" class="sub">אין שיעורים להיום</td></tr>`}
+            </tbody></table>
+          </div>
+          <div class="card">
+            <h3>תלמידות במעקב</h3>
+            ${risk.map((s) => {
+              const p = absPercent(s.id);
+              return `<div class="srow" style="margin-bottom:6px;cursor:pointer" onclick="go('student',{studentId:'${s.id}'})">
+                <span class="nm">${esc(s.full)}</span>
+                <span class="pill ${p >= 20 ? "bad" : "warn"}">${p}% היעדרות</span>
+              </div>`;
+            }).join("") || `<p class="sub">אין חריגות</p>`}
+          </div>
+        </div>`;
+    }
+
+    function renderStudents() {
+      const q = ui.q.trim();
+      let rows = yearStudents();
+      if (ui.klass) rows = rows.filter((s) => (placement(s.id) || {}).classId === ui.klass);
+      if (q) rows = rows.filter((s) => s.full.includes(q) || s.identity.includes(q));
+      const classes = db.classes.filter((c) => c.yearId === activeYear().id);
+      return ph("תלמידות", "רשימה לפי שיבוץ השנה הנבחרת",
+        `<button class="btn btn-primary" onclick="openStudentForm()">תלמידה חדשה</button>`) +
+        `<div class="tools">
+          <input class="inp search" placeholder="חיפוש מורה או תלמידה..." value="${esc(ui.q)}" oninput="ui.q=this.value;render()">
+          <select class="inp" style="width:auto" onchange="ui.klass=this.value;render()">
+            <option value="">כל הכיתות</option>
+            ${classes.map((c) => `<option value="${c.id}" ${ui.klass===c.id?"selected":""}>${esc(c.name)}</option>`).join("")}
+          </select>
+        </div>
+        <div class="card" style="padding:0;overflow:auto">
+          <table>
+            <thead><tr><th>שם</th><th>שכבה</th><th>כיתה</th><th>מסלול</th><th>התמחות</th><th>היעדרות</th><th>סטטוס</th></tr></thead>
+            <tbody>
+              ${rows.map((s) => {
+                const p = placement(s.id) || {};
+                const abs = absPercent(s.id);
+                return `<tr class="click" onclick="go('student',{studentId:'${s.id}'})">
+                  <td>${esc(s.full)}</td>
+                  <td>${esc(nameOf("grades", p.gradeId))}</td>
+                  <td>${esc(nameOf("classes", p.classId))}</td>
+                  <td>${esc(nameOf("tracks", p.trackId))}</td>
+                  <td>${esc(nameOf("specs", p.specId))}</td>
+                  <td><span class="pill ${abs>=20?"bad":abs>=12?"warn":"ok"}">${abs}%</span></td>
+                  <td><span class="pill ${s.active?"ok":"muted"}">${s.active?"פעילה":"ארכיון"}</span></td>
+                </tr>`;
+              }).join("")}
+            </tbody>
+          </table>
+        </div>`;
+    }
+
+    function renderStudent() {
+      const s = db.students.find((x) => x.id === ui.studentId) || yearStudents()[0];
+      if (!s) return ph("כרטיס", "לא נמצאה תלמידה", `<button class="btn btn-ghost" onclick="go('students')">חזרה</button>`, true);
+      ui.studentId = s.id;
+      const p = placement(s.id) || {};
+      const assigned = yearLessons().filter((l) => l.classId === p.classId);
+      const logs = db.changeLog.filter((c) => c.studentId === s.id).slice(0, 8);
+      return ph(esc(s.full), [nameOf("grades", p.gradeId), nameOf("classes", p.classId), nameOf("tracks", p.trackId), nameOf("specs", p.specId)].join(" · "),
+        `<button class="btn btn-ghost" onclick="go('students')">חזרה לרשימה</button>`, true) +
+        `<div class="grid-2">
+          <div class="card">
+            <h3>כרטסת</h3>
+            <p class="sub">ת״ז: ${s.identity}<br>טלפון: ${esc(s.phone) || "—"}<br>הערה: ${esc(s.note) || "אין"}</p>
+            <div class="row" style="margin-top:12px">
+              <button class="btn btn-sm btn-ghost" onclick="openStudentForm('${s.id}')">עריכה</button>
+              ${s.active ? `<button class="btn btn-sm btn-danger" onclick="archiveStudent('${s.id}')">העברה לארכיון</button>` :
+                `<button class="btn btn-sm btn-ghost" onclick="db.students.find(x=>x.id==='${s.id}').active=true;persist();toast('הוחזרה לפעילות');render()">החזרה לפעילות</button>`}
+            </div>
+          </div>
+          <div class="card">
+            <h3>סדר נוכחות לשיעור</h3>
+            <p class="sub">מילוי אוטומטי של מופעים עד היום לפי יעד נוכחות.</p>
+            <select class="inp" id="fill-lesson" style="margin:8px 0">
+              ${assigned.map((l) => `<option value="${l.id}">${esc(l.subject)} · ${DAYS[l.day]} שעה ${l.hour}</option>`).join("")}
+            </select>
+            <div class="row">
+              <button class="btn btn-ghost" onclick="fillTarget(80)">סדר ל־80%</button>
+              <button class="btn btn-primary" onclick="fillTarget(100)">סדר ל־100%</button>
+            </div>
+          </div>
+        </div>
+        <div class="card">
+          <h3>שיעורים משויכים</h3>
+          <table><thead><tr><th>שיעור</th><th>מורה</th><th>מועד</th></tr></thead>
+          <tbody>${assigned.map((l) => `<tr><td>${esc(l.subject)}</td><td>${esc(teacherName(l.teacherId))}</td><td>${DAYS[l.day]} · שעה ${l.hour}</td></tr>`).join("")}</tbody></table>
+        </div>
+        <div class="card">
+          <h3>יומן שינויי נוכחות</h3>
+          ${logs.length ? `<ol>${logs.map((c) => `<li class="sub">${esc(c.subject)} · יום ${c.day}: ${c.old} ← ${c.neu}</li>`).join("")}</ol>` : `<p class="sub">אין שינויים רשומים.</p>`}
+        </div>`;
+    }
+
+    function archiveStudent(id) {
+      if (!confirm("להעביר לארכיון? התלמידה לא תימחק.")) return;
+      const s = db.students.find((x) => x.id === id);
+      if (s) { s.active = false; persist(); toast("הועברה לארכיון"); render(); }
+    }
+
+    function fillTarget(pct) {
+      const sel = document.getElementById("fill-lesson");
+      const lessonId = sel && sel.value;
+      const lesson = db.lessons.find((l) => l.id === lessonId);
+      if (!lesson) return;
+      const sid = ui.studentId;
+      if (!confirm(`לסדר נוכחות ב«${lesson.subject}» ל־${pct}%?`)) return;
+      const occs = db.occurrences
+        .filter((o) => o.lessonId === lessonId && o.day <= TODAY && o.status !== "cancelled")
+        .sort((a, b) => a.day - b.day);
+      if (!occs.length) { toast("אין מופעים עד היום"); return; }
+      const presentish = (o) => {
+        const a = attOf(o.id, sid);
+        return a && (a.status === "present" || a.status === "late");
+      };
+      const need = Math.max(0, Math.ceil((occs.length * pct) / 100) - occs.filter(presentish).length);
+      let left = need;
+      occs.filter((o) => !attOf(o.id, sid)).forEach((o) => { if (left > 0) { setAtt(o.id, sid, "present"); left--; } });
+      occs.filter((o) => (attOf(o.id, sid) || {}).status === "absent").forEach((o) => { if (left > 0) { setAtt(o.id, sid, "present"); left--; } });
+      toast(`סומנו ${need - left} מופעים כנוכחת (יעד ${pct}%)`);
+      render();
+    }
+
+    function renderAttendance() {
+      const lessons = yearLessons();
+      if (!ui.lessonId || !lessons.some((l) => l.id === ui.lessonId)) ui.lessonId = (lessons[0] || {}).id;
+      const lesson = lessons.find((l) => l.id === ui.lessonId);
+      const occ = ensureOcc();
+      const list = lesson ? studentsForLesson(lesson.id) : [];
+      const marked = list.filter((s) => occ && attOf(occ.id, s.id)).length;
+      const hasDays = new Set(db.occurrences.filter((o) => o.lessonId === ui.lessonId).map((o) => o.day));
+      const cal = WD.map((d) => `<span class="wd">${d}</span>`).join("") +
+        ["","","", ...Array.from({ length: 29 }, (_, i) => i + 1)].map((d) => {
+          if (!d) return "<span></span>";
+          const sel = d === ui.attDay ? "sel" : "";
+          const has = hasDays.has(d) ? "has" : "";
+          let miss = "";
+          if (hasDays.has(d)) {
+            const o = db.occurrences.find((x) => x.lessonId === ui.lessonId && x.day === d);
+            const st = o ? studentsForLesson(ui.lessonId) : [];
+            const mk = st.filter((s) => attOf(o.id, s.id)).length;
+            if (st.length && mk < st.length) miss = "miss";
+          }
+          return `<button type="button" class="${sel} ${has} ${miss}" onclick="ui.attDay=${d};render()">${d}</button>`;
+        }).join("");
+      const rows = list.map((s) => {
+        const a = occ ? attOf(occ.id, s.id) : null;
+        const st = a && a.status;
+        return `<div class="srow ${st === "absent" ? "abs" : ""}">
+          <span class="nm">${esc(s.full)}</span>
+          <div class="seg">
+            <button class="${st === "present" ? "p" : ""}" onclick="pickAtt('${s.id}','present')">נוכחת</button>
+            <button class="${st === "late" ? "l" : ""}" onclick="pickAtt('${s.id}','late')">איחור</button>
+            <button class="${st === "absent" ? "a" : ""}" onclick="pickAtt('${s.id}','absent')">נעדרה</button>
+          </div>
+          ${st === "absent" ? `<select class="inp" style="width:auto;min-width:10rem" onchange="pickReason('${s.id}', this.value)">
+            ${REASONS.map((r) => `<option ${((a&&a.reason)||"")===r?"selected":""} value="${esc(r)}">${r || "הערה (אופציונלי)"}</option>`).join("")}
+          </select>` : ""}
+        </div>`;
+      }).join("");
+      return ph("נוכחות", "בחרי תאריך ושיעור וסמני את התלמידות.", "", true) +
+        `<div class="att">
+          <div>
+            <div class="cal">
+              <div class="tools"><strong>אלול תשפ״ו</strong><span class="sub">יום ${ui.attDay}</span></div>
+              <div class="cal-grid">${cal}</div>
+              <p class="sub">ירוק = יש מופע · כתום = רישום חסר</p>
+            </div>
+            ${lessons.map((l) => `<button type="button" class="lesson-btn ${l.id===ui.lessonId?"sel":""}" onclick="ui.lessonId='${l.id}';render()">
+              <strong>${esc(l.subject)}</strong>
+              <div class="sub">${esc(teacherName(l.teacherId))} · ${DAYS[l.day]} שעה ${l.hour} · ${esc(nameOf("classes", l.classId))}</div>
+            </button>`).join("")}
+          </div>
+          <div class="sheet">
+            <div class="sheet-h">
+              <h3>${lesson ? esc(lesson.subject) : "בחרי שיעור"}</h3>
+              <p class="sub">יום ${ui.attDay} באלול · ${lesson ? esc(teacherName(lesson.teacherId)) : ""}</p>
+              <div class="row" style="margin-top:8px">
+                <button class="btn btn-sm btn-ghost" onclick="markAll('present')">הכל נוכח</button>
+                <button class="btn btn-sm btn-ghost" onclick="markRest()">שאר חסר</button>
+                <button class="btn btn-sm btn-ghost" onclick="copyPrev()">העתק קודם</button>
+                <span class="sub" style="margin-inline-start:auto">${marked}/${list.length}</span>
+              </div>
+            </div>
+            <div class="sheet-b">${rows || `<p class="sub">אין תלמידות בכיתה זו.</p>`}</div>
+          </div>
+        </div>`;
+    }
+
+    function pickAtt(sid, status) {
+      const o = ensureOcc();
+      if (!o) return;
+      setAtt(o.id, sid, status);
+      render();
+    }
+    function pickReason(sid, reason) {
+      const o = ensureOcc();
+      if (!o) return;
+      const cur = attOf(o.id, sid) || { status: "absent" };
+      setAtt(o.id, sid, cur.status, reason);
+      render();
+    }
+    function markAll(status) {
+      const o = ensureOcc();
+      studentsForLesson(ui.lessonId).forEach((s) => setAtt(o.id, s.id, status));
+      toast("הסימון נשמר");
+      render();
+    }
+    function markRest() {
+      const o = ensureOcc();
+      studentsForLesson(ui.lessonId).forEach((s) => { if (!attOf(o.id, s.id)) setAtt(o.id, s.id, "absent"); });
+      toast("שאר התלמידות סומנו נעדרה");
+      render();
+    }
+    function copyPrev() {
+      const prev = db.occurrences
+        .filter((o) => o.lessonId === ui.lessonId && o.day < ui.attDay)
+        .sort((a, b) => b.day - a.day)[0];
+      if (!prev) { toast("אין מופע קודם"); return; }
+      const o = ensureOcc();
+      studentsForLesson(ui.lessonId).forEach((s) => {
+        const a = attOf(prev.id, s.id);
+        if (a) setAtt(o.id, s.id, a.status, a.reason);
+      });
+      toast("הועתק מהמופע הקודם");
+      render();
+    }
+
+    function renderMakeup() {
+      const statusLabel = { pending: "ממתינה", scheduled: "נקבעה", done: "הושלמה" };
+      return ph("מבחני השלמה", "מעקב אחר השלמות שחסרות",
+        `<button class="btn btn-primary" onclick="openMakeupForm()">הוספת השלמה</button>`, true) +
+        `<div class="card" style="padding:0">
+          <table><thead><tr><th>תלמידה</th><th>שיעור</th><th>יום</th><th>סטטוס</th><th></th></tr></thead><tbody>
+            ${db.makeup.map((m) => `<tr>
+              <td>${esc(studentName(m.studentId))}</td>
+              <td>${esc((db.lessons.find(l=>l.id===m.lessonId)||{}).subject || "—")}</td>
+              <td>${m.day}</td>
+              <td><span class="pill ${m.status==="done"?"ok":m.status==="scheduled"?"warn":"muted"}">${statusLabel[m.status]}</span></td>
+              <td><button class="btn btn-sm btn-ghost" onclick="cycleMakeup('${m.id}')">התקדמות</button></td>
+            </tr>`).join("")}
+          </tbody></table>
+        </div>`;
+    }
+    function cycleMakeup(id) {
+      const m = db.makeup.find((x) => x.id === id);
+      if (!m) return;
+      m.status = m.status === "pending" ? "scheduled" : m.status === "scheduled" ? "done" : "pending";
+      persist(); render();
+    }
+    function openMakeupForm() {
+      const stus = yearStudents().filter((s) => s.active);
+      const lessons = yearLessons();
+      openModal("הוספת השלמה",
+        `<div class="form-grid">
+          <label class="fld">תלמידה<select class="inp" id="mk-s">${stus.map((s)=>`<option value="${s.id}">${esc(s.full)}</option>`)}</select></label>
+          <label class="fld">שיעור<select class="inp" id="mk-l">${lessons.map((l)=>`<option value="${l.id}">${esc(l.subject)}</option>`)}</select></label>
+          <label class="fld">יום באלול<input class="inp" id="mk-d" type="number" min="1" max="29" value="15"></label>
+        </div>`,
+        `<button class="btn btn-primary" onclick="saveMakeup()">שמירה</button>`);
+    }
+    function saveMakeup() {
+      db.makeup.push({
+        id: uid("m"),
+        studentId: document.getElementById("mk-s").value,
+        lessonId: document.getElementById("mk-l").value,
+        day: Number(document.getElementById("mk-d").value) || TODAY,
+        status: "pending",
+      });
+      persist(); closeModal(); toast("השלמה נשמרה"); render();
+    }
+
+    function renderTimetable() {
+      const lessons = yearLessons();
+      let html = `<div class="hd"></div>` + DAYS.slice(0, 5).map((d) => `<div class="hd">${d}</div>`).join("");
+      for (let h = 1; h <= 5; h++) {
+        html += `<div class="hd">שעה ${h}</div>`;
+        for (let d = 0; d < 5; d++) {
+          const hits = lessons.filter((l) => l.day === d && l.hour === h);
+          html += hits.length
+            ? `<div><strong>${esc(hits[0].subject)}</strong><div class="sub">${esc(nameOf("classes", hits[0].classId))}<br>${esc(teacherName(hits[0].teacherId))}</div></div>`
+            : `<div></div>`;
+        }
+      }
+      return ph("מערכת שעות", "לפי השנה האקדמית הפעילה", "", true) + `<div class="tt">${html}</div>`;
+    }
+
+    function renderLessons() {
+      const lessons = yearLessons();
+      return ph("שיעורים", "תבניות שיעור לשנה הפעילה",
+        `<button class="btn btn-primary" onclick="openLessonForm()">שיעור חדש</button>`) +
+        `<div class="card" style="padding:0"><table>
+          <thead><tr><th>מקצוע</th><th>מורה</th><th>מועד</th><th>קהל</th><th></th></tr></thead>
+          <tbody>${lessons.map((l) => `<tr>
+            <td>${esc(l.subject)}</td><td>${esc(teacherName(l.teacherId))}</td>
+            <td>${DAYS[l.day]} · שעה ${l.hour}</td><td>${esc(nameOf("classes", l.classId))}</td>
+            <td><button class="btn btn-sm btn-ghost" onclick="ui.lessonId='${l.id}';go('attendance')">רישום</button></td>
+          </tr>`).join("")}</tbody>
+        </table></div>`;
+    }
+
+    function renderTeachers() {
+      return ph("מורות", "סנכרון ממערכת השכר ושיבוצי הוראה") +
+        `<div class="grid-2">
+          <div class="card gold">
+            <h3>סנכרון מורות</h3>
+            <p class="sub">מושך את רשימת המורות והשיבוצים ממערכת דיווח השכר.</p>
+            <button class="btn btn-primary" style="width:100%;margin-top:12px" onclick="syncTeachers()">סנכרן ממערכת השכר</button>
+          </div>
+          <div class="card" style="padding:0;overflow:auto">
+            <table>
+              <thead><tr><th>שם</th><th>מקצוע בסיס</th><th>מסלול בסיס</th><th>שנה בסיס</th><th>סמסטר בסיס</th><th>מפגשים</th></tr></thead>
+              <tbody>${db.teachers.map((t) => {
+                const src = db.sourceRecords.filter((r) => r.teacherId === t.id || r.identity === t.identity);
+                const sub = [...new Set(src.map((r) => r.subject).filter(Boolean))].join(" · ") || "—";
+                const tr = [...new Set(src.map((r) => r.track).filter(Boolean))].join(" · ") || "—";
+                const yr = [...new Set(src.map((r) => r.year).filter(Boolean))].join(" · ") || "—";
+                const sm = [...new Set(src.map((r) => r.sem).filter(Boolean))].join(" · ") || "—";
+                const mt = src.reduce((a, r) => a + (Number(r.meetings) || 0), 0);
+                return `<tr><td>${esc(t.full)}</td><td>${esc(sub)}</td><td>${esc(tr)}</td><td>${esc(yr)}</td><td>${esc(sm)}</td><td>${mt || "—"}</td></tr>`;
+              }).join("")}</tbody>
+            </table>
+          </div>
+        </div>`;
+    }
+
+    function syncTeachers() {
+      let added = 0, updated = 0;
+      SALARY_POOL.forEach((row) => {
+        let t = db.teachers.find((x) => x.identity === row.tz);
+        if (!t) {
+          t = { id: uid("tch"), full: row.name, identity: row.tz, phone: row.phone, email: row.email, local: false };
+          db.teachers.push(t);
+          added++;
+        } else {
+          if (!t.phone) t.phone = row.phone;
+          if (!t.email) t.email = row.email;
+          updated++;
+        }
+        const ext = "src:" + row.tz + ":" + row.subject;
+        let src = db.sourceRecords.find((r) => r.ext === ext);
+        if (!src) {
+          db.sourceRecords.push({
+            id: uid("src"), ext, teacherId: t.id, identity: row.tz,
+            subject: row.subject, track: row.track, year: row.year, sem: row.sem, meetings: row.meetings,
+          });
+        } else {
+          src.subject = row.subject; src.track = row.track; src.year = row.year; src.sem = row.sem; src.meetings = row.meetings;
+        }
+      });
+      persist();
+      toast(`הסנכרון הושלם: נוספו ${added}, עודכנו ${updated}.`);
+      render();
+    }
+
+    function renderReports() {
+      const rows = yearStudents().filter((s) => s.active);
+      return ph("דוחות", "אחוזי נוכחות לפי תלמידה בשנה הפעילה") +
+        `<div class="card" style="padding:0"><table>
+          <thead><tr><th>תלמידה</th><th>כיתה</th><th>נוכחות</th><th>היעדרות</th></tr></thead>
+          <tbody>${rows.map((s) => {
+            const abs = absPercent(s.id);
+            return `<tr>
+              <td>${esc(s.full)}</td><td>${esc(nameOf("classes", (placement(s.id)||{}).classId))}</td>
+              <td>${100 - abs}%</td>
+              <td><span class="pill ${abs>=20?"bad":abs>=12?"warn":"ok"}">${abs}%</span></td>
+            </tr>`;
+          }).join("")}</tbody>
+        </table></div>`;
+    }
+
+    function renderSettings() {
+      const y = activeYear();
+      const classes = db.classes.filter((c) => c.yearId === y.id);
+      return ph("הגדרות", "שנים אקדמיות, כיתות, מסלולים והתמחויות", "", true) +
+        `<div class="grid-2">
+          <div class="card">
+            <h3>שנים אקדמיות</h3>
+            <table><tbody>${db.years.map((yr) => `<tr>
+              <td>${esc(yr.name)}</td>
+              <td>${yr.active ? `<span class="pill ok">פעילה</span>` : `<button class="btn btn-sm btn-ghost" onclick="switchYear('${yr.id}')">הפוך לפעילה</button>`}</td>
+            </tr>`).join("")}</tbody></table>
+          </div>
+          <div class="card">
+            <h3>כיתות ${esc(y.name)}</h3>
+            <table><tbody>${classes.map((c) => `<tr><td>${esc(c.name)}</td><td>${esc(nameOf("grades", c.gradeId))}</td></tr>`).join("")}</tbody></table>
+            <div class="row" style="margin-top:10px">
+              <input class="inp" id="new-class" placeholder="שם כיתה חדשה" style="max-width:12rem">
+              <button class="btn btn-primary btn-sm" onclick="addClass()">הוספה</button>
+            </div>
+          </div>
+        </div>
+        <div class="card">
+          <h3>מסלולים והתמחויות</h3>
+          <p class="sub">${db.tracks.filter(t=>t.yearId===y.id).map(t=>t.name).join(" · ")} | ${db.specs.filter(t=>t.yearId===y.id).map(t=>t.name).join(" · ")}</p>
+          <button class="btn btn-danger" style="margin-top:12px" onclick="resetData()">איפוס לנתוני פתיחה</button>
+        </div>`;
+    }
+
+    function addClass() {
+      const name = (document.getElementById("new-class").value || "").trim();
+      if (!name) return;
+      const y = activeYear();
+      const grade = db.grades.find((g) => g.yearId === y.id) || db.grades[0];
+      db.classes.push({ id: uid("c"), yearId: y.id, gradeId: grade.id, name });
+      persist(); toast("כיתה נוספה"); render();
+    }
+
+    function openStudentForm(id) {
+      const s = id ? db.students.find((x) => x.id === id) : null;
+      const p = s ? placement(s.id) || {} : {};
+      const y = activeYear();
+      const classes = db.classes.filter((c) => c.yearId === y.id);
+      const tracks = db.tracks.filter((t) => t.yearId === y.id);
+      const specs = db.specs.filter((t) => t.yearId === y.id);
+      openModal(s ? "עריכת תלמידה" : "תלמידה חדשה",
+        `<div class="form-grid">
+          <label class="fld">שם מלא<input class="inp" id="st-name" value="${esc(s ? s.full : "")}"></label>
+          <label class="fld">ת״ז<input class="inp" id="st-id" value="${esc(s ? s.identity : String(208472000 + db.students.length))}"></label>
+          <label class="fld">כיתה<select class="inp" id="st-c">${classes.map((c)=>`<option value="${c.id}" ${p.classId===c.id?"selected":""}>${esc(c.name)}</option>`)}</select></label>
+          <label class="fld">מסלול<select class="inp" id="st-t">${tracks.map((c)=>`<option value="${c.id}" ${p.trackId===c.id?"selected":""}>${esc(c.name)}</option>`)}</select></label>
+          <label class="fld">התמחות<select class="inp" id="st-sp">${specs.map((c)=>`<option value="${c.id}" ${p.specId===c.id?"selected":""}>${esc(c.name)}</option>`)}</select></label>
+          <label class="fld">הערה<input class="inp" id="st-note" value="${esc(s ? s.note : "")}"></label>
+        </div>`,
+        `<button class="btn btn-primary" onclick="saveStudent(${s ? `'${s.id}'` : "null"})">שמירה</button>`);
+    }
+
+    function saveStudent(id) {
+      const full = (document.getElementById("st-name").value || "").trim();
+      if (!full) { toast("יש למלא שם"); return; }
+      const identity = document.getElementById("st-id").value.trim();
+      const classId = document.getElementById("st-c").value;
+      const trackId = document.getElementById("st-t").value;
+      const specId = document.getElementById("st-sp").value;
+      const note = document.getElementById("st-note").value;
+      const cls = db.classes.find((c) => c.id === classId);
+      if (id) {
+        const s = db.students.find((x) => x.id === id);
+        s.full = full; s.identity = identity; s.note = note;
+        let a = placement(id);
+        if (a) { a.classId = classId; a.trackId = trackId; a.specId = specId; a.gradeId = cls.gradeId; }
+      } else {
+        const sid = uid("s");
+        db.students.push({ id: sid, full, identity, phone: "", note, active: true });
+        db.assignments.push({
+          id: uid("a"), studentId: sid, yearId: activeYear().id,
+          gradeId: cls.gradeId, classId, trackId, specId, start: "2025-09-01", end: null,
+        });
+      }
+      persist(); closeModal(); toast("נשמר"); go(id ? "student" : "students", id ? { studentId: id } : null);
+    }
+
+    function openLessonForm() {
+      const y = activeYear();
+      const teachers = db.teachers;
+      const classes = db.classes.filter((c) => c.yearId === y.id);
+      openModal("שיעור חדש",
+        `<div class="form-grid">
+          <label class="fld">מקצוע<input class="inp" id="ls-sub"></label>
+          <label class="fld">מורה<select class="inp" id="ls-t">${teachers.map((t)=>`<option value="${t.id}">${esc(t.full)}</option>`)}</select></label>
+          <label class="fld">יום<select class="inp" id="ls-d">${DAYS.slice(0,5).map((d,i)=>`<option value="${i}">${d}</option>`)}</select></label>
+          <label class="fld">שעה<select class="inp" id="ls-h">${[1,2,3,4,5].map((h)=>`<option>${h}</option>`)}</select></label>
+          <label class="fld">כיתה<select class="inp" id="ls-c">${classes.map((c)=>`<option value="${c.id}">${esc(c.name)}</option>`)}</select></label>
+        </div>`,
+        `<button class="btn btn-primary" onclick="saveLesson()">שמירה</button>`);
+    }
+    function saveLesson() {
+      const subject = (document.getElementById("ls-sub").value || "").trim();
+      if (!subject) { toast("יש למלא מקצוע"); return; }
+      const id = uid("l");
+      db.lessons.push({
+        id, yearId: activeYear().id, subject,
+        teacherId: document.getElementById("ls-t").value,
+        day: Number(document.getElementById("ls-d").value),
+        hour: Number(document.getElementById("ls-h").value),
+        classId: document.getElementById("ls-c").value,
+      });
+      db.occurrences.push({ id: id + "-d" + TODAY, lessonId: id, day: TODAY, status: "scheduled" });
+      persist(); closeModal(); toast("שיעור נוסף"); go("lessons");
+    }
+
+    const PAGES = {
+      dashboard: renderDashboard,
+      students: renderStudents,
+      student: renderStudent,
+      attendance: renderAttendance,
+      makeup: renderMakeup,
+      timetable: renderTimetable,
+      lessons: renderLessons,
+      teachers: renderTeachers,
+      reports: renderReports,
+      settings: renderSettings,
+    };
+
+    function render() {
+      renderNav();
+      document.getElementById("content").innerHTML = (PAGES[ui.page] || renderDashboard)();
+    }
+  </script>
+</body>
+</html>
