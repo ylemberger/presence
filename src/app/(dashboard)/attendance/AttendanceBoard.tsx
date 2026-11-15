@@ -43,6 +43,10 @@ import {
   type AttendancePickerPhase,
 } from "./AttendanceStatusPicker";
 import { AttendanceBlankSheet } from "./AttendanceBlankSheet";
+import {
+  AttendanceLessonRosterPrint,
+  type LessonPrintStudent,
+} from "./AttendanceLessonRosterPrint";
 import { AddOccurrenceDate } from "./AddOccurrenceDate";
 import { ReassignOccurrenceLesson } from "./ReassignOccurrenceLesson";
 import { AttendanceGapModal, type GapItem } from "./AttendanceGapModal";
@@ -152,6 +156,13 @@ interface Props {
   insightsByStudent?: Record<string, StudentInsight>;
   pastGaps?: GapItem[];
   occurrenceIdsWithNotes?: string[];
+  /** Full lesson roster for «הדפסת רשימה» (all assigned students + partial notes). */
+  lessonPrintRoster?: {
+    subject: string;
+    teacherName: string;
+    groupLabel: string;
+    students: LessonPrintStudent[];
+  } | null;
 }
 
 type DraftKey = string;
@@ -269,9 +280,11 @@ export function AttendanceBoard({
   insightsByStudent = {},
   pastGaps = [],
   occurrenceIdsWithNotes = [],
+  lessonPrintRoster = null,
 }: Props) {
   const { canWrite } = useAccess();
   const { isPending, push, router } = usePendingRouter();
+  const [printTarget, setPrintTarget] = useState<"blank" | "roster">("blank");
   const [draft, setDraft] = useState<Record<DraftKey, AttendanceStatus | null>>({});
   const [reasons, setReasons] = useState<Record<DraftKey, AbsenceReason | null>>({});
   const [cellPhase, setCellPhase] = useState<Record<DraftKey, AttendancePickerPhase>>({});
@@ -1525,9 +1538,19 @@ export function AttendanceBoard({
               </p>
             </div>
           )}
-          <p className="mt-3 font-caption text-caption text-on-surface-variant/70">
-            מקלדת: נ/N נוכחת · ע/A איחור · ן/X נעדרה · ↑↓ מעבר
-          </p>
+          <div className="mt-3 flex flex-wrap items-center justify-between gap-2">
+            <p className="font-caption text-caption text-on-surface-variant/70">
+              מקלדת: נ/N נוכחת · ע/A איחור · ן/X נעדרה · ↑↓ מעבר
+            </p>
+            {lessonPrintRoster && lessonPrintRoster.students.length > 0 ? (
+              <PrintButton
+                label="הדפסת הרשימה"
+                documentTitle={`רשימה-${lessonPrintRoster.subject}`}
+                onBeforePrint={() => setPrintTarget("roster")}
+                className="inline-flex items-center gap-1.5 rounded-lg border border-outline-variant/70 bg-surface-container-lowest px-3 py-1.5 font-label-md text-label-md text-primary shadow-tactile-sm transition-colors hover:bg-secondary-container/50 print:hidden"
+              />
+            ) : null}
+          </div>
         </div>
       </div>
 
@@ -1903,7 +1926,15 @@ export function AttendanceBoard({
                   label="דף ריק"
                   documentTitle={`נוכחות-${activeLesson.subject}`}
                   disabled={lessonStudents.length === 0}
+                  onBeforePrint={() => setPrintTarget("blank")}
                 />
+                {lessonPrintRoster && lessonPrintRoster.students.length > 0 ? (
+                  <PrintButton
+                    label="הדפסת הרשימה"
+                    documentTitle={`רשימה-${lessonPrintRoster.subject}`}
+                    onBeforePrint={() => setPrintTarget("roster")}
+                  />
+                ) : null}
                 <AddOccurrenceDate lessonId={activeLesson.lessonId} />
                 {canWrite && activeOccurrenceId && activeLesson.status !== "cancelled" && (
                   <ReassignOccurrenceLesson
@@ -2230,8 +2261,18 @@ export function AttendanceBoard({
           groupLabel={activeLesson.groupLabel}
           date={selectedDate}
           students={lessonStudents}
+          printActive={printTarget === "blank"}
         />
       )}
+      {lessonPrintRoster && lessonPrintRoster.students.length > 0 ? (
+        <AttendanceLessonRosterPrint
+          subject={lessonPrintRoster.subject}
+          teacherName={lessonPrintRoster.teacherName}
+          groupLabel={lessonPrintRoster.groupLabel}
+          students={lessonPrintRoster.students}
+          printActive={printTarget === "roster"}
+        />
+      ) : null}
 
       {undo && (
         <div className="fixed bottom-8 left-8 z-50 flex items-center gap-4 rounded-lg bg-primary px-6 py-4 font-body-md text-body-md text-on-primary shadow-tactile-lg">

@@ -7,15 +7,18 @@ export function AttendanceBlankSheet({
   groupLabel,
   date,
   students,
+  printActive = true,
 }: {
   subject: string;
   teacherName?: string;
   groupLabel?: string;
   date: string;
   students: { id: string; full_name: string }[];
+  /** When false, stays screen-hidden and does not print (another sheet is active). */
+  printActive?: boolean;
 }) {
   return (
-    <section className="hidden print:block">
+    <section className={printActive ? "hidden print:block" : "hidden"}>
       <SeminarPrintHeader
         title={subject}
         subtitle={[

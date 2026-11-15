@@ -3,6 +3,7 @@ import { createClient } from "@/lib/supabase/server";
 import { getActiveAcademicYear } from "@/lib/utils";
 import {
   buildHebrewMonth,
+  formatHebrewDate,
   hebrewMonthFromIso,
   isDateInRange,
   schoolYearIsoBounds,
@@ -695,6 +696,100 @@ export default async function AttendancePage({ searchParams }: Props) {
     .map((n) => n.lesson_occurrence_id)
     .filter(Boolean);
 
+  /** Full lesson roster for print: every assigned student + from/until when not for all meetings. */
+  let lessonPrintRoster: {
+    subject: string;
+    teacherName: string;
+    groupLabel: string;
+    students: Array<{
+      id: string;
+      full_name: string;
+      last_name?: string | null;
+      first_name?: string | null;
+      assignmentNote: string | null;
+    }>;
+  } | null = null;
+  if (params.lessonId) {
+    const lessonMeta = lessonById.get(params.lessonId);
+    const occDates = [
+      ...new Set(
+        rawOccs
+          .filter(
+            (o) =>
+              o.lesson_id === params.lessonId &&
+              o.status !== "cancelled" &&
+              !cancelledDateSet.has(o.occurrence_date) &&
+              !vacationDateSet.has(o.occurrence_date)
+          )
+          .map((o) => o.occurrence_date)
+      ),
+    ].sort();
+    const firstOcc = occDates[0] ?? "";
+    const lastOcc = occDates[occDates.length - 1] ?? "";
+    const byStudent = new Map<
+      string,
+      {
+        student: ShellStudent;
+        links: Array<{ start_date: string; end_date: string | null }>;
+      }
+    >();
+    for (const link of linksFor(params.lessonId)) {
+      const student = rosterStudent(link);
+      if (!student) continue;
+      const cur = byStudent.get(student.id);
+      if (cur) cur.links.push({ start_date: link.start_date, end_date: link.end_date });
+      else byStudent.set(student.id, {
+        student,
+        links: [{ start_date: link.start_date, end_date: link.end_date }],
+      });
+    }
+    const students = [...byStudent.values()]
+      .map(({ student, links }) => {
+        const coversAll =
+          occDates.length === 0 ||
+          occDates.every((date) =>
+            links.some((l) => isDateInRange(date, l.start_date, l.end_date))
+          );
+        let assignmentNote: string | null = null;
+        if (!coversAll) {
+          const starts = links.map((l) => l.start_date.slice(0, 10)).sort();
+          const earliest = starts[0] ?? "";
+          const open = links.some((l) => !l.end_date);
+          const ends = links
+            .map((l) => (l.end_date ? l.end_date.slice(0, 10) : null))
+            .filter((d): d is string => Boolean(d))
+            .sort();
+          const latestEnd = open ? null : (ends[ends.length - 1] ?? null);
+          const parts: string[] = [];
+          if (earliest && (!firstOcc || earliest > firstOcc)) {
+            parts.push(`מ־${formatHebrewDate(earliest)}`);
+          }
+          if (latestEnd && (!lastOcc || latestEnd < lastOcc)) {
+            parts.push(`עד ${formatHebrewDate(latestEnd)}`);
+          }
+          if (parts.length === 0 && earliest) {
+            parts.push(`מ־${formatHebrewDate(earliest)}`);
+            if (latestEnd) parts.push(`עד ${formatHebrewDate(latestEnd)}`);
+          }
+          assignmentNote = parts.length > 0 ? parts.join(" · ") : null;
+        }
+        return {
+          id: student.id,
+          full_name: student.full_name,
+          last_name: student.last_name,
+          first_name: student.first_name,
+          assignmentNote,
+        };
+      })
+      .sort(compareStudentsByLastName);
+    lessonPrintRoster = {
+      subject: lessonMeta?.subject ?? "שיעור",
+      teacherName: lessonMeta?.teacherName ?? "",
+      groupLabel: lessonMeta?.groupLabel ?? "",
+      students,
+    };
+  }
+
   return (
     <div className="flex flex-col gap-stack_lg print:gap-0">
       <PageHeader title="נוכחות" size="headline" />
@@ -771,6 +866,7 @@ export default async function AttendancePage({ searchParams }: Props) {
         insightsByStudent={{}}
         pastGaps={pastGaps}
         occurrenceIdsWithNotes={occurrenceIdsWithNotes}
+        lessonPrintRoster={lessonPrintRoster}
       />
     </div>
   );
