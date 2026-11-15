@@ -72,7 +72,7 @@ export async function GET(request: Request) {
       process.env.VERCEL_URL,
       process.env.VERCEL_PROJECT_PRODUCTION_URL,
     ]
-      .filter(Boolean)
+      .filter((host): host is string => Boolean(host))
       .map((host) => host.replace(/^https?:\/\//, "").split("/")[0].toLowerCase())
   );
   if (forwardedHost && allowedHosts.has(forwardedHost)) {
