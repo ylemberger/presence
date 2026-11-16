@@ -588,7 +588,7 @@ export function AttendanceBoard({
   }, [lessons, studentId, studentLessonIdSet, teacherId, subject, classId, trackId, specializationId]);
 
   const teacherLessonOptions = useMemo(() => {
-    return scopedLessons
+    const lessonOpts = scopedLessons
       .filter((l) => (studentId ? true : Boolean(l.teacherId)))
       .slice()
       .sort((a, b) => {
@@ -616,6 +616,25 @@ export function AttendanceBoard({
           keywords: [teacher, l.subject, group, day, hours].filter(Boolean).join(" "),
         };
       });
+    // Without a student: offer "all lessons of this teacher" so the calendar day list works.
+    if (studentId) return lessonOpts;
+    const byTeacher = new Map<string, { name: string; count: number }>();
+    for (const l of scopedLessons) {
+      if (!l.teacherId) continue;
+      const cur = byTeacher.get(l.teacherId);
+      if (cur) cur.count += 1;
+      else byTeacher.set(l.teacherId, { name: (l.teacherName || "").trim() || "ללא מורה", count: 1 });
+    }
+    const teacherOpts = [...byTeacher.entries()]
+      .sort((a, b) => compareByFamilyName({ name: a[1].name }, { name: b[1].name }))
+      .map(([id, t]) => ({
+        value: `teacher:${id}`,
+        label: t.name,
+        description: `כל השיעורים של המורה · ${t.count} שיעורים — בחרי תאריך בלוח`,
+        selectedLabel: `מורה: ${t.name} (כל השיעורים)`,
+        keywords: t.name,
+      }));
+    return [...teacherOpts, ...lessonOpts];
   }, [scopedLessons, studentId]);
 
   function buildParams(patch: Record<string, string | undefined>) {
@@ -663,11 +682,13 @@ export function AttendanceBoard({
 
   function selectDate(iso: string) {
     setPinnedOccurrenceId(undefined);
+    // Student/teacher filter + calendar: show every meeting that person has that day.
+    const personDayView = Boolean(studentId || teacherId);
     navigate(
       buildParams({
         date: iso,
         occurrenceId: undefined,
-        lessonId: studentId ? lessonId : undefined,
+        lessonId: personDayView ? undefined : lessonId,
       })
     );
   }
@@ -1314,7 +1335,9 @@ export function AttendanceBoard({
       )}
 
       <div className="flex flex-wrap items-center gap-2 font-body-md text-body-md text-on-surface-variant print:hidden">
-        <span className={cn(!lessonId && "font-bold text-primary")}>שלב 1: מורה ושיעור</span>
+        <span className={cn(!lessonId && "font-bold text-primary")}>
+          {studentId || teacherId ? "שלב 1: סינון ותאריך" : "שלב 1: מורה ושיעור"}
+        </span>
         <Icon name="arrow_back" className="text-[16px]" />
         <span className={cn(Boolean(lessonId && !activeOccurrenceId) && "font-bold text-primary")}>
           שלב 2: מופע
@@ -1328,19 +1351,56 @@ export function AttendanceBoard({
       <div className="overflow-hidden rounded-2xl border border-outline-variant/40 bg-surface-container-lowest shadow-tactile-sm print:hidden">
         <div className="border-b border-outline-variant/25 bg-secondary-container/30 px-4 py-3">
           <p className="font-title-lg text-title-lg text-primary">
-            {studentId ? "נוכחות לפי תלמידה" : "חיפוש מורה ושיעור"}
+            {studentId
+              ? "נוכחות לפי תלמידה"
+              : teacherId && !lessonId
+                ? "נוכחות לפי מורה"
+                : "חיפוש מורה ושיעור"}
           </p>
           <p className="mt-0.5 font-body-sm text-body-sm text-on-surface-variant">
             {studentId
-              ? "בחרי שיעור של התלמידה. יופיעו כל המופעים שלו, ואפשר לסמן רק אותה בכל מפגש."
-              : "הקלידי שם מורה או מקצוע. מיד יופיע «מחפשת…», ואחרי בחירה «בודקת נתונים…» עד שהשיעור עולה."}
+              ? "בחרי תאריך בלוח — יופיעו כל השיעורים של התלמידה ביום הזה. אפשר גם לבחור שיעור ספציפי לרשימת כל המופעים שלו."
+              : teacherId && !lessonId
+                ? "בחרי תאריך בלוח — יופיעו כל השיעורים של המורה ביום הזה."
+                : "הקלידי שם מורה (כל השיעורים שלה) או שיעור/מקצוע. אחרי בחירת מורה — בחרי תאריך בלוח."}
           </p>
         </div>
         <div className="px-4 py-4">
           <Combobox
-            label={studentId ? "שיעור של התלמידה" : "שם מורה, מקצוע או קבוצה"}
-            value={lessonId ?? ""}
+            label={
+              studentId
+                ? "שיעור של התלמידה (אופציונלי)"
+                : "שם מורה, מקצוע או קבוצה"
+            }
+            value={
+              lessonId
+                ? lessonId
+                : teacherId && !studentId
+                  ? `teacher:${teacherId}`
+                  : ""
+            }
             onChange={(v) => {
+              if (!v) {
+                navigate(
+                  buildParams({
+                    teacherId: studentId ? teacherId : undefined,
+                    lessonId: undefined,
+                    occurrenceId: undefined,
+                  })
+                );
+                return;
+              }
+              if (v.startsWith("teacher:")) {
+                navigate(
+                  buildParams({
+                    teacherId: v.slice("teacher:".length),
+                    studentId: undefined,
+                    lessonId: undefined,
+                    occurrenceId: undefined,
+                  })
+                );
+                return;
+              }
               const picked = lessons.find((l) => l.id === v);
               navigate(
                 buildParams({
@@ -1355,8 +1415,8 @@ export function AttendanceBoard({
             placeholder={
               teacherLessonOptions.length
                 ? studentId
-                  ? "בחרי שיעור של התלמידה…"
-                  : "למשל: שם המורה או שם המקצוע…"
+                  ? "אופציונלי: בחרי שיעור, או לחצי על תאריך בלוח…"
+                  : "למשל: שם המורה (כל השיעורים) או שם המקצוע…"
                 : studentId
                   ? "אין שיעורים משויכים לתלמידה"
                   : "אין שיעורים לפי הסינון"
@@ -1365,7 +1425,9 @@ export function AttendanceBoard({
             loading={isPending}
           />
           <p className="mt-2 font-caption text-caption text-on-surface-variant">
-            בכל שורה: מקצוע למעלה, ומתחת מורה, קבוצה, יום ושעה. אותה מורה יכולה להופיע כמה פעמים.
+            {studentId || (teacherId && !lessonId)
+              ? "אחרי הסינון — בחרי תאריך בלוח השנה משמאל/למטה. יוצגו כל השיעורים של אותו יום."
+              : "בחירת מורה בלבד = כל השיעורים שלה ביום שנבחר בלוח. שורה של שיעור = שיעור ספציפי."}
           </p>
 
           <div className="mt-4">
@@ -1446,6 +1508,7 @@ export function AttendanceBoard({
                     navigate(
                       buildParams({
                         studentId: v || undefined,
+                        teacherId: undefined,
                         lessonId: undefined,
                         occurrenceId: undefined,
                       })
@@ -1502,17 +1565,11 @@ export function AttendanceBoard({
                   label="מורה"
                   value={teacherId ?? ""}
                   onChange={(v) => {
-                    const nextTeacher = v || undefined;
-                    const keepLesson =
-                      nextTeacher &&
-                      lessonId &&
-                      lessons.find((l) => l.id === lessonId)?.teacherId === nextTeacher
-                        ? lessonId
-                        : undefined;
                     navigate(
                       buildParams({
-                        teacherId: nextTeacher,
-                        lessonId: keepLesson,
+                        teacherId: v || undefined,
+                        studentId: undefined,
+                        lessonId: undefined,
                         occurrenceId: undefined,
                       })
                     );
@@ -1759,6 +1816,17 @@ export function AttendanceBoard({
               <span className="font-caption text-caption text-on-surface-variant">
                 ({formatGregorianDate(selectedDate)})
               </span>
+              {studentId ? (
+                <span className="font-caption text-caption text-on-surface-variant">
+                  ·{" "}
+                  {allStudents.find((s) => s.id === studentId)?.full_name ?? "התלמידה"}
+                </span>
+              ) : null}
+              {teacherId && !lessonId ? (
+                <span className="font-caption text-caption text-on-surface-variant">
+                  · מורה {teachers.find((t) => t.id === teacherId)?.name ?? ""}
+                </span>
+              ) : null}
             </h3>
             {completeDateSet.has(selectedDate) && dayOccurrences.length > 0 && (
               <span className="inline-flex items-center gap-1 rounded-full bg-attendance-present/10 px-2 py-0.5 text-caption font-semibold text-attendance-present">
@@ -1802,7 +1870,11 @@ export function AttendanceBoard({
                 ? "ביטול לימודים — השיעורים בוטלו ואין סימון נוכחות ביום זה."
                 : holidayDates.includes(selectedDate)
                   ? "יום חופשה — אין לימודים ולא נספרת נוכחות."
-                  : "אין שיעורים ביום זה לפי הסינון."}
+                  : studentId
+                    ? "אין שיעורים לתלמידה ביום זה."
+                    : teacherId && !lessonId
+                      ? "אין שיעורים למורה ביום זה."
+                      : "אין שיעורים ביום זה לפי הסינון."}
             </p>
           ) : (
             <div className="grid grid-cols-2 gap-1.5 sm:grid-cols-3">
