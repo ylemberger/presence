@@ -53,8 +53,22 @@ const config: Config = {
         "accent-soft": "rgba(119, 90, 32, 0.05)",
       },
       fontFamily: {
-        sans: ["var(--font-heebo)", "system-ui", "sans-serif"],
-        heebo: ["var(--font-heebo)", "system-ui", "sans-serif"],
+        sans: [
+          "Segoe UI",
+          "Tahoma",
+          "Arial",
+          "Helvetica Neue",
+          "system-ui",
+          "sans-serif",
+        ],
+        heebo: [
+          "Segoe UI",
+          "Tahoma",
+          "Arial",
+          "Helvetica Neue",
+          "system-ui",
+          "sans-serif",
+        ],
       },
       fontSize: {
         "display-lg": ["48px", { lineHeight: "56px", letterSpacing: "-0.02em", fontWeight: "700" }],
