@@ -684,9 +684,14 @@ export function AttendanceBoard({
     setPinnedOccurrenceId(undefined);
     // Student/teacher filter + calendar: show every meeting that person has that day.
     const personDayView = Boolean(studentId || teacherId);
+    // Always align the fetched month to the clicked day (past months were empty before).
+    const seed = hebrewMonthFromIso(iso);
+    const month = buildHebrewMonth(seed.year, seed.month);
     navigate(
       buildParams({
         date: iso,
+        from: month.rangeStart,
+        to: month.rangeEnd,
         occurrenceId: undefined,
         lessonId: personDayView ? undefined : lessonId,
       })
@@ -696,13 +701,12 @@ export function AttendanceBoard({
   function selectLesson(occurrenceId: string) {
     // Pin the exact card id so a slow refresh cannot open a later hour of the same lesson.
     setPinnedOccurrenceId(occurrenceId);
-    const row =
-      dayOccurrences.find((o) => o.id === occurrenceId) ||
-      dayOccurrences.find((o) => o.linkedOccurrenceIds?.includes(occurrenceId));
+    // Person day view: open that meeting only — do not lock into a single-lesson year sheet.
+    const personDayView = Boolean(studentId || teacherId);
     navigate(
       buildParams({
         occurrenceId,
-        lessonId: studentId ? row?.lessonId ?? lessonId : lessonId,
+        lessonId: personDayView ? undefined : lessonId,
       })
     );
   }
@@ -1935,7 +1939,16 @@ export function AttendanceBoard({
               studyRanges={studyRanges}
               onSelectDate={selectDate}
               onMonthRangeChange={(from, to) => {
-                navigate(buildParams({ from, to, date: selectedDate, occurrenceId: undefined }));
+                const dateInMonth =
+                  selectedDate >= from && selectedDate <= to ? selectedDate : from;
+                navigate(
+                  buildParams({
+                    from,
+                    to,
+                    date: dateInMonth,
+                    occurrenceId: undefined,
+                  })
+                );
               }}
             />
           </div>
