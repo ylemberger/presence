@@ -881,6 +881,68 @@ export function AttendanceBoard({
     setMessage(`בוטל עבור ${item.label}`);
   }
 
+  /** Mark one student on every meeting shown for the selected calendar day (appeal / full day). */
+  async function markStudentWholeDay(status: AttendanceStatus) {
+    if (!canWrite || !studentId || dayOccurrences.length === 0 || bulkSaving) return;
+    const occIds = [
+      ...new Set(
+        dayOccurrences
+          .filter((o) => o.status !== "cancelled")
+          .flatMap((o) =>
+            o.linkedOccurrenceIds?.length ? o.linkedOccurrenceIds : [o.id]
+          )
+      ),
+    ];
+    if (occIds.length === 0) return;
+    const studentName =
+      allStudents.find((s) => s.id === studentId)?.full_name ?? "התלמידה";
+    const statusLabel =
+      status === "present" ? "נוכחת" : status === "absent" ? "נעדרה" : "איחור";
+    if (
+      !confirm(
+        `לסמן ${statusLabel} ל${studentName} בכל ${occIds.length} השיעורים של ${formatHebrewDate(selectedDate)}?\n\nלחצי «ביטול» אם צריך לסמן רק חלק מהיום (שיעור־שיעור).`
+      )
+    ) {
+      return;
+    }
+
+    setBulkSaving(true);
+    setMessage(null);
+    const nextDraft = { ...draft };
+    const nextPhase: Record<DraftKey, AttendancePickerPhase> = {};
+    for (const occId of occIds) {
+      const k = keyOf(studentId, occId);
+      nextDraft[k] = status;
+      nextPhase[k] = "saving";
+    }
+    setDraft(nextDraft);
+    setCellPhase((prev) => ({ ...prev, ...nextPhase }));
+
+    const result = await bulkAttendanceAction({
+      updates: occIds.map((occurrenceId) => ({
+        studentId,
+        occurrenceId,
+        status,
+        reason: null,
+      })),
+      refresh: true,
+      skipPreviousWeek: true,
+    });
+    if (result && "error" in result && result.error) {
+      setMessage(result.error);
+      router.refresh();
+    } else {
+      const saved: Record<DraftKey, AttendancePickerPhase> = {};
+      for (const occId of occIds) {
+        saved[keyOf(studentId, occId)] = "saved";
+      }
+      setCellPhase((prev) => ({ ...prev, ...saved }));
+      setMessage(`נשמר — ${statusLabel} ב־${occIds.length} שיעורים ביום זה`);
+      router.refresh();
+    }
+    setBulkSaving(false);
+  }
+
   async function markAll(status: AttendanceStatus) {
     if (!activeOccurrenceId) return;
     setBulkSaving(true);
@@ -1881,45 +1943,111 @@ export function AttendanceBoard({
                       : "אין שיעורים ביום זה לפי הסינון."}
             </p>
           ) : (
-            <div className="grid grid-cols-2 gap-1.5 sm:grid-cols-3">
-              {dayOccurrences.map((o) => {
-                const selected =
-                  o.id === activeOccurrenceId ||
-                  Boolean(activeOccurrenceId && o.linkedOccurrenceIds?.includes(activeOccurrenceId));
-                const tone = lessonAttendanceTone(o.markedCount, o.studentCount);
-                const hasNote = (o.linkedOccurrenceIds ?? [o.id]).some((id) =>
-                  occurrenceIdsWithNotes.includes(id)
-                );
-                return (
+            <>
+              {studentId && canWrite ? (
+                <div className="mb-2 flex flex-wrap items-center gap-1.5 rounded-md border border-primary/20 bg-primary/5 px-2.5 py-2">
+                  <span className="font-label-md text-label-md text-primary">
+                    סימון לכל היום
+                  </span>
                   <button
-                    key={o.id}
                     type="button"
-                    onClick={() => selectLesson(o.id)}
-                    className={cn(
-                      "relative flex min-w-0 flex-col gap-0.5 overflow-hidden rounded-md border px-2 py-1.5 text-right hover:brightness-[0.98]",
-                      tone.card,
-                      selected && "ring-2 ring-secondary/55"
-                    )}
+                    disabled={bulkSaving}
+                    onClick={() => void markStudentWholeDay("present")}
+                    className="rounded-md border border-attendance-present/40 bg-attendance-present/15 px-2.5 py-1 font-label-md text-label-md text-attendance-present transition-colors hover:bg-attendance-present/25 disabled:opacity-50"
                   >
-                    <span className="truncate font-label-md text-label-md text-primary">
-                      {o.subject}
-                      {o.lessonNumber
-                        ? ` · ${formatLessonHours(o.lessonNumber, o.periodCount ?? 1)}`
-                        : ""}
-                    </span>
-                    <span className="line-clamp-2 font-caption text-caption text-on-surface-variant">
-                      {o.teacherName || "ללא מורה"}
-                      {o.groupLabel ? ` · ${o.groupLabel}` : ""}
-                    </span>
-                    <span className={cn("font-caption text-caption", tone.meta)}>
-                      {o.markedCount}/{o.studentCount}
-                      {tone.complete ? " ✓" : tone.started ? " · חלקי" : ""}
-                      {hasNote ? " · הערה" : ""}
-                    </span>
+                    {bulkSaving ? "שומר…" : "נוכחת בכל השיעורים"}
                   </button>
-                );
-              })}
-            </div>
+                  <button
+                    type="button"
+                    disabled={bulkSaving}
+                    onClick={() => void markStudentWholeDay("absent")}
+                    className="rounded-md border border-attendance-absent/40 bg-error-container/20 px-2.5 py-1 font-label-md text-label-md text-on-error-container transition-colors hover:bg-error-container/35 disabled:opacity-50"
+                  >
+                    נעדרה בכל השיעורים
+                  </button>
+                  <span className="font-caption text-caption text-on-surface-variant">
+                    לערעור/יום מלא. לחצי על שיעור בודד לחצי יום.
+                  </span>
+                </div>
+              ) : null}
+              {studentId && message ? (
+                <p
+                  className={cn(
+                    "mb-2 rounded-lg px-3 py-1.5 font-body-sm text-body-sm",
+                    message.includes("שגיא") ||
+                      message.includes("אין הרשאה") ||
+                      message.includes("נכשל") ||
+                      message.includes("לא ניתן")
+                      ? "bg-error-container/60 text-on-error-container"
+                      : "bg-attendance-present/10 text-attendance-present"
+                  )}
+                >
+                  {message}
+                </p>
+              ) : null}
+              <div className="grid grid-cols-2 gap-1.5 sm:grid-cols-3">
+                {dayOccurrences.map((o) => {
+                  const selected =
+                    o.id === activeOccurrenceId ||
+                    Boolean(
+                      activeOccurrenceId && o.linkedOccurrenceIds?.includes(activeOccurrenceId)
+                    );
+                  const tone = lessonAttendanceTone(o.markedCount, o.studentCount);
+                  const hasNote = (o.linkedOccurrenceIds ?? [o.id]).some((id) =>
+                    occurrenceIdsWithNotes.includes(id)
+                  );
+                  const studentMark = studentId
+                    ? (draft[keyOf(studentId, o.id)] ??
+                      attendance.find(
+                        (a) =>
+                          a.student_id === studentId &&
+                          (a.lesson_occurrence_id === o.id ||
+                            o.linkedOccurrenceIds?.includes(a.lesson_occurrence_id))
+                      )?.status ??
+                      null)
+                    : null;
+                  const studentMarkLabel =
+                    studentMark === "present"
+                      ? "נוכחת"
+                      : studentMark === "absent"
+                        ? "נעדרה"
+                        : studentMark === "late"
+                          ? "איחור"
+                          : null;
+                  return (
+                    <button
+                      key={o.id}
+                      type="button"
+                      onClick={() => selectLesson(o.id)}
+                      className={cn(
+                        "relative flex min-w-0 flex-col gap-0.5 overflow-hidden rounded-md border px-2 py-1.5 text-right hover:brightness-[0.98]",
+                        tone.card,
+                        selected && "ring-2 ring-secondary/55"
+                      )}
+                    >
+                      <span className="truncate font-label-md text-label-md text-primary">
+                        {o.subject}
+                        {o.lessonNumber
+                          ? ` · ${formatLessonHours(o.lessonNumber, o.periodCount ?? 1)}`
+                          : ""}
+                      </span>
+                      <span className="line-clamp-2 font-caption text-caption text-on-surface-variant">
+                        {o.teacherName || "ללא מורה"}
+                        {o.groupLabel ? ` · ${o.groupLabel}` : ""}
+                      </span>
+                      <span className={cn("font-caption text-caption", tone.meta)}>
+                        {studentId && studentMarkLabel
+                          ? studentMarkLabel
+                          : `${o.markedCount}/${o.studentCount}${
+                              tone.complete ? " ✓" : tone.started ? " · חלקי" : ""
+                            }`}
+                        {hasNote ? " · הערה" : ""}
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
+            </>
           )}
           </>
           )}

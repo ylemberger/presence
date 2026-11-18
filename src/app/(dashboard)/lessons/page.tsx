@@ -38,14 +38,26 @@ import {
 } from "@/lib/teachers/name-group";
 import { chunkIds, fetchAllPages, fetchAssignmentsByLessons } from "@/lib/supabase/paged";
 import { compareByFamilyName } from "@/lib/students/sort";
-import { buildHebrewMonth, hebrewMonthFromIso, parseIsoDate, todayIso } from "@/lib/dates/hebrew";
+import {
+  buildHebrewMonth,
+  hebrewMonthFromIso,
+  parseIsoDate,
+  schoolYearIsoBounds,
+  todayIso,
+} from "@/lib/dates/hebrew";
 import {
   holidayDatesByKind,
   isMissingHolidayKind,
   isMissingHolidayTable,
 } from "@/lib/lessons/holidays";
 import { isMissingOccurrenceHourColumn } from "@/lib/lessons/occurrences";
+import { embedOne } from "@/lib/supabase/embed";
+import {
+  buildRosterStudents,
+  type LessonRosterPrintData,
+} from "@/lib/lessons/roster-print";
 import type { LessonTemplateCard } from "./LessonsCalendar";
+import { LessonsTemplatesWithPrint } from "./LessonsRostersPrint";
 import type { LessonFormTeacher } from "./LessonsForm";
 
 interface Props {
@@ -211,16 +223,113 @@ export default async function LessonsPage({ searchParams }: Props) {
     a.localeCompare(b, "he")
   );
 
-  const slaRows = await fetchAssignmentsByLessons<{ lesson_id: string }>(
-    supabase,
-    filteredIds,
-    "lesson_id",
-    true
+  type SlaPrintRow = {
+    lesson_id: string;
+    student_id: string;
+    start_date: string;
+    end_date: string | null;
+    students: unknown;
+  };
+  const [slaRows, exclusionRows, schoolBounds] = await Promise.all([
+    fetchAssignmentsByLessons<SlaPrintRow>(
+      supabase,
+      filteredIds,
+      "lesson_id, student_id, start_date, end_date, students(id, full_name, first_name, last_name, is_active)"
+    ),
+    filteredIds.length > 0
+      ? Promise.all(
+          chunkIds(filteredIds).map((chunk) =>
+            fetchAllPages<{ student_id: string; lesson_id: string }>((from, to) =>
+              supabase
+                .from("student_lesson_exclusions")
+                .select("student_id, lesson_id")
+                .in("lesson_id", chunk)
+                .range(from, to)
+            )
+          )
+        )
+          .then((pages) => pages.flat())
+          .catch(() => [] as { student_id: string; lesson_id: string }[])
+      : Promise.resolve([] as { student_id: string; lesson_id: string }[]),
+    Promise.resolve(schoolYearIsoBounds(todayIso())),
+  ]);
+
+  const excludedPairs = new Set(
+    exclusionRows.map((row) => `${row.lesson_id}::${row.student_id}`)
   );
 
   const studentCountByLesson = new Map<string, number>();
+  const studentsByLesson = new Map<
+    string,
+    Map<
+      string,
+      {
+        full_name: string;
+        last_name?: string | null;
+        first_name?: string | null;
+        links: Array<{ start_date: string; end_date: string | null }>;
+      }
+    >
+  >();
   for (const row of slaRows) {
-    studentCountByLesson.set(row.lesson_id, (studentCountByLesson.get(row.lesson_id) ?? 0) + 1);
+    if (excludedPairs.has(`${row.lesson_id}::${row.student_id}`)) continue;
+    const embedded = embedOne<{
+      id: string;
+      full_name: string;
+      first_name?: string | null;
+      last_name?: string | null;
+      is_active?: boolean | null;
+    }>(row.students);
+    if (!embedded || embedded.is_active === false) continue;
+    let byStudent = studentsByLesson.get(row.lesson_id);
+    if (!byStudent) {
+      byStudent = new Map();
+      studentsByLesson.set(row.lesson_id, byStudent);
+    }
+    const cur = byStudent.get(embedded.id);
+    if (cur) {
+      cur.links.push({ start_date: row.start_date, end_date: row.end_date });
+    } else {
+      byStudent.set(embedded.id, {
+        full_name: embedded.full_name,
+        first_name: embedded.first_name,
+        last_name: embedded.last_name,
+        links: [{ start_date: row.start_date, end_date: row.end_date }],
+      });
+    }
+  }
+  for (const [lessonId, byStudent] of studentsByLesson) {
+    studentCountByLesson.set(lessonId, byStudent.size);
+  }
+
+  const occDatesByLesson = new Map<string, string[]>();
+  if (filteredIds.length > 0) {
+    const occPages = await Promise.all(
+      chunkIds(filteredIds).map((ids) =>
+        fetchAllPages<{ lesson_id: string; occurrence_date: string }>((from, to) =>
+          supabase
+            .from("lesson_occurrences")
+            .select("lesson_id, occurrence_date")
+            .in("lesson_id", ids)
+            .neq("status", "cancelled")
+            .gte("occurrence_date", schoolBounds.start)
+            .lte("occurrence_date", schoolBounds.end)
+            .range(from, to)
+        )
+      )
+    );
+    const dateSets = new Map<string, Set<string>>();
+    for (const row of occPages.flat()) {
+      let set = dateSets.get(row.lesson_id);
+      if (!set) {
+        set = new Set();
+        dateSets.set(row.lesson_id, set);
+      }
+      set.add(row.occurrence_date);
+    }
+    for (const [lessonId, set] of dateSets) {
+      occDatesByLesson.set(lessonId, [...set].sort());
+    }
   }
 
   const gradeById = new Map((grades.data ?? []).map((g) => [g.id, g.name]));
@@ -348,6 +457,27 @@ export default async function LessonsPage({ searchParams }: Props) {
       markedMeetings: markedByLesson.get(l.id) ?? [],
     };
   });
+
+  const lessonPrintRosters: LessonRosterPrintData[] = lessonCards
+    .map((card) => {
+      const byStudent = studentsByLesson.get(card.id) ?? new Map();
+      const occDates = occDatesByLesson.get(card.id) ?? [];
+      return {
+        id: card.id,
+        subject: card.subject,
+        teacherName: card.teacherName,
+        groupLabel: card.audienceLabel || card.gradeName || "",
+        students: buildRosterStudents(byStudent, occDates),
+      };
+    })
+    .sort((a, b) => {
+      const byTeacher = compareByFamilyName(
+        { name: a.teacherName },
+        { name: b.teacherName }
+      );
+      if (byTeacher) return byTeacher;
+      return a.subject.localeCompare(b.subject, "he");
+    });
 
   const selectedDate = resolveIsoDay(searchParams.date);
   const monthCursor = hebrewMonthFromIso(selectedDate);
@@ -592,68 +722,77 @@ export default async function LessonsPage({ searchParams }: Props) {
   dateBaseQuery.delete("date");
 
   return (
-    <div className="flex flex-col gap-stack_lg">
-      <PageHeader
-        title="שיעורים"
-        description="מופעים לפי לוח השנה, ורשימת תבניות השיעור לפי הסינון. יצירת שיעור פותחת את המופעים בטווח שנבחר."
-        actions={
-          <LessonsFormDialog
-            key={searchParams.edit ?? "create"}
-            startOpen={Boolean(searchParams.edit)}
-            noTeachers={formProps.teachers.length === 0}
-            editNotFound={Boolean(searchParams.edit && !editingDraft)}
-            attendanceRecorded={Boolean(editingLesson && markedByLesson.has(editingLesson.id))}
-            markedMeetings={
-              editingLesson ? markedByLesson.get(editingLesson.id) ?? [] : []
-            }
-            {...formProps}
-            initial={editingDraft}
-            cancelHref={cancelHref}
-          />
-        }
-      />
+    <div className="flex flex-col gap-stack_lg print:gap-0">
+      <div className="print:hidden">
+        <PageHeader
+          title="שיעורים"
+          description="מופעים לפי לוח השנה, ורשימת תבניות השיעור לפי הסינון. יצירת שיעור פותחת את המופעים בטווח שנבחר. למזכירה: הדפסת כל הרשימות או רשימה לשיעור."
+          actions={
+            <LessonsFormDialog
+              key={searchParams.edit ?? "create"}
+              startOpen={Boolean(searchParams.edit)}
+              noTeachers={formProps.teachers.length === 0}
+              editNotFound={Boolean(searchParams.edit && !editingDraft)}
+              attendanceRecorded={Boolean(editingLesson && markedByLesson.has(editingLesson.id))}
+              markedMeetings={
+                editingLesson ? markedByLesson.get(editingLesson.id) ?? [] : []
+              }
+              {...formProps}
+              initial={editingDraft}
+              cancelHref={cancelHref}
+            />
+          }
+        />
+      </div>
 
-      <LessonsFilters
-        classes={(classes.data ?? []).map((c) => ({ id: c.id, name: c.name }))}
-        tracks={(tracks.data ?? []).map((t) => ({ id: t.id, name: t.name }))}
-        specializations={(specializations.data ?? []).map((s) => ({ id: s.id, name: s.name }))}
-        teachers={uniqueTeachersByName(teachers.data ?? [])}
-        subjects={subjects}
-        defaults={{
-          classId: searchParams.classId,
-          trackId: searchParams.trackId,
-          specializationId: searchParams.specializationId,
-          teacherId: representativeTeacherId(teachers.data ?? [], searchParams.teacherId),
-          subject: searchParams.subject,
-        }}
-        keepEdit={searchParams.edit}
-        keepDate={selectedDate}
-      />
+      <div className="print:hidden">
+        <LessonsFilters
+          classes={(classes.data ?? []).map((c) => ({ id: c.id, name: c.name }))}
+          tracks={(tracks.data ?? []).map((t) => ({ id: t.id, name: t.name }))}
+          specializations={(specializations.data ?? []).map((s) => ({ id: s.id, name: s.name }))}
+          teachers={uniqueTeachersByName(teachers.data ?? [])}
+          subjects={subjects}
+          defaults={{
+            classId: searchParams.classId,
+            trackId: searchParams.trackId,
+            specializationId: searchParams.specializationId,
+            teacherId: representativeTeacherId(teachers.data ?? [], searchParams.teacherId),
+            subject: searchParams.subject,
+          }}
+          keepEdit={searchParams.edit}
+          keepDate={selectedDate}
+        />
+      </div>
 
-      <LessonsByDate
-        selectedDate={selectedDate}
-        baseQuery={dateBaseQuery.toString()}
-        meetings={dayMeetings}
-        countsByDate={countsByDate}
-        completeDates={completeDates}
-        partialDates={partialDates}
-        holidayDates={holidaySets.vacation}
-        cancelledDates={holidaySets.cancelled}
-        studyRanges={studyRanges}
-      />
+      <div className="print:hidden">
+        <LessonsByDate
+          selectedDate={selectedDate}
+          baseQuery={dateBaseQuery.toString()}
+          meetings={dayMeetings}
+          countsByDate={countsByDate}
+          completeDates={completeDates}
+          partialDates={partialDates}
+          holidayDates={holidaySets.vacation}
+          cancelledDates={holidaySets.cancelled}
+          studyRanges={studyRanges}
+        />
+      </div>
 
-      <LessonsCalendar
+      <LessonsTemplatesWithPrint
         lessons={lessonCards}
         monthQuery={calendarQuery.toString()}
         students={yearStudents}
         editingId={editingDraft?.id}
+        rosters={lessonPrintRosters}
       />
 
-      <AttendancePoolsPanel
-        yearId={activeYear.id}
-        pools={poolViews}
-        lessons={poolLessonOptions}
-      />
+      <div className="print:hidden">
+        <AttendancePoolsPanel
+          yearId={activeYear.id}
+          pools={poolViews}
+          lessons={poolLessonOptions}
+        />
+      </div>
     </div>
   );
 }

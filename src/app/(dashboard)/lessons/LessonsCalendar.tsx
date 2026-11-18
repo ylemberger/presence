@@ -31,6 +31,9 @@ interface LessonsCalendarProps {
   monthQuery: string;
   students?: { id: string; full_name: string }[];
   editingId?: string;
+  /** Print one lesson roster (secretary / read-only friendly). */
+  onPrintRoster?: (lessonId: string) => void;
+  canPrintRoster?: (lessonId: string) => boolean;
 }
 
 export function LessonsCalendar({
@@ -38,12 +41,14 @@ export function LessonsCalendar({
   monthQuery,
   students = [],
   editingId,
+  onPrintRoster,
+  canPrintRoster,
 }: LessonsCalendarProps) {
   const { canWrite } = useAccess();
   const router = useRouter();
 
   return (
-    <section className="rounded-xl border border-outline-variant/30 bg-surface-container-lowest p-stack_md shadow-tactile-md">
+    <section className="rounded-xl border border-outline-variant/30 bg-surface-container-lowest p-stack_md shadow-tactile-md print:hidden">
       <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
         <h3 className="flex items-center gap-2 font-title-lg text-title-lg text-primary">
           <Icon name="view_agenda" className="text-secondary" />
@@ -104,36 +109,54 @@ export function LessonsCalendar({
                         : `${l.studentCount} תלמידות משויכות`}
                     </p>
                   </div>
-                  {canWrite ? (
-                    <div className="flex shrink-0 flex-col items-stretch gap-1">
-                      <Link
-                        href={`/lessons?${new URLSearchParams({
-                          ...(monthQuery
-                            ? Object.fromEntries(new URLSearchParams(monthQuery))
-                            : {}),
-                          edit: l.id,
-                        }).toString()}`}
-                        className="inline-flex items-center justify-center gap-1 rounded-lg border border-outline-variant bg-surface-container-lowest px-3 py-1.5 font-semibold text-caption text-primary hover:bg-surface-container-low"
+                  <div className="flex shrink-0 flex-col items-stretch gap-1">
+                    {onPrintRoster ? (
+                      <button
+                        type="button"
+                        disabled={canPrintRoster ? !canPrintRoster(l.id) : l.studentCount === 0}
+                        title={
+                          (canPrintRoster ? !canPrintRoster(l.id) : l.studentCount === 0)
+                            ? "אין תלמידות משויכות"
+                            : undefined
+                        }
+                        onClick={() => onPrintRoster(l.id)}
+                        className="inline-flex items-center justify-center gap-1 rounded-lg border border-outline-variant bg-surface-container-lowest px-3 py-1.5 font-semibold text-caption text-primary hover:bg-surface-container-low disabled:cursor-not-allowed disabled:opacity-50"
                       >
-                        <Icon name="edit" className="text-[16px]" />
-                        עריכה
-                      </Link>
-                      <DeleteButton
-                        label="מחק שיעור"
-                        confirmMessage="יימחקו השיעור, שיבוצי התלמידות לשיעור, המופעים והנוכחות שלהם. התלמידות עצמן לא יימחקו. להמשיך?"
-                        onDelete={async () => {
-                          const result = await deleteLessonAction(l.id);
-                          if (!result?.error && editingId === l.id) {
-                            const params = new URLSearchParams(monthQuery);
-                            params.delete("edit");
-                            const q = params.toString();
-                            router.push(q ? `/lessons?${q}` : "/lessons", { scroll: false });
-                          }
-                          return result;
-                        }}
-                      />
-                    </div>
-                  ) : null}
+                        <Icon name="print" className="text-[16px]" />
+                        הדפסת רשימה
+                      </button>
+                    ) : null}
+                    {canWrite ? (
+                      <>
+                        <Link
+                          href={`/lessons?${new URLSearchParams({
+                            ...(monthQuery
+                              ? Object.fromEntries(new URLSearchParams(monthQuery))
+                              : {}),
+                            edit: l.id,
+                          }).toString()}`}
+                          className="inline-flex items-center justify-center gap-1 rounded-lg border border-outline-variant bg-surface-container-lowest px-3 py-1.5 font-semibold text-caption text-primary hover:bg-surface-container-low"
+                        >
+                          <Icon name="edit" className="text-[16px]" />
+                          עריכה
+                        </Link>
+                        <DeleteButton
+                          label="מחק שיעור"
+                          confirmMessage="יימחקו השיעור, שיבוצי התלמידות לשיעור, המופעים והנוכחות שלהם. התלמידות עצמן לא יימחקו. להמשיך?"
+                          onDelete={async () => {
+                            const result = await deleteLessonAction(l.id);
+                            if (!result?.error && editingId === l.id) {
+                              const params = new URLSearchParams(monthQuery);
+                              params.delete("edit");
+                              const q = params.toString();
+                              router.push(q ? `/lessons?${q}` : "/lessons", { scroll: false });
+                            }
+                            return result;
+                          }}
+                        />
+                      </>
+                    ) : null}
+                  </div>
                 </div>
                 {canWrite && l.attendanceLocked ? (
                   <div className="mt-2 rounded-lg border border-outline-variant/40 bg-surface-container-lowest px-3 py-2">
