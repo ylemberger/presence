@@ -32,6 +32,7 @@ import {
   audienceForLesson,
   audienceMapFromRows,
   autoAssignStudentsToLesson,
+  closeOpenAutomaticAssignmentsForLesson,
   lessonMismatchMessage,
   refreshAutomaticLessonAssignmentsForStudent,
   refreshAutomaticAssignmentsForLesson,
@@ -1335,12 +1336,16 @@ function parsePlacementFields(formData: FormData) {
     "בתוקף מתאריך"
   );
   if (isError(startDate)) return startDate;
-  const specId = requireId(formData.get("specialization_id"), "התמחות");
-  if (isError(specId)) return specId;
+  // התמחות רשות — «ללא» = null (למשל מסלול «ללא הוראה» בלי התמחות)
+  const specRaw = String(formData.get("specialization_id") ?? "").trim();
+  const specId = specRaw || null;
   const secondarySpecId =
     String(formData.get("secondary_specialization_id") ?? "").trim() || null;
-  if (secondarySpecId && secondarySpecId === specId) {
+  if (secondarySpecId && specId && secondarySpecId === specId) {
     return { error: "התמחות נוספת חייבת להיות שונה מההתמחות הראשית" };
+  }
+  if (secondarySpecId && !specId) {
+    return { error: "אי אפשר לבחור התמחות נוספת בלי התמחות ראשית" };
   }
   const isPsychology =
     formData.get("is_psychology") === "on" || formData.get("is_psychology") === "1";
@@ -1355,6 +1360,67 @@ function parsePlacementFields(formData: FormData) {
     is_psychology: isPsychology,
     start_date: startDate,
   };
+}
+
+/**
+ * When the transfer date moves into a past window that already has closed
+ * assignment rows, shorten those rows (or remove ones wholly replaced) so the
+ * open assignment can start on the requested date without overlap.
+ */
+async function clearAssignmentWindowForTransfer(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  studentId: string,
+  yearId: string,
+  openAssignmentId: string,
+  newStart: string,
+  currentStart: string
+): Promise<{ error?: string }> {
+  if (newStart >= currentStart) return {};
+
+  const { data: earlier, error: earlierError } = await supabase
+    .from("student_assignments")
+    .select("id, start_date, end_date")
+    .eq("student_id", studentId)
+    .eq("academic_year_id", yearId)
+    .neq("id", openAssignmentId);
+  if (earlierError) {
+    return { error: hebrewDbError(earlierError, "בדיקת היסטוריית השיבוץ נכשלה") };
+  }
+
+  const dayBefore = addDaysLocal(newStart, -1);
+  for (const row of earlier ?? []) {
+    const start = String(row.start_date).slice(0, 10);
+    const end = row.end_date ? String(row.end_date).slice(0, 10) : "9999-12-31";
+    const touchesWindow = start <= currentStart && end >= newStart;
+    if (!touchesWindow) continue;
+
+    if (start >= newStart) {
+      // Entire closed segment is replaced by the corrected transfer window.
+      const { error } = await supabase.from("student_assignments").delete().eq("id", row.id);
+      if (error) {
+        return { error: hebrewDbError(error, "תיקון היסטוריית השיבוץ נכשל") };
+      }
+      continue;
+    }
+
+    // Started before newStart — keep history, end the day before the transfer.
+    if (!row.end_date || end >= newStart) {
+      if (dayBefore < start) {
+        return {
+          error:
+            "אי אפשר להקדים את תאריך ההעברה ליום הזה כי יש שיבוץ קודם שמתחיל באותו יום או אחריו.",
+        };
+      }
+      const { error } = await supabase
+        .from("student_assignments")
+        .update({ end_date: dayBefore })
+        .eq("id", row.id);
+      if (error) {
+        return { error: hebrewDbError(error, "קיצור השיבוץ הקודם נכשל") };
+      }
+    }
+  }
+  return {};
 }
 
 export async function createStudentAssignmentAction(_formData: FormData) {
@@ -1385,8 +1451,12 @@ export async function transferStudentAction(formData: FormData) {
       (currentAssignment.secondary_specialization_id ?? null) ===
         placement.secondary_specialization_id &&
       Boolean(currentAssignment.is_psychology) === placement.is_psychology;
-    if (samePlacement) {
-      return { error: "לא בוצע שינוי בשיבוץ. בחרי התמחות, כיתה או מסלול אחרים." };
+    const currentStart = String(currentAssignment.start_date).slice(0, 10);
+    if (samePlacement && placement.start_date === currentStart) {
+      return {
+        error:
+          "לא בוצע שינוי. בחרי כיתה, מסלול, התמחות (או «ללא»), פסיכולוגיה — או תאריך העברה אחר.",
+      };
     }
 
     const nextPlacement = {
@@ -1397,32 +1467,20 @@ export async function transferStudentAction(formData: FormData) {
       secondary_specialization_id: placement.secondary_specialization_id,
       is_psychology: placement.is_psychology,
     };
-    const currentStart = String(currentAssignment.start_date).slice(0, 10);
 
-    // Transfer on/before the open row's start: correct that row (past dates allowed).
-    // Moving start earlier must not overlap a closed historical assignment.
+    // Transfer on/before the open row's start: correct that row (past dates allowed),
+    // and rewrite overlapping closed history so retroactive dates stick.
     if (placement.start_date <= currentStart) {
       if (placement.start_date < currentStart) {
-        const { data: earlier, error: earlierError } = await supabase
-          .from("student_assignments")
-          .select("id, start_date, end_date")
-          .eq("student_id", placement.student_id)
-          .eq("academic_year_id", placement.academic_year_id)
-          .neq("id", currentAssignment.id);
-        if (earlierError) {
-          return { error: hebrewDbError(earlierError, "בדיקת היסטוריית השיבוץ נכשלה") };
-        }
-        const overlaps = (earlier ?? []).some((row) => {
-          const start = String(row.start_date).slice(0, 10);
-          const end = row.end_date ? String(row.end_date).slice(0, 10) : "9999-12-31";
-          return start <= currentStart && end >= placement.start_date;
-        });
-        if (overlaps) {
-          return {
-            error:
-              "אי אפשר להקדים את תאריך ההעברה כי יש שיבוץ קודם שחופף לתאריכים האלה. בחרי תאריך אחרי סיום השיבוץ הקודם.",
-          };
-        }
+        const cleared = await clearAssignmentWindowForTransfer(
+          supabase,
+          placement.student_id,
+          placement.academic_year_id,
+          currentAssignment.id,
+          placement.start_date,
+          currentStart
+        );
+        if (cleared.error) return { error: cleared.error };
       }
       const { error: updateError } = await supabase
         .from("student_assignments")
@@ -1465,7 +1523,8 @@ export async function transferStudentAction(formData: FormData) {
         is_psychology: placement.is_psychology,
       },
       placement.start_date,
-      supabase
+      supabase,
+      { clearExclusionsForMatches: true }
     );
     closedLessonIds = refresh.closedLessonIds ?? [];
   } catch (error) {
@@ -2045,9 +2104,11 @@ export async function createLessonAction(formData: FormData) {
     return { error: "יש לבחור לפחות תלמידה אחת לשיעור" };
   }
 
-  // Catalog/psychology audience gets automatic links; named-only skips that.
+  // Catalog/psychology audience gets automatic links; named-only is manual roster only.
   if (audienceKind !== "named") {
     await autoAssignStudentsToLesson(lesson.id, payload.academic_year_id, undefined, supabase);
+  } else {
+    await closeOpenAutomaticAssignmentsForLesson(lesson.id, supabase);
   }
 
   const named = await assignNamedStudentsToLesson(
@@ -2473,7 +2534,10 @@ export async function updateLessonAction(formData: FormData) {
   const oldStart = oldRange?.start_date?.slice(0, 10) ?? "";
   const rangeStartChanged = oldStart !== bounds.start;
   try {
-    if (audienceKind !== "named" && (!hasMarks || rangeStartChanged)) {
+    if (audienceKind === "named") {
+      // Drop whole-grade automatic leftovers so the count is only the named roster.
+      await closeOpenAutomaticAssignmentsForLesson(lessonId, supabase);
+    } else if (!hasMarks || rangeStartChanged) {
       await refreshAutomaticAssignmentsForLesson(lessonId, payload.academic_year_id, supabase);
     }
   } catch (e) {

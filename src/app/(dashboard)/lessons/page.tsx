@@ -11,6 +11,8 @@ import type { Lesson } from "@/types/database";
 import {
   audienceForLesson,
   audienceMapFromRows,
+  closeOpenAutomaticAssignmentsForLesson,
+  isNamedOnlyLesson,
   lessonMatchesAudienceFilter,
 } from "@/lib/lessons/autoAssign";
 import { describeAudienceScope } from "@/lib/validation";
@@ -228,13 +230,35 @@ export default async function LessonsPage({ searchParams }: Props) {
     student_id: string;
     start_date: string;
     end_date: string | null;
+    assignment_type: string;
     students: unknown;
   };
+  const namedLessonIds = new Set(
+    filteredLessons
+      .filter((l) => {
+        const aud = audienceForLesson(l, audienceByLesson);
+        return isNamedOnlyLesson({ ...l, audience: aud });
+      })
+      .map((l) => l.id)
+  );
+  // Repair: named-only must not keep whole-grade automatic links from an earlier sync.
+  if (namedLessonIds.size > 0) {
+    await Promise.all(
+      [...namedLessonIds].map(async (id) => {
+        try {
+          await closeOpenAutomaticAssignmentsForLesson(id, supabase);
+        } catch {
+          /* count/print still ignore automatic rows below */
+        }
+      })
+    );
+  }
   const [slaRows, exclusionRows, schoolBounds] = await Promise.all([
     fetchAssignmentsByLessons<SlaPrintRow>(
       supabase,
       filteredIds,
-      "lesson_id, student_id, start_date, end_date, students(id, full_name, first_name, last_name, is_active)"
+      "lesson_id, student_id, start_date, end_date, assignment_type, students(id, full_name, first_name, last_name, is_active)",
+      true
     ),
     filteredIds.length > 0
       ? Promise.all(
@@ -273,6 +297,8 @@ export default async function LessonsPage({ searchParams }: Props) {
   >();
   for (const row of slaRows) {
     if (excludedPairs.has(`${row.lesson_id}::${row.student_id}`)) continue;
+    // Named-only roster is the manual list — ignore leftover automatic whole-grade links.
+    if (namedLessonIds.has(row.lesson_id) && row.assignment_type !== "manual") continue;
     const embedded = embedOne<{
       id: string;
       full_name: string;
@@ -418,26 +444,35 @@ export default async function LessonsPage({ searchParams }: Props) {
     const assignment = one<{ teacher_id: string; teachers?: unknown }>(l.teacher_teaching_assignments);
     const teacherName = one<{ full_name: string }>(assignment?.teachers)?.full_name ?? "";
     const audience = audienceForLesson(l, audienceByLesson);
+    const namedOnly = namedLessonIds.has(l.id);
     const gradeNames =
       audience.grade_ids.length > 0
         ? audience.grade_ids
             .map((id) => gradeById.get(id))
             .filter((n): n is string => Boolean(n))
-        : [gradeById.get(l.grade_id)].filter((n): n is string => Boolean(n));
-    const audienceLabel = describeAudienceScope({
-      billing_type: l.billing_type,
-      gradeNames,
-      classNames: audience.class_ids.map((id) => classById.get(id)).filter((n): n is string => Boolean(n)),
-      trackNames: audience.track_ids.map((id) => trackById.get(id)).filter((n): n is string => Boolean(n)),
-      specializationNames: audience.specialization_ids
-        .map((id) => specById.get(id))
-        .filter((n): n is string => Boolean(n)),
-      forPsychology: l.for_psychology,
-      wholeGrade:
-        audience.class_ids.length === 0 &&
-        audience.track_ids.length === 0 &&
-        audience.specialization_ids.length === 0,
-    });
+        : namedOnly
+          ? []
+          : [gradeById.get(l.grade_id)].filter((n): n is string => Boolean(n));
+    const audienceLabel = namedOnly
+      ? "תלמידות בשם"
+      : describeAudienceScope({
+          billing_type: l.billing_type,
+          gradeNames,
+          classNames: audience.class_ids
+            .map((id) => classById.get(id))
+            .filter((n): n is string => Boolean(n)),
+          trackNames: audience.track_ids
+            .map((id) => trackById.get(id))
+            .filter((n): n is string => Boolean(n)),
+          specializationNames: audience.specialization_ids
+            .map((id) => specById.get(id))
+            .filter((n): n is string => Boolean(n)),
+          forPsychology: l.for_psychology,
+          wholeGrade:
+            audience.class_ids.length === 0 &&
+            audience.track_ids.length === 0 &&
+            audience.specialization_ids.length === 0,
+        });
     return {
       ...l,
       subject: l.subject,

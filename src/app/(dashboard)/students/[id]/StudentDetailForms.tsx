@@ -95,8 +95,12 @@ export function StudentDetailForms({ studentId, yearData, current }: Props) {
     const form = e.currentTarget;
     setError(null);
     setSaved(false);
-    if (!gradeId || !classId || !trackId || !specId) {
-      setError("יש לבחור שכבה, כיתה, מסלול והתמחות");
+    if (!gradeId || !classId || !trackId) {
+      setError("יש לבחור שכבה, כיתה ומסלול");
+      return;
+    }
+    if (secondarySpecId && !specId) {
+      setError("אי אפשר לבחור התמחות נוספת בלי התמחות ראשית");
       return;
     }
     const fd = new FormData(form);
@@ -104,7 +108,7 @@ export function StudentDetailForms({ studentId, yearData, current }: Props) {
     const today = todayIso();
     if (transferDate && transferDate < today) {
       const ok = window.confirm(
-        `תאריך ההעברה (${transferDate}) לפני היום. שיעורים אוטומטיים שלא מתאימים לשיבוץ החדש ייסגרו מתאריך זה, וסימוני נוכחות שלה בשיעורים האלה מתאריך ההעברה ואילך יימחקו (רשימות, הדפסה ודוחות). להמשיך?`
+        `תאריך ההעברה (${transferDate}) לפני היום. שיעורים אוטומטיים שלא מתאימים לשיבוץ החדש ייסגרו מתאריך זה, וסימוני נוכחות שלה בשיעורים האלה מתאריך ההעברה ואילך יימחקו (רשימות, הדפסה ודוחות). שיעורים שמתאימים לשיבוץ החדש ישויכו אוטומטית. להמשיך?`
       );
       if (!ok) return;
     }
@@ -139,9 +143,10 @@ export function StudentDetailForms({ studentId, yearData, current }: Props) {
   return (
     <div>
       <p className="mb-3 font-caption text-caption text-on-surface-variant">
-        שינוי כיתה/מסלול/התמחות/פסיכולוגיה נעשה רק בהעברה. אפשר גם תאריך בעבר. שיעורים
-        אוטומטיים שלא מתאימים לשיבוץ החדש נסגרים מתאריך ההעברה, וסימוני נוכחות שלה בשיעורים
-        האלה מתאריך זה ואילך נמחקים (רשימות, הדפסה ודוחות). שיוך ידני לשיעור לא נסגר בהעברה.
+        שינוי כיתה/מסלול/התמחות/פסיכולוגיה נעשה רק בהעברה. אפשר תאריך בעבר (גם לתיקון
+        העברה שכבר נעשתה). שיעורים אוטומטיים של ההתמחות/הכיתה החדשה משויכים מתאריך ההעברה;
+        שיעורים שלא מתאימים נסגרים, וסימונים בהם מתאריך זה ואילך נמחקים. שיוך ידני לא נסגר.
+        התמחות אפשר להשאיר «ללא».
       </p>
       <form onSubmit={handleTransfer} className="flex flex-col gap-3">
         <HebrewDateInput
@@ -195,14 +200,14 @@ export function StudentDetailForms({ studentId, yearData, current }: Props) {
           <Combobox
             label="התמחות"
             name="specialization_id"
-            required
             value={specId}
             onChange={(v) => {
               setSaved(false);
               setSpecId(v);
+              if (!v) setSecondarySpecId("");
             }}
             options={yearData.specializations.map((s) => ({ value: s.id, label: s.name }))}
-            emptyLabel={yearData.specializations.length ? "בחרי" : "אין התמחויות בהגדרות"}
+            emptyLabel={yearData.specializations.length ? "ללא" : "אין התמחויות בהגדרות"}
           />
           <Combobox
             label="התמחות נוספת"

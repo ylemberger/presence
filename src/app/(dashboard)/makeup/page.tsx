@@ -15,6 +15,7 @@ import { formatSubjectLessonLabel } from "@/lib/lessons/subject-label";
 import { fetchAttendancePools, calcUnitForLesson } from "@/lib/attendance/pools";
 import { embeddedTeacher } from "@/lib/supabase/embed";
 import { fetchAllPages } from "@/lib/supabase/paged";
+import { audienceForLesson, audienceMapFromRows } from "@/lib/lessons/autoAssign";
 import { MakeupForms } from "./MakeupForms";
 import { MakeupFilters, type MakeupFilterStatus } from "./MakeupFilters";
 import { Icon } from "@/components/ui/Icon";
@@ -63,6 +64,7 @@ export default async function MakeupPage({ searchParams }: Props) {
     { data: specializations },
     { data: teachers },
     { data: lessons },
+    { data: audienceRows },
     { data: placements },
     { data: lessonLinks },
     { data: occurrences },
@@ -103,6 +105,18 @@ export default async function MakeupPage({ searchParams }: Props) {
       )
       .eq("academic_year_id", activeYear.id)
       .order("subject"),
+    fetchAllPages<{
+      lesson_id: string;
+      grade_id: string | null;
+      class_id: string | null;
+      track_id: string | null;
+      specialization_id: string | null;
+    }>((from, to) =>
+      supabase
+        .from("lesson_audience")
+        .select("lesson_id, grade_id, class_id, track_id, specialization_id")
+        .range(from, to)
+    ).then((data) => ({ data })),
     supabase
       .from("student_assignments")
       .select("student_id, start_date, end_date")
@@ -129,6 +143,7 @@ export default async function MakeupPage({ searchParams }: Props) {
   ]);
 
   const poolCatalog = await fetchAttendancePools(supabase, activeYear.id);
+  const audienceMap = audienceMapFromRows(audienceRows ?? []);
 
   function parentName(lesson: {
     subject: string;
@@ -139,6 +154,15 @@ export default async function MakeupPage({ searchParams }: Props) {
     return (name ?? "").trim() || lesson.subject;
   }
 
+  function lessonAudienceIds(lesson: {
+    id: string;
+    class_id: string | null;
+    track_id: string | null;
+    specialization_id: string | null;
+  }) {
+    return audienceForLesson(lesson, audienceMap);
+  }
+
   const suggestions: Array<{
     studentId: string;
     studentName: string;
@@ -147,6 +171,9 @@ export default async function MakeupPage({ searchParams }: Props) {
     classId: string | null;
     trackId: string | null;
     specializationId: string | null;
+    specializationIds: string[];
+    classIds: string[];
+    trackIds: string[];
     teacherId: string | null;
     absencePercent: number;
     maxAllowed: number;
@@ -250,14 +277,24 @@ export default async function MakeupPage({ searchParams }: Props) {
     const lesson = g.lessonsInGroup[0];
     const unit = calcUnitForLesson(lesson.id, poolCatalog.byLesson);
     const names = g.lessonsInGroup.map((l) => parentName(l));
+    const audience = lessonAudienceIds({
+      id: lesson.id,
+      class_id: (lesson as unknown as { class_id: string | null }).class_id ?? null,
+      track_id: (lesson as unknown as { track_id: string | null }).track_id ?? null,
+      specialization_id:
+        (lesson as unknown as { specialization_id: string | null }).specialization_id ?? null,
+    });
     suggestions.push({
       studentId: g.studentId,
       studentName: studentName.get(g.studentId) ?? "תלמידה",
       lessonId: lesson.id,
       subject: unit.poolName || [...new Set(names)].join(" · "),
-      classId: (lesson as unknown as { class_id: string | null }).class_id ?? null,
-      trackId: (lesson as unknown as { track_id: string | null }).track_id ?? null,
-      specializationId: (lesson as unknown as { specialization_id: string | null }).specialization_id ?? null,
+      classId: audience.class_ids[0] ?? null,
+      trackId: audience.track_ids[0] ?? null,
+      specializationId: audience.specialization_ids[0] ?? null,
+      specializationIds: audience.specialization_ids,
+      classIds: audience.class_ids,
+      trackIds: audience.track_ids,
       teacherId: embeddedTeacher(
         (lesson as unknown as { teacher_teaching_assignments?: unknown }).teacher_teaching_assignments
       )?.id ?? null,
@@ -280,9 +317,25 @@ export default async function MakeupPage({ searchParams }: Props) {
   function matchSuggestion(s: (typeof suggestions)[number]) {
     if (!matchesChetz(s.studentId)) return false;
     if (params.studentId && s.studentId !== params.studentId) return false;
-    if (params.classId && s.classId !== params.classId) return false;
-    if (params.trackId && s.trackId !== params.trackId) return false;
-    if (params.specializationId && s.specializationId !== params.specializationId) return false;
+    if (params.classId) {
+      if (s.classIds.length > 0 ? !s.classIds.includes(params.classId) : s.classId !== params.classId) {
+        return false;
+      }
+    }
+    if (params.trackId) {
+      if (s.trackIds.length > 0 ? !s.trackIds.includes(params.trackId) : s.trackId !== params.trackId) {
+        return false;
+      }
+    }
+    if (params.specializationId) {
+      if (
+        s.specializationIds.length > 0
+          ? !s.specializationIds.includes(params.specializationId)
+          : s.specializationId !== params.specializationId
+      ) {
+        return false;
+      }
+    }
     if (params.teacherId && s.teacherId !== params.teacherId) return false;
     if (params.subject && s.subject !== params.subject) return false;
     return true;
@@ -320,13 +373,37 @@ export default async function MakeupPage({ searchParams }: Props) {
 
     if (!matchesChetz(row.student_id)) return false;
     if (params.studentId && row.student_id !== params.studentId) return false;
-    if (params.classId && (lesson?.class_id ?? null) !== params.classId) return false;
-    if (params.trackId && (lesson?.track_id ?? null) !== params.trackId) return false;
-    if (
-      params.specializationId &&
-      (lesson?.specialization_id ?? null) !== params.specializationId
-    )
-      return false;
+    const lessonId = String(row.lesson_id ?? "");
+    const existingAudience = lessonId
+      ? lessonAudienceIds({
+          id: lessonId,
+          class_id: lesson?.class_id ?? null,
+          track_id: lesson?.track_id ?? null,
+          specialization_id: lesson?.specialization_id ?? null,
+        })
+      : null;
+    if (params.classId) {
+      const ids = existingAudience?.class_ids ?? [];
+      if (ids.length > 0 ? !ids.includes(params.classId) : (lesson?.class_id ?? null) !== params.classId) {
+        return false;
+      }
+    }
+    if (params.trackId) {
+      const ids = existingAudience?.track_ids ?? [];
+      if (ids.length > 0 ? !ids.includes(params.trackId) : (lesson?.track_id ?? null) !== params.trackId) {
+        return false;
+      }
+    }
+    if (params.specializationId) {
+      const ids = existingAudience?.specialization_ids ?? [];
+      if (
+        ids.length > 0
+          ? !ids.includes(params.specializationId)
+          : (lesson?.specialization_id ?? null) !== params.specializationId
+      ) {
+        return false;
+      }
+    }
     if (params.teacherId) {
       const teacherId = embeddedTeacher(lesson?.teacher_teaching_assignments)?.id ?? null;
       if (teacherId !== params.teacherId) return false;

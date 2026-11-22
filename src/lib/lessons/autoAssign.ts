@@ -58,9 +58,56 @@ function audienceOf(lesson: LessonScope): LessonAudienceIds {
 }
 
 /**
+ * Named-only lesson: no catalog audience (no grade / class / track / specialization).
+ * Roster comes only from manual named assignments — never from auto-match.
+ */
+export function isNamedOnlyLesson(
+  lesson: {
+    grade_id?: string | null;
+    class_id?: string | null;
+    track_id?: string | null;
+    specialization_id?: string | null;
+    for_psychology?: boolean | null;
+    audience?: LessonAudienceIds;
+  },
+  audienceRows?: AudienceRow[]
+): boolean {
+  if (lesson.for_psychology) return false;
+  const audience = lesson.audience
+    ? audienceOf(lesson as LessonScope)
+    : audienceRows
+      ? audienceForLesson(
+          {
+            id: "x",
+            grade_id: lesson.grade_id,
+            class_id: lesson.class_id ?? null,
+            track_id: lesson.track_id ?? null,
+            specialization_id: lesson.specialization_id ?? null,
+          },
+          audienceMapFromRows(audienceRows)
+        )
+      : audienceOf({
+          id: "x",
+          class_id: lesson.class_id ?? null,
+          track_id: lesson.track_id ?? null,
+          specialization_id: lesson.specialization_id ?? null,
+          billing_type: "mandatory",
+          grade_id: lesson.grade_id ?? "",
+          for_psychology: false,
+        });
+  return (
+    audience.grade_ids.length === 0 &&
+    audience.class_ids.length === 0 &&
+    audience.track_ids.length === 0 &&
+    audience.specialization_ids.length === 0
+  );
+}
+
+/**
  * Match: student must be in one of the lesson grades.
  * Then AND across dimensions that have targets (class / track / specialization).
  * Within a dimension, any of the selected values matches (OR).
+ * Empty catalog audience (named-only) never auto-matches.
  */
 export function studentMatchesLesson(placement: Placement, lesson: LessonScope): boolean {
   const audience = audienceOf(lesson);
@@ -71,17 +118,25 @@ export function studentMatchesLesson(placement: Placement, lesson: LessonScope):
         ? [lesson.grade_id]
         : [];
 
-  if (gradeIds.length > 0 && !gradeIds.includes(placement.grade_id)) {
-    return false;
-  }
-
   if (lesson.for_psychology) {
+    if (gradeIds.length > 0 && !gradeIds.includes(placement.grade_id)) {
+      return false;
+    }
     return Boolean(placement.is_psychology);
   }
 
   const hasClass = audience.class_ids.length > 0;
   const hasTrack = audience.track_ids.length > 0;
   const hasSpec = audience.specialization_ids.length > 0;
+
+  // Named-only / no catalog scope: never auto-assign (manual roster only).
+  if (gradeIds.length === 0 && !hasClass && !hasTrack && !hasSpec) {
+    return false;
+  }
+
+  if (gradeIds.length > 0 && !gradeIds.includes(placement.grade_id)) {
+    return false;
+  }
 
   if (!hasClass && !hasTrack && !hasSpec) {
     return true;
@@ -272,6 +327,51 @@ async function excludedLessonIdsForStudent(
   return new Set((data ?? []).map((row) => row.lesson_id));
 }
 
+/** Close open automatic links (named-only lessons / leftover whole-grade sync). */
+export async function closeOpenAutomaticAssignmentsForLesson(
+  lessonId: string,
+  db?: Supabase
+): Promise<{ closed: number }> {
+  const supabase = await dbOf(db);
+  const openAutomatic = await fetchAllPages<{
+    id: string;
+    start_date: string;
+  }>((from, to) =>
+    supabase
+      .from("student_lesson_assignments")
+      .select("id, start_date")
+      .eq("lesson_id", lessonId)
+      .eq("assignment_type", "automatic")
+      .is("end_date", null)
+      .range(from, to)
+  );
+  if (openAutomatic.length === 0) return { closed: 0 };
+
+  const today = todayIso();
+  const yesterday = addDays(today, -1);
+  let closed = 0;
+  for (const row of openAutomatic) {
+    const start = row.start_date.slice(0, 10);
+    if (start >= today) {
+      const { error } = await supabase
+        .from("student_lesson_assignments")
+        .delete()
+        .eq("id", row.id);
+      if (error) throw new Error(hebrewDbError(error, "סגירת שיוך אוטומטי נכשלה"));
+      closed += 1;
+      continue;
+    }
+    const endDate = start > yesterday ? start : yesterday;
+    const { error } = await supabase
+      .from("student_lesson_assignments")
+      .update({ end_date: endDate })
+      .eq("id", row.id);
+    if (error) throw new Error(hebrewDbError(error, "סגירת שיוך אוטומטי נכשלה"));
+    closed += 1;
+  }
+  return { closed };
+}
+
 export async function autoAssignStudentsToLesson(
   lessonId: string,
   academicYearId: string,
@@ -326,7 +426,17 @@ export async function autoAssignStudentsToLesson(
       .eq("lesson_id", lessonId),
   ]);
 
-  if (!lesson) return { assigned: 0 };
+  if (!lesson) return { assigned: 0, backfilled: 0 };
+
+  const scoped = withAudience(
+    { ...lesson, for_psychology: Boolean(lesson.for_psychology) },
+    audience ?? []
+  );
+  // Named-only: never auto-assign; drop leftover automatic links from an earlier whole-grade sync.
+  if (isNamedOnlyLesson(scoped, audience ?? [])) {
+    const closed = await closeOpenAutomaticAssignmentsForLesson(lessonId, supabase);
+    return { assigned: 0, backfilled: 0, closed: closed.closed };
+  }
 
   const rawRange = lesson.activity_ranges as unknown;
   const range = (Array.isArray(rawRange) ? rawRange[0] : rawRange) as {
@@ -334,8 +444,6 @@ export async function autoAssignStudentsToLesson(
   } | null;
   const effectiveFrom =
     toIsoDay(startDate || range?.start_date) || todayIso();
-
-  const scoped = withAudience(lesson, audience ?? []);
 
   const already = new Set(existingLinks.map((r) => r.student_id));
   const rows = placements
@@ -380,6 +488,10 @@ export async function refreshAutomaticAssignmentsForLesson(
 ) {
   const supabase = await dbOf(db);
   const result = await autoAssignStudentsToLesson(lessonId, academicYearId, undefined, supabase);
+  if ("closed" in result && typeof result.closed === "number" && result.closed > 0) {
+    // Named-only path already closed leftover automatic links.
+    return { assigned: result.assigned, backfilled: result.backfilled, closed: result.closed };
+  }
 
   const [{ data: lesson }, placements, existingLinks, { data: audience }] = await Promise.all([
     supabase
@@ -427,7 +539,10 @@ export async function refreshAutomaticAssignmentsForLesson(
 
   if (!lesson) return { ...result, closed: 0 };
 
-  const scoped = withAudience(lesson, audience ?? []);
+  const scoped = withAudience(
+    { ...lesson, for_psychology: Boolean(lesson.for_psychology) },
+    audience ?? []
+  );
   const matching = new Set(
     placements
       .filter((p) => studentMatchesLesson(placementFromRow(p), scoped))
@@ -483,11 +598,12 @@ export async function refreshAutomaticLessonAssignmentsForStudent(
   academicYearId: string,
   placement: Placement,
   effectiveFrom: string,
-  db?: Supabase
+  db?: Supabase,
+  options?: { clearExclusionsForMatches?: boolean }
 ) {
   const supabase = await dbOf(db);
   const closeDate = addDays(effectiveFrom, -1);
-  const excludedLessons = await excludedLessonIdsForStudent(supabase, studentId);
+  let excludedLessons = await excludedLessonIdsForStudent(supabase, studentId);
 
   const [openLinks, lessons, audience] = await Promise.all([
     loadAllRows<{
@@ -527,14 +643,34 @@ export async function refreshAutomaticLessonAssignmentsForStudent(
     ),
   ]);
 
+  const matchIds = lessons
+    .map((lesson) =>
+      withAudience({ ...lesson, for_psychology: Boolean(lesson.for_psychology) }, audience)
+    )
+    .filter((lesson) => studentMatchesLesson(placement, lesson))
+    .map((lesson) => lesson.id);
+
+  // On transfer: drop exclusions for lessons that now match so specialization
+  // lessons open automatically (manual «הסר שיוך» still blocks until transfer).
+  if (options?.clearExclusionsForMatches && excludedLessons.size > 0 && matchIds.length > 0) {
+    const toClear = matchIds.filter((id) => excludedLessons.has(id));
+    if (toClear.length > 0) {
+      const { error: clearError } = await supabase
+        .from("student_lesson_exclusions")
+        .delete()
+        .eq("student_id", studentId)
+        .in("lesson_id", toClear);
+      if (clearError && !isMissingExclusionTable(clearError)) {
+        throw new Error(hebrewDbError(clearError, "הסרת החרגות לשיעורים החדשים נכשלה"));
+      }
+      excludedLessons = new Set(
+        [...excludedLessons].filter((id) => !toClear.includes(id))
+      );
+    }
+  }
+
   const matching = new Set(
-    lessons
-      .map((lesson) =>
-        withAudience({ ...lesson, for_psychology: Boolean(lesson.for_psychology) }, audience)
-      )
-      .filter((lesson) => !excludedLessons.has(lesson.id))
-      .filter((lesson) => studentMatchesLesson(placement, lesson))
-      .map((lesson) => lesson.id)
+    matchIds.filter((id) => !excludedLessons.has(id))
   );
 
   const toClose = openLinks.filter(
@@ -569,23 +705,95 @@ export async function refreshAutomaticLessonAssignmentsForStudent(
     if (error) throw new Error(hebrewDbError(error, "עדכון תאריך השיוך לשיעור נכשל"));
   }
 
-  const rows = [...matching]
-    .filter((lessonId) => !stillOpen.has(lessonId))
-    .map((lessonId) => ({
-      student_id: studentId,
-      lesson_id: lessonId,
-      assignment_type: "automatic" as const,
-      start_date: effectiveFrom,
-      end_date: null,
-    }));
+  const needAssign = [...matching].filter((lessonId) => !stillOpen.has(lessonId));
+  let assigned = 0;
 
-  if (rows.length > 0) {
-    const { error } = await supabase.from("student_lesson_assignments").insert(rows);
-    if (error) throw new Error(hebrewDbError(error, "שיוך השיעורים החדשים נכשל"));
+  if (needAssign.length > 0) {
+    // Re-open closed automatic rows that would overlap the new window (common after
+    // transfer / retroactive date fix), instead of inserting a second overlapping row.
+    const closedForLessons = await loadAllRows<{
+      id: string;
+      lesson_id: string;
+      start_date: string;
+      end_date: string | null;
+      assignment_type: string;
+    }>((from, to) =>
+      supabase
+        .from("student_lesson_assignments")
+        .select("id, lesson_id, start_date, end_date, assignment_type")
+        .eq("student_id", studentId)
+        .in("lesson_id", needAssign)
+        .not("end_date", "is", null)
+        .gte("end_date", effectiveFrom)
+        .range(from, to)
+    );
+
+    const reopenByLesson = new Map<string, (typeof closedForLessons)[number]>();
+    for (const row of closedForLessons) {
+      if (row.assignment_type !== "automatic") continue;
+      const prev = reopenByLesson.get(row.lesson_id);
+      if (!prev || String(row.end_date) > String(prev.end_date)) {
+        reopenByLesson.set(row.lesson_id, row);
+      }
+    }
+
+    const reopenedIds = new Set<string>();
+    for (const [lessonId, row] of reopenByLesson) {
+      const start = String(row.start_date).slice(0, 10);
+      const nextStart = start < effectiveFrom ? start : effectiveFrom;
+      const { error } = await supabase
+        .from("student_lesson_assignments")
+        .update({ end_date: null, start_date: nextStart, assignment_type: "automatic" })
+        .eq("id", row.id);
+      if (error) throw new Error(hebrewDbError(error, "פתיחה מחדש של שיוך השיעור נכשלה"));
+      assigned += 1;
+      stillOpen.add(lessonId);
+      reopenedIds.add(row.id);
+    }
+
+    // Shorten other closed rows that would still overlap the new open window.
+    for (const row of closedForLessons) {
+      if (reopenedIds.has(row.id)) continue;
+      if (!needAssign.includes(row.lesson_id)) continue;
+      const start = String(row.start_date).slice(0, 10);
+      if (start > closeDate) {
+        const { error } = await supabase
+          .from("student_lesson_assignments")
+          .delete()
+          .eq("id", row.id);
+        if (error) {
+          throw new Error(hebrewDbError(error, "ניקוי שיוך שיעור חופף נכשל"));
+        }
+        continue;
+      }
+      const { error } = await supabase
+        .from("student_lesson_assignments")
+        .update({ end_date: closeDate })
+        .eq("id", row.id);
+      if (error) {
+        throw new Error(hebrewDbError(error, "קיצור שיוך שיעור קודם נכשל"));
+      }
+    }
+
+    const rows = needAssign
+      .filter((lessonId) => !stillOpen.has(lessonId))
+      .map((lessonId) => ({
+        student_id: studentId,
+        lesson_id: lessonId,
+        assignment_type: "automatic" as const,
+        start_date: effectiveFrom,
+        end_date: null,
+      }));
+
+    if (rows.length > 0) {
+      const { error } = await supabase.from("student_lesson_assignments").insert(rows);
+      if (error) throw new Error(hebrewDbError(error, "שיוך השיעורים החדשים נכשל"));
+      assigned += rows.length;
+    }
   }
 
   return {
-    assigned: rows.length,
+    assigned,
     closed: toClose.length,
     closedLessonIds,
   };

@@ -20,7 +20,7 @@ export function hebrewDbError(error: DbErrorLike, fallback: string): string {
   const looksGarbled = geresh >= 4 && geresh >= hebrewLetters;
   if (/[\u0590-\u05FF]/.test(original) && !looksGarbled) return original;
   if (looksGarbled) {
-    return "לתלמידה כבר יש שיבוץ בטווח התאריכים הזה. בחרי תאריך העברה אחרי תחילת השיבוץ הנוכחי.";
+    return "לתלמידה כבר יש שיבוץ בטווח התאריכים הזה. בחרי תאריך אחרי סיום השיבוץ הקודם, או תקני את תאריך ההעברה של השיבוץ הפתוח.";
   }
 
   const msg = blob(error);
@@ -66,7 +66,7 @@ export function hebrewDbError(error: DbErrorLike, fallback: string): string {
   }
 
   if (msg.includes("overlap") || msg.includes("חפיפ") || msg.includes("check_student_assignment")) {
-    return "לתלמידה כבר יש שיבוץ בטווח התאריכים הזה. בחרי תאריך העברה אחרי תחילת השיבוץ הנוכחי.";
+    return "לתלמידה כבר יש שיבוץ בטווח התאריכים הזה. בחרי תאריך אחרי סיום השיבוץ הקודם, או תקני את תאריך ההעברה של השיבוץ הפתוח.";
   }
 
   if (code === "23514" || msg.includes("check constraint")) {
