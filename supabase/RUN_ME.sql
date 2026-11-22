@@ -537,7 +537,7 @@ alter table lessons drop constraint if exists lessons_period_span_check;
 alter table lessons add constraint lessons_period_span_check
   check (
     (lesson_number between 1 and 13 and lesson_number + period_count - 1 between 1 and 13)
-    or (lesson_number = 14 and period_count = 1)
+    or (lesson_number = 14 and period_count between 1 and 6)
   );
 
 do $$
@@ -559,7 +559,7 @@ begin
       add constraint lesson_weekly_slots_period_span_check
       check (
         (lesson_number between 1 and 13 and lesson_number + period_count - 1 between 1 and 13)
-        or (lesson_number = 14 and period_count = 1)
+        or (lesson_number = 14 and period_count between 1 and 6)
       );
   end if;
 end $$;
@@ -839,7 +839,7 @@ end $$;
 
 alter table lesson_occurrences drop constraint if exists lesson_occurrences_hour_check;
 alter table lesson_occurrences
-  add constraint lesson_occurrences_hour_check check (lesson_number between 1 and 14);
+  add constraint lesson_occurrences_hour_check check (lesson_number between 1 and 19);
 
 alter table lesson_occurrences alter column lesson_number set not null;
 

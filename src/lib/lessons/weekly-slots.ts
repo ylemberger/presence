@@ -1,7 +1,10 @@
 import { DAY_OF_WEEK_LABELS } from "@/lib/constants";
 import {
+  AFTERNOON_LESSON_NUMBER,
   formatLessonHours,
   isAfternoonLesson,
+  isAfternoonStart,
+  MAX_AFTERNOON_PERIODS,
   MAX_LESSON_NUMBER,
   MAX_NUMBERED_LESSON,
 } from "@/lib/lessons/hours";
@@ -32,23 +35,44 @@ export function normalizeWeeklySlots(
   for (const slot of slots) {
     const dayOfWeek = Number(slot.dayOfWeek);
     const lessonNumber = Number(slot.lessonNumber);
-    const rawCount = Number(slot.periodCount || 1);
-    const afternoon = isAfternoonLesson(lessonNumber);
-    const periodCount = afternoon ? 1 : rawCount;
+    const periodCount = Number(slot.periodCount || 1);
+    const afternoon = isAfternoonStart(lessonNumber) || isAfternoonLesson(lessonNumber);
 
     if (!Number.isInteger(dayOfWeek) || dayOfWeek < 0 || dayOfWeek > 6) {
       return { error: "יום בשבוע לא תקין באחד המפגשים" };
     }
+    if (afternoon && !isAfternoonStart(lessonNumber)) {
+      return {
+        error: `«${formatLessonHours(AFTERNOON_LESSON_NUMBER, 1)}» מתחילה תמיד בשעת ההתחלה של אחר הצהריים, לא בשעה פנימית של הבלוק.`,
+      };
+    }
     if (
       !Number.isInteger(lessonNumber) ||
       lessonNumber < 1 ||
-      lessonNumber > MAX_LESSON_NUMBER
+      (afternoon
+        ? lessonNumber !== AFTERNOON_LESSON_NUMBER
+        : lessonNumber > MAX_NUMBERED_LESSON)
     ) {
       return {
         error: `שעת התחלה חייבת להיות שיעור 1–${MAX_NUMBERED_LESSON}, או «אחרי צהריים»`,
       };
     }
-    if (!afternoon) {
+    if (afternoon) {
+      if (
+        !Number.isInteger(periodCount) ||
+        periodCount < 1 ||
+        periodCount > MAX_AFTERNOON_PERIODS
+      ) {
+        return {
+          error: `מספר שעות אחר הצהריים חייב להיות בין 1 ל-${MAX_AFTERNOON_PERIODS}`,
+        };
+      }
+      if (AFTERNOON_LESSON_NUMBER + periodCount - 1 > MAX_LESSON_NUMBER) {
+        return {
+          error: `מספר שעות אחר הצהריים חורג מהמותר (עד ${MAX_AFTERNOON_PERIODS}).`,
+        };
+      }
+    } else {
       if (
         !Number.isInteger(periodCount) ||
         periodCount < 1 ||

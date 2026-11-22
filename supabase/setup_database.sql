@@ -161,7 +161,7 @@ create table lessons (
   constraint lessons_period_count_check check (period_count between 1 and 13),
   constraint lessons_period_span_check check (
     (lesson_number between 1 and 13 and lesson_number + period_count - 1 between 1 and 13)
-    or (lesson_number = 14 and period_count = 1)
+    or (lesson_number = 14 and period_count between 1 and 6)
   ),
   repeat_every_weeks smallint not null default 1 check (repeat_every_weeks in (1, 2)),
   activity_range_id uuid references activity_ranges(id) on delete cascade,
@@ -179,7 +179,7 @@ create table lesson_weekly_slots (
   constraint lesson_weekly_slots_period_count_check check (period_count between 1 and 13),
   constraint lesson_weekly_slots_period_span_check check (
     (lesson_number between 1 and 13 and lesson_number + period_count - 1 between 1 and 13)
-    or (lesson_number = 14 and period_count = 1)
+    or (lesson_number = 14 and period_count between 1 and 6)
   ),
   unique (lesson_id, day_of_week)
 );
@@ -206,7 +206,7 @@ create table lesson_occurrences (
   lesson_number integer not null,
   status text check (status in ('scheduled', 'completed', 'cancelled')) default 'scheduled',
   notes text,
-  constraint lesson_occurrences_hour_check check (lesson_number between 1 and 14),
+  constraint lesson_occurrences_hour_check check (lesson_number between 1 and 19),
   unique (lesson_id, occurrence_date, lesson_number)
 );
 

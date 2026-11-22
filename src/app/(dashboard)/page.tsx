@@ -420,7 +420,9 @@ export default async function DashboardPage() {
                     const progress =
                       lesson.total > 0 ? Math.round((lesson.marked / lesson.total) * 100) : 0;
                     const label = isAfternoonLesson(lesson.lessonNumber)
-                      ? "אחה״צ"
+                      ? lesson.lessonNumber === 14
+                        ? "אחה״צ"
+                        : `אחה״צ ${Number(lesson.lessonNumber) - 13}`
                       : (HEBREW_LESSON_LABEL[(lesson.lessonNumber ?? 1) - 1] ??
                         String(lesson.lessonNumber ?? "?"));
                     return (

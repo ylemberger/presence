@@ -12,6 +12,7 @@ import {
   formatLessonHours,
   isAfternoonLesson,
   lessonHourSelectOptions,
+  MAX_AFTERNOON_PERIODS,
   MAX_NUMBERED_LESSON,
 } from "@/lib/lessons/hours";
 import {
@@ -791,27 +792,20 @@ export function LessonsForm({
                 onChange={(e) => {
                   const lessonNumber = Number(e.target.value);
                   setWeeklySlots((prev) =>
-                    prev.map((s, i) =>
-                      i === index
-                        ? {
-                            ...s,
-                            lessonNumber,
-                            periodCount: isAfternoonLesson(lessonNumber) ? 1 : s.periodCount,
-                          }
-                        : s
-                    )
+                    prev.map((s, i) => {
+                      if (i !== index) return s;
+                      const afternoon = isAfternoonLesson(lessonNumber);
+                      const maxPeriods = afternoon ? MAX_AFTERNOON_PERIODS : MAX_NUMBERED_LESSON;
+                      return {
+                        ...s,
+                        lessonNumber,
+                        periodCount: Math.min(Math.max(1, s.periodCount), maxPeriods),
+                      };
+                    })
                   );
                 }}
                 options={lessonHourSelectOptions()}
               />
-              {isAfternoonLesson(slot.lessonNumber) ? (
-                <div className="flex items-end">
-                  <input type="hidden" name="slot_period_count" value="1" />
-                  <p className="pb-2 font-body-md text-body-md text-on-surface-variant">
-                    בלוק אחד בסוף היום, בלי מספר שעות רצופות.
-                  </p>
-                </div>
-              ) : (
               <div>
               <Select
                 fieldSize="lg"
@@ -826,16 +820,24 @@ export function LessonsForm({
                     prev.map((s, i) => (i === index ? { ...s, periodCount } : s))
                   );
                 }}
-                options={Array.from({ length: MAX_NUMBERED_LESSON }, (_, i) => ({
-                  value: String(i + 1),
-                  label: i === 0 ? "שעה אחת" : `${i + 1} שעות`,
-                }))}
+                options={Array.from(
+                  {
+                    length: isAfternoonLesson(slot.lessonNumber)
+                      ? MAX_AFTERNOON_PERIODS
+                      : MAX_NUMBERED_LESSON,
+                  },
+                  (_, i) => ({
+                    value: String(i + 1),
+                    label: i === 0 ? "שעה אחת" : `${i + 1} שעות`,
+                  })
+                )}
               />
               <p className="mt-1 font-caption text-caption text-on-surface-variant">
-                כל שעה היא מפגש נוכחות נפרד. שלוש שעות = שלושה מפגשים באותו יום.
+                {isAfternoonLesson(slot.lessonNumber)
+                  ? "גם באחר הצהריים: כל שעה היא מפגש נוכחות נפרד באותו יום."
+                  : "כל שעה היא מפגש נוכחות נפרד. שלוש שעות = שלושה מפגשים באותו יום."}
               </p>
               </div>
-              )}
               <div className="flex items-end">
                 {weeklySlots.length > 1 ? (
                   <Button
@@ -929,8 +931,8 @@ export function LessonsForm({
         )}
         <p className="mt-3 font-body-md text-body-md text-on-surface-variant">
           שיעור של שעתיים רצופות באותו יום: שעת התחלה 1 ומשך 2 (
-          {formatLessonHours(1, 2)}). «אחרי צהריים» עומדת תמיד אחרי כל השעות הממוספרות, בלי
-          רצף שעות. ימי חופשה מגדירים ב־הגדרות ← לשונית «לוח חופשות».
+          {formatLessonHours(1, 2)}). גם «אחרי צהריים» יכולה להיות כמה שעות — כל אחת מפגש
+          נוכחות נפרד בסוף היום. ימי חופשה מגדירים ב־הגדרות ← לשונית «לוח חופשות».
         </p>
       </div>
 

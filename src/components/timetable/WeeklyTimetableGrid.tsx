@@ -7,8 +7,8 @@ import {
   hebrewWeekdayLabels,
 } from "@/lib/dates/hebrew";
 import {
-  AFTERNOON_LESSON_LABEL,
   AFTERNOON_LESSON_NUMBER,
+  formatAfternoonHourLabel,
   formatLessonHours,
   isAfternoonLesson,
   MAX_LESSON_NUMBER,
@@ -46,9 +46,25 @@ export function WeeklyTimetableGrid({
 }) {
   const days = hebrewWeekdayLabels();
   const numberedCount = Math.min(maxLessonNumber, MAX_NUMBERED_LESSON);
+  const maxAfternoonHour = useMemo(() => {
+    let max = AFTERNOON_LESSON_NUMBER;
+    for (const e of entries) {
+      if (!isAfternoonLesson(e.lessonNumber) && e.lessonNumber !== AFTERNOON_LESSON_NUMBER) {
+        continue;
+      }
+      const hours = occupiedLessonNumbers(e.lessonNumber, e.periodCount ?? 1);
+      for (const hour of hours) {
+        if (hour > max) max = hour;
+      }
+    }
+    return Math.min(max, Math.max(maxLessonNumber, AFTERNOON_LESSON_NUMBER));
+  }, [entries, maxLessonNumber]);
   const hourRows = [
     ...Array.from({ length: numberedCount }, (_, i) => i + 1),
-    AFTERNOON_LESSON_NUMBER,
+    ...Array.from(
+      { length: maxAfternoonHour - AFTERNOON_LESSON_NUMBER + 1 },
+      (_, i) => AFTERNOON_LESSON_NUMBER + i
+    ),
   ];
 
   const bySlot = useMemo(() => {
@@ -119,7 +135,7 @@ export function WeeklyTimetableGrid({
               className="odd:bg-surface-container-lowest even:bg-surface-container-low/30"
             >
               <td className="w-24 border-b border-outline-variant/25 px-2 py-2 text-center font-label-md text-label-md leading-tight text-primary">
-                {isAfternoonLesson(lessonNo) ? AFTERNOON_LESSON_LABEL : lessonNo}
+                {isAfternoonLesson(lessonNo) ? formatAfternoonHourLabel(lessonNo) : lessonNo}
               </td>
               {days.map((_, dayIdx) => {
                 const slotKey = `${dayIdx}::${lessonNo}`;
