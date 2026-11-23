@@ -7,6 +7,7 @@ export async function middleware(request: NextRequest) {
 
 export const config = {
   matcher: [
-    "/((?!_next/static|_next/image|favicon.ico|api/cron|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)",
+    // api/cron + api/sync use Bearer secrets, not Google login cookies.
+    "/((?!_next/static|_next/image|favicon.ico|api/cron|api/sync|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)",
   ],
 };
