@@ -27,7 +27,7 @@ import { createActionClient, createClient } from "@/lib/supabase/server";
 import { setActiveAcademicYear, getActiveAcademicYear } from "@/lib/utils";
 import { syncTeacherSourceRecords } from "@/lib/sync/teachers";
 import { generateLessonOccurrences, applyHolidaysToAllOccurrences, syncLessonOccurrences, addOccurrenceMeetingsForDate } from "@/lib/lessons/occurrences";
-import { toggleHolidayDate, isMissingHolidayKind } from "@/lib/lessons/holidays";
+import { toggleHolidayDate, isMissingHolidayKind, holidayDateSet } from "@/lib/lessons/holidays";
 import {
   audienceForLesson,
   audienceMapFromRows,
@@ -54,7 +54,7 @@ import {
 } from "@/lib/students/excelImport";
 import { applyStudentImportRows } from "@/lib/students/importApply";
 import type { AttendanceStatus, HolidayKind } from "@/types/database";
-import { addDays, todayIso, formatHebrewDate } from "@/lib/dates/hebrew";
+import { addDays, todayIso, formatHebrewDate, schoolYearIsoBounds } from "@/lib/dates/hebrew";
 import { embedOne } from "@/lib/supabase/embed";
 import { resolveOrCreateSubject } from "@/lib/lessons/subjects";
 import { formatLessonHours } from "@/lib/lessons/hours";
@@ -1211,6 +1211,391 @@ export async function createStudentLessonAssignmentAction(formData: FormData) {
 }
 
 type ActionSupabase = Awaited<ReturnType<typeof createClient>>;
+
+async function selectAllRows<T>(
+  load: (
+    from: number,
+    to: number
+  ) => PromiseLike<{ data: T[] | null; error: { message?: string; code?: string } | null }>
+): Promise<{ rows: T[] } | { error: string }> {
+  const rows: T[] = [];
+  for (let from = 0; from < 50000; from += 1000) {
+    const { data, error } = await load(from, from + 1000 - 1);
+    if (error) return { error: hebrewDbError(error, "הטעינה נכשלה. לא נשמר.") };
+    const batch = data ?? [];
+    rows.push(...batch);
+    if (batch.length < 1000) return { rows };
+  }
+  return { rows };
+}
+
+/** Open or extend one manual link from startDate. Does not clear an exclusion. */
+async function ensureManualLessonLink(
+  supabase: ActionSupabase,
+  studentId: string,
+  lessonId: string,
+  startDate: string
+): Promise<{ error?: string; changed: boolean }> {
+  const { data: existingRows, error: existingError } = await supabase
+    .from("student_lesson_assignments")
+    .select("id, start_date, end_date")
+    .eq("student_id", studentId)
+    .eq("lesson_id", lessonId);
+  if (existingError) {
+    return { error: hebrewDbError(existingError, "לא ניתן לשייך את התלמידה לשיעור"), changed: false };
+  }
+
+  const newEnd = "9999-12-31";
+  const overlapping = (existingRows ?? []).filter((row) => {
+    const start = String(row.start_date).slice(0, 10);
+    const end = row.end_date ? String(row.end_date).slice(0, 10) : "9999-12-31";
+    return start <= newEnd && startDate <= end;
+  });
+
+  if (overlapping.length > 1) {
+    return {
+      error: "לתלמידה יש יותר משיוך אחד חופף לשיעור. לא נוסף שיוך ולא סומנה נוכחות.",
+      changed: false,
+    };
+  }
+
+  if (overlapping.length === 1) {
+    const only = overlapping[0];
+    const onlyStart = String(only.start_date).slice(0, 10);
+    const onlyEnd = only.end_date ? String(only.end_date).slice(0, 10) : null;
+    if (!onlyEnd && startDate >= onlyStart) return { changed: false };
+    const nextStart = !onlyEnd || startDate < onlyStart ? startDate : onlyStart;
+    const { data: updated, error } = await supabase
+      .from("student_lesson_assignments")
+      .update({
+        start_date: nextStart,
+        end_date: null,
+        assignment_type: "manual",
+      })
+      .eq("id", only.id)
+      .select("id");
+    if (error || (updated?.length ?? 0) !== 1) {
+      return { error: hebrewDbError(error, "לא ניתן להקדים את תאריך השיוך"), changed: false };
+    }
+    return { changed: true };
+  }
+
+  const { data: inserted, error } = await supabase
+    .from("student_lesson_assignments")
+    .insert({
+      student_id: studentId,
+      lesson_id: lessonId,
+      assignment_type: "manual",
+      start_date: startDate,
+      end_date: null,
+    })
+    .select("id");
+  if (error || (inserted?.length ?? 0) !== 1) {
+    return { error: hebrewDbError(error, "לא ניתן לשייך את התלמידה לשיעור"), changed: false };
+  }
+  return { changed: true };
+}
+
+/**
+ * Assign a student to a teacher's lessons (or one lesson) from the activity-range
+ * start, then mark her present on every unmarked meeting through today.
+ * Existing marks stay. Excluded lessons stay closed.
+ */
+export async function fillStudentAttendanceFromYearStartAction(input: {
+  studentId: string;
+  teacherId?: string;
+  lessonId?: string;
+  force?: boolean;
+}) {
+  const studentId = requireUuid(input.studentId, "תלמידה");
+  if (isError(studentId)) return { error: "יש לבחור תלמידה מהרשימה" };
+  const teacherRaw = String(input.teacherId ?? "").trim();
+  const lessonRaw = String(input.lessonId ?? "").trim();
+  let teacherId: string | null = null;
+  if (teacherRaw) {
+    const parsedTeacher = requireUuid(teacherRaw, "מורה");
+    if (isError(parsedTeacher)) return { error: "יש לבחור מורה מהרשימה" };
+    teacherId = parsedTeacher;
+  }
+  let lessonId: string | null = null;
+  if (lessonRaw) {
+    const parsedLesson = requireUuid(lessonRaw, "שיעור");
+    if (isError(parsedLesson)) return { error: "יש לבחור שיעור מהרשימה" };
+    lessonId = parsedLesson;
+  }
+  if (!teacherId && !lessonId) return { error: "בחרי מורה או שיעור" };
+
+  const actionAuth = await createActionClient();
+  if ("error" in actionAuth) return { error: actionAuth.error };
+  const supabase = actionAuth.supabase;
+  const year = await getActiveAcademicYear();
+  if (!year) return { error: "אין שנה אקדמית פעילה" };
+
+  const lessonRows = await selectAllRows<{
+    id: string;
+    subject: string;
+    academic_year_id: string;
+    class_id: string | null;
+    track_id: string | null;
+    specialization_id: string | null;
+    billing_type: string | null;
+    grade_id: string | null;
+    for_psychology: boolean | null;
+    activity_ranges: { start_date: string } | { start_date: string }[] | null;
+  }>((from, to) => {
+    let query = supabase
+      .from("lessons")
+      .select(
+        `id, subject, academic_year_id, class_id, track_id, specialization_id, billing_type, grade_id, for_psychology, activity_ranges(start_date), teacher_teaching_assignments${teacherId ? "!inner" : ""}(teacher_id)`
+      )
+      .eq("academic_year_id", year.id);
+    if (teacherId) query = query.eq("teacher_teaching_assignments.teacher_id", teacherId);
+    if (lessonId) query = query.eq("id", lessonId);
+    return query.order("id").range(from, to);
+  });
+  if ("error" in lessonRows) return { error: lessonRows.error };
+  if (lessonRows.rows.length === 0) {
+    return { error: lessonId ? "השיעור לא נמצא אצל המורה בשנה הזו" : "למורה אין שיעורים בשנה הזו" };
+  }
+
+  const { data: placement, error: placementError } = await supabase
+    .from("student_assignments")
+    .select(
+      "class_id, track_id, specialization_id, secondary_specialization_id, grade_id, is_psychology"
+    )
+    .eq("student_id", studentId)
+    .eq("academic_year_id", year.id)
+    .is("end_date", null)
+    .maybeSingle();
+  if (placementError) {
+    if (placementError.code === "PGRST116") {
+      return { error: "לתלמידה יש יותר משיבוץ פתוח אחד בשנה הזו. צריך לסגור את הכפילות לפני השלמת הנוכחות." };
+    }
+    return { error: hebrewDbError(placementError, "לא ניתן לקרוא את השיבוץ של התלמידה") };
+  }
+  if (!placement) return { error: "לתלמידה אין שיבוץ פעיל בשנה הזו" };
+
+  const lessonIds = lessonRows.rows.map((row) => row.id);
+  const audienceCollected: Array<{
+    lesson_id: string;
+    grade_id: string | null;
+    class_id: string | null;
+    track_id: string | null;
+    specialization_id: string | null;
+  }> = [];
+  for (const idChunk of chunkIds(lessonIds)) {
+    const audienceRows = await selectAllRows<{
+      lesson_id: string;
+      grade_id: string | null;
+      class_id: string | null;
+      track_id: string | null;
+      specialization_id: string | null;
+    }>((from, to) =>
+      supabase
+        .from("lesson_audience")
+        .select("lesson_id, grade_id, class_id, track_id, specialization_id")
+        .in("lesson_id", idChunk)
+        .range(from, to)
+    );
+    if ("error" in audienceRows) return { error: audienceRows.error };
+    audienceCollected.push(...audienceRows.rows);
+  }
+  const audienceByLesson = audienceMapFromRows(audienceCollected);
+
+  const exclusionCollected: Array<{ lesson_id: string }> = [];
+  let exclusionMissing = false;
+  for (const idChunk of chunkIds(lessonIds)) {
+    const exclusionRows = await selectAllRows<{ lesson_id: string }>((from, to) =>
+      supabase
+        .from("student_lesson_exclusions")
+        .select("lesson_id")
+        .eq("student_id", studentId)
+        .in("lesson_id", idChunk)
+        .range(from, to)
+    );
+    if ("error" in exclusionRows) {
+      if (/student_lesson_exclusions|schema cache|PGRST205|42P01/i.test(exclusionRows.error)) {
+        exclusionMissing = true;
+        break;
+      }
+      return { error: exclusionRows.error };
+    }
+    exclusionCollected.push(...exclusionRows.rows);
+  }
+  const excluded = new Set<string>();
+  if (!exclusionMissing) {
+    for (const row of exclusionCollected) excluded.add(row.lesson_id);
+  }
+
+  const targets = lessonRows.rows.filter((row) => !excluded.has(row.id));
+  const skippedExcluded = lessonRows.rows.length - targets.length;
+  if (targets.length === 0) {
+    return {
+      error:
+        skippedExcluded > 0
+          ? "השיוך הוסר מהשיעורים האלה. הכפתור לא פותח אותם מחדש. אפשר לשייך ידנית מתוך השיעור."
+          : "אין שיעורים להשלמה",
+    };
+  }
+
+  if (!input.force) {
+    const mismatches: string[] = [];
+    for (const lesson of targets) {
+      const scoped = {
+        id: lesson.id,
+        class_id: lesson.class_id,
+        track_id: lesson.track_id,
+        specialization_id: lesson.specialization_id,
+        billing_type: lesson.billing_type ?? "mandatory",
+        grade_id: lesson.grade_id ?? "",
+        for_psychology: Boolean(lesson.for_psychology),
+        audience: audienceForLesson(
+          {
+            id: lesson.id,
+            class_id: lesson.class_id,
+            track_id: lesson.track_id,
+            specialization_id: lesson.specialization_id,
+            grade_id: lesson.grade_id,
+          },
+          audienceByLesson
+        ),
+      };
+      const mismatch = lessonMismatchMessage(placement, scoped);
+      if (mismatch) mismatches.push(lesson.subject);
+    }
+    if (mismatches.length > 0) {
+      const shown = mismatches.slice(0, 6).join(", ");
+      const more = mismatches.length > 6 ? ` ועוד ${mismatches.length - 6}` : "";
+      return {
+        error: `התלמידה לא שייכת לקהל של: ${shown}${more}. אם תאשרי, השיעורים ייספרו כחיוב נוכחות שלה בדוחות, והמפגשים עד היום יסומנו נוכחת.`,
+        code: "mismatch" as const,
+      };
+    }
+  }
+
+  const schoolStart = schoolYearIsoBounds(todayIso()).start;
+  const today = todayIso();
+  const startByLesson = new Map<string, string>();
+  for (const lesson of targets) {
+    const raw = lesson.activity_ranges;
+    const range = (Array.isArray(raw) ? raw[0] : raw) as { start_date?: string } | null;
+    const rangeStart = range?.start_date ? String(range.start_date).slice(0, 10) : schoolStart;
+    const start = rangeStart > schoolStart ? rangeStart : schoolStart;
+    startByLesson.set(lesson.id, start <= today ? start : today);
+  }
+
+  let linked = 0;
+  for (const lesson of targets) {
+    const start = startByLesson.get(lesson.id) ?? schoolStart;
+    const result = await ensureManualLessonLink(supabase, studentId, lesson.id, start);
+    if (result.error) return { error: result.error };
+    if (result.changed) linked += 1;
+  }
+
+  const earliest = [...startByLesson.values()].sort()[0] ?? schoolStart;
+  const occurrenceRows: Array<{
+    id: string;
+    lesson_id: string;
+    occurrence_date: string;
+    status: string;
+  }> = [];
+  for (const idChunk of chunkIds(targets.map((row) => row.id))) {
+    const occurrences = await selectAllRows<{
+      id: string;
+      lesson_id: string;
+      occurrence_date: string;
+      status: string;
+    }>((from, to) =>
+      supabase
+        .from("lesson_occurrences")
+        .select("id, lesson_id, occurrence_date, status")
+        .in("lesson_id", idChunk)
+        .gte("occurrence_date", earliest)
+        .lte("occurrence_date", today)
+        .neq("status", "cancelled")
+        .order("occurrence_date")
+        .range(from, to)
+    );
+    if ("error" in occurrences) {
+      return { error: "השיוך נשמר, אבל טעינת המפגשים נכשלה. נסי שוב. לא סומנה נוכחות." };
+    }
+    occurrenceRows.push(...occurrences.rows);
+  }
+  const occurrences = { rows: occurrenceRows };
+
+  const holidayRows = await selectAllRows<{
+    start_date: string;
+    end_date: string;
+    kind?: string | null;
+  }>((from, to) =>
+    supabase.from("holiday_periods").select("start_date, end_date, kind").range(from, to)
+  );
+  if (
+    "error" in holidayRows &&
+    !/holiday_periods|schema cache|PGRST205|42P01/i.test(holidayRows.error)
+  ) {
+    return { error: holidayRows.error };
+  }
+  const holidays = holidayDateSet("error" in holidayRows ? [] : holidayRows.rows);
+
+  const openOccurrences = occurrences.rows.filter((row) => {
+    const start = startByLesson.get(row.lesson_id);
+    if (!start) return false;
+    const date = String(row.occurrence_date).slice(0, 10);
+    return date >= start && date <= today && !holidays.has(date);
+  });
+
+  const already = new Set<string>();
+  for (const chunk of chunkIds(openOccurrences.map((row) => row.id))) {
+    const marked = await selectAllRows<{ lesson_occurrence_id: string }>((from, to) =>
+      supabase
+        .from("attendance")
+        .select("lesson_occurrence_id")
+        .eq("student_id", studentId)
+        .in("lesson_occurrence_id", chunk)
+        .range(from, to)
+    );
+    if ("error" in marked) {
+      return { error: "השיוך נשמר, אבל בדיקת הסימונים הקיימים נכשלה. נסי שוב. לא סומנה נוכחות חדשה." };
+    }
+    for (const row of marked.rows) already.add(row.lesson_occurrence_id);
+  }
+
+  const toWrite = openOccurrences.filter((row) => !already.has(row.id));
+  if (toWrite.length > 0) {
+    const written = await writeAttendanceRecords(
+      supabase,
+      toWrite.map((row) => ({
+        student_id: studentId,
+        lesson_occurrence_id: row.id,
+        status: "present" as const,
+        reason: null,
+      }))
+    );
+    if ("error" in written) return { error: written.error };
+    if (written.written !== toWrite.length) {
+      return { error: "לא כל הסימונים נשמרו. נסי שוב." };
+    }
+    for (let i = 0; i < toWrite.length; i += 8) {
+      await Promise.all(
+        toWrite.slice(i, i + 8).map((row) => tryMarkOccurrenceComplete(supabase, row.id))
+      );
+    }
+  }
+
+  revalidatePath(`/students/${studentId}`);
+  revalidatePath("/attendance");
+  revalidatePath("/reports");
+  revalidatePath("/lessons");
+  return {
+    success: true as const,
+    lessons: targets.length,
+    linked,
+    marked: toWrite.length,
+    alreadyMarked: openOccurrences.length - toWrite.length,
+    skippedExcluded,
+  };
+}
 
 /** Remove every lesson-link row so she never appears on any meeting of this lesson. */
 async function removeAllStudentLessonLinks(
@@ -2712,6 +3097,14 @@ function occurrenceNoteError(error: { message?: string; code?: string } | null):
   return hebrewDbError(error, "שמירת ההערה נכשלה. לא נשמר.");
 }
 
+function slotNoteError(error: { message?: string; code?: string } | null): string {
+  const msg = error?.message ?? "";
+  if (/slot_date|slot_lesson_number|schema cache|PGRST204|attendance_notes_one_target|check constraint/i.test(msg)) {
+    return "הערת יום ושעה עדיין לא פתוחה במסד. הריצי supabase/patches/035_slot_notes.sql ואז רענני. לא נשמר.";
+  }
+  return hebrewDbError(error, "שמירת ההערה נכשלה. לא נשמר.");
+}
+
 export async function upsertAttendanceNoteAction(formData: FormData) {
   const yearId = requireId(formData.get("academic_year_id"), "שנה");
   if (isError(yearId)) return yearId;
@@ -2719,9 +3112,66 @@ export async function upsertAttendanceNoteAction(formData: FormData) {
   const studentId = String(formData.get("student_id") ?? "").trim() || null;
   const lessonId = String(formData.get("lesson_id") ?? "").trim() || null;
 
+  const slotDateRaw = String(formData.get("slot_date") ?? "").trim();
+  const slotHourRaw = String(formData.get("slot_lesson_number") ?? "").trim();
+
   const actionAuth = await createActionClient();
   if ("error" in actionAuth) return { error: actionAuth.error };
   const supabase = actionAuth.supabase;
+
+  if (slotDateRaw || slotHourRaw) {
+    const slotDate = requireIsoDate(slotDateRaw, "תאריך");
+    if (isError(slotDate)) return slotDate;
+    const slotHour = Number(slotHourRaw);
+    if (!Number.isInteger(slotHour) || slotHour < 1 || slotHour > 19) {
+      return { error: "שעת השיעור לא תקינה" };
+    }
+    const body = String(formData.get("body") ?? "").trim();
+    const { data: existing, error: loadError } = await supabase
+      .from("attendance_notes")
+      .select("id")
+      .eq("academic_year_id", yearId)
+      .eq("slot_date", slotDate)
+      .eq("slot_lesson_number", slotHour)
+      .maybeSingle();
+    if (loadError) return { error: slotNoteError(loadError) };
+    if (!body) {
+      if (!existing) {
+        revalidatePath("/attendance");
+        return { success: true };
+      }
+      const { error } = await supabase.from("attendance_notes").delete().eq("id", existing.id);
+      if (error) return { error: slotNoteError(error) };
+      revalidatePath("/attendance");
+      return { success: true };
+    }
+    const row = {
+      academic_year_id: yearId,
+      student_id: null,
+      lesson_id: null,
+      lesson_occurrence_id: null,
+      slot_date: slotDate,
+      slot_lesson_number: slotHour,
+      body,
+      updated_at: new Date().toISOString(),
+    };
+    if (existing) {
+      const { data: updated, error } = await supabase
+        .from("attendance_notes")
+        .update(row)
+        .eq("id", existing.id)
+        .select("id");
+      if (error || (updated?.length ?? 0) !== 1) return { error: slotNoteError(error) };
+    } else {
+      const { data: inserted, error } = await supabase
+        .from("attendance_notes")
+        .insert(row)
+        .select("id");
+      if (error || (inserted?.length ?? 0) !== 1) return { error: slotNoteError(error) };
+    }
+    revalidatePath("/attendance");
+    return { success: true };
+  }
 
   if (occurrenceRaw) {
     const occurrenceId = requireUuid(occurrenceRaw, "מופע");

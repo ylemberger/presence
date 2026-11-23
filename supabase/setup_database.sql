@@ -1049,19 +1049,28 @@ begin
   end if;
 end $$;
 
--- Notes: one student, one whole lesson (legacy), or one specific occurrence.
+-- Notes: one student, one whole lesson (legacy), one occurrence, or one day+hour slot.
 create table if not exists attendance_notes (
   id uuid primary key default gen_random_uuid(),
   academic_year_id uuid not null references academic_years(id) on delete cascade,
   student_id uuid references students(id) on delete cascade,
   lesson_id uuid references lessons(id) on delete cascade,
   lesson_occurrence_id uuid references lesson_occurrences(id) on delete cascade,
+  slot_date date,
+  slot_lesson_number smallint,
   body text not null,
   updated_at timestamptz default now(),
   constraint attendance_notes_one_target check (
-    (student_id is not null and lesson_id is null and lesson_occurrence_id is null)
-    or (lesson_id is not null and student_id is null and lesson_occurrence_id is null)
-    or (lesson_occurrence_id is not null and student_id is null and lesson_id is null)
+    (student_id is not null and lesson_id is null and lesson_occurrence_id is null and slot_date is null and slot_lesson_number is null)
+    or (lesson_id is not null and student_id is null and lesson_occurrence_id is null and slot_date is null and slot_lesson_number is null)
+    or (lesson_occurrence_id is not null and student_id is null and lesson_id is null and slot_date is null and slot_lesson_number is null)
+    or (
+      slot_date is not null
+      and slot_lesson_number between 1 and 19
+      and student_id is null
+      and lesson_id is null
+      and lesson_occurrence_id is null
+    )
   )
 );
 
@@ -1076,6 +1085,10 @@ create unique index if not exists idx_attendance_notes_lesson
 create unique index if not exists idx_attendance_notes_occurrence
   on attendance_notes (lesson_occurrence_id)
   where lesson_occurrence_id is not null;
+
+create unique index if not exists idx_attendance_notes_slot
+  on attendance_notes (academic_year_id, slot_date, slot_lesson_number)
+  where slot_date is not null and slot_lesson_number is not null;
 
 alter table attendance_notes enable row level security;
 

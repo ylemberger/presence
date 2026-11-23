@@ -18,6 +18,7 @@
 | **שיעורים 1–13 + פעם בשבועיים** | [`patches/024_lesson_number_13_and_fortnightly.sql`](patches/024_lesson_number_13_and_fortnightly.sql) |
 | **שעת אחרי צהריים** | [`patches/029_afternoon_lesson.sql`](patches/029_afternoon_lesson.sql) |
 | **הערה למופע אחד** | [`patches/030_occurrence_notes.sql`](patches/030_occurrence_notes.sql) |
+| **הערה לכל השיעורים ביום ובשעה** | [`patches/035_slot_notes.sql`](patches/035_slot_notes.sql) — נפרדת מהערת המופע. לא מוחקת הערות. |
 | **מפגש נוכחות לכל שעה** | [`patches/031_occurrence_per_hour.sql`](patches/031_occurrence_per_hour.sql) — שעה 3 למשך 3 יוצרת מפגשים 3, 4 ו־5. לא מוחק סימונים. |
 | **אחרי צהריים — כמה שעות** | [`patches/034_afternoon_multi_hour.sql`](patches/034_afternoon_multi_hour.sql) — משך 3 באחה״צ = מפגשים 14, 15 ו־16. |
 | **סנכרון למערכת מבחנים** | [`EXAM_SYNC.md`](EXAM_SYNC.md) — API קריאה בלבד `/api/sync/exam` + סוד משותף (בלי לחשוף מפתחות Supabase). |

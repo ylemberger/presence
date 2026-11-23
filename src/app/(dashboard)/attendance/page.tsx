@@ -297,7 +297,8 @@ export default async function AttendancePage({ searchParams }: Props) {
     );
   }
   if (params.lessonId) monthOccurrences = monthOccurrences.filter((o) => o.lessonId === params.lessonId);
-  if (params.studentId) {
+  // Teacher or a specific lesson: show meetings even when the student is not assigned yet.
+  if (params.studentId && !params.teacherId && !params.lessonId) {
     const links = studentLinks.data ?? [];
     monthOccurrences = monthOccurrences.filter((o) =>
       links.some(
@@ -612,6 +613,7 @@ export default async function AttendancePage({ searchParams }: Props) {
       .filter((o) => sheetLessonSet.has(o.lesson_id))
       .filter((o) => {
         if (!params.studentId) return true;
+        if (params.teacherId || params.lessonId) return true;
         return studentCoverLinks.some(
           (la) =>
             la.lesson_id === o.lesson_id &&
@@ -667,12 +669,19 @@ export default async function AttendancePage({ searchParams }: Props) {
   const needsPrevWeekCheck =
     Boolean(openOccurrenceId) && (selectedOcc?.markedCount ?? 0) === 0;
 
-  const [noteRes, prevWeekIncompleteRaw, dayNotesRes] = await Promise.all([
+  const slotNotesQuery = supabase
+    .from("attendance_notes")
+    .select("slot_lesson_number, body")
+    .eq("academic_year_id", activeYear.id)
+    .eq("slot_date", selectedDate);
+
+  const [noteRes, prevWeekIncompleteRaw, dayNotesRes, slotNotesRes] = await Promise.all([
     noteQuery,
     needsPrevWeekCheck && openOccurrenceId
       ? findIncompletePreviousWeekOccurrences(supabase, openOccurrenceId)
       : Promise.resolve([]),
     dayNotesQuery,
+    slotNotesQuery,
   ]);
 
   const noteBody = noteRes.data?.body ?? "";
@@ -695,6 +704,16 @@ export default async function AttendancePage({ searchParams }: Props) {
   const occurrenceIdsWithNotes = (dayNotesRes.data ?? [])
     .map((n) => n.lesson_occurrence_id)
     .filter(Boolean);
+
+  const slotNotes =
+    slotNotesRes.error || !slotNotesRes.data
+      ? []
+      : slotNotesRes.data
+          .map((row) => ({
+            lessonNumber: Number(row.slot_lesson_number),
+            body: String(row.body ?? "").trim(),
+          }))
+          .filter((row) => Number.isInteger(row.lessonNumber) && row.lessonNumber > 0 && row.body);
 
   /** Full lesson roster for print: every assigned student + from/until when not for all meetings. */
   let lessonPrintRoster: {
@@ -866,6 +885,7 @@ export default async function AttendancePage({ searchParams }: Props) {
         insightsByStudent={{}}
         pastGaps={pastGaps}
         occurrenceIdsWithNotes={occurrenceIdsWithNotes}
+        slotNotes={slotNotes}
         lessonPrintRoster={lessonPrintRoster}
       />
     </div>

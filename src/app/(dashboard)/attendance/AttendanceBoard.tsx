@@ -18,6 +18,7 @@ import {
   syncLessonStudentsAction,
   excludeStudentFromLessonAction,
   upsertAttendanceNoteAction,
+  fillStudentAttendanceFromYearStartAction,
 } from "../actions";
 import type { AttendanceStatus } from "@/types/database";
 import { cn } from "@/lib/cn";
@@ -156,6 +157,8 @@ interface Props {
   insightsByStudent?: Record<string, StudentInsight>;
   pastGaps?: GapItem[];
   occurrenceIdsWithNotes?: string[];
+  /** Shared notes for every lesson on the selected date, keyed by lesson hour. */
+  slotNotes?: Array<{ lessonNumber: number; body: string }>;
   /** Full lesson roster for «הדפסת רשימה» (all assigned students + partial notes). */
   lessonPrintRoster?: {
     subject: string;
@@ -280,6 +283,7 @@ export function AttendanceBoard({
   insightsByStudent = {},
   pastGaps = [],
   occurrenceIdsWithNotes = [],
+  slotNotes = [],
   lessonPrintRoster = null,
 }: Props) {
   const { canWrite } = useAccess();
@@ -301,6 +305,12 @@ export function AttendanceBoard({
   const [note, setNote] = useState(noteBody);
   const [noteSaving, setNoteSaving] = useState(false);
   const [noteModalOpen, setNoteModalOpen] = useState(false);
+  const [slotNote, setSlotNote] = useState("");
+  const [slotNoteSaving, setSlotNoteSaving] = useState(false);
+  const [slotNoteModalOpen, setSlotNoteModalOpen] = useState(false);
+  const [yearFillSaving, setYearFillSaving] = useState(false);
+  const [yearFillMessage, setYearFillMessage] = useState<string | null>(null);
+  const [yearFillMismatch, setYearFillMismatch] = useState<string | null>(null);
   const [gapQueue, setGapQueue] = useState<GapItem[]>([]);
   /** Session-local: after the user acts on a gap, do not re-open it until attendance is filled. */
   const [suppressedGapIds, setSuppressedGapIds] = useState<string[]>([]);
@@ -573,7 +583,11 @@ export function AttendanceBoard({
 
   const scopedLessons = useMemo(() => {
     return lessons.filter((l) => {
-      if (studentId && !studentLessonIdSet.has(l.id)) return false;
+      if (studentId && !studentLessonIdSet.has(l.id)) {
+        const sameTeacher = Boolean(teacherId && l.teacherId === teacherId);
+        const sameLesson = Boolean(lessonId && l.id === lessonId);
+        if (!sameTeacher && !sameLesson) return false;
+      }
       if (teacherId && l.teacherId && l.teacherId !== teacherId) return false;
       if (subject && l.subjectKey && l.subjectKey !== subject && !l.subject.startsWith(`${subject} ·`)) {
         return false;
@@ -616,8 +630,6 @@ export function AttendanceBoard({
           keywords: [teacher, l.subject, group, day, hours].filter(Boolean).join(" "),
         };
       });
-    // Without a student: offer "all lessons of this teacher" so the calendar day list works.
-    if (studentId) return lessonOpts;
     const byTeacher = new Map<string, { name: string; count: number }>();
     for (const l of scopedLessons) {
       if (!l.teacherId) continue;
@@ -635,7 +647,7 @@ export function AttendanceBoard({
         keywords: t.name,
       }));
     return [...teacherOpts, ...lessonOpts];
-  }, [scopedLessons, studentId]);
+  }, [scopedLessons]);
 
   function buildParams(patch: Record<string, string | undefined>) {
     const params = new URLSearchParams();
@@ -1244,6 +1256,98 @@ export function AttendanceBoard({
     return true;
   }
 
+  const slotNoteByHour = useMemo(() => {
+    const map = new Map<number, string>();
+    for (const row of slotNotes) {
+      if (row.body.trim()) map.set(row.lessonNumber, row.body.trim());
+    }
+    return map;
+  }, [slotNotes]);
+
+  const activeSlotHour = activeLesson?.lessonNumber ?? null;
+  const activeSlotBody = activeSlotHour ? (slotNoteByHour.get(activeSlotHour) ?? "") : "";
+
+  useEffect(() => {
+    setSlotNote(activeSlotBody);
+  }, [activeSlotBody, selectedDate, activeSlotHour]);
+
+  useEffect(() => {
+    setYearFillMessage(null);
+    setYearFillMismatch(null);
+  }, [studentId, teacherId, lessonId]);
+
+  async function saveSlotNote() {
+    if (!activeSlotHour) return false;
+    setSlotNoteSaving(true);
+    const fd = new FormData();
+    fd.set("academic_year_id", yearId);
+    fd.set("body", slotNote);
+    fd.set("slot_date", selectedDate);
+    fd.set("slot_lesson_number", String(activeSlotHour));
+    const result = await upsertAttendanceNoteAction(fd);
+    setSlotNoteSaving(false);
+    if (result && "error" in result && result.error) {
+      setMessage(result.error);
+      return false;
+    }
+    setMessage(
+      slotNote.trim()
+        ? "ההערה נשמרה לכל השיעורים ביום ובשעה הזאת"
+        : "הערת היום והשעה הוסרה"
+    );
+    router.refresh();
+    return true;
+  }
+
+  async function fillAttendanceFromYearStart(force: boolean) {
+    if (!canWrite || !studentId || (!teacherId && !lessonId) || yearFillSaving) return;
+    const studentName =
+      allStudents.find((s) => s.id === studentId)?.full_name ?? "התלמידה";
+    const teacherName = teachers.find((t) => t.id === teacherId)?.name ?? "המורה";
+    const scope = lessonId
+      ? "השיעור שנבחר"
+      : `כל שיעורי ${teacherName}`;
+    if (!force) {
+      const ok = confirm(
+        `לשייך את ${studentName} ל${scope} מתחילת השנה, ולסמן נוכחת בכל מפגש עד היום שעדיין בלי סימון?\n\nסימון שכבר נשמר נשאר. שיעור שהשיוך הוסר ממנו לא נפתח מחדש.`
+      );
+      if (!ok) return;
+    }
+    setYearFillSaving(true);
+    setYearFillMessage(null);
+    if (!force) setYearFillMismatch(null);
+    const result = await fillStudentAttendanceFromYearStartAction({
+      studentId,
+      teacherId,
+      lessonId,
+      force,
+    });
+    setYearFillSaving(false);
+    if (result && "error" in result && result.error) {
+      if ("code" in result && result.code === "mismatch") {
+        setYearFillMismatch(result.error);
+        setYearFillMessage(null);
+        return;
+      }
+      setYearFillMismatch(null);
+      setYearFillMessage(result.error);
+      return;
+    }
+    setYearFillMismatch(null);
+    if (result && "success" in result && "marked" in result) {
+      const already = result.alreadyMarked ?? 0;
+      const skipped = result.skippedExcluded ?? 0;
+      const parts = [
+        `שויכו או עודכנו ${result.linked ?? 0} שיעורים`,
+        `סומנה נוכחת ב־${result.marked} מפגשים`,
+        already > 0 ? `${already} מפגשים כבר היו מסומנים` : null,
+        skipped > 0 ? `${skipped} שיעורים שהשיוך הוסר מהם דולגו` : null,
+      ].filter(Boolean);
+      setYearFillMessage(parts.join(" · "));
+      router.refresh();
+    }
+  }
+
   async function setReason(sid: string, occurrenceId: string, reason: AbsenceReason | "") {
     const k = keyOf(sid, occurrenceId);
     const status = draft[k];
@@ -1417,31 +1521,37 @@ export function AttendanceBoard({
       <div className="overflow-hidden rounded-2xl border border-outline-variant/40 bg-surface-container-lowest shadow-tactile-sm print:hidden">
         <div className="border-b border-outline-variant/25 bg-secondary-container/30 px-4 py-3">
           <p className="font-title-lg text-title-lg text-primary">
-            {studentId
-              ? "נוכחות לפי תלמידה"
-              : teacherId && !lessonId
-                ? "נוכחות לפי מורה"
-                : "חיפוש מורה ושיעור"}
+            {studentId && teacherId
+              ? "נוכחות לפי מורה ותלמידה"
+              : studentId
+                ? "נוכחות לפי תלמידה"
+                : teacherId && !lessonId
+                  ? "נוכחות לפי מורה"
+                  : "חיפוש מורה ושיעור"}
           </p>
           <p className="mt-0.5 font-body-sm text-body-sm text-on-surface-variant">
-            {studentId
-              ? "בחרי תאריך בלוח — יופיעו כל השיעורים של התלמידה ביום הזה. אפשר גם לבחור שיעור ספציפי לרשימת כל המופעים שלו."
-              : teacherId && !lessonId
-                ? "בחרי תאריך בלוח — יופיעו כל השיעורים של המורה ביום הזה."
-                : "הקלידי שם מורה (כל השיעורים שלה) או שיעור/מקצוע. אחרי בחירת מורה — בחרי תאריך בלוח."}
+            {studentId && teacherId
+              ? "כל שיעורי המורה, גם אם התלמידה לא הייתה משויכת. אפשר לסמן נוכחת על כולם מתחילת השנה."
+              : studentId
+                ? "בחרי תאריך בלוח — יופיעו כל השיעורים של התלמידה ביום הזה. אפשר גם לבחור מורה כדי לראות את כל השיעורים שלה."
+                : teacherId && !lessonId
+                  ? "בחרי תאריך בלוח — יופיעו כל השיעורים של המורה ביום הזה. אפשר גם לבחור תלמידה להשלמת נוכחות."
+                  : "הקלידי שם מורה (כל השיעורים שלה) או שיעור/מקצוע. אחרי בחירת מורה — בחרי תאריך בלוח, ואפשר להוסיף שם תלמידה."}
           </p>
         </div>
         <div className="px-4 py-4">
           <Combobox
             label={
-              studentId
-                ? "שיעור של התלמידה (אופציונלי)"
-                : "שם מורה, מקצוע או קבוצה"
+              studentId && teacherId
+                ? "שיעור של המורה (אופציונלי)"
+                : studentId
+                  ? "שיעור של התלמידה, או מורה"
+                  : "שם מורה, מקצוע או קבוצה"
             }
             value={
               lessonId
                 ? lessonId
-                : teacherId && !studentId
+                : teacherId
                   ? `teacher:${teacherId}`
                   : ""
             }
@@ -1460,7 +1570,6 @@ export function AttendanceBoard({
                 navigate(
                   buildParams({
                     teacherId: v.slice("teacher:".length),
-                    studentId: undefined,
                     lessonId: undefined,
                     occurrenceId: undefined,
                   })
@@ -1574,7 +1683,6 @@ export function AttendanceBoard({
                     navigate(
                       buildParams({
                         studentId: v || undefined,
-                        teacherId: undefined,
                         lessonId: undefined,
                         occurrenceId: undefined,
                       })
@@ -1634,7 +1742,6 @@ export function AttendanceBoard({
                     navigate(
                       buildParams({
                         teacherId: v || undefined,
-                        studentId: undefined,
                         lessonId: undefined,
                         occurrenceId: undefined,
                       })
@@ -1707,6 +1814,59 @@ export function AttendanceBoard({
           </Button>
         </div>
       )}
+
+      {canWrite && studentId && (teacherId || lessonId) ? (
+        <div className="rounded-xl border border-primary/25 bg-primary/5 px-4 py-3 print:hidden">
+          <p className="font-label-md text-label-md text-primary">
+            השלמת נוכחות מתחילת השנה
+          </p>
+          <p className="mt-1 font-body-sm text-body-sm text-on-surface-variant">
+            {lessonId
+              ? "משייכת את התלמידה לשיעור הזה מתחילת טווח הפעילות, ומסמנת נוכחת בכל מפגש עד היום שעדיין בלי סימון."
+              : "משייכת את התלמידה לכל שיעורי המורה מתחילת טווח הפעילות, ומסמנת נוכחת בכל מפגש עד היום שעדיין בלי סימון."}{" "}
+            סימון שכבר נשמר נשאר. שיעור שהשיוך הוסר ממנו לא נפתח.
+          </p>
+          <div className="mt-2 flex flex-wrap items-center gap-2">
+            <Button
+              type="button"
+              size="sm"
+              disabled={yearFillSaving}
+              onClick={() => void fillAttendanceFromYearStart(false)}
+            >
+              {yearFillSaving ? "שומרת…" : "נוכחת על הכל ביחד"}
+            </Button>
+          </div>
+          {yearFillMismatch ? (
+            <div className="mt-2 rounded-xl border border-attendance-late/30 bg-attendance-late/10 px-3 py-2 font-body-sm text-body-sm text-attendance-late">
+              <p className="mb-2">{yearFillMismatch}</p>
+              <Button
+                type="button"
+                size="sm"
+                variant="secondary"
+                disabled={yearFillSaving}
+                onClick={() => void fillAttendanceFromYearStart(true)}
+              >
+                שמרי בכל זאת
+              </Button>
+            </div>
+          ) : null}
+          {yearFillMessage ? (
+            <p
+              className={cn(
+                "mt-2 rounded-lg px-3 py-1.5 font-body-sm text-body-sm",
+                yearFillMessage.includes("נכשל") ||
+                  yearFillMessage.includes("לא נשמר") ||
+                  yearFillMessage.includes("נסי שוב") ||
+                  yearFillMessage.includes("אין ")
+                  ? "bg-error-container/60 text-on-error-container"
+                  : "bg-attendance-present/10 text-attendance-present"
+              )}
+            >
+              {yearFillMessage}
+            </p>
+          ) : null}
+        </div>
+      ) : null}
 
       <div className="relative grid grid-cols-1 items-start gap-gutter print:hidden xl:grid-cols-12">
         {isPending ? (
@@ -2043,6 +2203,12 @@ export function AttendanceBoard({
                             }`}
                         {hasNote ? " · הערה" : ""}
                       </span>
+                      {o.lessonNumber && slotNoteByHour.get(o.lessonNumber) ? (
+                        <span className="line-clamp-2 font-caption text-caption text-primary">
+                          {o.markedCount === 0 ? "אין נוכחות · " : "הערת שעה · "}
+                          {slotNoteByHour.get(o.lessonNumber)}
+                        </span>
+                      ) : null}
                     </button>
                   );
                 })}
@@ -2124,6 +2290,21 @@ export function AttendanceBoard({
                     }}
                   />
                 </div>
+                {activeSlotBody ? (
+                  <p
+                    className={cn(
+                      "mt-2 rounded-md px-2 py-1 font-body-sm text-body-sm",
+                      markedInLesson === 0
+                        ? "bg-attendance-late/15 text-attendance-late"
+                        : "bg-secondary/10 text-primary"
+                    )}
+                  >
+                    {markedInLesson === 0
+                      ? "אין נוכחות — הערה לכל השיעורים ביום ובשעה הזאת: "
+                      : "הערה לכל השיעורים ביום ובשעה הזאת: "}
+                    {activeSlotBody}
+                  </p>
+                ) : null}
               </div>
               <div className="flex flex-wrap items-center gap-1.5 print:hidden">
                 <Button
@@ -2133,8 +2314,19 @@ export function AttendanceBoard({
                   onClick={() => setNoteModalOpen(true)}
                 >
                   <Icon name="edit_note" className="text-[16px]" />
-                  {note.trim() ? "הערה ✓" : "הערה"}
+                  {note.trim() ? "הערת שיעור ✓" : "הערת שיעור"}
                 </Button>
+                {activeSlotHour ? (
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="secondary"
+                    onClick={() => setSlotNoteModalOpen(true)}
+                  >
+                    <Icon name="edit_note" className="text-[16px]" />
+                    {activeSlotBody ? "הערת יום ושעה ✓" : "הערת יום ושעה"}
+                  </Button>
+                ) : null}
                 <PrintButton
                   label="דף ריק"
                   documentTitle={`נוכחות-${activeLesson.subject}`}
@@ -2532,6 +2724,42 @@ export function AttendanceBoard({
               }}
             >
               {noteSaving ? "שומר…" : "שמור"}
+            </Button>
+          </div>
+        </div>
+      </Modal>
+
+      <Modal
+        open={slotNoteModalOpen && Boolean(activeSlotHour)}
+        title="הערה לכל השיעורים ביום ובשעה"
+        description={
+          activeLesson
+            ? `${formatHebrewDate(selectedDate)} · ${formatLessonHours(activeSlotHour ?? 1, 1)} · כל השיעורים בשעה הזאת, בנפרד מהערת השיעור`
+            : "כל השיעורים ביום ובשעה הזאת"
+        }
+        onClose={() => setSlotNoteModalOpen(false)}
+      >
+        <div className="space-y-3">
+          <textarea
+            value={slotNote}
+            onChange={(e) => setSlotNote(e.target.value)}
+            rows={5}
+            className="w-full rounded-lg border border-outline-variant/60 bg-surface-container-lowest px-3 py-2 font-body-sm text-body-sm text-on-surface focus:border-secondary focus:outline-none focus:ring-2 focus:ring-secondary/30"
+            placeholder="למשל: לא היה שיעור. תופיע בכל השיעורים ביום ובשעה הזאת, גם כשאין נוכחות. הערת השיעור הספציפי נשארת בנפרד. מחקי את הטקסט ושמרי כדי להסיר."
+          />
+          <div className="flex justify-end gap-2">
+            <Button type="button" variant="secondary" onClick={() => setSlotNoteModalOpen(false)}>
+              סגור
+            </Button>
+            <Button
+              type="button"
+              disabled={slotNoteSaving}
+              onClick={async () => {
+                const saved = await saveSlotNote();
+                if (saved) setSlotNoteModalOpen(false);
+              }}
+            >
+              {slotNoteSaving ? "שומר…" : "שמור"}
             </Button>
           </div>
         </div>

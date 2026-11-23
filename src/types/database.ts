@@ -233,6 +233,9 @@ export interface AttendanceNote {
   student_id: string | null;
   lesson_id: string | null;
   lesson_occurrence_id: string | null;
+  /** Shared note for every lesson on this date and lesson hour. */
+  slot_date?: string | null;
+  slot_lesson_number?: number | null;
   body: string;
   updated_at: string;
 }
