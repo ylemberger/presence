@@ -12,10 +12,9 @@ import {
   combineAttendanceSummaries,
 } from "@/lib/attendance/calculator";
 import { fetchAttendancePools, calcUnitForLesson } from "@/lib/attendance/pools";
-import { getPendingAttendanceSummary, EMPTY_PENDING_SUMMARY } from "@/lib/attendance/pending";
+import { audienceForLesson, audienceMapFromRows, isNamedOnlyLesson } from "@/lib/lessons/autoAssign";
 import { formatSubjectLessonLabel } from "@/lib/lessons/subject-label";
 import { isAfternoonLesson } from "@/lib/lessons/hours";
-import { AttendanceReminderBanner } from "@/components/attendance/AttendanceReminderBanner";
 import { cn } from "@/lib/cn";
 import { Icon } from "@/components/ui/Icon";
 
@@ -25,9 +24,6 @@ export default async function DashboardPage() {
   const activeYear = await getActiveAcademicYear();
   const supabase = await createClient();
   const today = todayIso();
-  const pendingSummaryPromise = activeYear
-    ? getPendingAttendanceSummary(activeYear.id)
-    : Promise.resolve(EMPTY_PENDING_SUMMARY);
 
   let stats = { students: 0, classes: 0, lessons: 0, unmarked: 0, markedThisWeek: 0 };
   let todayLessons: Array<{
@@ -79,7 +75,8 @@ export default async function DashboardPage() {
         .select(
           `id, lesson_id,
            lessons!inner(
-             subject, academic_year_id, attendance_rule_id, class_id, lesson_number,
+             subject, academic_year_id, attendance_rule_id, grade_id, class_id, track_id,
+             specialization_id, for_psychology, lesson_number,
              classes(name), subjects(name),
              teacher_teaching_assignments(teachers(full_name))
            )`
@@ -107,27 +104,38 @@ export default async function DashboardPage() {
     if (todayRows.length > 0) {
       const lessonIds = [...new Set(todayRows.map((o) => o.lesson_id))];
       const occIds = todayRows.map((o) => o.id);
-      const [links, att] = await Promise.all([
+      const [links, att, audienceRows] = await Promise.all([
         fetchAssignmentsByLessons<{
           lesson_id: string;
+          student_id: string;
           start_date: string;
           end_date: string | null;
+          assignment_type: string | null;
           students: unknown;
         }>(
           supabase,
           lessonIds,
-          "lesson_id, student_id, start_date, end_date, students(is_active)"
+          "lesson_id, student_id, start_date, end_date, assignment_type, students(is_active)"
         ),
-        fetchAttendanceForOccurrences<{ lesson_occurrence_id: string }>(
-          supabase,
-          occIds,
-          "lesson_occurrence_id"
-        ),
+        fetchAttendanceForOccurrences<{
+          lesson_occurrence_id: string;
+          student_id: string;
+        }>(supabase, occIds, "student_id, lesson_occurrence_id"),
+        supabase
+          .from("lesson_audience")
+          .select("lesson_id, grade_id, class_id, track_id, specialization_id")
+          .in("lesson_id", lessonIds),
       ]);
+      const audienceByLesson = audienceMapFromRows(audienceRows.data ?? []);
 
       todayLessons = todayRows.map((o) => {
         const lesson = o.lessons as unknown as {
           subject: string;
+          grade_id?: string | null;
+          class_id?: string | null;
+          track_id?: string | null;
+          specialization_id?: string | null;
+          for_psychology?: boolean | null;
           subjects?: { name: string } | { name: string }[] | null;
           lesson_number: number | null;
           teacher_teaching_assignments: { teachers: { full_name: string } | null } | null;
@@ -136,15 +144,36 @@ export default async function DashboardPage() {
         const parent = Array.isArray(lesson.subjects)
           ? lesson.subjects[0]?.name
           : lesson.subjects?.name;
-        let total = 0;
+        const namedOnly = isNamedOnlyLesson({
+          grade_id: lesson.grade_id,
+          class_id: lesson.class_id,
+          track_id: lesson.track_id,
+          specialization_id: lesson.specialization_id,
+          for_psychology: lesson.for_psychology,
+          audience: audienceForLesson(
+            {
+              id: o.lesson_id,
+              grade_id: lesson.grade_id,
+              class_id: lesson.class_id ?? null,
+              track_id: lesson.track_id ?? null,
+              specialization_id: lesson.specialization_id ?? null,
+            },
+            audienceByLesson
+          ),
+        });
+        const students = new Set<string>();
         for (const link of links) {
           if (link.lesson_id !== o.lesson_id) continue;
+          if (namedOnly && link.assignment_type !== "manual") continue;
           const student = embedOne<{ is_active?: boolean }>(link.students);
           if (student?.is_active === false) continue;
           if (!isDateInRange(today, link.start_date, link.end_date)) continue;
-          total++;
+          if (link.student_id) students.add(link.student_id);
         }
-        const marked = att.filter((a) => a.lesson_occurrence_id === o.id).length;
+        const total = students.size;
+        const marked = att.filter(
+          (a) => a.lesson_occurrence_id === o.id && students.has(a.student_id)
+        ).length;
         return {
           id: o.id,
           subject: formatSubjectLessonLabel(parent, lesson.subject),
@@ -260,8 +289,6 @@ export default async function DashboardPage() {
     };
   }
 
-  const pendingSummary = await pendingSummaryPromise;
-
   const kpis = [
     {
       label: "תלמידות בשנה",
@@ -326,8 +353,6 @@ export default async function DashboardPage() {
         </Card>
       ) : (
         <>
-          <AttendanceReminderBanner summary={pendingSummary} />
-
           {/* Quick Actions & KPI Grid */}
           <div className="grid grid-cols-12 gap-gutter">
             <div className="col-span-12">

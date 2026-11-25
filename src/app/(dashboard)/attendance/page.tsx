@@ -17,13 +17,14 @@ import {
 } from "@/lib/lessons/occurrences";
 import { mergeAttendanceBlocks } from "@/lib/attendance/blocks";
 import { holidayDatesByKind } from "@/lib/lessons/holidays";
-import { audienceForLesson, lessonMatchesAudienceFilter } from "@/lib/lessons/autoAssign";
+import {
+  audienceForLesson,
+  closeAutomaticLinksByIds,
+  isNamedOnlyLesson,
+  lessonMatchesAudienceFilter,
+} from "@/lib/lessons/autoAssign";
 import { audienceKey } from "@/lib/lessons/group-label";
 import { calcUnitForLesson, lessonIdsInCalcUnit } from "@/lib/attendance/pools";
-import {
-  blockingPreviousWeekGaps,
-  findIncompletePreviousWeekOccurrences,
-} from "@/lib/attendance/previous-week";
 import { loadAttendanceShell, type ShellLesson, type ShellStudent } from "@/lib/attendance/load-shell";
 import { bustAttendanceShellCache } from "@/lib/attendance/shell-cache";
 import {
@@ -374,17 +375,43 @@ export default async function AttendancePage({ searchParams }: Props) {
     calendarFromStatus = true;
   }
 
+  const namedLessonIds = new Set(
+    shell.lessons
+      .filter((lesson) =>
+        isNamedOnlyLesson({
+          grade_id: lesson.gradeId,
+          class_id: lesson.classId,
+          track_id: lesson.trackId,
+          specialization_id: lesson.specializationId,
+          for_psychology: lesson.for_psychology,
+          audience: audienceForLesson(
+            {
+              id: lesson.id,
+              grade_id: lesson.gradeId,
+              class_id: lesson.classId,
+              track_id: lesson.trackId,
+              specialization_id: lesson.specializationId,
+            },
+            audienceByLesson
+          ),
+        })
+      )
+      .map((lesson) => lesson.id)
+  );
+
   const [monthLinks, monthAttendance, lessonMarkCounts, exclusionRows] = await Promise.all([
     fetchAssignmentsByLessons<{
+      id: string;
       lesson_id: string;
       student_id: string;
       start_date: string;
       end_date: string | null;
+      assignment_type: string | null;
       students: unknown;
     }>(
       supabase,
       linkLessonIds,
-      "lesson_id, student_id, start_date, end_date, students(id, full_name, first_name, last_name, is_active)"
+      "id, lesson_id, student_id, start_date, end_date, assignment_type, students(id, full_name, first_name, last_name, is_active)"
     ),
     fetchAttendanceForOccurrences<{
       student_id: string;
@@ -421,6 +448,19 @@ export default async function AttendancePage({ searchParams }: Props) {
     exclusionRows.map((row) => `${row.lesson_id}::${row.student_id}`)
   );
 
+  const leftoverAutomatic = monthLinks.filter(
+    (link) =>
+      namedLessonIds.has(link.lesson_id) &&
+      link.assignment_type !== "manual" &&
+      !link.end_date
+  );
+  if (leftoverAutomatic.length > 0) {
+    const closed = await closeAutomaticLinksByIds(supabase, leftoverAutomatic);
+    if (closed.error) {
+      console.error("named lesson automatic links were not closed");
+    }
+  }
+
   function rosterStudent(link: {
     student_id: string;
     lesson_id?: string;
@@ -445,19 +485,24 @@ export default async function AttendancePage({ searchParams }: Props) {
   const linksByLesson = new Map<string, typeof monthLinks>();
   for (const link of monthLinks) {
     if (excludedPairs.has(`${link.lesson_id}::${link.student_id}`)) continue;
+    // Named lessons keep only the hand-picked list. Leftover whole-grade links stay off the count.
+    if (namedLessonIds.has(link.lesson_id) && link.assignment_type !== "manual") continue;
     const list = linksByLesson.get(link.lesson_id);
     if (list) list.push(link);
     else linksByLesson.set(link.lesson_id, [link]);
   }
   const markedCountByOccurrence = new Map<string, number>(lessonMarkCounts);
   const attendanceByPair = new Map<string, (typeof monthAttendance)[number]>();
-  for (const row of monthAttendance) {
-    if (!lessonSearchCounts) {
-      markedCountByOccurrence.set(
-        row.lesson_occurrence_id,
-        (markedCountByOccurrence.get(row.lesson_occurrence_id) ?? 0) + 1
-      );
+  const occLessonDate = new Map<string, { lessonId: string; date: string }>();
+  for (const o of monthOccurrences) {
+    occLessonDate.set(o.id, { lessonId: o.lessonId, date: o.date });
+  }
+  for (const o of rawOccs) {
+    if (!occLessonDate.has(o.id)) {
+      occLessonDate.set(o.id, { lessonId: o.lesson_id, date: o.occurrence_date });
     }
+  }
+  for (const row of monthAttendance) {
     attendanceByPair.set(`${row.lesson_occurrence_id}::${row.student_id}`, row);
   }
 
@@ -465,11 +510,11 @@ export default async function AttendancePage({ searchParams }: Props) {
     return linksByLesson.get(lessonId) ?? [];
   }
 
-  const rosterCountByLessonDate = new Map<string, number>();
-  function countRoster(lessonId: string, date: string) {
+  const rosterIdsByLessonDate = new Map<string, Set<string>>();
+  function rosterIds(lessonId: string, date: string): Set<string> {
     const key = `${lessonId}|${date}`;
-    const cached = rosterCountByLessonDate.get(key);
-    if (cached != null) return cached;
+    const cached = rosterIdsByLessonDate.get(key);
+    if (cached) return cached;
     const ids = new Set<string>();
     for (const link of linksFor(lessonId)) {
       const student = rosterStudent(link);
@@ -477,8 +522,49 @@ export default async function AttendancePage({ searchParams }: Props) {
       if (!linkCoversDate(link, date)) continue;
       ids.add(student.id);
     }
-    rosterCountByLessonDate.set(key, ids.size);
-    return ids.size;
+    rosterIdsByLessonDate.set(key, ids);
+    return ids;
+  }
+
+  function countRoster(lessonId: string, date: string) {
+    return rosterIds(lessonId, date).size;
+  }
+
+  if (!lessonSearchCounts) {
+    for (const row of monthAttendance) {
+      const meta = occLessonDate.get(row.lesson_occurrence_id);
+      if (meta && !rosterIds(meta.lessonId, meta.date).has(row.student_id)) continue;
+      markedCountByOccurrence.set(
+        row.lesson_occurrence_id,
+        (markedCountByOccurrence.get(row.lesson_occurrence_id) ?? 0) + 1
+      );
+    }
+  } else {
+    const countedIds = new Set(yearOccIdsForCounts);
+    const namedOccIds = [...countedIds].filter((id) => {
+      const meta = occLessonDate.get(id);
+      return Boolean(meta && namedLessonIds.has(meta.lessonId));
+    });
+    if (namedOccIds.length > 0) {
+      const studentIds = new Set<string>();
+      for (const lessonId of linkLessonIds) {
+        if (!namedLessonIds.has(lessonId)) continue;
+        for (const link of linksFor(lessonId)) {
+          const student = rosterStudent(link);
+          if (student) studentIds.add(student.id);
+        }
+      }
+      if (studentIds.size === 0) {
+        for (const id of namedOccIds) markedCountByOccurrence.set(id, 0);
+      } else {
+        const recount = await fetchAttendanceCountsByOccurrence(
+          supabase,
+          namedOccIds,
+          [...studentIds]
+        );
+        for (const id of namedOccIds) markedCountByOccurrence.set(id, recount.get(id) ?? 0);
+      }
+    }
   }
 
   const studentCounts = new Map<string, number>();
@@ -665,41 +751,20 @@ export default async function AttendancePage({ searchParams }: Props) {
           .not("body", "eq", "")
       : Promise.resolve({ data: [] as { lesson_occurrence_id: string }[] });
 
-  // Previous-week check only blocks when the open meeting has no marks yet.
-  const needsPrevWeekCheck =
-    Boolean(openOccurrenceId) && (selectedOcc?.markedCount ?? 0) === 0;
-
   const slotNotesQuery = supabase
     .from("attendance_notes")
     .select("slot_lesson_number, body")
     .eq("academic_year_id", activeYear.id)
     .eq("slot_date", selectedDate);
 
-  const [noteRes, prevWeekIncompleteRaw, dayNotesRes, slotNotesRes] = await Promise.all([
+  const [noteRes, dayNotesRes, slotNotesRes] = await Promise.all([
     noteQuery,
-    needsPrevWeekCheck && openOccurrenceId
-      ? findIncompletePreviousWeekOccurrences(supabase, openOccurrenceId)
-      : Promise.resolve([]),
     dayNotesQuery,
     slotNotesQuery,
   ]);
 
   const noteBody = noteRes.data?.body ?? "";
-  const prevWeekIncomplete = blockingPreviousWeekGaps(prevWeekIncompleteRaw);
   const holidaySets = holidaySetsEarly;
-
-  const pastGaps =
-    selectedOcc && prevWeekIncompleteRaw.length > 0
-      ? prevWeekIncompleteRaw
-          .filter((i) => i.gapHandling !== "continued")
-          .map((i) => ({
-            lessonId: selectedOcc.lessonId,
-            subject: selectedOcc.subject,
-            date: i.date,
-            occurrenceId: i.id,
-            gapHandling: i.gapHandling,
-          }))
-      : [];
 
   const occurrenceIdsWithNotes = (dayNotesRes.data ?? [])
     .map((n) => n.lesson_occurrence_id)
@@ -847,10 +912,6 @@ export default async function AttendancePage({ searchParams }: Props) {
           period_count: l.period_count ?? undefined,
         }))}
         selectedLessonOccurrences={selectedLessonOccurrences}
-        prevWeekBlocked={
-          prevWeekIncomplete.length > 0 && (selectedOcc?.markedCount ?? 0) === 0
-        }
-        prevWeekIncomplete={prevWeekIncomplete}
         allStudents={allStudents}
         monthOccurrences={monthOccurrences.map((o) => ({ id: o.id, date: o.date }))}
         studentLessonIds={[...new Set((studentLinks.data ?? []).map((row) => row.lesson_id))]}
@@ -883,7 +944,6 @@ export default async function AttendancePage({ searchParams }: Props) {
         cancelledDates={holidaySets.cancelled}
         studyRanges={shell.activityRanges}
         insightsByStudent={{}}
-        pastGaps={pastGaps}
         occurrenceIdsWithNotes={occurrenceIdsWithNotes}
         slotNotes={slotNotes}
         lessonPrintRoster={lessonPrintRoster}

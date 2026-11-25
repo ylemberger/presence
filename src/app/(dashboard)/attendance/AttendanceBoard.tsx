@@ -50,7 +50,7 @@ import {
 } from "./AttendanceLessonRosterPrint";
 import { AddOccurrenceDate } from "./AddOccurrenceDate";
 import { ReassignOccurrenceLesson } from "./ReassignOccurrenceLesson";
-import { AttendanceGapModal, type GapItem } from "./AttendanceGapModal";
+import type { GapItem } from "./AttendanceGapModal";
 import { HebrewDateInput } from "@/components/ui/HebrewDateInput";
 import { useAccess } from "@/components/auth/AccessProvider";
 import { Modal } from "@/components/ui/Modal";
@@ -269,8 +269,6 @@ export function AttendanceBoard({
   dayOccurrences: dayOccurrencesProp,
   selectedLessonOccurrences = [],
   studentLessonIds = [],
-  prevWeekBlocked = false,
-  prevWeekIncomplete = [],
   lessonStudents,
   attendance,
   noteBody = "",
@@ -281,7 +279,6 @@ export function AttendanceBoard({
   cancelledDates = [],
   studyRanges = [],
   insightsByStudent = {},
-  pastGaps = [],
   occurrenceIdsWithNotes = [],
   slotNotes = [],
   lessonPrintRoster = null,
@@ -311,9 +308,6 @@ export function AttendanceBoard({
   const [yearFillSaving, setYearFillSaving] = useState(false);
   const [yearFillMessage, setYearFillMessage] = useState<string | null>(null);
   const [yearFillMismatch, setYearFillMismatch] = useState<string | null>(null);
-  const [gapQueue, setGapQueue] = useState<GapItem[]>([]);
-  /** Session-local: after the user acts on a gap, do not re-open it until attendance is filled. */
-  const [suppressedGapIds, setSuppressedGapIds] = useState<string[]>([]);
   const [openFilters, setOpenFilters] = useState<ExtraFilter[]>(() => {
     const open: ExtraFilter[] = [];
     if (classId) open.push("class");
@@ -410,28 +404,6 @@ export function AttendanceBoard({
   useEffect(() => {
     setNote(noteBody);
   }, [noteBody, noteOccurrenceId]);
-
-  useEffect(() => {
-    // Only nudge when the user is filling a specific occurrence, and only for
-    // earlier incomplete occurrences of that same lesson (passed in as pastGaps).
-    if (!selectedOccurrenceId || pastGaps.length === 0) {
-      setGapQueue([]);
-      return;
-    }
-
-    const suppressed = new Set(suppressedGapIds);
-    suppressed.add(selectedOccurrenceId);
-
-    const open = pastGaps.filter(
-      (g) =>
-        g.gapHandling !== "continued" &&
-        !suppressed.has(g.occurrenceId)
-    );
-    // One gentle reminder at a time — never a hard blocking queue.
-    setGapQueue(open.slice(0, 1));
-  }, [pastGaps, selectedOccurrenceId, suppressedGapIds]);
-
-  const activeGap = gapQueue[0] ?? null;
 
   useEffect(() => {
     if (studentLessonSheet && studentId) {
@@ -1479,31 +1451,6 @@ export function AttendanceBoard({
 
   return (
     <div className="flex flex-col gap-stack_lg" onTouchStart={onTouchStart} onTouchEnd={onTouchEnd}>
-      {activeGap && (
-        <AttendanceGapModal
-          gap={activeGap}
-          onResolved={(occurrenceId) => {
-            setSuppressedGapIds((ids) =>
-              ids.includes(occurrenceId) ? ids : [...ids, occurrenceId]
-            );
-            setGapQueue((q) => q.filter((g) => g.occurrenceId !== occurrenceId));
-          }}
-          onMarkAttendance={(gap) => {
-            setSuppressedGapIds((ids) =>
-              ids.includes(gap.occurrenceId) ? ids : [...ids, gap.occurrenceId]
-            );
-            setGapQueue((q) => q.filter((g) => g.occurrenceId !== gap.occurrenceId));
-            navigate(
-              buildParams({
-                date: gap.date,
-                occurrenceId: gap.occurrenceId,
-                lessonId: gap.lessonId,
-              })
-            );
-          }}
-        />
-      )}
-
       <div className="flex flex-wrap items-center gap-2 font-body-md text-body-md text-on-surface-variant print:hidden">
         <span className={cn(!lessonId && "font-bold text-primary")}>
           {studentId || teacherId ? "שלב 1: סינון ותאריך" : "שלב 1: מורה ושיעור"}
@@ -2061,29 +2008,6 @@ export function AttendanceBoard({
               </span>
             )}
           </div>
-          {prevWeekBlocked && (
-            <div className="mb-2 rounded-md border border-secondary/25 bg-secondary/5 px-3 py-2 font-body-sm text-body-sm text-on-surface">
-              <p className="font-semibold text-primary">תזכורת: יש מופע קודם בלי נוכחות מלאה</p>
-              <p className="mt-1 text-on-surface-variant">
-                אפשר לסמן כאן עכשיו ולחזור למלא את הקודם אחר כך
-                {prevWeekIncomplete[0]
-                  ? ` (${formatHebrewDate(prevWeekIncomplete[0].date)}).`
-                  : "."}
-              </p>
-              {prevWeekIncomplete[0] && (
-                <Button
-                  type="button"
-                  size="sm"
-                  className="mt-2"
-                  onClick={() =>
-                    selectOccurrence(prevWeekIncomplete[0].id, prevWeekIncomplete[0].date)
-                  }
-                >
-                  עבור למופע שחסר
-                </Button>
-              )}
-            </div>
-          )}
           {weekWarning.thisWeekPartial.length > 0 && (
             <p className="mb-2 rounded-md bg-attendance-late/10 px-2 py-1 font-caption text-caption text-attendance-late">
               בשבוע זה יש שיעורים שסומנו רק חלקית.
@@ -2438,11 +2362,6 @@ export function AttendanceBoard({
             </div>
 
             <div className="flex-1 space-y-1 overflow-y-auto px-2 py-2">
-            {prevWeekBlocked && (
-              <p className="mb-2 rounded-lg bg-secondary/10 px-3 py-2 font-body-sm text-body-sm text-primary">
-                תזכורת: יש מופע קודם בלי נוכחות מלאה. אפשר לסמן כאן עכשיו ולחזור אליו אחר כך.
-              </p>
-            )}
             {message && (
               <p
                 className={cn(

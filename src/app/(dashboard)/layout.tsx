@@ -7,7 +7,6 @@ import { requireAuthenticatedUser } from "@/lib/supabase/server";
 import { AccessProvider } from "@/components/auth/AccessProvider";
 import { authUserProfile } from "@/lib/auth/user-profile";
 import { getActiveAcademicYear, getAllAcademicYears } from "@/lib/utils";
-import { PendingBanner, PendingSidebar } from "@/components/layout/PendingChrome";
 import { Icon } from "@/components/ui/Icon";
 import { ScrollKeeper } from "@/components/layout/ScrollKeeper";
 
@@ -39,9 +38,7 @@ export default async function DashboardLayout({
         <NavigationProgress />
         <ScrollKeeper />
       </Suspense>
-      <Suspense fallback={<Sidebar {...sidebarProps} attendancePendingCount={0} />}>
-        <PendingSidebar {...sidebarProps} yearId={listOnly ? null : activeYear?.id ?? null} />
-      </Suspense>
+      <Sidebar {...sidebarProps} />
       {/* Main Content Area — offset right by the fixed sidebar width */}
       <main className="relative mr-[var(--sidebar-width)] flex min-h-screen w-[calc(100%-var(--sidebar-width))] min-w-0 flex-1 flex-col transition-[margin,width] duration-200 print:mr-0 print:w-full">
         {/* TopAppBar */}
@@ -57,9 +54,6 @@ export default async function DashboardLayout({
             )}
           </div>
           <div className="flex items-center gap-3">
-            <Suspense fallback={null}>
-              <PendingBanner yearId={listOnly ? null : activeYear?.id ?? null} />
-            </Suspense>
             <button
               type="button"
               className="text-on-surface-variant transition-colors hover:text-secondary"

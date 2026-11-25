@@ -1,6 +1,6 @@
 import { createClient } from "@/lib/supabase/server";
 import { addDays, todayIso, toIsoDay } from "@/lib/dates/hebrew";
-import { fetchAllPages } from "@/lib/supabase/paged";
+import { chunkIds, fetchAllPages } from "@/lib/supabase/paged";
 import { hebrewDbError } from "@/lib/db/hebrew-error";
 
 type Supabase = Awaited<ReturnType<typeof createClient>>;
@@ -327,6 +327,51 @@ async function excludedLessonIdsForStudent(
   return new Set((data ?? []).map((row) => row.lesson_id));
 }
 
+/** Close these automatic link rows in batches. Future-only rows are removed; past rows end yesterday. */
+export async function closeAutomaticLinksByIds(
+  supabase: Supabase,
+  rows: Array<{ id: string; start_date: string }>
+): Promise<{ closed: number; error?: string }> {
+  if (rows.length === 0) return { closed: 0 };
+  const today = todayIso();
+  const yesterday = addDays(today, -1);
+  const deleteIds: string[] = [];
+  const closeByEnd = new Map<string, string[]>();
+  for (const row of rows) {
+    const start = String(row.start_date).slice(0, 10);
+    if (start >= today) {
+      deleteIds.push(row.id);
+      continue;
+    }
+    const endDate = start > yesterday ? start : yesterday;
+    const list = closeByEnd.get(endDate) ?? [];
+    list.push(row.id);
+    closeByEnd.set(endDate, list);
+  }
+  let closed = 0;
+  for (const chunk of chunkIds(deleteIds)) {
+    const { data, error } = await supabase
+      .from("student_lesson_assignments")
+      .delete()
+      .in("id", chunk)
+      .select("id");
+    if (error) return { closed, error: hebrewDbError(error, "סגירת שיוך אוטומטי נכשלה") };
+    closed += data?.length ?? 0;
+  }
+  for (const [endDate, ids] of closeByEnd) {
+    for (const chunk of chunkIds(ids)) {
+      const { data, error } = await supabase
+        .from("student_lesson_assignments")
+        .update({ end_date: endDate })
+        .in("id", chunk)
+        .select("id");
+      if (error) return { closed, error: hebrewDbError(error, "סגירת שיוך אוטומטי נכשלה") };
+      closed += data?.length ?? 0;
+    }
+  }
+  return { closed };
+}
+
 /** Close open automatic links (named-only lessons / leftover whole-grade sync). */
 export async function closeOpenAutomaticAssignmentsForLesson(
   lessonId: string,
@@ -346,30 +391,9 @@ export async function closeOpenAutomaticAssignmentsForLesson(
       .range(from, to)
   );
   if (openAutomatic.length === 0) return { closed: 0 };
-
-  const today = todayIso();
-  const yesterday = addDays(today, -1);
-  let closed = 0;
-  for (const row of openAutomatic) {
-    const start = row.start_date.slice(0, 10);
-    if (start >= today) {
-      const { error } = await supabase
-        .from("student_lesson_assignments")
-        .delete()
-        .eq("id", row.id);
-      if (error) throw new Error(hebrewDbError(error, "סגירת שיוך אוטומטי נכשלה"));
-      closed += 1;
-      continue;
-    }
-    const endDate = start > yesterday ? start : yesterday;
-    const { error } = await supabase
-      .from("student_lesson_assignments")
-      .update({ end_date: endDate })
-      .eq("id", row.id);
-    if (error) throw new Error(hebrewDbError(error, "סגירת שיוך אוטומטי נכשלה"));
-    closed += 1;
-  }
-  return { closed };
+  const result = await closeAutomaticLinksByIds(supabase, openAutomatic);
+  if (result.error) throw new Error(result.error);
+  return { closed: result.closed };
 }
 
 export async function autoAssignStudentsToLesson(
